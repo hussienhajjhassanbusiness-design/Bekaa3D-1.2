@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AppLayout } from "./AppLayout";
+import { Header } from "./Header";
+import { Footer } from "./Footer";
 
 describe("AppLayout", () => {
   it("renders exactly one header, one main, and one footer landmark", () => {
@@ -83,5 +85,34 @@ describe("AppLayout", () => {
 
     await user.tab();
     expect(screen.getByRole("button", { name: "Footer action" })).toHaveFocus();
+  });
+
+  it("composes cleanly with the real Header and Footer (FVS001-T05b): exactly one landmark of each kind, no duplicates", () => {
+    render(
+      <AppLayout header={<Header />} footer={<Footer />}>
+        <p>Page content</p>
+      </AppLayout>
+    );
+
+    expect(screen.getAllByRole("banner")).toHaveLength(1);
+    expect(screen.getAllByRole("main")).toHaveLength(1);
+    expect(screen.getAllByRole("contentinfo")).toHaveLength(1);
+    expect(screen.getByRole("banner")).toHaveTextContent("Bekaa3D");
+    expect(screen.getByRole("contentinfo")).toHaveTextContent("Bekaa3D");
+  });
+
+  it("keeps SkipLink as the first tab stop with the real Header/Footer composed in (neither contributes a tab stop yet, so main's own content is reached next)", async () => {
+    const user = userEvent.setup();
+    render(
+      <AppLayout header={<Header />} footer={<Footer />}>
+        <button>Main action</button>
+      </AppLayout>
+    );
+
+    await user.tab();
+    expect(screen.getByRole("link", { name: "Skip to main content" })).toHaveFocus();
+
+    await user.tab();
+    expect(screen.getByRole("button", { name: "Main action" })).toHaveFocus();
   });
 });

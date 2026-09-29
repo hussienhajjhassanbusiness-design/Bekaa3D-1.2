@@ -123,6 +123,20 @@
   --shadow-elevation-2: 0 4px 12px color-mix(in srgb, var(--color-ink) 10%, transparent);
   --shadow-elevation-3: 0 12px 32px color-mix(in srgb, var(--color-ink) 16%, transparent);
   --shadow-focus-ring: 0 0 0 2px var(--color-white), 0 0 0 4px var(--color-brand-lime);
+
+  /* ---- Breakpoints — tokens.md §10 ----
+     tokens.md defines this named mobile/tablet/desktop system explicitly as
+     "the single breakpoint system for the whole app, not a second competing
+     scale" — added here (deferred by T03, see that task's own note naming
+     T05a/T05b as the owner) because this is the first component that
+     actually needs responsive behavior. Named tablet:/desktop: variants are
+     used instead of Tailwind's differently-named default sm:/md:/lg: scale
+     so components read directly in tokens.md's own vocabulary rather than
+     relying on an incidental pixel-value coincidence with an unrelated
+     default scale. Mobile has no explicit token — it is simply the
+     unprefixed base state, matching tokens.md's "≤767px". */
+  --breakpoint-tablet: 768px;
+  --breakpoint-desktop: 1024px;
 }
 
 /* ---- Minimal global/base styles ---- */
