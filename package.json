@@ -12,6 +12,7 @@
     "test:e2e": "echo \"test:e2e is a placeholder — Playwright is not installed yet (see FVS001-T16). No E2E tests were run.\""
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.104.0",
     "next": "16.3.7",
     "react": "19.2.8",
     "react-dom": "19.2.8"
