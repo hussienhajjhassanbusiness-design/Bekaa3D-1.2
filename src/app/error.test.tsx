@@ -21,12 +21,15 @@ const sampleError = Object.assign(new Error("Internal database connection string
 });
 
 describe("error.tsx (segment render-error fallback)", () => {
-  it("renders a clear heading and explanatory text, composed inside the brand shell (one banner/main/contentinfo)", () => {
+  // FVS001-T14: the AppLayout/Header/Footer shell is now owned by the root
+  // layout, which remains rendered around this fallback automatically (a
+  // normal segment error.tsx replaces only its own segment's children, not
+  // any layout above it — see src/app/layout.test.tsx for the composed-
+  // shell landmark assertions). This file tests only the fallback's own
+  // content, not shell ownership it no longer has.
+  it("renders a clear heading and explanatory text", () => {
     render(<ErrorFallback error={sampleError} retry={() => {}} />);
 
-    expect(screen.getAllByRole("banner")).toHaveLength(1);
-    expect(screen.getAllByRole("main")).toHaveLength(1);
-    expect(screen.getAllByRole("contentinfo")).toHaveLength(1);
     expect(
       screen.getByRole("heading", { name: /something went wrong/i })
     ).toBeInTheDocument();

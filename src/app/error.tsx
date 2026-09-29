@@ -1,9 +1,6 @@
 "use client"; // Error boundaries must be Client Components
 
 import { useEffect } from "react";
-import { AppLayout } from "@/components/layout/AppLayout";
-import { Header } from "@/components/layout/Header";
-import { Footer } from "@/components/layout/Footer";
 
 // Category A ONLY (FRONTEND-VERTICAL-SLICE-PLAN.md §17): unexpected
 // React/render/runtime failures caught by Next.js's own App Router segment
@@ -13,11 +10,11 @@ import { Footer } from "@/components/layout/Footer";
 // BackendUnreachableBanner, §17 categories B/C), not a crash. Do not import
 // ApiError, TanStack Query, fetch, or anything backend-related here.
 //
-// Composes AppLayout/Header/Footer itself (matching FVS001-T06's page.tsx/
-// not-found.tsx pattern) because AppLayout isn't hoisted into the root
-// layout yet — that's FVS001-T14's job. Without this, a render failure
-// would drop the header/footer chrome entirely instead of showing a
-// consistent, branded fallback.
+// Renders bare content only — a normal segment error.tsx replaces just its
+// own segment's children, not any layout above it (unlike global-error.tsx,
+// which explicitly replaces the root layout and must define its own
+// <html>/<body>). The root layout's AppLayout/Header/Footer shell
+// (FVS001-T14) remains rendered around this fallback automatically.
 export default function Error({
   error,
   retry,
@@ -33,7 +30,7 @@ export default function Error({
   }, [error]);
 
   return (
-    <AppLayout header={<Header />} footer={<Footer />}>
+    <>
       <h1 className="text-h1 font-bold text-text-primary">Something went wrong</h1>
       <p className="text-body text-text-secondary">
         An unexpected error occurred while rendering this page.
@@ -45,6 +42,6 @@ export default function Error({
       >
         Try again
       </button>
-    </AppLayout>
+    </>
   );
 }

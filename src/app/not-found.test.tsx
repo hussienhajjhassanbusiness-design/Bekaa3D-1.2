@@ -1,23 +1,18 @@
 import { describe, it, expect } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import NotFound from "./not-found";
 
+// FVS001-T14: the AppLayout/Header/Footer shell is now owned by the root
+// layout (see src/app/layout.test.tsx for the composed-shell landmark
+// assertions) — this file tests only NotFound's own content, not shell
+// ownership it no longer has.
 describe("NotFound (catch-all 404)", () => {
-  it("renders through the same AppLayout shell: exactly one banner, one main, and one contentinfo landmark", () => {
+  it("renders a clear 404/not-found heading and explanatory text", () => {
     render(<NotFound />);
 
-    expect(screen.getAllByRole("banner")).toHaveLength(1);
-    expect(screen.getAllByRole("main")).toHaveLength(1);
-    expect(screen.getAllByRole("contentinfo")).toHaveLength(1);
-  });
-
-  it("renders a clear 404/not-found heading and explanatory text inside <main>", () => {
-    render(<NotFound />);
-
-    const main = within(screen.getByRole("main"));
-    expect(main.getByRole("heading", { name: /page not found/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /page not found/i })).toBeInTheDocument();
     expect(
-      main.getByText(/doesn.t exist|couldn.t find|been moved/i)
+      screen.getByText(/doesn.t exist|couldn.t find|been moved/i)
     ).toBeInTheDocument();
   });
 
@@ -31,10 +26,10 @@ describe("NotFound (catch-all 404)", () => {
   it("introduces no product/catalogue links or other business content", () => {
     render(<NotFound />);
 
-    // Exactly two links are expected in total: AppLayout's own SkipLink
-    // (structural shell behavior, present on every page) and this page's
-    // one back-to-home link. No third/business link exists.
-    expect(screen.getAllByRole("link")).toHaveLength(2);
+    // Exactly one link is expected: this page's own back-to-home link.
+    // SkipLink is no longer rendered here — it's the root layout's
+    // AppLayout that owns it now (FVS001-T14).
+    expect(screen.getAllByRole("link")).toHaveLength(1);
     expect(screen.queryByRole("button")).toBeNull();
   });
 });
