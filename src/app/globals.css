@@ -1,1 +1,146 @@
 @import "tailwindcss";
+
+/*
+ * Bekaa3D design tokens.
+ * Source of truth: .claude/skills/bekaa3d-brand-ui/tokens.md — every value
+ * below is a direct transcription of that document. Do not add a token here
+ * that tokens.md does not define; extend tokens.md first (see the
+ * bekaa3d-brand-ui skill), then this file.
+ *
+ * Tailwind v4's @theme block is the CSS-first equivalent of tailwind.config.*
+ * (no config file is used in this project) — every custom property declared
+ * here under a recognized namespace (--color-*, --text-*, --radius-*,
+ * --shadow-*, --tracking-*) automatically generates the matching Tailwind
+ * utility classes (e.g. --color-brand-dark-green below generates
+ * bg-brand-dark-green / text-brand-dark-green / border-brand-dark-green).
+ */
+@theme {
+  /* ---- Brand colors — tokens.md §1 ---- */
+  --color-brand-dark-green: #195b2d;
+  --color-brand-lime: #8ac143;
+  --color-brand-green: #3d793a;
+  --color-ink: #21201f;
+  --color-white: #ffffff;
+
+  /* ---- Semantic status colors — tokens.md §2
+     "-bg" variants are 8% of the base color, derived via color-mix() so the
+     base token stays the single source of truth (no duplicated hex). ---- */
+  --color-success: var(--color-brand-green); /* = brand-green, tokens.md §2 */
+  --color-success-bg: color-mix(in srgb, var(--color-success) 8%, transparent);
+  --color-warning: #b8860b;
+  --color-warning-bg: color-mix(in srgb, var(--color-warning) 8%, transparent);
+  --color-danger: #b3261e;
+  --color-danger-bg: color-mix(in srgb, var(--color-danger) 8%, transparent);
+  --color-info: #2b6cb0;
+  --color-info-bg: color-mix(in srgb, var(--color-info) 8%, transparent);
+
+  /* ---- Neutral scale — tokens.md §3 ---- */
+  --color-neutral-50: #fafafa;
+  --color-neutral-100: #f2f2f1;
+  --color-neutral-200: #e4e3e1;
+  --color-neutral-300: #cbc9c6;
+  --color-neutral-400: #a6a4a0;
+  --color-neutral-500: #7d7b77;
+  --color-neutral-600: #5c5a57;
+  --color-neutral-700: #413f3d;
+  --color-neutral-800: #2d2c2a;
+  --color-neutral-900: var(--color-ink); /* = ink, tokens.md §3 */
+
+  /* ---- Text colors — tokens.md §4 (semantic aliases over the raw palette,
+     each derived via var() so the palette above remains the one source of
+     truth) ---- */
+  --color-text-primary: var(--color-ink);
+  --color-text-secondary: var(--color-neutral-600);
+  --color-text-disabled: var(--color-neutral-400);
+  --color-text-on-brand: var(--color-white);
+  --color-text-link: var(--color-brand-dark-green);
+
+  /* ---- Surfaces & borders — tokens.md §5 ---- */
+  --color-surface-base: var(--color-white);
+  --color-surface-subtle: var(--color-neutral-50);
+  --color-surface-sunken: var(--color-neutral-100);
+  --color-border-default: var(--color-neutral-200);
+  --color-border-strong: var(--color-neutral-300);
+  --color-border-focus: var(--color-brand-lime);
+
+  /* ---- Typography — tokens.md §6. Size + line-height only: Tailwind's
+     --text-* namespace does not carry font-weight, and tokens.md's own
+     weight column already maps cleanly onto Tailwind's built-in font-*
+     utilities (700=font-bold, 600=font-semibold, 400=font-normal), so
+     weight is applied via those existing utilities, not duplicated here.
+     No custom font-family is set — tokens.md §6 explicitly flags the
+     typeface as an unconfirmed assumption pending brand/marketing sign-off
+     (see tokens.md "Open Items"), so this file relies on Tailwind
+     Preflight's default system-sans stack rather than inventing or
+     committing to a specific typeface T03 was not given. ---- */
+  --text-display: 40px;
+  --text-display--line-height: 48px;
+  --text-h1: 32px;
+  --text-h1--line-height: 40px;
+  --text-h2: 24px;
+  --text-h2--line-height: 32px;
+  --text-h3: 20px;
+  --text-h3--line-height: 28px;
+  --text-h4: 16px;
+  --text-h4--line-height: 24px;
+  --text-body-lg: 16px;
+  --text-body-lg--line-height: 24px;
+  --text-body: 14px;
+  --text-body--line-height: 20px;
+  --text-caption: 12px;
+  --text-caption--line-height: 16px;
+  --text-label: 12px;
+  --text-label--line-height: 16px;
+  --tracking-label: 0.04em; /* tokens.md §6 label tracking */
+
+  /*
+   * ---- Spacing — tokens.md §7 ----
+   * tokens.md's space-1..space-16 scale (4, 8, 12, 16, 20, 24, 32, 40, 48,
+   * 64px) is an exact match for Tailwind v4's own default spacing scale,
+   * which is every integer multiple of the base --spacing token (0.25rem
+   * equals 4px, already the v4 default, not overridden here). No custom
+   * --spacing- keys are added; components use Tailwind's built-in padding,
+   * margin and gap utilities directly, and each one already is the
+   * matching space token:
+   *   space-1 = 4px  -> p-1, m-1, gap-1     space-6 = 24px -> p-6, m-6, gap-6
+   *   space-2 = 8px  -> p-2, m-2, gap-2     space-8 = 32px -> p-8, m-8, gap-8
+   *   space-3 = 12px -> p-3, m-3, gap-3     space-10 = 40px -> p-10, m-10, gap-10
+   *   space-4 = 16px -> p-4, m-4, gap-4     space-12 = 48px -> p-12, m-12, gap-12
+   *   space-5 = 20px -> p-5, m-5, gap-5     space-16 = 64px -> p-16, m-16, gap-16
+   */
+
+  /* ---- Radius — tokens.md §8 ---- */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+
+  /* ---- Elevation — tokens.md §9. elevation-0 ("none") is Tailwind's
+     built-in shadow-none, so it is not redefined here. Shadow color is
+     derived from --color-ink via color-mix() rather than a duplicated raw
+     hex/rgb value, at the exact opacities tokens.md specifies (8/10/16%). */
+  --shadow-elevation-1: 0 1px 3px color-mix(in srgb, var(--color-ink) 8%, transparent);
+  --shadow-elevation-2: 0 4px 12px color-mix(in srgb, var(--color-ink) 10%, transparent);
+  --shadow-elevation-3: 0 12px 32px color-mix(in srgb, var(--color-ink) 16%, transparent);
+  --shadow-focus-ring: 0 0 0 2px var(--color-white), 0 0 0 4px var(--color-brand-lime);
+}
+
+/* ---- Minimal global/base styles ---- */
+body {
+  background-color: var(--color-surface-base);
+  color: var(--color-text-primary);
+}
+
+/*
+ * ---- Global focus-visible treatment — tokens.md §9 `focus-ring` ----
+ * A visible 2px brand-lime ring with a white inner edge so it reads clearly
+ * on both light and brand-colored backgrounds (tokens.md's own rationale).
+ * Applied to every focusable element by default; never removed without this
+ * exact replacement, per bekaa3d-brand-ui's "Responsive & States" section
+ * and WCAG 2.4.7. `outline: none` here is intentional and always paired
+ * with the box-shadow ring on the same rule — it is not a bare removal.
+ */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus-ring);
+}
