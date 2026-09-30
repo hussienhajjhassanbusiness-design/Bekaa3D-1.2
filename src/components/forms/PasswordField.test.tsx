@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { createRef } from "react";
 import { PasswordField } from "./PasswordField";
 
 describe("PasswordField", () => {
@@ -92,5 +93,13 @@ describe("PasswordField", () => {
     render(<PasswordField label="Password" error="Password is required." />);
 
     expect(screen.getByLabelText("Password")).toHaveAttribute("aria-invalid", "true");
+  });
+
+  it("forwards a ref to the underlying <input> (needed for RHF register()/setFocus wiring, FVS002-T08)", () => {
+    const ref = createRef<HTMLInputElement>();
+    render(<PasswordField label="Password" ref={ref} />);
+
+    expect(ref.current).toBeInstanceOf(HTMLInputElement);
+    expect(ref.current).toBe(screen.getByLabelText("Password"));
   });
 });

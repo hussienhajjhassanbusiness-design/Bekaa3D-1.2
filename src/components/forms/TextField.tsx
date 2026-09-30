@@ -1,9 +1,15 @@
-import { useId, type InputHTMLAttributes } from "react";
+import { useId, type InputHTMLAttributes, type Ref } from "react";
 
 export interface TextFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "id"> {
   label: string;
   hint?: string;
   error?: string;
+  // React 19 passes `ref` to plain function components as a regular prop
+  // (no forwardRef wrapper needed) — declared explicitly here so RHF's
+  // register()/setFocus (FVS002-T08) can reach the real <input> node. It
+  // flows through the existing `...rest` spread onto <input> below exactly
+  // like any other native prop; no implementation change was needed.
+  ref?: Ref<HTMLInputElement>;
 }
 
 // FVS002-T03 — deliberately React-Hook-Form-agnostic: plain controlled/

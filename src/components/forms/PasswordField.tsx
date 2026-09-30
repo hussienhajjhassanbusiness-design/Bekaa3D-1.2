@@ -1,9 +1,15 @@
-import { useId, useState, type InputHTMLAttributes } from "react";
+import { useId, useState, type InputHTMLAttributes, type Ref } from "react";
 
 export interface PasswordFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "id" | "type"> {
   label: string;
   hint?: string;
   error?: string;
+  // React 19 passes `ref` to plain function components as a regular prop
+  // (no forwardRef wrapper needed) — declared explicitly here so RHF's
+  // register()/setFocus (FVS002-T08) can reach the real <input> node. It
+  // flows through the existing `...rest` spread onto <input> below exactly
+  // like any other native prop; no implementation change was needed.
+  ref?: Ref<HTMLInputElement>;
 }
 
 // FVS002-T04 — mirrors TextField's structural pattern (label, useId,
