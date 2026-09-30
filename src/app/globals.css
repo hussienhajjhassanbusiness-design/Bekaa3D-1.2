@@ -122,7 +122,17 @@
   --shadow-elevation-1: 0 1px 3px color-mix(in srgb, var(--color-ink) 8%, transparent);
   --shadow-elevation-2: 0 4px 12px color-mix(in srgb, var(--color-ink) 10%, transparent);
   --shadow-elevation-3: 0 12px 32px color-mix(in srgb, var(--color-ink) 16%, transparent);
-  --shadow-focus-ring: 0 0 0 2px var(--color-white), 0 0 0 4px var(--color-brand-lime);
+  /* FVS001-T15 closure pass: outer ring changed from --color-brand-lime to
+     --color-brand-dark-green. brand-lime's outer edge measured only 2.15:1
+     against white (below the 3:1 non-text-contrast target); brand-dark-green
+     measures 7.16-8.15:1 against every surrounding surface this app uses
+     (white, neutral-50, and all four 8%-tint alert backgrounds). The white
+     2px inner ring is unchanged and still separates the outer ring from the
+     focused element's own fill — the outer ring is never directly adjacent
+     to e.g. a brand-dark-green button's own background, only to the
+     surrounding page/container surface, which is the comparison that
+     actually applies to this geometry. */
+  --shadow-focus-ring: 0 0 0 2px var(--color-white), 0 0 0 4px var(--color-brand-dark-green);
 
   /* ---- Breakpoints — tokens.md §10 ----
      tokens.md defines this named mobile/tablet/desktop system explicitly as
@@ -147,8 +157,12 @@ body {
 
 /*
  * ---- Global focus-visible treatment — tokens.md §9 `focus-ring` ----
- * A visible 2px brand-lime ring with a white inner edge so it reads clearly
- * on both light and brand-colored backgrounds (tokens.md's own rationale).
+ * A visible double ring — 2px white inner separation, 4px brand-dark-green
+ * outer (changed from brand-lime during the FVS001-T15 closure pass; see
+ * --shadow-focus-ring above) — so it reads clearly against both a focused
+ * element's own fill (via the white inner ring) and the surrounding page
+ * surface (the outer ring measures 7.16-8.15:1 against every surface this
+ * app uses, vs. brand-lime's 2.15:1 against white).
  * Applied to every focusable element by default; never removed without this
  * exact replacement, per bekaa3d-brand-ui's "Responsive & States" section
  * and WCAG 2.4.7. `outline: none` here is intentional and always paired
