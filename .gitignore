@@ -33,6 +33,12 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*.local
 
+# playwright (FVS001-T16) — transient run artifacts, never committed
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
 # vercel
 .vercel
 
