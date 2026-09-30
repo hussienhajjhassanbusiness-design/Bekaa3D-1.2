@@ -16,6 +16,14 @@ export interface ApiError {
   // FRONTEND-VERTICAL-SLICE-PLAN.md §17. Never populate this until the
   // header name is confirmed by the backend.
   correlationId?: string;
+  // FVS-002 BATCH 3 Part A — confirmed contract: 429 responses carry a
+  // `Retry-After` header in whole seconds (FVS-002-IMPLEMENTATION-PLAN.md
+  // §1 row 13). Only the parsed seconds value is exposed here — never a raw
+  // Response/Headers object — and only when the header is present and a
+  // valid finite non-negative whole number; otherwise this stays undefined
+  // (never guessed). Populated for any non-2xx response that carries the
+  // header, not just 429, since parsing is generic and status-agnostic.
+  retryAfterSeconds?: number;
   message: string;
   raw: unknown;
 }

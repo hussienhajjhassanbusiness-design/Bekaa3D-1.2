@@ -28,6 +28,19 @@ function textResponse(status: number, text: string) {
   };
 }
 
+// FVS-002 BATCH 3 Part A — a response carrying real headers, used only by
+// the Retry-After tests below. Uses the real Headers class so `.get()`'s
+// case-insensitivity matches actual fetch() behavior, not a hand-rolled
+// stand-in.
+function jsonResponseWithHeaders(status: number, body: unknown, headers: Record<string, string>) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    text: () => Promise.resolve(JSON.stringify(body)),
+    headers: new Headers(headers),
+  };
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
@@ -216,6 +229,107 @@ describe("apiClient.get", () => {
       settleWithSuccess?.();
 
       await expect(pending).resolves.toEqual({ ok: true });
+    });
+  });
+
+  // FVS-002 BATCH 3 Part A — FVS-002-IMPLEMENTATION-PLAN.md §1 row 13:
+  // 429 responses carry a `Retry-After` header in whole seconds. Only a
+  // parsed, validated seconds value is ever exposed — never a raw
+  // Response/Headers object, never an invented value for a missing/
+  // malformed header.
+  describe("I. Retry-After header", () => {
+    it("exposes retryAfterSeconds: 120 for Retry-After: 120", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(jsonResponseWithHeaders(429, { type: "about:blank", status: 429 }, { "Retry-After": "120" }))
+      );
+
+      await expect(apiClient.get("/api/health/ready")).rejects.toMatchObject({ retryAfterSeconds: 120 });
+    });
+
+    it("exposes retryAfterSeconds: 3599 for Retry-After: 3599", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(jsonResponseWithHeaders(429, { type: "about:blank", status: 429 }, { "Retry-After": "3599" }))
+      );
+
+      await expect(apiClient.get("/api/health/ready")).rejects.toMatchObject({ retryAfterSeconds: 3599 });
+    });
+
+    it("leaves retryAfterSeconds undefined when the header is missing", async () => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(429, { type: "about:blank", status: 429 })));
+
+      let caught: unknown;
+      try {
+        await apiClient.get("/api/health/ready");
+      } catch (error) {
+        caught = error;
+      }
+
+      expect((caught as { retryAfterSeconds?: number }).retryAfterSeconds).toBeUndefined();
+    });
+
+    it("leaves retryAfterSeconds undefined for a malformed (non-whole-second) header value", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi
+          .fn()
+          .mockResolvedValue(
+            jsonResponseWithHeaders(429, { type: "about:blank", status: 429 }, { "Retry-After": "not-a-number" })
+          )
+      );
+
+      let caught: unknown;
+      try {
+        await apiClient.get("/api/health/ready");
+      } catch (error) {
+        caught = error;
+      }
+
+      expect((caught as { retryAfterSeconds?: number }).retryAfterSeconds).toBeUndefined();
+    });
+
+    it("leaves retryAfterSeconds undefined for a negative header value", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(jsonResponseWithHeaders(429, { type: "about:blank", status: 429 }, { "Retry-After": "-5" }))
+      );
+
+      let caught: unknown;
+      try {
+        await apiClient.get("/api/health/ready");
+      } catch (error) {
+        caught = error;
+      }
+
+      expect((caught as { retryAfterSeconds?: number }).retryAfterSeconds).toBeUndefined();
+    });
+
+    it("leaves retryAfterSeconds undefined for a fractional-seconds header value", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(jsonResponseWithHeaders(429, { type: "about:blank", status: 429 }, { "Retry-After": "1.5" }))
+      );
+
+      let caught: unknown;
+      try {
+        await apiClient.get("/api/health/ready");
+      } catch (error) {
+        caught = error;
+      }
+
+      expect((caught as { retryAfterSeconds?: number }).retryAfterSeconds).toBeUndefined();
+    });
+
+    it("also exposes retryAfterSeconds on apiClient.post's thrown ApiError", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(jsonResponseWithHeaders(429, { type: "about:blank", status: 429 }, { "Retry-After": "60" }))
+      );
+
+      await expect(apiClient.post("/api/v1/auth/resend-verification", { email: "a@example.com" })).rejects.toMatchObject({
+        retryAfterSeconds: 60,
+      });
     });
   });
 });

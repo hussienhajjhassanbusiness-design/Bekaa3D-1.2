@@ -33,6 +33,26 @@ function timeoutError(): ApiError {
   return { kind: "timeout", message: MESSAGE_TIMEOUT, raw: undefined };
 }
 
+// FVS-002 BATCH 3 Part A (FVS-002-IMPLEMENTATION-PLAN.md §1 row 13) — parses
+// only a valid finite non-negative whole-seconds Retry-After value. Anything
+// else (missing header, non-numeric, negative, fractional) resolves
+// undefined rather than guessed — this deliberately does not implement the
+// HTTP-date form of Retry-After, since the confirmed contract states whole
+// seconds only.
+const WHOLE_SECONDS_PATTERN = /^[0-9]+$/;
+
+function parseRetryAfterSeconds(headers: { get(name: string): string | null } | undefined): number | undefined {
+  const raw = headers?.get("Retry-After");
+  if (raw === null || raw === undefined) {
+    return undefined;
+  }
+  const trimmed = raw.trim();
+  if (!WHOLE_SECONDS_PATTERN.test(trimmed)) {
+    return undefined;
+  }
+  return Number(trimmed);
+}
+
 // §13 point 1: apiClient calls only relative `/api/...` paths — never an
 // absolute or cross-origin URL. This is the entire path contract; kept
 // minimal per instruction, not a general-purpose URL framework.
@@ -55,7 +75,12 @@ async function request<T>(path: string, init: RequestInit, timeoutMs: number): P
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-  let response: { ok: boolean; status: number; text: () => Promise<string> };
+  let response: {
+    ok: boolean;
+    status: number;
+    text: () => Promise<string>;
+    headers?: { get(name: string): string | null };
+  };
   try {
     response = await fetch(path, { ...init, signal: controller.signal });
   } catch {
@@ -95,6 +120,10 @@ async function request<T>(path: string, init: RequestInit, timeoutMs: number): P
   const apiError: ApiError = { ...parsed, message: fallbackHttpMessage(response.status) };
   if (apiError.kind === "http") {
     apiError.status = response.status;
+  }
+  const retryAfterSeconds = parseRetryAfterSeconds(response.headers);
+  if (retryAfterSeconds !== undefined) {
+    apiError.retryAfterSeconds = retryAfterSeconds;
   }
   throw apiError;
 }
