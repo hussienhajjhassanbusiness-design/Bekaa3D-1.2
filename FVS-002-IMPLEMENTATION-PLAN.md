@@ -23,29 +23,30 @@ Verified directly against the repository, not assumed:
 
 ## 1. Contract Confidence Table
 
-Every row's "Frontend consequence" governs the corresponding task's scope below. **No row below was resolved by guessing — every `NEEDS BACKEND CONFIRMATION` stays unresolved in this plan and in the code it produces.**
+**Updated at FVS-002 BATCH 2 (Contract Sync)** — the backend has confirmed the majority of rows below. Evidence source for every newly-confirmed row is the backend's own `docs/frontend-contract-vs002.md` as relayed in the BATCH 2 contract-sync instruction; that document is not itself present in this frontend execution context, so this table records the confirmed facts, not a copy of that file. **Two items remain genuinely unresolved and must not be guessed: the RFC 9457 `errors[]` field-level validation shape (row 7) and the Turnstile captcha contract (row 18).**
 
 | # | Contract item | Status | Evidence / source | Frontend consequence |
 |---|---|---|---|---|
-| 1 | Endpoint paths (`register`, `verify-email`, `resend-verification`) | **CONFIRMED** | `vertical-slice-plan.md` VS-002 line 75; `FRONTEND-VERTICAL-SLICE-PLAN.md` §5 lines 86–88 | Mutations/routes can be built against exact paths now |
-| 2 | Registration request field names | **NEEDS BACKEND CONFIRMATION** | `vertical-slice-plan.md` names only the type `RegisterRequest`, no fields | Zod schema for register cannot name real fields yet (§9, §21) |
-| 3 | Password validation rules (length/complexity) | **NEEDS BACKEND CONFIRMATION** | Not stated anywhere in either plan document | Client schema applies **no** length/complexity rule; relies entirely on server-returned validation errors until confirmed (§9, §21) |
-| 4 | Email format check | **ASSUMED — safe, non-authoritative** | Standard web input hygiene, not a backend business rule; `bekaa3d-api-contract`'s own principle ("frontend validation is UX only, never authoritative") | A generic "looks like an email" client check is permitted — it cannot be stricter than any real backend rule and never blocks a request the server would accept |
-| 5 | Registration success HTTP status | **NEEDS BACKEND CONFIRMATION** | Not stated | Treat any 2xx as success via existing `apiClient` contract; do not assert a specific status code |
-| 6 | Registration success response shape (`RegistrationAccepted`) | **NEEDS BACKEND CONFIRMATION** | Type named only, no fields, in `vertical-slice-plan.md` | Frontend reads **no** field from the success body — success is the HTTP outcome alone, exactly like `useReadiness`'s existing pattern |
-| 7 | RFC 9457 validation-error (`errors[]`) extension shape | **NEEDS BACKEND CONFIRMATION** — already logged | `FRONTEND-VERTICAL-SLICE-PLAN.md` §17 ("RFC 9457 problem-response validation-error shape") | No per-field server-error mapping is built; server validation failures surface only via the existing generic `ApiError.message`/`Alert` path until confirmed |
-| 8 | Verify-email token transport (query param name vs. POST body field name) | **NEEDS BACKEND CONFIRMATION** | `FRONTEND-VERTICAL-SLICE-PLAN.md` §5 line 91 says the frontend *route* "reads a token query param" (a frontend routing assumption, not a backend-confirmed contract); backend names only `VerifyEmailRequest`, no field | The verify-email mutation task is contract-gated (§22) |
-| 9 | Invalid / expired / used token distinction | **NEEDS BACKEND CONFIRMATION** | Not stated; only "single-use verification token" is mentioned | UI implements **one generic failure state**, not three, until the backend proves distinct signals (§21) |
-| 10 | Already-verified idempotent re-click behavior | **NEEDS BACKEND CONFIRMATION** | Not stated | No special-casing; whatever HTTP outcome the backend returns is what the existing success/generic-failure states already handle (§22) |
-| 11 | Resend request field name(s) | **NEEDS BACKEND CONFIRMATION** | Type named only (`ResendVerificationRequest`) | Resend schema cannot name a real field yet (§9, §24) |
-| 12 | Resend enumeration-safe behavior | **CONFIRMED (behavior)** / body shape unconfirmed | `vertical-slice-plan.md` VS-002 line 74: "enumeration-safe registration/resend" (explicit) | UI copy rule is settled now (§6); exact response body still unconfirmed |
-| 13 | Rate-limit HTTP status (429 or otherwise) | **NEEDS BACKEND CONFIRMATION** | Not stated | No special-cased rate-limit UI branch; generic `kind:"http"` 4xx handling applies until confirmed |
-| 14 | Cooldown duration source (`Retry-After` header / response field / fixed value) | **NEEDS BACKEND CONFIRMATION** | Not stated anywhere | Countdown task is fully contract-gated (§24) — no duration is invented |
-| 15 | Auto-login after registration | **NEEDS BACKEND CONFIRMATION** — already logged | `FRONTEND-VERTICAL-SLICE-PLAN.md` §17 ("Does registration (VS-002) log the user in?"), and §5's FVS-002 entry states its own working assumption of "no" | This plan builds against the documented "no auto-login" assumption (§7); flagged, not silently decided |
-| 16 | Correlation/request-ID header | **NEEDS BACKEND CONFIRMATION** — already logged, inherited from FVS-001 | `src/lib/api/ApiError.ts` inline comment | Unchanged from FVS-001; never populated |
-| 17 | Local dev email-adapter test mechanism (for real-backend acceptance) | **NEEDS BACKEND CONFIRMATION** | `vertical-slice-plan.md` VS-002 line 77 confirms a "local dev email adapter" is planned/documented on the backend side, but not *how* to extract a token from it | Real-backend acceptance task (§25) cannot be written to a concrete mechanism yet |
+| 1 | Endpoint paths (`register`, `verify-email`, `resend-verification`) | **CONFIRMED** | `vertical-slice-plan.md` VS-002 line 75; backend contract sync | Mutations/routes can be built against exact paths now. **Also confirmed: the backend's own path already includes `/api`** — `/api/v1/auth/register` etc. — unlike the health endpoints, whose backend path has no `/api` prefix. This is a proxy-configuration fact, not a mutation-code change (§5, and FVS-002 BATCH 2 Part B) |
+| 2 | Registration request field names | **CONFIRMED** | Backend contract sync | Request body is exactly `{ "email": string, "password": string }` — no other fields (§9, §21) |
+| 3 | Password validation rules (length/complexity) | **CONFIRMED** | Backend contract sync | Minimum 8, maximum 256 **Unicode code points** (counted via `[...password].length`, never `.length`, which counts UTF-16 code units); **no complexity rule** (no uppercase/lowercase/digit/symbol requirement); values are **not trimmed** before submission; control characters are rejected client-side (§8, §9, §21) |
+| 4 | Email format check | **ASSUMED — safe, non-authoritative** | Standard web input hygiene, not a backend business rule; `bekaa3d-api-contract`'s own principle ("frontend validation is UX only, never authoritative") | A generic "looks like an email" client check is permitted — it cannot be stricter than any real backend rule and never blocks a request the server would accept. Email is **not trimmed/normalized** before submission (unchanged assumption) |
+| 5 | Registration success HTTP status | **CONFIRMED** | Backend contract sync | Success is **HTTP 202** specifically (not just "any 2xx") |
+| 6 | Registration success response shape (`RegistrationAccepted`) | **CONFIRMED** | Backend contract sync | Body is `{ "message": string }`. Frontend still reads **no** field from it — success is the HTTP 202 outcome alone, matching `useReadiness`'s existing pattern; the backend's own message text is never rendered (enumeration-safety and safe-message rules both forbid it) |
+| 7 | RFC 9457 validation-error (`errors[]`) extension shape | **NEEDS BACKEND CONFIRMATION — still open** | `FRONTEND-VERTICAL-SLICE-PLAN.md` §17 ("RFC 9457 problem-response validation-error shape"); the backend's own `docs/frontend-contract-vs002.md` reportedly has a concrete example, but it is **not available in this frontend execution context** | No per-field server-error mapping is built; server validation failures surface only via the existing generic `ApiError.message`/`Alert` path until this is actually confirmed in a context this frontend work can read |
+| 8 | Verify-email token transport | **CONFIRMED** | Backend contract sync | The email link format is `{FRONTEND_BASE_URL}/verify-email#token=...` — the token travels in the **URL fragment**, not a query string, and must be read from `location.hash` (never `useSearchParams`, which cannot see a fragment). POST body field is `token` (string). Token length is exactly 43 characters. This corrects the prior "query param" assumption everywhere it appeared (§9, §13, §21 task definition) |
+| 9 | Invalid / expired / used token distinction | **CONFIRMED** | Backend contract sync | Invalid token → HTTP 400, code `INVALID_TOKEN`. Used token → HTTP 400, code `INVALID_TOKEN` (same code as invalid — no distinct signal). Expired token → HTTP 410, code `RESOURCE_EXPIRED` (genuinely distinct from the other two). UI implements exactly two failure states, not three: a generic "invalid" state (400) and an "expired" state (410) with different copy (§13, §21) |
+| 10 | Already-verified idempotent re-click behavior | **CONFIRMED** | Backend contract sync | Backend returns HTTP 400 `INVALID_TOKEN` for this case too — **explicitly not** a separate already-verified success state. The existing generic-failure (400) state already handles it correctly with no special-casing (§13, §22) |
+| 11 | Resend request field name(s) | **CONFIRMED** | Backend contract sync | Request body is exactly `{ "email": string }` (§9, §24) |
+| 12 | Resend enumeration-safe behavior | **CONFIRMED** (behavior and outcome) | `vertical-slice-plan.md` VS-002 line 74; backend contract sync | Success is HTTP 202, identical regardless of whether the account exists. During an active cooldown the backend **still returns 202** — it simply doesn't send another email — so the frontend must never infer "no cooldown is active" from a 202 alone; cooldown state is tracked client-side from the timestamp of the frontend's own last successful resend (§6, §24) |
+| 13 | Rate-limit HTTP status (429 or otherwise) | **CONFIRMED** | Backend contract sync | HTTP 429, with a `Retry-After` header in whole seconds. Fixed one-hour per-IP windows: register = 5, resend = 5, verify = 20. Failed backend validation **also counts** toward these limits, so client-side validation must catch every confirmed rule before sending, to avoid wasting rate-limit budget (§9, §21, §24) |
+| 14 | Cooldown duration source (`Retry-After` header / response field / fixed value) | **CONFIRMED** | Backend contract sync | Fixed value: **120 seconds** per account after a successful resend 202 — not derived from a header or response field. Countdown task (§10, §11, §24) is no longer contract-gated on the duration itself; it is gated only on the resend field name (row 11, now confirmed) and can proceed |
+| 15 | Auto-login after registration | **CONFIRMED — no** | `FRONTEND-VERTICAL-SLICE-PLAN.md` §17 ("Does registration (VS-002) log the user in?"); backend contract sync | Registration does **not** log the user in, creates no frontend auth state, and sets no auth cookies — explicitly confirmed, not merely an assumption anymore (§3, §7) |
+| 16 | Correlation/request-ID header | **NEEDS BACKEND CONFIRMATION** — already logged, inherited from FVS-001, unaffected by this sync | `src/lib/api/ApiError.ts` inline comment | Unchanged from FVS-001; never populated |
+| 17 | Local dev email-adapter test mechanism (for real-backend acceptance) | **PARTIALLY CONFIRMED** | Backend contract sync | A manual mechanism exists **now**: stop the worker and inspect `email_outbox` directly via SQL. A file-based dev/test email provider is being built but is **not ready yet**. This resolves enough of row 17 to describe Task T14's manual procedure, but **T14 itself remains explicitly deferred** — not attempted in this batch or until a real backend is reachable (§0, §16, §25) |
+| 18 | Captcha (Cloudflare Turnstile) contract | **NEEDS BACKEND CONFIRMATION — still open, new row** | Backend contract sync: Turnstile will be added later to registration and resend; exact field name/contract not yet confirmed | Do **not** install Turnstile, render a fake captcha widget, add a captcha request field, or create a dummy token anywhere in this slice. Registration/resend code must stay composable enough that a future field/widget can be added without a rewrite — no extra abstraction beyond that (§8 note, §21) |
 
-**New gaps this plan surfaces that are not yet in `FRONTEND-VERTICAL-SLICE-PLAN.md` §17** (rows 2, 3, 8, 9, 10, 11, 13, 14, 17 above, excluding the two already-logged rows 7 and 15): this plan does **not** edit that file (out of this planning task's scope), but whoever executes the contract-gated tasks below should append them to §17 before or as part of that task, per `bekaa3d-api-contract`'s "Maintaining the Contract-Gap List" rule.
+**Gap-list disposition:** rows 7 and 18 remain genuinely open and must stay listed in `FRONTEND-VERTICAL-SLICE-PLAN.md` §17 (row 18 is a new gap not previously logged there — see the §17 update below). Rows 2, 3, 8, 9, 10, 11, 13, 14 — previously flagged as gaps this plan surfaced beyond §17 — are now resolved by this sync and require no further gap-list entry.
 
 ## 2. Enumeration Safety (non-negotiable, applies to every task touching register/resend copy)
 
@@ -76,7 +77,7 @@ No `select`/`checkbox`/`radio`/date-picker/file-upload/combobox/phone-field comp
 
 Unchanged from FVS-001: `UI → mutation hook → apiClient → relative /api/... path → Next.js proxy → backend`. No feature component calls `fetch` directly. No new HTTP wrapper. `API_PROXY_TARGET` stays server-only, untouched by this slice.
 
-Backend paths are `/api/v1/auth/register`, `/api/v1/auth/verify-email`, `/api/v1/auth/resend-verification` — since T09/T10 already established that `apiClient` paths must start with `/api/` and Next's rewrite strips only the literal `/api` prefix (not `/api/v1`), the frontend calls are:
+**Corrected at FVS-002 BATCH 2 (Contract Sync) — the backend's real path for these endpoints already includes `/api`.** The frontend calls are still:
 
 ```
 apiClient.post("/api/v1/auth/register", ...)
@@ -84,7 +85,7 @@ apiClient.post("/api/v1/auth/verify-email", ...)
 apiClient.post("/api/v1/auth/resend-verification", ...)
 ```
 
-which the existing rewrite forwards to the backend's `/v1/auth/register` etc. **This mapping is mechanical, not a new design decision** — it follows T09/T10's already-approved rule applied to a `/v1`-prefixed backend path, the same way `/api/health/ready` → `/health/ready` already works. No new proxy configuration is needed.
+but these now forward to the backend's `/api/v1/auth/register`, `/api/v1/auth/verify-email`, `/api/v1/auth/resend-verification` — **the proxy must preserve the `/api` prefix for these paths**, which is the opposite of the health-endpoint behavior (`/api/health/ready` → `/health/ready`, which still strips it, since the backend's own health paths have no `/api` prefix). This is a genuine dev-proxy configuration change, not mechanical inheritance of the old single-rule assumption — see FVS-002 BATCH 2 Part B, which corrects `next.config.ts` to route health paths one way and versioned API paths the other, with the resulting paths proven rather than assumed.
 
 ## 6. apiClient POST Support (scope for Task T06)
 
@@ -109,7 +110,9 @@ No global mutation defaults are added to `queryClient.ts` (unchanged from FVS-00
 
 ## 8. Password Strength Hint
 
-**Static rule hint, not a scored strength meter.** No `zxcvbn` or similar dependency (not approved, not needed). Since real password rules are `NEEDS BACKEND CONFIRMATION` (table row 3), the hint text itself must be clearly generic/non-committal until confirmed (e.g., a static, honestly-worded helper string — exact copy is Task T08's own small decision, not invented as a "rule" the backend will actually enforce). The hint is a plain describedby-linked text node, not a live-scored indicator, keeping it cheap and avoiding a fabricated confidence signal about password strength the frontend cannot actually verify.
+**Static rule hint, not a scored strength meter.** No `zxcvbn` or similar dependency (not approved, not needed). **Confirmed at FVS-002 BATCH 2 (table row 3):** the real rule is 8–256 Unicode code points, no complexity requirement — the hint copy states exactly that (e.g., "Use 8–256 characters.") and nothing more; it must not claim a complexity rule that doesn't exist, and must not be described as a "strength score" since the frontend still computes no score. The hint remains a plain describedby-linked text node, not a live-scored indicator.
+
+**Captcha note (table row 18):** Cloudflare Turnstile will be added to registration (and resend) later; its field name/contract is not yet confirmed. This task does **not** install Turnstile, render a placeholder widget, or add a dummy captcha field — the form/schema is simply written so a future field can be added without restructuring it.
 
 ## 9. Validation & Accessibility (governs T03–T05, T08–T10)
 
@@ -117,12 +120,13 @@ No global mutation defaults are added to `queryClient.ts` (unchanged from FVS-00
 - Error summary region after a failed submit, `aria-live="polite"`.
 - Focus moves to the **first invalid field** on submit failure (matches `FRONTEND-VERTICAL-SLICE-PLAN.md` §5's FVS-003 accessibility note, "focus moves to the first invalid field on submit failure" — applied consistently here since FVS-002 establishes the pattern FVS-003 explicitly says it reuses). Do not build a more elaborate focus-management scheme than this.
 - All of this inherits the now-corrected global focus-ring token from FVS-001's T15 closure pass automatically — no new focus styling is needed in this slice's primitives.
+- **Confirmed at FVS-002 BATCH 2 (table row 3):** password length is validated by **Unicode code point count**, via `[...password].length` (spreading the string into an array of code points) or an equivalent code-point-aware method — never `password.length`, which counts UTF-16 code units and over-counts characters outside the Basic Multilingual Plane (e.g., some emoji). Minimum 8, maximum 256 code points; no complexity rule; no trimming of email or password before validation/submission; control characters are rejected client-side.
 
-## 10. Resend Cooldown — Contract Gate
+## 10. Resend Cooldown — Confirmed at FVS-002 BATCH 2
 
-**This is the single highest-risk contract area in the slice.** Required UX: visible countdown, rate-limited resend, `aria-live="polite"` announcement at countdown **start** and **completion** only (never per-tick), paired with a static "resend available at HH:MM:SS" text node for screen readers. This exact treatment is already specified in `FRONTEND-VERTICAL-SLICE-PLAN.md` §5 (FVS-002 entry) as the pattern FVS-034 will later reuse — FVS-002 is establishing it, not copying an existing implementation (none exists yet).
+**Duration is confirmed: 120 seconds (2 minutes) after a successful resend 202, per account** (table row 14) — no longer a contract gate; the countdown can be built directly against this fixed value. Required UX: visible countdown, `aria-live="polite"` announcement at countdown **start** and **completion** only (never per-tick), paired with a static "resend available at HH:MM:SS" text node for screen readers. This exact treatment is already specified in `FRONTEND-VERTICAL-SLICE-PLAN.md` §5 (FVS-002 entry) as the pattern FVS-034 will later reuse — FVS-002 is establishing it, not copying an existing implementation (none exists yet).
 
-**Duration source is `NEEDS BACKEND CONFIRMATION`** (table row 14) — no value is invented. Task T10 is split internally so that the enumeration-safe resend *submission* (no cooldown display) can be built now, while the countdown *display* is gated behind duration-source confirmation (see Task T10's own Do-NOT list).
+Since the backend still returns 202 during an active cooldown (it just silently skips sending another email — table row 12), the frontend derives cooldown state from the timestamp of its **own** last successful resend call, not from any backend field — there is no cooldown-remaining value in the response to read.
 
 ## 11. Countdown Architecture (once duration source is confirmed)
 
@@ -144,15 +148,17 @@ No global mutation defaults are added to `queryClient.ts` (unchanged from FVS-00
 
 `ApiError.raw`, `.detail`, `.type`, `.title`, `.instance` are never rendered directly — only `ApiError.message` (or a page's own safe, hardcoded copy) reaches the user, exactly matching FVS-001's established rule (`docs/frontend-setup.md`, "Safe message vs. raw diagnostic").
 
-## 13. Invalid / Expired / Used Token — Decision Table
+## 13. Invalid / Expired / Used Token — Decision Table (confirmed at FVS-002 BATCH 2)
 
 | Condition | Backend signal | Frontend state/copy |
 |---|---|---|
-| Valid, unused token | Confirmed: some 2xx (exact status/body unconfirmed, table row 5) | Success state |
-| Invalid / expired / used / any other failure | **NEEDS BACKEND CONFIRMATION** — no distinct signal known (table row 9) | **One generic failure state**: "This verification link isn't valid. Request a new one." + resend CTA. Do not guess which sub-case occurred. |
-| Already-verified re-click | **NEEDS BACKEND CONFIRMATION** (table row 10) | Whatever the backend's real HTTP outcome is — if 2xx, the existing success state naturally handles it with no special-casing; if an error, the existing generic failure state handles it. No invented idempotency branch. |
+| Valid, unused token | HTTP 204 | Success state |
+| Invalid token | HTTP 400, code `INVALID_TOKEN` | Generic "invalid" failure state: "This verification link isn't valid. Request a new one." + resend CTA |
+| Used token | HTTP 400, code `INVALID_TOKEN` (same code as invalid — no distinct signal) | Same generic "invalid" failure state as above — do not invent a separate "already used" sub-state |
+| Already-verified re-click | HTTP 400, code `INVALID_TOKEN` (same code again) | Same generic "invalid" failure state as above — **explicitly not** a separate already-verified success state, per the confirmed contract |
+| Expired token | HTTP 410, code `RESOURCE_EXPIRED` | Distinct "expired" failure state, copy communicating: "If you already verified your email, you can log in; otherwise request a new link." (exact wording may follow Bekaa3D's tone, but must preserve both halves of that meaning) + resend CTA and a link to `/login` |
 
-Revisit this table (and split the generic failure state into real sub-states) only once the backend confirms distinct signals — tracked as a documented follow-up in Task T13's docs update, not built speculatively now.
+This collapses to exactly **two** failure states (generic-invalid, expired) plus success — not three/four, and not the single generic-failure design originally planned before this row was confirmed. No further sub-states (e.g. distinguishing "used" from "invalid") are invented, since the backend's own signal does not distinguish them either.
 
 ## 14. Responsive & Brand Reuse
 
@@ -178,7 +184,7 @@ One update to the existing `docs/frontend-setup.md` (not a new file — one cano
 
 ## 18. Security / Privacy Review Points (checked explicitly in Task T11)
 
-Enumeration safety (§2); passwords never logged (no `console.log`/analytics on form values, no password value in any error object); verification tokens never logged, and never persisted beyond the single request that consumes them (read from the URL, used once, not written to any storage); no auth/session assumption introduced (§3); no secret in the client bundle (nothing changes here vs. FVS-001 — still zero `NEXT_PUBLIC_*`); `ApiError.raw`/`detail`/backend HTML never rendered (§12); mutations never auto-retry (§6/§7 — prevents duplicate-write risk); rate-limit responses are handled as a generic failure, not specially trusted/parsed beyond status; the verification token appears in the URL query string by necessity (backend-driven design, not a frontend choice) — note this plainly in T13's docs rather than attempting to "fix" an architecture this slice doesn't own.
+Enumeration safety (§2); passwords never logged (no `console.log`/analytics on form values, no password value in any error object); verification tokens never logged, and never persisted beyond the single request that consumes them (read from the URL, used once, not written to any storage); no auth/session assumption introduced (§3); no secret in the client bundle (nothing changes here vs. FVS-001 — still zero `NEXT_PUBLIC_*`); `ApiError.raw`/`detail`/backend HTML never rendered (§12); mutations never auto-retry (§6/§7 — prevents duplicate-write risk); rate-limit responses are handled as a generic failure, not specially trusted/parsed beyond status; the verification token appears in the URL **fragment** (`#token=...`, confirmed at FVS-002 BATCH 2 — not a query string) by necessity (backend-driven design, not a frontend choice) — note this plainly in T13's docs rather than attempting to "fix" an architecture this slice doesn't own. The fragment is never sent to the server by the browser on navigation, which is a small privacy positive over a query string, but is not itself a reason this design was chosen and not a guarantee this plan invents further meaning from.
 
 ## 19. Dependency Policy
 
@@ -245,7 +251,7 @@ T07 (route skeletons) ───────────────────�
 
 **Parallel-safe now:** T01, T02, T03, T06, T07 (and T04/T05 once their own deps land) — none require backend confirmation.
 
-**Contract-blocked:** T08 (row 2,3,5,6,7,15), T09 (row 8,9,10), T10 (row 11,12,13,14) — each task definition below states exactly which rows gate it.
+**Contract-blocked (as of BATCH 2 contract sync):** None of T08/T09/T10 remain blocked on the rows that used to gate them (2,3,5,6,15 for T08; 8,9,10 for T09; 11,12,13,14 for T10 — all now confirmed). Row 7 (`errors[]` shape) and row 18 (captcha) remain open but do not block T08–T10 from proceeding, per each task's own updated contract-status note.
 
 **Backend-availability-blocked (separate from contract-blocked):** T14 only.
 
@@ -397,18 +403,18 @@ T07 (route skeletons) ───────────────────�
 
 ### FVS002-T08 — Registration Flow
 
-**CONTRACT GATE:** Blocked on table rows 2 (field names), 3 (password rules), 5 (success status), 6 (success body), 7 (validation-error shape), 15 (auto-login). **Can proceed only once at least rows 2 and 6 are confirmed** (password rules can remain unconfirmed per §8's static-hint design; auto-login proceeds on the documented "no" assumption per §3 with a flagged caveat; validation-error shape can remain unconfirmed — server field errors simply surface via the generic `Alert` path per §12 until row 7 is confirmed).
+**CONTRACT STATUS (updated at FVS-002 BATCH 2):** Rows 2 (field names), 3 (password rules), 5 (success status), 6 (success body), 15 (auto-login) are now **CONFIRMED** — this task is no longer blocked on them. **Row 7 (validation-error `errors[]` shape) and row 18 (Turnstile captcha) remain genuinely open** and must not be guessed: server field errors surface only via the generic `Alert` path per §12 until row 7 is confirmed, and no captcha field/widget/token is added until row 18 is confirmed.
 
 **Purpose:** The real registration mutation and page, enumeration-safe by construction.
 **Depends on:** T05, T06, T07.
 **Files expected:** `src/lib/auth/useRegister.ts` (+ test), `src/app/register/page.tsx` (rewritten from skeleton), `page.test.tsx` (rewritten).
 **Implementation actions:**
-1. RED: mutation tests (mock `apiClient.post`, not `fetch`) for — successful submit resolves regardless of a mocked "new" vs. "duplicate" server response (enumeration-safety proof, §2); `retry: false` is actually configured (mirror T13a's own `getReadinessQueryOptions`-style exported-options testability pattern if useful); network failure surfaces `ApiError.kind:"network"` through to the page; double-submit is prevented (rapid double-click fires exactly one mutation).
-2. RED: page tests — client-side validation blocks submit with empty/malformed fields using only the confirmed email-shape check (§1 row 4) and whatever server-confirmed fields exist at implementation time; successful submit shows the enumeration-safe "check your email" `Alert`, never branching copy; a server validation failure (mocked `ApiError.kind:"http"`) shows the generic message via `Alert`, never `.raw`/`.detail`.
-3. GREEN: implement `useRegister` and wire `/register`'s real form (`Form` + `TextField` + `PasswordField` + `Button` + `Alert`), using a Zod schema built **only** from confirmed field names (row 2) — if a field's server-side rule is unconfirmed (row 3), the schema imposes no rule beyond "required"/the generic email-shape check.
-**Do NOT:** add any field, limit, or rule not confirmed by the backend at implementation time; introduce auth/session state even though "no auto-login" is only an assumption — if that assumption is later proven wrong, that's a follow-up task, not something to hedge for here now; retry the mutation automatically.
-**Tests:** TDD required, including the explicit enumeration-safety test from §2.
-**Acceptance criteria:** Enumeration-safety test passes; double-submit test passes; no invented field/rule is present anywhere in the schema or copy.
+1. RED: mutation tests (mock `apiClient.post`, not `fetch`) for — successful submit resolves regardless of a mocked "new" vs. "duplicate" server response (enumeration-safety proof, §2); request body is exactly `{ email, password }` sent to `/api/v1/auth/register` with no trailing slash; `retry: false` is actually configured; network failure surfaces `ApiError.kind:"network"` through to the page; double-submit is prevented (rapid double-click fires exactly one mutation).
+2. RED: page tests — client-side validation blocks submit with empty/malformed email, and password outside the confirmed 8–256 Unicode-code-point range (counted via `[...password].length`, not `.length`) or containing control characters, without ever sending the request; no password complexity rule is enforced; email/password are not trimmed; successful submit shows the enumeration-safe "check your email" `Alert`, identical copy whether the mocked backend implies a new or existing account; a server validation failure (mocked `ApiError.kind:"http"`) and a 429 rate-limit failure both show a safe generic message via `Alert`, never `.raw`/`.detail`.
+3. GREEN: implement `useRegister` and wire `/register`'s real form (`Form` + `TextField` + `PasswordField` + `Button` + `Alert`), using a Zod schema built from the confirmed fields and password rule (row 2, row 3) only.
+**Do NOT:** add any field, limit, or rule not confirmed by the backend (email/password only — no captcha field); introduce auth/session/cookie state (row 15 confirms none is created); retry the mutation automatically; invent the `errors[]` per-field mapping (row 7); render `ApiError.raw`.
+**Tests:** TDD required, including the explicit enumeration-safety test from §2 and the full 21-item test matrix from the BATCH 2 Part C instruction.
+**Acceptance criteria:** Enumeration-safety test passes; double-submit test passes; Unicode-code-point password counting proven (not UTF-16 length); no invented field/rule is present anywhere in the schema or copy.
 **Verification:** `npm run test -- useRegister`, `npm run test -- register`, full suite, `npm run build`.
 **Skills/tools:** `bekaa3d-api-contract` (mandatory — this is the highest contract-risk task in the slice), `bekaa3d-brand-ui`, `superpowers:test-driven-development`.
 **Suggested commit message:** `feat: add registration mutation and page`
@@ -417,18 +423,18 @@ T07 (route skeletons) ───────────────────�
 
 ### FVS002-T09 — Verify-Email Flow
 
-**CONTRACT GATE:** Blocked on table rows 8 (token transport), 9 (invalid/expired/used distinction), 10 (idempotent re-click). **Implementable now only as the single-generic-failure-state design (§13)** — do not wait for rows 9/10 to build a richer version; build the safe generic version once row 8 (token transport) is confirmed, and treat 9/10 as documented future refinements (§13, §17 doc note).
+**CONTRACT STATUS (updated at FVS-002 BATCH 2):** Rows 8 (token transport), 9 (invalid/expired/used distinction), 10 (idempotent re-click) are now **CONFIRMED** — this task is no longer contract-gated. **Build the two-state design from the updated §13 table** (generic-invalid on 400 `INVALID_TOKEN`, expired on 410 `RESOURCE_EXPIRED`), not the single-generic-failure design originally planned before this sync, and not a further-split three/four-state design either — the backend's own signal supports exactly two failure states.
 
 **Purpose:** The real verify-email mutation and page.
 **Depends on:** T05, T06, T07.
 **Files expected:** `src/lib/auth/useVerifyEmail.ts` (+ test), `src/app/verify-email/page.tsx` (rewritten), `page.test.tsx` (rewritten).
 **Implementation actions:**
-1. RED: mutation tests — valid token → success; any error (mocked `ApiError` of any `kind`) → the single generic failure state, never a guessed sub-state; missing/empty/malformed token (read from the URL search params per Next.js's App Router convention, e.g. `useSearchParams`) → generic failure state without ever calling the mutation with a garbage value.
-2. RED: page tests — loading state while the mutation is in flight; success state with a link/prompt toward `/login` (a route this slice does not build, just links to — per §3); generic failure state with a resend CTA linking to `/verify-email/resend`.
-3. GREEN: implement, using the exact token parameter name confirmed at implementation time (row 8) — **if still unconfirmed when this task starts, STOP and report rather than guessing a name.**
-**Do NOT:** build three/four distinct failure UI states; persist the token anywhere beyond the single request that consumes it (§18); auto-retry the verify mutation.
-**Tests:** TDD required, including the URL-edge-case tests from Review Focus item 4.
-**Acceptance criteria:** Generic failure state correctly covers every non-success `ApiError.kind`; token is read once, used once, never stored.
+1. RED: mutation tests — valid token → HTTP 204 success; 400 `INVALID_TOKEN` → generic-invalid failure state; 410 `RESOURCE_EXPIRED` → distinct expired failure state; any other error (mocked `ApiError` of any other `kind`) → the generic-invalid failure state as the safe fallback; missing/empty/malformed token (read from `location.hash`, **not** `useSearchParams` — the token is in the URL fragment, which Next.js's server-rendered search params cannot see) → generic-invalid failure state without ever calling the mutation with a garbage value.
+2. RED: page tests — loading state while the mutation is in flight; success state with a link/prompt toward `/login` (a route this slice does not build, just links to — per §3); generic-invalid failure state with a resend CTA linking to `/verify-email/resend`; expired failure state with copy communicating both "log in if already verified" and "otherwise request a new link," plus the same resend CTA and a `/login` link.
+3. GREEN: implement, reading the 43-character token from `location.hash` (confirmed format `#token=...`) client-side (this requires a Client Component / `"use client"` boundary, since `location.hash` is never sent to or renderable by the server) and POSTing `{ token }` to `/api/v1/auth/verify-email`.
+**Do NOT:** build more than two distinct failure UI states; read the token from `useSearchParams`/a query string; persist the token anywhere beyond the single request that consumes it (§18); auto-retry the verify mutation; invent a separate already-verified success state (row 10 confirms the backend does not distinguish it).
+**Tests:** TDD required, including the URL-edge-case tests from Review Focus item 4 (now exercising `location.hash`, not search params).
+**Acceptance criteria:** Generic-invalid and expired failure states correctly map to 400/410 respectively; token is read once, used once, never stored.
 **Verification:** `npm run test -- useVerifyEmail`, `npm run test -- verify-email`, full suite, `npm run build`.
 **Skills/tools:** `bekaa3d-api-contract`, `bekaa3d-brand-ui`, `superpowers:test-driven-development`.
 **Suggested commit message:** `feat: add email verification mutation and page`
@@ -437,18 +443,18 @@ T07 (route skeletons) ───────────────────�
 
 ### FVS002-T10 — Resend Flow + Cooldown
 
-**CONTRACT GATE:** Submission half blocked on table rows 11 (field name), 12 (body shape only — enumeration-safe *behavior* is already confirmed). Countdown-display half additionally blocked on rows 13 (rate-limit status) and 14 (cooldown duration source) — **do not build the live countdown until row 14 is confirmed**; the enumeration-safe submission itself can land once row 11 is confirmed, independent of the countdown.
+**CONTRACT STATUS (updated at FVS-002 BATCH 2):** Rows 11 (field name), 12 (body shape/behavior), 13 (rate-limit status), and 14 (cooldown duration = 120 seconds fixed) are now **CONFIRMED** — both the submission half and the countdown-display half can be built together; this task is no longer split into a gated and an ungated half.
 
-**Purpose:** The real resend mutation, page, and (once unblocked) cooldown countdown.
+**Purpose:** The real resend mutation, page, and cooldown countdown.
 **Depends on:** T05, T06, T07.
 **Files expected:** `src/lib/auth/useResendVerification.ts` (+ test), `src/lib/auth/useCooldown.ts` (+ test — pure logic, split out from the page per §11's "one small hook" guidance), `src/app/verify-email/resend/page.tsx` (rewritten), `page.test.tsx` (rewritten).
 **Implementation actions:**
-1. RED: mutation tests — identical enumeration-safe result rendered whether the mocked backend response implies the account existed or not (§2's explicit test requirement); `retry: false`.
-2. RED (once row 14 is confirmed): `useCooldown` tests with fake timers — derives remaining time from an absolute deadline; announces once at start, once at completion, never per-tick; cleans up on unmount; survives a simulated throttled-timer gap without drifting past the real deadline (Review Focus item 3).
-3. GREEN: implement submission first; implement cooldown only once its gate clears.
-**Do NOT:** invent a cooldown duration (30s/60s/5min or otherwise) if row 14 is still unconfirmed when this task starts — land the submission-only version and leave the countdown for a follow-up continuation of this same task ID; special-case a guessed rate-limit status code.
-**Tests:** TDD required for both halves, each gated as above.
-**Acceptance criteria:** Enumeration-safety test passes for resend; if the countdown half lands, its accessibility-announcement test (start/completion only) passes.
+1. RED: mutation tests — identical enumeration-safe result rendered whether the mocked backend response implies the account existed or not (§2's explicit test requirement); request body is exactly `{ email }` sent to `/api/v1/auth/resend-verification`; `retry: false`; a 429 response (with `Retry-After`) surfaces as a safe generic rate-limit `Alert`, not a fabricated cooldown value.
+2. RED: `useCooldown` tests with fake timers — derives remaining time from an absolute deadline computed as "now + 120 seconds" at the moment of a successful 202 (not from any response field, since none carries the duration — table row 14); announces once at start, once at completion, never per-tick; cleans up on unmount; survives a simulated throttled-timer gap without drifting past the real deadline (Review Focus item 3).
+3. GREEN: implement submission and cooldown together.
+**Do NOT:** derive the cooldown duration from a `Retry-After` header or any response field — it is a fixed 120-second client-side value starting at the successful resend, per row 14; special-case the 429 rate-limit path into anything other than the generic `Alert`.
+**Tests:** TDD required for both halves.
+**Acceptance criteria:** Enumeration-safety test passes for resend; the countdown's accessibility-announcement test (start/completion only) passes.
 **Verification:** `npm run test -- useResendVerification`, `npm run test -- useCooldown` (once built), `npm run test -- resend`, full suite, `npm run build`.
 **Skills/tools:** `bekaa3d-api-contract`, `bekaa3d-brand-ui`, `superpowers:test-driven-development`.
 **Suggested commit message:** `feat: add resend verification mutation and cooldown`
@@ -481,7 +487,7 @@ T07 (route skeletons) ───────────────────�
 **Files expected:** `e2e/register-and-verify.spec.ts` (new file; whether it joins the existing `smoke` project's `testMatch` or needs its own project entry in `playwright.config.ts` is this task's own small decision — prefer extending the existing `smoke` project's `testMatch` array over adding a third project, unless a concrete reason emerges).
 **Implementation actions:**
 1. Determine the interception mechanism (`page.route` stubbing the three `/api/v1/auth/*` endpoints is the likely approach, matching this spec's need to stay backend-independent — confirm against current Playwright docs at implementation time, same discipline FVS001-T16 used for its own Playwright setup).
-2. Write the flow: navigate to `/register` → submit → see check-email state → navigate to `/verify-email?<confirmed-token-param>=<fake-token>` → see success state → see a link/prompt toward `/login`.
+2. Write the flow: navigate to `/register` → submit → see check-email state → navigate to `/verify-email#token=<fake-43-char-token>` (URL fragment, confirmed at FVS-002 BATCH 2 — not a query string) → see success state → see a link/prompt toward `/login`.
 3. Run `npm run test:e2e` twice conceptually (this flow doesn't depend on a real backend at all, unlike FVS-001's readiness-banner tolerance test) and confirm determinism.
 **Do NOT:** hit a real backend in this spec; fold this into `e2e/backend-connectivity.spec.ts` or vice versa; add unrelated business-flow coverage.
 **Tests:** This is the test — behavior-defined-before-done, not unit RED/GREEN.

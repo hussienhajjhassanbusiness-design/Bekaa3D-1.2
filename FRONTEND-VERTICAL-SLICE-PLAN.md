@@ -88,9 +88,9 @@ POST /api/v1/auth/verify-email
 POST /api/v1/auth/resend-verification
 ```
 **Frontend capability:** A visitor can create an account, is told to check email (enumeration-safe wording — never "email already exists"), can click a verification link that lands on a confirmation page, and can request the verification email again if it didn't arrive.
-**Routes:** `/register`, `/verify-email` (reads a token query param), `/verify-email/resend`.
+**Routes:** `/register`, `/verify-email` (reads the token from the URL fragment, `#token=...` — **confirmed at FVS-002 BATCH 2 contract sync; not a query param**, see `FVS-002-IMPLEMENTATION-PLAN.md` §1 row 8), `/verify-email/resend`.
 **Components:** `Form`, `TextField`, `PasswordField` (with strength hint), `Button`, `Alert` — this is the slice that introduces the base form component set per §3/§18, because it's the first write flow in the app.
-**State:** Form state (React Hook Form + Zod schema mirroring server field rules); no auth/session state yet — VS-002's mergeable outcome describes registration and verification as two separate steps with no mention of an auto-login side effect, so this plan assumes registration does **not** log the user in (they land on a "check your email" success state, then verify, then log in separately via FVS-003). This is a reasonable but unconfirmed reading — see §17.
+**State:** Form state (React Hook Form + Zod schema mirroring server field rules); no auth/session state — **confirmed at FVS-002 BATCH 2 contract sync (no longer just an assumption): registration does not log the user in, creates no frontend auth state, and sets no auth cookies** (they land on a "check your email" success state, then verify, then log in separately via FVS-003).
 **API integration:** `POST /register` always returns the same "check your email" success shape regardless of whether the email existed, per the backend's enumeration-safe design — the UI must never branch copy on a "this email is taken" case. `POST /verify-email` with an invalid/expired/used token shows a distinct error with a resend CTA. `POST /resend-verification` is itself enumeration-safe and rate-limited; UI shows a generic "if that account exists, an email was sent" message either way.
 **UX states:** Submitting; success (check-your-email); token invalid/expired/used; token already-verified (idempotent re-click); resend cooldown (rate-limited) with a visible countdown; network failure.
 **Responsive behavior:** Single-column form, full-width inputs and CTA on mobile; centered card max-width 420px on desktop.
@@ -1499,12 +1499,19 @@ Each item below is `NEEDS BACKEND CONFIRMATION` — this plan does not guess an 
 **Recommended question:** Please provide the authoritative offer and offer-round status enum, parallel to the order-line status enum requested above.
 
 ---
-**Issue:** Does registration (VS-002) log the user in?
+**Issue:** Does registration (VS-002) log the user in? — **RESOLVED at FVS-002 BATCH 2 contract sync**
 **Backend slice:** VS-002
 **Why frontend needs clarification:** FVS-002 needs to know whether to redirect a freshly-registered (but not yet verified) user into an authenticated state or to a plain "check your email" page with no session established.
-**What is currently defined:** VS-002's mergeable outcome describes registration and email verification as separate steps ("A user can register and verify through a durable email workflow") with no mention of a session/cookie being issued at registration time.
-**What is missing:** An explicit statement of whether `POST /auth/register` sets any session cookie, or whether the user must separately log in (via VS-003) after verifying.
-**Recommended question:** Does successful registration establish a session, or does the customer need to log in separately (via VS-003) after verifying their email?
+**What is currently defined:** Confirmed: registration does **not** establish a session — no auth state, no cookies. The customer logs in separately (via VS-003) after verifying their email.
+**What is missing:** Nothing further — resolved. See `FVS-002-IMPLEMENTATION-PLAN.md` §1 row 15.
+
+---
+**Issue:** Turnstile captcha contract for registration/resend (VS-002) — distinct from the BYI captcha item above
+**Backend slice:** VS-002
+**Why frontend needs clarification:** Cloudflare Turnstile will be added later to the registration and resend-verification forms; FVS-002's form/schema needs to stay composable for it without a rewrite once it lands.
+**What is currently defined:** Turnstile is the confirmed provider (unlike the BYI captcha item above, whose provider is still open); exact field name and request/response contract are not yet confirmed.
+**What is missing:** The request field name Turnstile's token should be sent under, and whether it gates registration, resend, or both.
+**Recommended question:** What field name and validation contract does the backend expect for the Turnstile token on `POST /auth/register` and `POST /auth/resend-verification`, and when is it being turned on?
 
 ---
 **Issue:** Frontend-constructed REST paths for backend slices whose "Endpoint / entrypoint" line is prose-only
