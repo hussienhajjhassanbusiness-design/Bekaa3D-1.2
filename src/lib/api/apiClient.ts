@@ -42,16 +42,22 @@ function assertApiPath(path: string): void {
   }
 }
 
-async function get<T = unknown>(path: string, options: ApiClientRequestOptions = {}): Promise<T> {
+// FVS002-T06 — the shared transport core behind both get() and post():
+// same path assertion, same AbortController-driven timeout, same success
+// contract (2xx + empty/unparseable body resolves undefined, never an
+// ApiError), same failure contract (delegates to T08's single
+// parseProblemBody — never duplicated). get()/post() differ only in what
+// RequestInit they pass in; this function's own behavior is otherwise
+// untouched from FVS001-T09's original get()-only implementation.
+async function request<T>(path: string, init: RequestInit, timeoutMs: number): Promise<T> {
   assertApiPath(path);
 
-  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   let response: { ok: boolean; status: number; text: () => Promise<string> };
   try {
-    response = await fetch(path, { signal: controller.signal });
+    response = await fetch(path, { ...init, signal: controller.signal });
   } catch {
     // §13 point 5: an aborted request (our own timeout) vs. point 4: any
     // other rejection (offline, DNS failure, connection refused, etc.) —
@@ -93,4 +99,28 @@ async function get<T = unknown>(path: string, options: ApiClientRequestOptions =
   throw apiError;
 }
 
-export const apiClient = { get };
+async function get<T = unknown>(path: string, options: ApiClientRequestOptions = {}): Promise<T> {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  return request<T>(path, {}, timeoutMs);
+}
+
+// FVS002-T06 — JSON write support, reusing every rule request() already
+// enforces. Content-Type is set only when a body is actually sent (no
+// unnecessary header on a bodyless POST). No retry, no auth/CSRF header, no
+// credentials-mode change, no interceptor system — transport only. Callers
+// pass a full /api/... path; this task does not call any auth endpoint
+// itself (that remains contract-gated, FVS-002-IMPLEMENTATION-PLAN.md §1).
+async function post<T = unknown>(
+  path: string,
+  body?: unknown,
+  options: ApiClientRequestOptions = {}
+): Promise<T> {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const init: RequestInit =
+    body === undefined
+      ? { method: "POST" }
+      : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
+  return request<T>(path, init, timeoutMs);
+}
+
+export const apiClient = { get, post };
