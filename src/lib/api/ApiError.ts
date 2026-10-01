@@ -24,6 +24,13 @@ export interface ApiError {
   // (never guessed). Populated for any non-2xx response that carries the
   // header, not just 429, since parsing is generic and status-agnostic.
   retryAfterSeconds?: number;
+  // FVS-003 BATCH 3A Part B — confirmed contract: every backend failure mode
+  // relevant to this slice (AUTH_REQUIRED, MFA_REQUIRED, CSRF_INVALID,
+  // RATE_LIMITED) is identified by a top-level string `code` on the RFC 9457
+  // problem body. Only a string value is ever accepted — never coerced,
+  // never guessed from status alone. Production auth logic (Parts D/E/F)
+  // must branch on `status`+`code`, never on `raw`.
+  code?: string;
   message: string;
   raw: unknown;
 }

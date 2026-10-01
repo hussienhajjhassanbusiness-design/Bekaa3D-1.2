@@ -40,7 +40,7 @@ describe("parseProblemBody", () => {
       });
       // No field exists on the result beyond what ApiError itself defines.
       expect(Object.keys(result).sort()).toEqual(
-        ["detail", "instance", "kind", "message", "raw", "status", "title", "type"].sort()
+        ["code", "detail", "instance", "kind", "message", "raw", "status", "title", "type"].sort()
       );
     });
 
@@ -132,6 +132,38 @@ describe("parseProblemBody", () => {
       const result = parseProblemBody(JSON.stringify({ detail: 404 }));
 
       expect(result.detail).toBeUndefined();
+    });
+  });
+
+  describe("FVS-003 BATCH 3A Part B — top-level problem `code` field", () => {
+    it.each([
+      ["401", "AUTH_REQUIRED", 401, "AUTH_REQUIRED"],
+      ["401", "MFA_REQUIRED", 401, "MFA_REQUIRED"],
+      ["403", "CSRF_INVALID", 403, "CSRF_INVALID"],
+      ["429", "RATE_LIMITED", 429, "RATE_LIMITED"],
+    ])("%s + %s: code is preserved exactly", (_label, _codeLabel, status, code) => {
+      const body = JSON.stringify({ type: "about:blank", status, code });
+      const result = parseProblemBody(body);
+
+      expect(result.code).toBe(code);
+      expect(result.status).toBe(status);
+    });
+
+    it("leaves code undefined when the body has no code field", () => {
+      const result = parseProblemBody(JSON.stringify({ type: "about:blank", status: 500 }));
+
+      expect(result.code).toBeUndefined();
+    });
+
+    it("leaves code undefined when the code field is present but not a string (never coerced)", () => {
+      const result = parseProblemBody(JSON.stringify({ status: 401, code: 123 }));
+
+      expect(result.code).toBeUndefined();
+    });
+
+    it("leaves code undefined for a non-problem or malformed body, same as the other RFC fields", () => {
+      expect(parseProblemBody(JSON.stringify({ foo: "bar" })).code).toBeUndefined();
+      expect(parseProblemBody("<html>Bad Gateway</html>").code).toBeUndefined();
     });
   });
 

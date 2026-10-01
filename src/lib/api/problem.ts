@@ -53,6 +53,11 @@ export function parseProblemBody(rawText: string): ApiError {
     status: readOptionalNumber(parsed, "status"),
     detail: readOptionalString(parsed, "detail"),
     instance: readOptionalString(parsed, "instance"),
+    // FVS-003 BATCH 3A Part B — the one additional top-level field this
+    // slice's confirmed contract actually needs (AUTH_REQUIRED/MFA_REQUIRED/
+    // CSRF_INVALID/RATE_LIMITED) — parsed with the same only-if-a-real-
+    // string rule as every other field here, never coerced.
+    code: readOptionalString(parsed, "code"),
     message: GENERIC_MESSAGE,
     raw: parsed,
   };
