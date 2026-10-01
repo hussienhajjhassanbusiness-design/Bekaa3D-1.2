@@ -442,4 +442,85 @@ describe("apiClient.post", () => {
       await expect(apiClient.post("/v1/auth/register", {})).rejects.toThrow('path must start with "/api/"');
     });
   });
+
+  // FVS-003 BATCH 3A Part C — explicit opt-in CSRF support. Never a blanket
+  // auto-attach: anonymous/login calls must stay byte-for-byte unaffected.
+  describe("I. Explicit CSRF opt-in ({ csrf: true })", () => {
+    afterEach(() => {
+      document.cookie = "csrf_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/";
+    });
+
+    it("attaches X-CSRF-Token with the current cookie value when csrf: true is passed", async () => {
+      document.cookie = "csrf_token=abc123";
+      const fetchStub = vi.fn().mockResolvedValue(textResponse(204, ""));
+      vi.stubGlobal("fetch", fetchStub);
+
+      await apiClient.post("/api/v1/auth/refresh", undefined, { csrf: true });
+
+      const [, calledInit] = fetchStub.mock.calls[0] as [string, RequestInit];
+      expect(new Headers(calledInit.headers).get("X-CSRF-Token")).toBe("abc123");
+    });
+
+    it("re-reads the cookie fresh on every call — never caches a stale value across requests", async () => {
+      const fetchStub = vi.fn().mockResolvedValue(textResponse(204, ""));
+      vi.stubGlobal("fetch", fetchStub);
+
+      document.cookie = "csrf_token=first-value";
+      await apiClient.post("/api/v1/auth/refresh", undefined, { csrf: true });
+      document.cookie = "csrf_token=second-value";
+      await apiClient.post("/api/v1/auth/refresh", undefined, { csrf: true });
+
+      const [, firstInit] = fetchStub.mock.calls[0] as [string, RequestInit];
+      const [, secondInit] = fetchStub.mock.calls[1] as [string, RequestInit];
+      expect(new Headers(firstInit.headers).get("X-CSRF-Token")).toBe("first-value");
+      expect(new Headers(secondInit.headers).get("X-CSRF-Token")).toBe("second-value");
+    });
+
+    it("fails locally with a safe, normalized ApiError (kind: 'csrf') when the cookie is missing — never invents a fake token, never sends the request", async () => {
+      const fetchStub = vi.fn();
+      vi.stubGlobal("fetch", fetchStub);
+
+      await expect(apiClient.post("/api/v1/auth/refresh", undefined, { csrf: true })).rejects.toMatchObject({
+        kind: "csrf",
+      });
+      expect(fetchStub).not.toHaveBeenCalled();
+    });
+
+    it("never attaches X-CSRF-Token when csrf is omitted (default), even if the cookie exists — no blanket auto-attach", async () => {
+      document.cookie = "csrf_token=should-not-be-sent";
+      const fetchStub = vi.fn().mockResolvedValue(jsonResponse(202, { message: "ok" }));
+      vi.stubGlobal("fetch", fetchStub);
+
+      await apiClient.post("/api/v1/auth/register", { email: "a@example.com", password: "password123" });
+
+      const [, calledInit] = fetchStub.mock.calls[0] as [string, RequestInit];
+      expect(new Headers(calledInit.headers).has("X-CSRF-Token")).toBe(false);
+    });
+
+    it("existing anonymous POST behavior (register) is completely unchanged — exact same body/headers as before", async () => {
+      const fetchStub = vi.fn().mockResolvedValue(jsonResponse(202, { message: "ok" }));
+      vi.stubGlobal("fetch", fetchStub);
+
+      await apiClient.post("/api/v1/auth/register", { email: "a@example.com", password: "password123" });
+
+      const [calledPath, calledInit] = fetchStub.mock.calls[0] as [string, RequestInit];
+      expect(calledPath).toBe("/api/v1/auth/register");
+      expect(calledInit.method).toBe("POST");
+      expect(calledInit.body).toBe(JSON.stringify({ email: "a@example.com", password: "password123" }));
+      expect(new Headers(calledInit.headers).get("Content-Type")).toBe("application/json");
+      expect(new Headers(calledInit.headers).has("X-CSRF-Token")).toBe(false);
+    });
+
+    it("csrf: true with a body still sets both Content-Type and X-CSRF-Token", async () => {
+      document.cookie = "csrf_token=xyz";
+      const fetchStub = vi.fn().mockResolvedValue(textResponse(204, ""));
+      vi.stubGlobal("fetch", fetchStub);
+
+      await apiClient.post("/api/v1/auth/logout", undefined, { csrf: true });
+
+      const [, calledInit] = fetchStub.mock.calls[0] as [string, RequestInit];
+      const headers = new Headers(calledInit.headers);
+      expect(headers.get("X-CSRF-Token")).toBe("xyz");
+    });
+  });
 });

@@ -1,5 +1,6 @@
 import type { ApiError } from "./ApiError";
 import { parseProblemBody } from "./problem";
+import { readCsrfToken, CSRF_HEADER_NAME } from "@/lib/auth/csrf";
 
 // FRONTEND-VERTICAL-SLICE-PLAN.md §13, point 2: "a frontend-only operational
 // default, not a backend contract — proposed 10s for the health check
@@ -19,6 +20,11 @@ const MESSAGE_TIMEOUT = "The server took too long to respond. Please try again."
 
 export interface ApiClientRequestOptions {
   timeoutMs?: number;
+  // FVS-003 BATCH 3A Part C — explicit opt-in only (confirmed contract:
+  // required for refresh/logout/every authenticated write; NOT required
+  // for login or FVS-002's anonymous POSTs). Never a blanket auto-attach —
+  // callers that don't need it simply never pass this.
+  csrf?: boolean;
 }
 
 function fallbackHttpMessage(status: number): string {
@@ -31,6 +37,15 @@ function networkError(): ApiError {
 
 function timeoutError(): ApiError {
   return { kind: "timeout", message: MESSAGE_TIMEOUT, raw: undefined };
+}
+
+const MESSAGE_CSRF = "Unable to verify your session. Please refresh the page and try again.";
+
+// FVS-003 BATCH 3A Part C — a missing CSRF cookie when one was explicitly
+// required is a local precondition failure, not a server response: no
+// request is ever sent, and no fake token is ever invented.
+function missingCsrfError(): ApiError {
+  return { kind: "csrf", message: MESSAGE_CSRF, raw: undefined };
 }
 
 // FVS-002 BATCH 3 Part A (FVS-002-IMPLEMENTATION-PLAN.md §1 row 13) — parses
@@ -145,10 +160,28 @@ async function post<T = unknown>(
   options: ApiClientRequestOptions = {}
 ): Promise<T> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const init: RequestInit =
-    body === undefined
-      ? { method: "POST" }
-      : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
+
+  const headers: Record<string, string> = {};
+  if (body !== undefined) {
+    headers["Content-Type"] = "application/json";
+  }
+  if (options.csrf) {
+    // Read fresh at send time, every time — never cached across requests
+    // (§5 of the plan: the token happens to stay stable across a refresh,
+    // but nothing here depends on that stability to be correct).
+    const csrfToken = readCsrfToken();
+    if (csrfToken === undefined) {
+      throw missingCsrfError();
+    }
+    headers[CSRF_HEADER_NAME] = csrfToken;
+  }
+
+  const hasHeaders = Object.keys(headers).length > 0;
+  const init: RequestInit = {
+    method: "POST",
+    ...(hasHeaders ? { headers } : {}),
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  };
   return request<T>(path, init, timeoutMs);
 }
 

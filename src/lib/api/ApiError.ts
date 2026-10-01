@@ -3,7 +3,11 @@
 // section first (bekaa3d-api-contract: the server contract is the sole
 // authority; this file must never get ahead of it).
 
-export type ApiErrorKind = "http" | "network" | "timeout" | "parse";
+// FVS-003 BATCH 3A Part C — "csrf" is a local precondition failure (the
+// required csrf_token cookie was missing when apiClient.post was called
+// with { csrf: true }), never a real server response. No request is sent
+// in this case.
+export type ApiErrorKind = "http" | "network" | "timeout" | "parse" | "csrf";
 
 export interface ApiError {
   kind: ApiErrorKind;
