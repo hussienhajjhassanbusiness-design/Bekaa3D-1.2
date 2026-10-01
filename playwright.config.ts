@@ -27,7 +27,7 @@ export default defineConfig({
   projects: [
     {
       name: "smoke",
-      testMatch: "smoke.spec.ts",
+      testMatch: ["smoke.spec.ts", "register-and-verify.spec.ts"],
       // Uses the system-installed Microsoft Edge (Chromium-based) via
       // Playwright's "channel" option instead of Playwright's own bundled
       // Chromium — this sandboxed environment has no outbound network
