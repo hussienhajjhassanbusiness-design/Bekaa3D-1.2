@@ -179,7 +179,7 @@ function LoginPage() {
         schema={loginSchema}
         defaultValues={{ email: "", password: "" }}
         onSubmit={handleSubmit}
-        className="mt-4 max-w-[420px]"
+        className="mt-4 max-w-[420px] mx-auto"
       >
         <LoginFields />
       </Form>

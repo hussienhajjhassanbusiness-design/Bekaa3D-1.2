@@ -122,14 +122,25 @@ describe("AuthProvider / useAuth", () => {
     const queryFn = vi.fn(() => Promise.resolve(SAFE_USER));
     mockBootstrap(queryFn);
     const queryClient = new QueryClient();
-    const Wrapper = ({ children }: { children: ReactNode }) =>
+
+    // FVS-003 BATCH 4 Section F/T11 finding (test-methodology only, no
+    // product defect): passing the StrictMode wrapper via RTL's `wrapper`
+    // render option does NOT actually trigger React's dev-only
+    // mount->cleanup->mount effect double-invoke in this environment
+    // (confirmed empirically — a bare counter effect run through
+    // `render(ui, { wrapper })` stays at 1, while the identical tree built
+    // directly inside `render(...)` reaches 2). The tree must be built
+    // directly, with StrictMode as the actual root passed to `render`, for
+    // this test to exercise genuine double-invoke rather than passing
+    // trivially regardless of whether the dedupe behavior it claims to
+    // prove is real.
+    render(
       createElement(
         StrictMode,
         null,
-        createElement(QueryClientProvider, { client: queryClient }, createElement(AuthProvider, null, children))
-      );
-
-    render(<Probe />, { wrapper: Wrapper });
+        createElement(QueryClientProvider, { client: queryClient }, createElement(AuthProvider, null, createElement(Probe)))
+      )
+    );
 
     await waitFor(() => expect(screen.getByTestId("loading")).toHaveTextContent("false"));
     expect(queryFn).toHaveBeenCalledTimes(1);
@@ -183,6 +194,49 @@ describe("AuthProvider cross-tab logout wiring", () => {
     unmount();
     expect(unsubscribe).toHaveBeenCalledTimes(1);
     expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  // FVS-003 BATCH 4 Section M — React Strict Mode's dev-only double-invoke
+  // (mount -> cleanup -> mount) must leave exactly one ACTIVE cross-tab
+  // subscription per provider instance, not two: the discarded first
+  // mount's listener must be torn down (unsubscribe/close called) before
+  // the second, surviving mount registers its own.
+  it("StrictMode's dev-only double-invoke leaves exactly one active cross-tab subscription, not two", async () => {
+    mockBootstrap(() => Promise.resolve(null));
+    const unsubscribeCalls: number[] = [];
+    const closeCalls: number[] = [];
+    let subscribeCallCount = 0;
+    const subscribe = vi.fn(() => {
+      subscribeCallCount += 1;
+      const thisRegistration = subscribeCallCount;
+      return vi.fn(() => unsubscribeCalls.push(thisRegistration));
+    });
+    const close = vi.fn(() => closeCalls.push(subscribeCallCount));
+    vi.spyOn(crossTabSignalModule, "createCrossTabSignal").mockReturnValue({
+      announce: vi.fn(),
+      subscribe,
+      close,
+    });
+    const queryClient = new QueryClient();
+
+    // See the sibling bootstrap-queryFn StrictMode test above for why the
+    // tree is built directly here rather than via RTL's `wrapper` render
+    // option — only this form genuinely triggers double-invoke.
+    render(
+      createElement(
+        StrictMode,
+        null,
+        createElement(QueryClientProvider, { client: queryClient }, createElement(AuthProvider, null, createElement(Probe)))
+      )
+    );
+    await waitFor(() => expect(screen.getByTestId("loading")).toHaveTextContent("false"));
+
+    // Double-invoke registered twice, but exactly the FIRST registration's
+    // resources were released — leaving registration #2 as the one
+    // surviving, active subscription.
+    expect(subscribe).toHaveBeenCalledTimes(2);
+    expect(unsubscribeCalls).toEqual([1]);
+    expect(closeCalls).toEqual([1]);
   });
 
   it("receiving a 'logout' cross-tab event sets the session anonymous immediately", async () => {
@@ -253,6 +307,44 @@ describe("AuthProvider cross-tab logout wiring", () => {
     screen.getByRole("button").click();
 
     expect(mutateAsync).toHaveBeenCalledTimes(1);
+  });
+
+  // FVS-003 BATCH 4 Section L — the backend requires that a user be
+  // informable when server-side logout did not complete after local-first
+  // logout. useLogout.ts's own mutateAsync already resolves (never throws)
+  // a { serverConfirmed: boolean } result for exactly this reason (see its
+  // own tests); what hadn't been proven before BATCH 4 is that
+  // AuthProvider.logout() — the one seam a future real caller would
+  // actually use — forwards that result unchanged rather than swallowing
+  // it. "The hook internally knows it failed" is not feedback; a caller
+  // that awaits `logout()` and inspects `serverConfirmed` is.
+  it("logout() forwards a failed server-side outcome (serverConfirmed:false) to its caller unchanged, never swallowing or throwing it", async () => {
+    mockBootstrap(() => Promise.resolve(SAFE_USER));
+    const mutateAsync = vi.fn().mockResolvedValue({ serverConfirmed: false });
+    mockedUseLogout.mockReturnValue({ mutateAsync } as never);
+    mockSignal();
+
+    let observedResult: unknown;
+    function LogoutProbe() {
+      const { logout } = useAuth();
+      return (
+        <button
+          onClick={() => {
+            void logout().then((result) => {
+              observedResult = result;
+            });
+          }}
+        >
+          Log out
+        </button>
+      );
+    }
+    const { Wrapper } = createClientWrapper();
+    render(<LogoutProbe />, { wrapper: Wrapper });
+
+    screen.getByRole("button").click();
+
+    await waitFor(() => expect(observedResult).toEqual({ serverConfirmed: false }));
   });
 
   it("the public interface exposes exactly user/isAuthenticated/isLoading/logout — no refreshSession, login, setUser, setAuthenticated, tokens, or roles helpers", async () => {
