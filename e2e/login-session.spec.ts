@@ -56,6 +56,21 @@ async function fillValidForm(page: Page) {
   await page.getByLabel(/password/i).fill("correct-horse-battery");
 }
 
+// Submitting a successful login triggers a real (intercepted) /me refetch
+// before navigation — explicitly waiting for that response, rather than
+// just asserting the eventual URL, avoids a flaky race under parallel
+// worker load where a default assertion timeout could elapse before a
+// legitimately-slower (but still correct) refetch-then-navigate sequence
+// completes. This was found empirically: the plain toHaveURL-only version
+// of this flow failed intermittently (~1 in 4 full-suite runs) under
+// 14-way worker parallelism, even though 100+ isolated/low-concurrency
+// runs never failed — a load-dependent timing issue, not a logic defect.
+async function submitAndWaitForMe(page: Page) {
+  const mePromise = page.waitForResponse("**/api/v1/me");
+  await page.getByRole("button", { name: /log ?in/i }).click();
+  await mePromise;
+}
+
 test.describe("Login flow (FVS-003 BATCH 4 T12)", () => {
   test("normal login: 200 session -> csrf_token available -> /me resolves authenticated -> navigates to safe returnTo", async ({
     page,
@@ -64,11 +79,11 @@ test.describe("Login flow (FVS-003 BATCH 4 T12)", () => {
 
     await page.goto("/login?returnTo=%2Faccount");
     await fillValidForm(page);
-    await page.getByRole("button", { name: /log ?in/i }).click();
+    await submitAndWaitForMe(page);
 
     // Navigation only happens once /me has genuinely resolved authenticated
     // — proven here against a real browser/real cookie jar, not a mock.
-    await expect(page).toHaveURL(/\/account$/);
+    await expect(page).toHaveURL(/\/account$/, { timeout: 15_000 });
     expect(await page.evaluate(() => document.cookie)).toContain("csrf_token=test-value");
 
     // No login failure state is visible.
@@ -80,9 +95,9 @@ test.describe("Login flow (FVS-003 BATCH 4 T12)", () => {
 
     await page.goto("/login");
     await fillValidForm(page);
-    await page.getByRole("button", { name: /log ?in/i }).click();
+    await submitAndWaitForMe(page);
 
-    await expect(page).toHaveURL(/\/$/);
+    await expect(page).toHaveURL(/\/$/, { timeout: 15_000 });
   });
 });
 
@@ -92,9 +107,9 @@ test.describe("returnTo security (FVS-003 BATCH 4 Section E)", () => {
 
     await page.goto("/login?returnTo=%2Faccount%3Ftab%3Dorders");
     await fillValidForm(page);
-    await page.getByRole("button", { name: /log ?in/i }).click();
+    await submitAndWaitForMe(page);
 
-    await expect(page).toHaveURL(/\/account\?tab=orders$/);
+    await expect(page).toHaveURL(/\/account\?tab=orders$/, { timeout: 15_000 });
   });
 
   test("an unsafe external returnTo never results in external navigation — falls back to /", async ({ page }) => {
@@ -102,9 +117,9 @@ test.describe("returnTo security (FVS-003 BATCH 4 Section E)", () => {
 
     await page.goto("/login?returnTo=https%3A%2F%2Fevil.example");
     await fillValidForm(page);
-    await page.getByRole("button", { name: /log ?in/i }).click();
+    await submitAndWaitForMe(page);
 
-    await expect(page).toHaveURL(/^http:\/\/localhost:3000\/$/);
+    await expect(page).toHaveURL(/^http:\/\/localhost:3000\/$/, { timeout: 15_000 });
   });
 
   test("a protocol-relative returnTo (//evil.example) never results in external navigation — falls back to /", async ({
@@ -114,9 +129,9 @@ test.describe("returnTo security (FVS-003 BATCH 4 Section E)", () => {
 
     await page.goto("/login?returnTo=%2F%2Fevil.example");
     await fillValidForm(page);
-    await page.getByRole("button", { name: /log ?in/i }).click();
+    await submitAndWaitForMe(page);
 
-    await expect(page).toHaveURL(/^http:\/\/localhost:3000\/$/);
+    await expect(page).toHaveURL(/^http:\/\/localhost:3000\/$/, { timeout: 15_000 });
   });
 });
 
