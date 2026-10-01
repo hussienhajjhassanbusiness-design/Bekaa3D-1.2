@@ -239,6 +239,348 @@ Cloudflare Turnstile is planned for registration and resend but is **not impleme
 
 A deterministic, backend-independent E2E spec exists (`e2e/register-and-verify.spec.ts`) proving the full register → check-email → (simulated email link) → verify → `/login`-prompt flow via Playwright route interception — it never contacts a real backend. **Real-backend acceptance (FVS002-T14) remains pending** and is a genuine, separate gate, not satisfied by the E2E spec above. The current manual workaround for inspecting a real verification token during development is to stop the backend's worker and inspect the `email_outbox` table directly via SQL; an automated, file-based dev/test email provider is being built on the backend side but is not ready yet.
 
+## FVS-003 — Login, Logout & Session Management
+
+A verified customer can log in, stay logged in across page loads via
+backend-managed httpOnly cookies, be silently refreshed, be forced back to
+`/login` when refresh fails, log out (locally and cross-tab), and have a
+safe `returnTo` preserved through the redirect. See
+`FVS-003-IMPLEMENTATION-PLAN.md` for the full task-by-task plan and
+contract-confidence table; this section documents only what is actually
+committed.
+
+### Cookie model
+
+Three cookies, confirmed by the backend contract:
+
+| Cookie | Readable by JS | Path | Lifetime |
+|---|---|---|---|
+| `access_token` | **No** (httpOnly) | `/` | 15 minutes |
+| `refresh_token` | **No** (httpOnly) | `/api/v1/auth` | 30 days |
+| `csrf_token` | **Yes** | `/` | 30 days, stable across refresh |
+
+`access_token`/`refresh_token` are never read anywhere in this codebase —
+not via `document.cookie`, not via any other mechanism. `csrf_token` is the
+*only* cookie any frontend code reads, and only through one approved
+helper: `readCsrfToken()` in `src/lib/auth/csrf.ts`. No token, session
+identifier, or credential material is ever written to `localStorage`,
+`sessionStorage`, React state, or a module-level variable anywhere in this
+slice.
+
+### Same-origin API, no CORS, no `credentials` override
+
+Every `apiClient` call is a same-origin relative `/api/...` request, exactly
+like FVS-001/002 — `fetch`'s default `credentials: "same-origin"` already
+sends cookies automatically; `apiClient.ts` sets no `credentials` option and
+none is added for this slice. No `credentials: "include"` and no CORS
+workaround are needed or planned, because the browser never calls the
+backend's real origin directly (Next's `rewrites()` forwards server-side).
+
+### Session bootstrap — `/me` is canonical, `csrf_token` is only a hint
+
+`src/lib/auth/authSession.ts`'s `bootstrapAuthSession()` is the one
+backend-approved algorithm:
+
+1. Check for a readable `csrf_token` cookie. **Absent → resolve anonymous
+   immediately, zero network requests.** Its absence is a fast, free,
+   100%-reliable anonymous signal (a user with no session never had a
+   reason to have this cookie set).
+2. **Its presence is only a hint that a session might exist — never proof of
+   authentication.** The cookie could be stale (session since expired or
+   revoked server-side) or simply left over from a previous visit. The only
+   way to actually know is to ask the server.
+3. Present → `GET /api/v1/me` (direct `apiClient.get`, never through
+   `authenticatedRequest` — this call *is* the bootstrap check, not a
+   request that should itself re-enter the generic 401-refresh wrapper).
+4. `200` → authenticated; body mapped to a non-secret `SafeUser` shape
+   (`{id, email, role, emailVerified, emailVerifiedAt, createdAt}` — never a
+   token field of any kind).
+5. `401 AUTH_REQUIRED` → exactly one coordinated refresh (below), then retry
+   `/me` exactly once.
+6. Refresh failure, or the retried `/me` still `401 AUTH_REQUIRED`, or any
+   other unexpected failure (network/timeout/500/a 401 with a different
+   code such as `MFA_REQUIRED`) → **anonymous.** Never a false
+   "authenticated" result; never retried a third time.
+
+`POST /api/v1/auth/refresh` is explicitly **not** used as a page-load probe
+— refresh rotates the refresh cookie on every call, is rate-limited
+(60/hour/IP), and simultaneous old-token reuse across tabs can revoke the
+entire session, none of which is acceptable for an unconditional page-load
+check.
+
+### Auth state ownership
+
+- **TanStack Query** owns the actual data: one query, key `["auth",
+  "session"]` (the `AUTH_SESSION_QUERY_KEY` constant exported from
+  `authSession.ts`), `staleTime: Infinity`, `retry: false` — the bootstrap
+  sequence's own bounded refresh-then-retry-once logic lives inside the
+  `queryFn` itself, not TanStack's own retry mechanism.
+- **`AuthProvider`** (`src/lib/auth/AuthProvider.tsx`) is a thin context
+  wrapper that *derives* `{user, isAuthenticated, isLoading, logout}` from
+  that one query — it never maintains a second, independently-settable
+  piece of state that could drift from it. `logout` is the one action field
+  added beyond projection (forwards to `useLogout()`'s mutation) —
+  deliberately nothing else (no `refreshSession`, `login`, `setUser`,
+  `setAuthenticated`, tokens, or roles).
+
+### Refresh coordination
+
+Two layered mechanisms, both in `src/lib/auth/refreshSession.ts`:
+
+1. **Same-tab single-flight** (`src/lib/auth/singleFlight.ts`,
+   `createSingleFlight`) — a fully generic async-dedup primitive with zero
+   auth/HTTP knowledge. Concurrent same-tab callers all share one in-flight
+   refresh; the slot clears on both success and failure.
+2. **Cross-tab mutual exclusion** — a named Web Lock
+   (`navigator.locks.request("bekaa3d-refresh", ...)`), backend-mandated:
+   two tabs rotating the refresh cookie simultaneously can trigger reuse
+   detection and revoke the whole session. **Inside the lock**, the session
+   is re-checked (`GET /api/v1/me`, direct and unwrapped) before refreshing
+   — a second tab that acquires the lock after a first tab already
+   refreshed sees the session already valid and does **not** rotate the
+   token a second time.
+
+If `navigator.locks` is unavailable, this falls back to same-tab-only
+protection (`refreshOnce()` called directly) — a documented, non-silent
+reduction in guarantees, not a second invented cross-tab mechanism. This
+project's supported/tested browser (Edge 79+, the same browser this
+repository's own Playwright suite runs against) supports Web Locks, so this
+fallback path is defensive-only, not a live gap for any currently-supported
+browser.
+
+`BroadcastChannel` is never used as a mutex anywhere in this codebase — it
+is reserved exclusively for the logout *signal* (below), a separate concern
+from refresh mutual exclusion.
+
+### 401 handling — `authenticatedRequest`
+
+`src/lib/auth/authenticatedRequest.ts` wraps a future authenticated call
+with refresh-then-retry-once behavior:
+
+- Only `401` **with problem `code: "AUTH_REQUIRED"`** is refreshable.
+  `401 MFA_REQUIRED` is a different, non-refreshable signal, surfaced
+  unchanged. Every other failure (`403`, `404`, network, timeout, `500`,
+  any other code) never triggers a refresh.
+- At most one refresh per call, at most one retry of the original request.
+  If the retried call also comes back `401 AUTH_REQUIRED`, that surfaces as
+  a final failure — never a second refresh.
+- **Both reads and writes** may be retried once after a successful refresh
+  — the backend has confirmed authenticated write endpoints authenticate
+  before their business side effect, so replaying a write after refresh is
+  safe, not merely assumed.
+- `login`, `logout`, and `refresh` itself are always called directly
+  through `apiClient`, **never** through this wrapper — enforced by
+  construction (the wrapper is simply never imported into those call
+  sites), not a runtime blacklist. As of this writing, `authenticatedRequest`
+  has no production call site at all yet — it is prepared infrastructure
+  for the first real authenticated write, which doesn't exist until a later
+  slice ships one.
+
+### CSRF
+
+- **Cookie:** `csrf_token`, JS-readable, stable for the session (does not
+  rotate on refresh).
+- **Header:** `X-CSRF-Token`, attached only when a caller explicitly opts in
+  via `apiClient.post(path, body, { csrf: true })` — never a blanket
+  auto-attach. Required for `refresh`, `logout`, and every authenticated
+  write; **not** required for `login` or any of FVS-002's anonymous POSTs.
+- **Read fresh at send time, every call** — never cached across requests in
+  React or module state.
+- A missing `csrf_token` cookie when `{csrf: true}` was requested is a
+  local precondition failure (`ApiError{kind:"csrf"}`) — no request is
+  sent, and no token is ever fabricated.
+
+### Login (`/login`)
+
+`src/app/login/page.tsx`, mutation in `src/lib/auth/useLogin.ts`.
+
+- `POST /api/v1/auth/login`, body exactly `{email, password}`, no CSRF, no
+  trailing slash.
+- Two disjoint success shapes, never collapsed into "any 2xx means
+  authenticated": **`200`** (`{user_id, email, role, email_verified,
+  session_expires_at}`) is a normal session; **`202`** (`{challenge_id,
+  expires_in_seconds}`) is an MFA challenge that establishes **no session
+  and sets no cookies**. The `200` body itself is never trusted as the
+  ongoing auth source of truth — only `GET /me` is; the login response is
+  read only far enough to discriminate the two shapes (`user_id` vs
+  `challenge_id`).
+- On `202`: shows a safe, generic "additional verification required, not
+  yet available" message. Never builds MFA UI, never marks `AuthProvider`
+  authenticated, never exposes or persists `challenge_id`, never navigates
+  — MFA itself is FVS-005's scope entirely.
+- On `200`: `await queryClient.invalidateQueries({queryKey:
+  AUTH_SESSION_QUERY_KEY})` **before** navigating — since the auth-session
+  query is always active (mounted by the root-level `AuthProvider`),
+  TanStack's `invalidateQueries` genuinely awaits the real `/me` refetch
+  before its promise resolves, so navigation never races ahead of the
+  canonical authenticated state. Proven directly (not just asserted) by
+  `src/app/login/page.race.test.tsx`, which exercises the real
+  `useLogin -> AuthProvider -> bootstrapAuthSession` wiring with only
+  `apiClient` mocked, deliberately stalls `/me`, and confirms navigation
+  waits for it.
+- Email is trimmed before submission (the one field-level transformation
+  this slice applies); password is never trimmed and has no 8-character
+  minimum (unlike registration) — only a non-empty requirement and a
+  ≤256-character cap mirroring the confirmed backend maximum.
+- Failure copy: `401 INVALID_CREDENTIALS` → "Invalid email or password."
+  (identical regardless of unknown-email vs wrong-password — enumeration
+  safety is a backend-confirmed design intent, not just a frontend
+  convention); `403 ACCOUNT_DISABLED` → safe generic copy, never revealing
+  the password was correct; `429 RATE_LIMITED` → safe copy, with a coarse
+  wait time only when `retryAfterSeconds` is actually present; network/
+  timeout get their own safe messages. Raw backend diagnostic text
+  (`ApiError.raw`/`.detail`) is never rendered.
+- `returnTo` is read from the login URL's query string and resolved through
+  `src/lib/auth/returnTo.ts`'s `resolveReturnTo` before navigating — see
+  below.
+
+### Safe `returnTo`
+
+`src/lib/auth/returnTo.ts`. `isSafeReturnTo` requires exactly one leading
+`/`, rejects `//...` and any literal-or-percent-encoded backslash, and
+re-validates by resolving against a fixed fake origin
+(`new URL(value, FAKE_ORIGIN).origin === FAKE_ORIGIN`). Any rejected or
+missing value falls back to `/`. `buildLoginRedirectPath` produces
+`/login?returnTo=<encoded-safe-path>` for `ProtectedRoute`'s own redirect.
+Tested against an exhaustive attack-string matrix (absolute URLs,
+protocol-relative URLs, `javascript:`/`data:` pseudo-protocols, backslash
+tricks, percent-encoded variants) in `returnTo.test.ts`, and against a real
+browser in `e2e/login-session.spec.ts`.
+
+### `ProtectedRoute`
+
+`src/components/auth/ProtectedRoute.tsx`. Three states only, matching
+`AuthProvider`'s own: `isLoading` → `LoadingSpinner` only; `isAuthenticated`
+→ renders `children`; anonymous → renders nothing and `router.replace`s to
+`/login?returnTo=<current path+query>` inside a `useEffect` (never during
+render, so protected children are never rendered even momentarily before
+the redirect). No role/permission checking of any kind. Callers must never
+wrap `/login` itself with it (redirect-loop avoidance) — an invariant
+documented in the component's own comment, not enforced internally.
+
+**No real protected application route exists yet** in this repository
+(FVS-006 will supply the first one) — `ProtectedRoute` is proven entirely
+through its own component/integration tests
+(`ProtectedRoute.test.tsx`) and through `AuthProvider.test.tsx`'s
+cross-tab-race test, not through an E2E visit to a page that doesn't exist.
+No throwaway production route was created purely to exercise it in E2E.
+
+### Logout — local-first
+
+`src/lib/auth/useLogout.ts`, wired into `AuthProvider.logout()`.
+
+Backend-recommended "local-first" sequence, in order:
+
+1. `queryClient.setQueryData(AUTH_SESSION_QUERY_KEY, null)` — local auth
+   state flips to anonymous **synchronously, before any network response**.
+2. Broadcast a `"logout"` cross-tab signal (below).
+3. `POST /api/v1/auth/logout` (no body, `{csrf: true}`, direct `apiClient`
+   call — never `authenticatedRequest`, so logout itself can never trigger
+   a refresh).
+4. **Both `204` and `401 AUTH_REQUIRED` count as confirmed server
+   success** (an already-logged-out session completing "logout" again is,
+   from the user's perspective, still a successful logout). `403
+   CSRF_INVALID`, network/timeout failures, and a missing `csrf_token`
+   cookie are explicitly **not** confirmed success.
+5. On any non-confirmed outcome: the user remains locally logged out
+   regardless (that already happened in step 1), and exactly **one**
+   bounded background retry fires after a fixed delay — a bare `setTimeout`
+   calling the same server-logout attempt once more, nothing scheduled
+   again after that. Never a generic retry/job framework, never routed
+   through `authenticatedRequest`, never triggers `refreshSession`.
+6. `mutateAsync()`/`AuthProvider.logout()` always **resolve** (never
+   reject) with `{serverConfirmed: boolean}` — the user's own logout action
+   is never a failed action, since the frontend is already locally logged
+   out by the time any server outcome is known.
+
+**User feedback on a failed server-side logout:** `serverConfirmed: false`
+is a genuinely caller-observable result, not an internally-swallowed
+detail — `AuthProvider.logout()` forwards `useLogout`'s own result
+Promise unchanged (proven by a dedicated test in `AuthProvider.test.tsx`).
+There is currently no real logout trigger in the UI to display this to an
+end user (no nav/account surface exists yet — see Non-Scope below), so
+nothing renders it today; the seam a future logout button/page would need
+already exists and is tested, without inventing one now.
+
+### Cross-tab logout
+
+`src/lib/auth/crossTabSignal.ts` (`createCrossTabSignal`, built on native
+`BroadcastChannel`) plus `AuthProvider.tsx`'s subscription. Outgoing: a
+local `logout()` call announces the literal string `"logout"` only — never
+an email, token, or any other payload, even though the primitive's own type
+signature accepts any string. Incoming: another tab receiving `"logout"`
+immediately calls `queryClient.cancelQueries({queryKey:
+AUTH_SESSION_QUERY_KEY})` then `setQueryData(..., null)` — never calls the
+logout API again, never re-announces (so it can never loop), never
+triggers a refresh.
+
+**Login-vs-remote-logout race:** if a concurrent login's own
+`invalidateQueries`-triggered `/me` refetch is still in flight when a
+remote `"logout"` signal arrives, `cancelQueries()` (called before
+`setQueryData`) causes that in-flight fetch's eventual resolution to be
+discarded rather than applied — a stale "authenticated" result can never
+land after the anonymous state has been set. Proven by a dedicated test in
+`AuthProvider.test.tsx` that builds exactly this sequence with a
+controllable, deliberately-delayed `/me` fetch.
+
+Survives React Strict Mode's dev-only effect double-invoke correctly: the
+discarded first mount's subscription is torn down (`unsubscribe()` +
+`close()`) before the second, surviving mount registers its own — proven
+with a test that genuinely exercises double-invoke (building the render
+tree directly, rather than via React Testing Library's `wrapper` render
+option, which was found during this slice's own integration pass not to
+trigger genuine double-invoke in this test environment).
+
+### Cache security
+
+On logout (local or remote) and nowhere else, exactly one query is
+cleared: `["auth","session"]`. No unrelated public data (e.g. a future
+catalog/product query) is ever touched by this mechanism. There is
+currently no second authenticated-user-scoped query in this codebase — the
+convention any future one must follow (so logout generalizes without
+re-deriving the rule) is recorded in `FVS-003-IMPLEMENTATION-PLAN.md` §13:
+nest such a query's key under a shared, exported prefix constant from this
+slice's auth module, so a single future `removeQueries` call on logout can
+target the whole prefix. No such constant exists yet, since nothing
+consumes it — it is not invented speculatively ahead of a real second
+query.
+
+### Deterministic E2E scope
+
+`e2e/login-session.spec.ts` (FVS003-T12) covers, all via route
+interception against the real browser (never a real backend): normal login
+with a real browser cookie jar (the backend's `Set-Cookie` for
+`csrf_token` is genuinely applied, never simulated in JS) through to
+canonical `/me`-authenticated navigation; safe `returnTo` round-tripping
+(including one with its own nested query string); unsafe external and
+protocol-relative `returnTo` both falling back to `/`; the `202` MFA path
+never authenticating, navigating, or exposing `challenge_id`; and a
+real-browser accessibility/responsive pass (six-viewport overflow and
+desktop-centering check, full-width mobile CTA, a full keyboard walkthrough
+with visible focus and no trap, the password show/hide toggle's keyboard
+operability and `aria-pressed` correctness, focus-first-invalid-field with
+a polite validation summary, and confirmation that a credential failure
+never leaks raw backend diagnostic text).
+
+**Why logout and `ProtectedRoute` are not covered here:** there is
+intentionally no real logout trigger in site navigation and no real
+protected product route anywhere in this repository yet (both are later
+slices' job — most likely FVS-006). Building either purely to round out
+this E2E file was explicitly rejected. They remain proven through their
+own component/integration tests instead (`useLogout.test.ts`,
+`AuthProvider.test.tsx`'s cross-tab tests, `ProtectedRoute.test.tsx`). The
+full login → protected-page → logout browser flow will be exercised once a
+real protected route/logout trigger exists, or during T14 against the real
+backend.
+
+### Real backend acceptance — still pending
+
+FVS003-T14 (real cookie/session/refresh/logout/CSRF acceptance against an
+actual backend) has not been attempted — no real backend has been reachable
+in this environment at any point in this engagement, matching FVS-001's and
+FVS-002's own still-pending real-backend gates. This is a genuine, separate
+gate, not satisfied by anything in this section.
+
 ## Testing
 
 ### Unit / Component Tests
@@ -259,9 +601,9 @@ Why no MSW: FVS-001's network surface is intentionally tiny — one client, one 
 npm run test:e2e
 ```
 
-Runs **only** `e2e/smoke.spec.ts` and `e2e/register-and-verify.spec.ts` (both matched by Playwright's `smoke` project in `playwright.config.ts`). Deliberately backend-independent — verified to pass whether or not a real backend is running.
+Runs **only** `e2e/smoke.spec.ts`, `e2e/register-and-verify.spec.ts`, and `e2e/login-session.spec.ts` (all three matched by Playwright's `smoke` project in `playwright.config.ts`). Deliberately backend-independent — verified to pass whether or not a real backend is running.
 
-Current coverage: `/` boots (shell landmarks, SkipLink, foundation content); `/does-not-exist` renders 404 content with a working "Back to home" link and the shell still exactly-once afterward; the readiness/banner state is asserted **tolerantly** — whichever valid state is currently showing is accepted, never a hard-coded expectation. `register-and-verify.spec.ts` (FVS002-T12) proves the full register → check-email → verify → `/login`-prompt flow and a short resend smoke check, both via route interception, never a real backend.
+Current coverage: `/` boots (shell landmarks, SkipLink, foundation content); `/does-not-exist` renders 404 content with a working "Back to home" link and the shell still exactly-once afterward; the readiness/banner state is asserted **tolerantly** — whichever valid state is currently showing is accepted, never a hard-coded expectation. `register-and-verify.spec.ts` (FVS002-T12) proves the full register → check-email → verify → `/login`-prompt flow and a short resend smoke check, both via route interception, never a real backend. `login-session.spec.ts` (FVS003-T12) proves the login flow — see the FVS-003 section above for its exact scope.
 
 No accessibility automation runs here — see below.
 
