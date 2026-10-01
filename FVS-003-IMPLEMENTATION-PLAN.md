@@ -11,6 +11,10 @@
 **Spec:** `FRONTEND-VERTICAL-SLICE-PLAN.md` §5 "FVS-003 — Login, Logout & Session Management" and `vertical-slice-plan.md` §"VS-003" are the governing specs. **This plan documents and resolves a real conflict between those two documents and the backend's actual VS-003/VS-006 scope — see §0 and §4.** Where this plan and either source document disagree, this plan's own Contract Confidence Table (§5 below, mirroring FVS-002's own §1) governs; executors read this plan first.
 
 > **CORRECTED after initial review:** T02 (login mutation) and T09 (logout) were originally marked "CAN IMPLEMENT NOW" despite this same plan's own Contract Confidence Table listing their real request/response semantics as unconfirmed — an internal inconsistency, now fixed. Both are reclassified **BLOCKED ON BACKEND CONTRACT**. T04 (AuthProvider) is reclassified fully **BLOCKED ON ARCHITECTURE DECISION** (its "interface half" is no longer treated as buildable in isolation, to avoid shipping a `user` field that implies metadata not yet known to exist). T06 (refresh coordinator) and T10 (cross-tab logout) are redesigned as fully generic, contract-independent primitives — decoupled from the real refresh/logout HTTP calls they'll eventually wire into — and remain **CAN IMPLEMENT NOW**. T07 (401 wrapper) is newly reclassified **BLOCKED ON BACKEND CONTRACT**, since its entire purpose is encoding exactly the replay-safety/refreshability decisions that must not be guessed. See the "Task Status Classification (corrected)" section below for the full table and reasoning, and the implementation session's own "FVS-003 SAFE BATCH 1" report for what was actually built under this correction.
+>
+> **BATCH 3A (contract sync + session foundation):** `/me` bootstrap, CSRF, refresh, and 401/replay-safety all confirmed and built (T04 minus `logout`, T07, T08, plus `ApiError.code`). See that batch's own report for detail.
+>
+> **BATCH 3B (this correction):** The backend has now also confirmed login's exact request/response contract (including the `200`-session-vs-`202`-MFA-challenge distinction, all three failure codes, and email-trim-only guidance) and logout's exact success semantics (`204` **and** `401 AUTH_REQUIRED` both treated as success, plus the backend's own recommended local-first/background-retry policy). T02, T03, T05, T09, and T10's logout-wiring are built this batch. Only genuinely unrelated gaps (correlation-ID) remain open.
 
 ---
 
@@ -65,14 +69,17 @@ This closes the circular dependency the original four options were weighing: `/m
 | # | Contract item | Status | Evidence / source | Frontend consequence |
 |---|---|---|---|---|
 | 1 | Endpoint paths (`login`, `logout`, `refresh`, `me`) | **CONFIRMED** | `vertical-slice-plan.md` VS-003; backend contract sync adds `GET /api/v1/me` (§1) | Mutations/queries can be built against exact paths now |
-| 2 | Login request field names | **ASSUMED — not independently re-stated at BATCH 3A** | Still only `{ email, password }` by convention (matching registration); the BATCH 3A contract message describes login's cookie/CSRF behavior in detail but does not restate its literal JSON field names | T02 proceeds against `{ email, password }` per explicit instruction to unblock T02 — if the real backend ever rejects this shape, that is a fast, cheap correction during T02's own implementation, not a reason to have blocked the task further |
-| 3 | Login password rules | **ASSUMED — none beyond "required"** | Unchanged | No login-specific complexity/length rule invented |
+| 2 | Login request field names | **CONFIRMED (BATCH 3B)** | `POST /api/v1/auth/login`, body exactly `{email, password}`; unknown fields → 422 | T02 builds the exact confirmed shape; no extra field is ever sent |
+| 3 | Login password rules | **CONFIRMED (BATCH 3B) — none beyond "required"** | "backend does not modify it; maximum backend-supported value is 256 chars; no login-specific complexity rule; client may require non-empty" | T03's schema requires non-empty only — explicitly does **not** reuse registration's 8-character minimum (a login form must accept any password the backend would, including a legitimately shorter pre-existing one); a client-side ≤256-char cap is permitted only because it exactly mirrors the confirmed backend maximum, not invented independently |
 | 4 | Email format check | **ASSUMED — safe, non-authoritative** | Unchanged | Generic, non-authoritative check only |
-| 5 | Login success HTTP status | **NEEDS BACKEND CONFIRMATION — still open** | Not restated at BATCH 3A | Treat any 2xx as success |
-| 6 | Login success response body | **CONFIRMED (BATCH 3A) — no token body, ever** | "No token body is ever returned" (Cookie Model section) | Login's success handling reads **no** field from its own response body — the canonical "who am I" read is always the separate `GET /api/v1/me` call (§1), never the login response itself |
-| 7 | Login failure HTTP status | **NEEDS BACKEND CONFIRMATION — still open** | Not restated | Generic `kind:"http"` 4xx handling applies |
-| 8 | Invalid-credential error signal | **NEEDS BACKEND CONFIRMATION — still open** | Not restated | One generic "Invalid email or password." copy regardless |
-| 9 | Locked/rate-limited signal | **NEEDS BACKEND CONFIRMATION — still open for login specifically** (refresh's own 429 is confirmed, row 20) | Not restated for login | No lockout countdown invented for login; reuses `ApiError.retryAfterSeconds` if present |
+| 4b | Email trimming | **CONFIRMED (BATCH 3B) — recommended by backend, frontend-applied** | "backend team recommended trimming email client-side; no explicit backend trimming was found" (lookup is case-insensitive server-side) | T03 trims the email before submission — the ONLY field-level transformation this slice ever applies; password is never trimmed (row 3's "backend does not modify it" + the registration precedent both forbid it); no manual lowercasing is added, since the backend's case-insensitive lookup already makes it unnecessary |
+| 5 | Login success HTTP status | **CONFIRMED (BATCH 3B) — two disjoint outcomes, not "any 2xx"** | Login Success section: normal session is `200`; an MFA-enabled admin instead gets `202` | T02 must **not** collapse these — `200` means authenticated: see row 6; `202` means an MFA challenge was issued and **no session was established, no cookies were set** — see row 5b. Treating `202` as success would be a real security bug (FVS-005 territory, not FVS-003's) |
+| 5b | MFA challenge (202) | **CONFIRMED (BATCH 3B) — new row** | Body `{challenge_id, expires_in_seconds}`; "202 does NOT establish an authenticated session and sets no auth cookies" | T03 shows a safe, generic "additional verification required, not yet available" informational state — never exposes or persists `challenge_id`, never fabricates an MFA route, never marks `AuthProvider` authenticated. FVS-005 owns the real MFA flow |
+| 6 | Login success response body (200) | **CONFIRMED (BATCH 3B)** | `{user_id, email, role, email_verified, session_expires_at}` | Still read for **nothing** beyond distinguishing this shape from the 202 shape (disjoint: `user_id` vs `challenge_id`) — the canonical "who am I" read remains the separate `GET /api/v1/me` call (§1); this plan does not start trusting the login response as an ongoing auth source of truth merely because it now has a confirmed shape |
+| 7 | Login failure HTTP status | **CONFIRMED (BATCH 3B)** | See rows 8/9/9b | `401`/`403`/`429` each map to a specific confirmed code, not a generic 4xx bucket |
+| 8 | Invalid-credential error signal | **CONFIRMED (BATCH 3B)** | `401`, code `INVALID_CREDENTIALS`; "unknown email and wrong password are intentionally indistinguishable" | One generic "Invalid email or password." copy for this exact code — enumeration-safety is a backend-confirmed design intent here, not just a frontend convention |
+| 9 | Locked/rate-limited signal (login) | **CONFIRMED (BATCH 3B)** | `429`, code `RATE_LIMITED`, `Retry-After` header present | Reuses the existing `ApiError.retryAfterSeconds` pattern; no failed-attempt-count or lockout-threshold copy is ever shown |
+| 9b | Disabled-account signal (login) | **CONFIRMED (BATCH 3B) — new row** | `403`, code `ACCOUNT_DISABLED`, returned only *after* a correct password | Safe generic copy ("Unable to sign in to this account.") — never reveals that the password was actually correct, which is exactly the detail a `403`-after-correct-password signal could otherwise leak if rendered carelessly |
 | 10 | Cookies set by login | **CONFIRMED (BATCH 3A)** | Cookie Model section | `access_token` (httpOnly, Path `/`, 15m), `refresh_token` (httpOnly, Path `/api/v1/auth`, 30d), `csrf_token` (JS-readable, Path `/`, 30d) |
 | 11 | Cookie names | **CONFIRMED (BATCH 3A)** | Cookie Model section | `access_token`, `refresh_token`, `csrf_token` — only `csrf_token` is ever read by frontend code (§3) |
 | 12 | Cookie `SameSite`/`Secure`/`Path` | **CONFIRMED (BATCH 3A)** | Cookie Model section | `csrf_token`: `SameSite=Lax`, `Path=/`. `Secure=true` outside development; non-`Secure` in local dev over HTTP. No frontend code depends on these values directly (the browser enforces them), but documented so a dev-environment surprise isn't mistaken for a frontend bug |
@@ -87,11 +94,12 @@ This closes the circular dependency the original four options were weighing: `/m
 | 21 | Reuse-detected response | **CONFIRMED (BATCH 3A)** | "refresh-token replay" is explicitly one of the conditions folded into `401 AUTH_REQUIRED` | No distinct UX — identical to any other expired-session case, exactly as this plan's own §21 already assumed |
 | 22 | Can refresh itself return 401/403 | **CONFIRMED (BATCH 3A)** | Refresh section (`401 AUTH_REQUIRED`, `403 CSRF_INVALID`) | T06/Part D treat any refresh failure as "could not refresh" — no recursive refresh-of-refresh (§6/§9, unchanged) |
 | 23 | Does refresh response include user/session state | **CONFIRMED (BATCH 3A) — no** | "204 empty"; "No token body is ever returned" | `/me` remains the sole source of user/session data (§1) |
-| 24 | Logout request shape | **CONFIRMED (BATCH 3A) — no body, per the existing Cookie/Refresh pattern** | Not explicitly restated for logout's body, but logout's CSRF/status are confirmed (rows 25/26) and no body is mentioned anywhere for it | T09 (Batch 3B) sends no body |
-| 25 | Logout CSRF requirement | **CONFIRMED (BATCH 3A) — required** | "Required for: POST /api/v1/auth/logout" | T09 always sends `X-CSRF-Token` |
-| 26 | Logout success status/body | **NEEDS BACKEND CONFIRMATION — still open (exact status not restated, though CSRF/path are confirmed)** | Not restated | T09 (Batch 3B) treats any 2xx as success until the exact code is confirmed |
+| 24 | Logout request shape | **CONFIRMED (BATCH 3B) — no body** | "POST /api/v1/auth/logout. No request body." | T09 sends no body |
+| 25 | Logout CSRF requirement | **CONFIRMED (BATCH 3A/3B) — required** | "Requires CSRF" | T09 always sends `X-CSRF-Token` |
+| 26 | Logout success status | **CONFIRMED (BATCH 3B) — two statuses both treated as success** | "Success: 204 empty. Repeat/no decodable auth cookie: 401 AUTH_REQUIRED. Treat this as successful logout UX." | T09 treats **both** `204` and `401 AUTH_REQUIRED` as logout success (an already-logged-out session completing "logout" again is, from the user's perspective, still successfully logged out). `403 CSRF_INVALID` is explicitly **not** success |
 | 27 | Logout cookie-clearing semantics | **ASSUMED — backend clears via Set-Cookie on response** | Unchanged | No frontend cookie-clearing code |
-| 28 | Logout idempotency | **NEEDS BACKEND CONFIRMATION — still open** | Not restated | T09 (Batch 3B) does not assume either way |
+| 28 | Logout idempotency | **CONFIRMED (BATCH 3B) — yes, effectively, via row 26's 401-as-success rule** | Same evidence as row 26 | T09 may be called again safely; a second call simply resolves via the `401 AUTH_REQUIRED` = success path rather than needing its own idempotency guarantee from the backend |
+| 28b | Logout network/backend-failure policy | **CONFIRMED (BATCH 3B) — backend-recommended, new row** | "immediately clear local authenticated UI state; broadcast logout to other tabs; tell user server-side logout may not have completed; retry server logout in background" | This is the "local-first logout" design T09 implements exactly — resolves the plan's own previously-flagged non-silent decision point (§9's T09 task definition) in the backend's favor: local state clears **before** waiting for any network response, never after |
 | 29 | CSRF token delivery mechanism | **CONFIRMED (BATCH 3A)** | "Cookie: csrf_token ... JS-readable, not HttpOnly" | Part C reads it directly from `document.cookie` |
 | 30 | CSRF header name | **CONFIRMED (BATCH 3A) — `X-CSRF-Token`** | CSRF section | Part C/apiClient attach exactly this header name |
 | 31 | Which methods require CSRF | **CONFIRMED (BATCH 3A)** | CSRF section | Required for refresh, logout, and every authenticated POST/PUT/PATCH/DELETE. **Not** required for login, or for anonymous POSTs (register/verify-email/resend-verification/password-reset) |
@@ -515,7 +523,7 @@ T08 (UNBLOCKED, CSRF — BUILT at BATCH 3A Part C)
 
 ### FVS003-T02 — Login Schema & Mutation
 
-**Status:** **UNBLOCKED at BATCH 3A** (re-corrected — see the Task Status Classification table above). Cookies/CSRF-exemption/no-token-body are confirmed; only the literal `{email,password}` field spelling remains ASSUMED-by-convention (§2 row 2). **Deferred to Batch 3B** — not implemented in BATCH 3A, which built the surrounding infrastructure (CSRF, refresh, bootstrap) this task will plug into.
+**Status:** **FULLY CONFIRMED at BATCH 3B and BUILT this batch.** Request fields, both success shapes (200 session / 202 MFA), and all three failure codes (`INVALID_CREDENTIALS`/`ACCOUNT_DISABLED`/`RATE_LIMITED`) are now confirmed (§2 rows 2/5/5b/6/8/9/9b). Real code: `src/lib/auth/useLogin.ts`.
 **Purpose:** The real login mutation, enumeration-safe by construction.
 **Depends on:** None (architecturally), but **execution is blocked** until the Backend Questions "LOGIN" group is answered.
 **Contract gates:** Rows 2, 3, 5, 6, 7, 8, 9, 10, 32 of §2 are unconfirmed — every one of them would need to be invented to write real code today, which this task does not do.
@@ -534,7 +542,7 @@ T08 (UNBLOCKED, CSRF — BUILT at BATCH 3A Part C)
 
 ### FVS003-T03 — Login Page (`/login`)
 
-**Status:** **UNBLOCKED at BATCH 3A**, same as T02 (see the Task Status Classification table above). **Deferred to Batch 3B.**
+**Status:** **BUILT at BATCH 3B.** Real code: `src/app/login/page.tsx`. Email is trimmed before submission (row 4b); password is never trimmed; no registration-style 8-char minimum (row 3); MFA's 202 renders a safe, generic "not yet available" state without exposing `challenge_id` (row 5b).
 **Purpose:** The real login form and enumeration-safe failure UX.
 **Depends on:** T02 (and T01, since a successful login redirects through the `returnTo` validator).
 **Contract gates:** Same unconfirmed rows as T02; additionally row 9 (lockout signal) — no lockout duration/countdown is rendered unless `retryAfterSeconds` is actually present on a `429`.
@@ -571,7 +579,7 @@ T08 (UNBLOCKED, CSRF — BUILT at BATCH 3A Part C)
 
 ### FVS003-T05 — `ProtectedRoute`
 
-**Status:** **UNBLOCKED at BATCH 3A** — T04 (its real dependency) is now built. **Deferred to Batch 3B**, not implemented in BATCH 3A.
+**Status:** **BUILT at BATCH 3B** against the real `AuthProvider` interface. Real code: `src/components/auth/ProtectedRoute.tsx`.
 **Purpose:** The reusable gate every future authenticated page/slice wraps itself in.
 **Depends on:** T04's eventual interface (design-only dependency, not an execution-order one — T05 can be built before T04 exists, as long as it imports/mocks the *agreed* context shape from §9), T01 (`returnTo` resolver).
 **Contract gates:** None of its own; its real-world acceptance inherits T04's §1 blocker.
@@ -645,7 +653,7 @@ T08 (UNBLOCKED, CSRF — BUILT at BATCH 3A Part C)
 
 ### FVS003-T09 — Logout
 
-**Status:** **UNBLOCKED at BATCH 3A** — CSRF requirement confirmed (row 25); exact success status (row 26) and idempotency (row 28) remain open but non-blocking. **Deferred to Batch 3B**, not implemented in BATCH 3A.
+**Status:** **FULLY CONFIRMED and BUILT at BATCH 3B.** Success semantics (204 **and** 401 AUTH_REQUIRED both treated as success, row 26), idempotency (row 28), and the backend-recommended local-first/background-retry policy (row 28b) are all confirmed. Real code: `src/lib/auth/useLogout.ts`.
 **Purpose:** The logout mutation, cache clearing, and `AuthProvider.logout()` wiring.
 **Depends on:** T04 (now fully blocked — see T04's corrected status) for the `["auth","session"]` key convention; the Backend Questions "LOGOUT" group.
 **Contract gates:** Rows 24/25/26/27/28 of §2 all block real implementation.
@@ -665,7 +673,7 @@ T08 (UNBLOCKED, CSRF — BUILT at BATCH 3A Part C)
 
 ### FVS003-T10 — Cross-Tab Logout Signal
 
-**Status:** **DONE** (Safe Batch 2 — `src/lib/auth/crossTabSignal.ts`, signal primitive only). Wiring into `useLogout`'s success handler is deferred to Batch 3B's T09.
+**Status:** **WIRED at BATCH 3B.** The primitive itself (Safe Batch 2 — `src/lib/auth/crossTabSignal.ts`) is unchanged; `useLogout` now calls its `announce("logout")` on local logout, and `AuthProvider` subscribes to clear auth state on receipt. A login/cross-tab-logout race guard (an epoch counter) was added to `AuthProvider` per the plan's own Review Focus item on this exact risk.
 **Purpose:** The reusable, content-free, same-browser cross-tab signaling mechanism that logout (once unblocked) and any future cross-tab-relevant event can build on.
 **Depends on:** None.
 **Contract gates:** None — this module never calls `apiClient`, never references `/logout`, and has no opinion about what triggers a broadcast.
