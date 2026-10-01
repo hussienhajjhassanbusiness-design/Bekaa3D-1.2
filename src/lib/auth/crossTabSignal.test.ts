@@ -8,8 +8,22 @@ import { createCrossTabSignal } from "./crossTabSignal";
 // announced and observed. Real `BroadcastChannel` is used throughout (both
 // Node and this project's jsdom test environment provide it natively); the
 // unsupported-environment path is exercised separately by stubbing it away.
+//
+// FVS-003 BATCH 3B reliability fix: real BroadcastChannel delivery is
+// asynchronous via the event loop, and a bare `setTimeout(resolve, 0)`
+// followed by a single assertion was observed to be genuinely flaky (~1 in
+// 6 runs failed, even in isolation — not just under parallel load). Positive
+// "a message arrives" assertions now poll via `vi.waitFor`; negative
+// "nothing arrives" assertions use a slightly longer, generous fixed wait
+// (20ms) instead of 0ms, since there is no positive condition to poll for.
+// This is a test-reliability fix only — the production module
+// (crossTabSignal.ts) is unchanged.
 
 const CHANNEL_NAME = "bekaa3d-auth";
+
+function settle(ms = 20): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 const createdChannels: BroadcastChannel[] = [];
 afterEach(() => {
@@ -57,9 +71,7 @@ describe("createCrossTabSignal", () => {
     const signal = createCrossTabSignal();
     signal.announce("logout");
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    expect(received).toEqual([{ type: "logout" }]);
+    await vi.waitFor(() => expect(received).toEqual([{ type: "logout" }]));
     signal.close();
   });
 
@@ -73,7 +85,7 @@ describe("createCrossTabSignal", () => {
 
     const signal = createCrossTabSignal();
     signal.announce("logout");
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await vi.waitFor(() => expect(received).not.toBeUndefined());
 
     expect(Object.keys(received as object)).toEqual(["type"]);
     expect(JSON.stringify(received)).not.toMatch(/token|email|user|session|cookie/i);
@@ -88,9 +100,7 @@ describe("createCrossTabSignal", () => {
     receiver.subscribe(listener);
 
     sender.announce("logout");
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    expect(listener).toHaveBeenCalledWith("logout");
+    await vi.waitFor(() => expect(listener).toHaveBeenCalledWith("logout"));
 
     sender.close();
     receiver.close();
@@ -107,7 +117,7 @@ describe("createCrossTabSignal", () => {
     foreign.postMessage({ unrelated: true });
     foreign.postMessage("just a string");
     foreign.postMessage(null);
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await settle();
 
     expect(listener).not.toHaveBeenCalled();
     receiver.close();
@@ -121,12 +131,11 @@ describe("createCrossTabSignal", () => {
     const unsubscribe = receiver.subscribe(listener);
 
     sender.announce("logout");
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(listener).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(listener).toHaveBeenCalledTimes(1));
 
     unsubscribe();
     sender.announce("logout");
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await settle();
     expect(listener).toHaveBeenCalledTimes(1);
 
     sender.close();
@@ -142,7 +151,7 @@ describe("createCrossTabSignal", () => {
     receiver.close();
 
     sender.announce("logout");
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await settle();
 
     expect(listener).not.toHaveBeenCalled();
     sender.close();
@@ -157,14 +166,14 @@ describe("createCrossTabSignal", () => {
     const unsubscribeB = receiver.subscribe(listenerB);
 
     sender.announce("logout");
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(listenerA).toHaveBeenCalledTimes(1);
-    expect(listenerB).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => {
+      expect(listenerA).toHaveBeenCalledTimes(1);
+      expect(listenerB).toHaveBeenCalledTimes(1);
+    });
 
     unsubscribeB();
     sender.announce("logout");
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(listenerA).toHaveBeenCalledTimes(2);
+    await vi.waitFor(() => expect(listenerA).toHaveBeenCalledTimes(2));
     expect(listenerB).toHaveBeenCalledTimes(1);
 
     sender.close();
@@ -180,7 +189,7 @@ describe("createCrossTabSignal", () => {
     const signal = createCrossTabSignal();
     signal.subscribe(vi.fn());
     signal.announce("logout");
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await settle();
 
     expect(fetchSpy).not.toHaveBeenCalled();
     signal.close();
@@ -194,7 +203,7 @@ describe("createCrossTabSignal", () => {
     const signal = createCrossTabSignal();
     signal.subscribe(vi.fn());
     signal.announce("logout");
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await settle();
 
     expect(localStorageSpy).not.toHaveBeenCalled();
     expect(sessionStorageSpy).not.toHaveBeenCalled();
@@ -226,7 +235,7 @@ describe("createCrossTabSignal", () => {
       const listener = vi.fn();
       signal.subscribe(listener);
       signal.announce("logout");
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await settle();
 
       expect(listener).not.toHaveBeenCalled();
       signal.close();
