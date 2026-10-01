@@ -51,7 +51,12 @@ export function Form<Schema extends ZodType<FieldValues, FieldValues>>({
   } = methods;
 
   const errorEntries = Object.entries(errors) as [string, { message?: string } | undefined][];
-  const errorMessages = errorEntries.map(([, error]) => error?.message).filter((message): message is string => Boolean(message));
+  // Keyed by field name, not message text — two different invalid fields
+  // can legitimately share identical error copy (e.g. two "Required"
+  // fields), which would otherwise produce a duplicate React key.
+  const errorItems = errorEntries
+    .map(([name, error]) => ({ name, message: error?.message }))
+    .filter((item): item is { name: string; message: string } => Boolean(item.message));
 
   function focusFirstInvalidField() {
     const [firstField] = errorEntries;
@@ -63,12 +68,12 @@ export function Form<Schema extends ZodType<FieldValues, FieldValues>>({
   return (
     <FormProvider {...methods}>
       <form onSubmit={handleSubmit(onSubmit, focusFirstInvalidField)} noValidate className={className}>
-        {errorMessages.length > 0 && (
+        {errorItems.length > 0 && (
           <div role="status" aria-live="polite" className="mb-4 rounded-md border-l-4 border-l-danger bg-danger-bg p-4 text-text-primary">
             <p className="text-body font-semibold">Please fix the following:</p>
             <ul className="mt-1 list-inside list-disc text-body">
-              {errorMessages.map((message) => (
-                <li key={message}>{message}</li>
+              {errorItems.map(({ name, message }) => (
+                <li key={name}>{message}</li>
               ))}
             </ul>
           </div>

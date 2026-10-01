@@ -44,6 +44,13 @@ describe("Register (/register)", () => {
     expect(screen.getByRole("button", { name: /create account/i })).toBeInTheDocument();
   });
 
+  it("the primary submit CTA is full-width, per the plan's mobile/desktop full-width-CTA requirement", () => {
+    mockedUseRegister.mockReturnValue({ mutateAsync: vi.fn() } as never);
+    render(<Register />);
+
+    expect(screen.getByRole("button", { name: /create account/i })).toHaveClass("w-full");
+  });
+
   it("submits the exact { email, password } body on a valid submit, preserving email case/content verbatim", async () => {
     const user = userEvent.setup();
     const mutateAsync = vi.fn().mockResolvedValue({ message: "check your email" });
@@ -174,6 +181,19 @@ describe("Register (/register)", () => {
     await user.click(screen.getByRole("button", { name: /create account/i }));
 
     expect(await screen.findByText(/check your email/i)).toBeInTheDocument();
+  });
+
+  it("moves focus to the success heading after a successful submit, so it never silently lands on <body>", async () => {
+    const user = userEvent.setup();
+    const mutateAsync = vi.fn().mockResolvedValue({ message: "check your email" });
+    mockedUseRegister.mockReturnValue({ mutateAsync } as never);
+    render(<Register />);
+
+    await fillValidForm(user);
+    await user.click(screen.getByRole("button", { name: /create account/i }));
+
+    await screen.findByText(/check your email/i);
+    await waitFor(() => expect(screen.getByRole("heading", { name: /create your account/i })).toHaveFocus());
   });
 
   it("renders identical success copy whether the backend implies a new or an existing account (enumeration safety)", async () => {

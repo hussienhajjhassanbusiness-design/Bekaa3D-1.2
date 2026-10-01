@@ -58,6 +58,7 @@ describe("useResendVerification", () => {
   });
 
   it("never retries automatically", async () => {
+    vi.useFakeTimers();
     const postSpy = vi.spyOn(apiClient, "post").mockRejectedValue(networkError());
     const { result } = renderHook(() => useResendVerification(), { wrapper: createWrapper() });
 
@@ -65,6 +66,13 @@ describe("useResendVerification", () => {
       await expect(result.current.mutateAsync({ email: "ada@example.com" })).rejects.toBeDefined();
     });
 
+    // Advance past TanStack Query's default backoff window — a dropped
+    // `retry: false` would surface here as a second call.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+
     expect(postSpy).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
   });
 });

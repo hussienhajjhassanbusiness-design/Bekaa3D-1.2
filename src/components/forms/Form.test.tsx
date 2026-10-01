@@ -32,6 +32,29 @@ function FakeField() {
   );
 }
 
+const twoFieldSchema = z.object({
+  first: z.string().min(1, "Required"),
+  second: z.string().min(1, "Required"),
+});
+type TwoFieldValues = z.infer<typeof twoFieldSchema>;
+
+function TwoFakeFields() {
+  const {
+    register,
+    formState: { errors },
+  } = useFormContext<TwoFieldValues>();
+  return (
+    <div>
+      <label htmlFor="first">First</label>
+      <input id="first" {...register("first")} />
+      {errors.first && <span>{errors.first.message}</span>}
+      <label htmlFor="second">Second</label>
+      <input id="second" {...register("second")} />
+      {errors.second && <span>{errors.second.message}</span>}
+    </div>
+  );
+}
+
 function renderTestForm(onSubmit: (values: FakeValues) => void | Promise<void>) {
   return render(
     <Form schema={fakeSchema} defaultValues={{ name: "" }} onSubmit={onSubmit}>
@@ -121,5 +144,25 @@ describe("Form", () => {
 
     await waitFor(() => expect(screen.getByRole("button", { name: "Submit" })).toBeDisabled());
     resolveSubmit();
+  });
+
+  it("does not produce a duplicate-React-key warning when two different invalid fields share identical error text", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const user = userEvent.setup();
+    render(
+      <Form schema={twoFieldSchema} defaultValues={{ first: "", second: "" }} onSubmit={vi.fn()}>
+        <TwoFakeFields />
+        <Button type="submit">Submit</Button>
+      </Form>
+    );
+
+    await user.click(screen.getByRole("button", { name: "Submit" }));
+    await screen.findByRole("status");
+
+    const duplicateKeyWarning = consoleErrorSpy.mock.calls.some((call) =>
+      call.some((arg) => typeof arg === "string" && arg.includes("Encountered two children with the same key"))
+    );
+    expect(duplicateKeyWarning).toBe(false);
+    consoleErrorSpy.mockRestore();
   });
 });

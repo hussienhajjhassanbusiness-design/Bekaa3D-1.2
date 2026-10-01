@@ -73,6 +73,17 @@ describe("VerifyEmail (/verify-email)", () => {
     expect(loginLink).toHaveAttribute("href", "/login");
   });
 
+  it("moves focus to the success heading once verification succeeds, so it never silently lands on <body>", async () => {
+    setHash(`#token=${VALID_TOKEN}`);
+    const mutateAsync = vi.fn().mockResolvedValue(undefined);
+    mockedUseVerifyEmail.mockReturnValue({ mutateAsync } as never);
+
+    render(<VerifyEmail />);
+
+    await screen.findByText(/verified/i);
+    await waitFor(() => expect(screen.getByRole("heading", { name: /verify your email/i })).toHaveFocus());
+  });
+
   it("shows the invalid state and makes no request when the hash is missing", () => {
     const mutateAsync = vi.fn();
     mockedUseVerifyEmail.mockReturnValue({ mutateAsync } as never);
@@ -242,6 +253,42 @@ describe("VerifyEmail (/verify-email)", () => {
 
     await screen.findByRole("alert");
     expect(screen.queryByText(/SECRET_RAW_DIAGNOSTIC_TEXT/)).toBeNull();
+  });
+
+  it("clears the token from the visible URL fragment after capturing it, without navigating or reloading", async () => {
+    setHash(`#token=${VALID_TOKEN}`);
+    const pathnameBefore = window.location.pathname;
+    const mutateAsync = vi.fn().mockResolvedValue(undefined);
+    mockedUseVerifyEmail.mockReturnValue({ mutateAsync } as never);
+
+    render(<VerifyEmail />);
+
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(window.location.hash).toBe(""));
+    // "without navigating or reloading" — the pathname is unchanged, proving
+    // this was a fragment-only History API replace, not a real navigation.
+    expect(window.location.pathname).toBe(pathnameBefore);
+  });
+
+  it("still sends exactly one POST (with the captured token) even though the URL fragment is cleared immediately after capture", async () => {
+    setHash(`#token=${VALID_TOKEN}`);
+    const mutateAsync = vi.fn().mockResolvedValue(undefined);
+    mockedUseVerifyEmail.mockReturnValue({ mutateAsync } as never);
+
+    render(<VerifyEmail />);
+
+    await waitFor(() => expect(window.location.hash).toBe(""));
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+    expect(mutateAsync).toHaveBeenCalledWith({ token: VALID_TOKEN });
+  });
+
+  it("clears the fragment for an invalid-shape token too (nothing secret should linger in the URL even on a local validation failure)", () => {
+    setHash("#token=tooshort");
+    mockedUseVerifyEmail.mockReturnValue({ mutateAsync: vi.fn() } as never);
+
+    render(<VerifyEmail />);
+
+    expect(window.location.hash).toBe("");
   });
 
   it("fires exactly one POST even under React Strict Mode's dev-only double-invoke of effects", async () => {

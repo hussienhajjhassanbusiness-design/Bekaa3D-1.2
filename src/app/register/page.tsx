@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { useFormContext } from "react-hook-form";
 import { Form } from "@/components/forms/Form";
@@ -108,7 +108,7 @@ function RegisterFields() {
         error={errors.password?.message}
         {...register("password")}
       />
-      <Button type="submit" className="mt-4">
+      <Button type="submit" className="mt-4 w-full">
         Create account
       </Button>
     </>
@@ -119,6 +119,18 @@ export default function Register() {
   const { mutateAsync } = useRegister();
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  // FVS-002 BATCH 4 Part C — after the page meaningfully changes to the
+  // success state, focus must not silently fall back to <body>. Moves
+  // focus to the success heading itself (tabIndex={-1}: a programmatic-
+  // only focus target, not part of normal Tab order) rather than building
+  // any general focus-management framework.
+  const successHeadingRef = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => {
+    if (isSubmitted) {
+      successHeadingRef.current?.focus();
+    }
+  }, [isSubmitted]);
 
   async function handleSubmit(values: RegisterFormValues) {
     setFailure(null);
@@ -133,7 +145,9 @@ export default function Register() {
   if (isSubmitted) {
     return (
       <>
-        <h1 className="text-h1 font-bold text-text-primary">Create your account</h1>
+        <h1 ref={successHeadingRef} tabIndex={-1} className="text-h1 font-bold text-text-primary">
+          Create your account
+        </h1>
         <Alert variant="success" message={SUCCESS_MESSAGE} />
       </>
     );

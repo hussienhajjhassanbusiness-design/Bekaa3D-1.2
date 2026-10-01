@@ -78,6 +78,7 @@ describe("useRegister", () => {
   });
 
   it("never retries automatically — a rejected mutation is not retried by TanStack Query", async () => {
+    vi.useFakeTimers();
     const postSpy = vi.spyOn(apiClient, "post").mockRejectedValue(networkError());
     const { result } = renderHook(() => useRegister(), { wrapper: createWrapper() });
 
@@ -85,7 +86,16 @@ describe("useRegister", () => {
       await expect(result.current.mutateAsync({ email: "ada@example.com", password: "password123" })).rejects.toBeDefined();
     });
 
-    // A single failed call, with no automatic retry attempts appended.
+    // Advance well past TanStack Query's default exponential-backoff retry
+    // delay (max ~30s across its default 3 retries) — if `retry: false`
+    // were ever accidentally dropped, a delayed retry would fire within
+    // this window and this assertion would catch it, unlike a bare
+    // immediate call-count check.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+
     expect(postSpy).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
   });
 });

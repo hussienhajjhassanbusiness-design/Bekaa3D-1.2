@@ -87,7 +87,7 @@ function ResendFields({ disabled }: { disabled: boolean }) {
         error={errors.email?.message}
         {...register("email")}
       />
-      <Button type="submit" className="mt-4" disabled={disabled}>
+      <Button type="submit" className="mt-4 w-full" disabled={disabled}>
         Resend verification email
       </Button>
     </>
@@ -100,8 +100,25 @@ export default function ResendVerification() {
   const [deadlineReason, setDeadlineReason] = useState<"success" | "rateLimit" | undefined>(undefined);
   const [failure, setFailure] = useState<Failure>(null);
   const [showSuccess, setShowSuccess] = useState(false);
+  // FVS-002 BATCH 4 independent-review finding (Important #2): the
+  // rate-limit warning Alert previously recomputed its message from the
+  // ticking `remainingSeconds` on every render, so for any Retry-After
+  // under 60s its text changed every second — and since Alert's "warning"
+  // variant is aria-live="polite", that re-announced on every tick,
+  // exactly the "per-tick spam" the plan's own risk register forbids.
+  // Frozen once, at the moment the 429 is caught, from the error's raw
+  // retryAfterSeconds — never from the live countdown.
+  const [rateLimitWaitDescription, setRateLimitWaitDescription] = useState<string | null>(null);
 
   const { remainingSeconds, isActive } = useCooldown(deadline);
+
+  // FVS-002 BATCH 4 Part C — this page stays on the same form after a
+  // successful resend (unlike register/verify-email's dedicated success
+  // views), so the meaningful new content is the success Alert itself, not
+  // the (already-present) page heading. Moves focus there — never
+  // silently to <body> — via a plain tabIndex={-1} wrapper, not a new
+  // ref-forwarding capability on Alert itself.
+  const successRef = useRef<HTMLDivElement>(null);
 
   // §countdown accessibility — exactly two announcements (start,
   // completion), never once per tick. `isActive` only flips at those two
@@ -121,6 +138,12 @@ export default function ResendVerification() {
     wasActiveRef.current = isActive;
   }, [isActive, deadline]);
 
+  useEffect(() => {
+    if (showSuccess) {
+      successRef.current?.focus();
+    }
+  }, [showSuccess]);
+
   async function handleSubmit(values: ResendFormValues) {
     setFailure(null);
     try {
@@ -132,6 +155,7 @@ export default function ResendVerification() {
       if (isRecognizedApiError(error) && error.kind === "http" && error.status === 429) {
         if (error.retryAfterSeconds !== undefined) {
           setDeadlineReason("rateLimit");
+          setRateLimitWaitDescription(formatWaitDuration(error.retryAfterSeconds));
           setDeadline(Date.now() + error.retryAfterSeconds * 1000);
         } else {
           // § rate limit — missing/malformed Retry-After: show a generic
@@ -157,16 +181,17 @@ export default function ResendVerification() {
     <>
       <h1 className="text-h1 font-bold text-text-primary">Resend verification email</h1>
 
-      {showSuccess && <Alert variant="success" message={SUCCESS_MESSAGE} />}
+      {showSuccess && (
+        <div ref={successRef} tabIndex={-1}>
+          <Alert variant="success" message={SUCCESS_MESSAGE} />
+        </div>
+      )}
       {failure === "network" && <Alert variant="error" message={NETWORK_MESSAGE} />}
       {failure === "timeout" && <Alert variant="error" message={TIMEOUT_MESSAGE} />}
       {failure === "failed" && <Alert variant="error" message={GENERIC_FAILURE_MESSAGE} />}
       {failure === "rateLimitedNoDuration" && <Alert variant="warning" message={RATE_LIMIT_MESSAGE_GENERIC} />}
-      {deadlineReason === "rateLimit" && isActive && (
-        <Alert
-          variant="warning"
-          message={`Too many attempts. Please wait about ${formatWaitDuration(remainingSeconds)} and try again.`}
-        />
+      {deadlineReason === "rateLimit" && isActive && rateLimitWaitDescription && (
+        <Alert variant="warning" message={`Too many attempts. Please wait about ${rateLimitWaitDescription} and try again.`} />
       )}
 
       {/* Exactly two announcements ever land here: cooldown start, cooldown

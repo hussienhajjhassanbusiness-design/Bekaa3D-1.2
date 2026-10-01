@@ -49,6 +49,13 @@ describe("ResendVerification (/verify-email/resend)", () => {
     expect(screen.getByRole("button", { name: /resend/i })).toBeInTheDocument();
   });
 
+  it("the primary submit CTA is full-width, per the plan's mobile/desktop full-width-CTA requirement", () => {
+    mockedUseResendVerification.mockReturnValue({ mutateAsync: vi.fn() } as never);
+    render(<ResendVerification />);
+
+    expect(screen.getByRole("button", { name: /resend/i })).toHaveClass("w-full");
+  });
+
   it("rejects a malformed email client-side without calling the mutation", async () => {
     const user = userEvent.setup();
     const mutateAsync = vi.fn();
@@ -106,6 +113,18 @@ describe("ResendVerification (/verify-email/resend)", () => {
 
     expect(existingCopy).toBe(missingCopy);
     expect(existingCopy).not.toMatch(/no account found/i);
+  });
+
+  it("moves focus to the success message after a successful resend, so it never silently lands on <body>", async () => {
+    const user = userEvent.setup();
+    const mutateAsync = vi.fn().mockResolvedValue({ message: "sent" });
+    mockedUseResendVerification.mockReturnValue({ mutateAsync } as never);
+    render(<ResendVerification />);
+
+    await submitValidEmail(user);
+
+    const successRegion = await screen.findByText(/if an account exists/i);
+    await waitFor(() => expect(successRegion.closest('[tabindex="-1"]')).toHaveFocus());
   });
 
   it("starts a 120-second cooldown and disables the resend button immediately after a successful 202", async () => {
@@ -185,6 +204,26 @@ describe("ResendVerification (/verify-email/resend)", () => {
 
     await waitFor(() => expect(screen.getAllByText(/1 hour/i).length).toBeGreaterThan(0));
     expect(screen.getByRole("button", { name: /resend/i })).toBeDisabled();
+  });
+
+  it("does not re-announce the rate-limit Alert every tick for a short (<60s) Retry-After — the live warning Alert's text must stay stable while only the non-live ticking paragraph changes", async () => {
+    const user = userEvent.setup();
+    const mutateAsync = vi.fn().mockRejectedValue(httpError(429, { retryAfterSeconds: 30 }));
+    mockedUseResendVerification.mockReturnValue({ mutateAsync } as never);
+    render(<ResendVerification />);
+
+    await submitValidEmail(user);
+
+    // The warning Alert (role="status", aria-live="polite" per Alert.tsx)
+    // must never change its text once rendered — only the separate,
+    // non-live ticking paragraph may update every second.
+    const alertBefore = await screen.findByText(/too many attempts/i);
+    const textBefore = alertBefore.textContent;
+
+    await new Promise((resolve) => setTimeout(resolve, 2100));
+
+    const alertAfter = screen.getByText(/too many attempts/i);
+    expect(alertAfter.textContent).toBe(textBefore);
   });
 
   it("shows a safe rate-limit failure without inventing a duration when Retry-After is missing", async () => {

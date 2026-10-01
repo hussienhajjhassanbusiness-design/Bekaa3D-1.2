@@ -48,6 +48,7 @@ describe("useVerifyEmail", () => {
   });
 
   it("never retries automatically", async () => {
+    vi.useFakeTimers();
     const postSpy = vi.spyOn(apiClient, "post").mockRejectedValue(httpError(400));
     const { result } = renderHook(() => useVerifyEmail(), { wrapper: createWrapper() });
 
@@ -55,7 +56,14 @@ describe("useVerifyEmail", () => {
       await expect(result.current.mutateAsync({ token: "a".repeat(43) })).rejects.toBeDefined();
     });
 
+    // Advance past TanStack Query's default backoff window — a dropped
+    // `retry: false` would surface here as a second call.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+
     expect(postSpy).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
   });
 
   it("surfaces the ApiError unchanged (400/410/429/network/timeout all pass through as-is)", async () => {
