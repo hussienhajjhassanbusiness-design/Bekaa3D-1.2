@@ -10,6 +10,8 @@
 
 **Spec:** `FRONTEND-VERTICAL-SLICE-PLAN.md` §5 "FVS-003 — Login, Logout & Session Management" and `vertical-slice-plan.md` §"VS-003" are the governing specs. **This plan documents and resolves a real conflict between those two documents and the backend's actual VS-003/VS-006 scope — see §0 and §4.** Where this plan and either source document disagree, this plan's own Contract Confidence Table (§5 below, mirroring FVS-002's own §1) governs; executors read this plan first.
 
+> **CORRECTED after initial review:** T02 (login mutation) and T09 (logout) were originally marked "CAN IMPLEMENT NOW" despite this same plan's own Contract Confidence Table listing their real request/response semantics as unconfirmed — an internal inconsistency, now fixed. Both are reclassified **BLOCKED ON BACKEND CONTRACT**. T04 (AuthProvider) is reclassified fully **BLOCKED ON ARCHITECTURE DECISION** (its "interface half" is no longer treated as buildable in isolation, to avoid shipping a `user` field that implies metadata not yet known to exist). T06 (refresh coordinator) and T10 (cross-tab logout) are redesigned as fully generic, contract-independent primitives — decoupled from the real refresh/logout HTTP calls they'll eventually wire into — and remain **CAN IMPLEMENT NOW**. T07 (401 wrapper) is newly reclassified **BLOCKED ON BACKEND CONTRACT**, since its entire purpose is encoding exactly the replay-safety/refreshability decisions that must not be guessed. See the "Task Status Classification (corrected)" section below for the full table and reasoning, and the implementation session's own "FVS-003 SAFE BATCH 1" report for what was actually built under this correction.
+
 ---
 
 ## 0. Repository / FVS-001 / FVS-002 Foundation State (read before starting any task)
@@ -160,22 +162,22 @@ Per rows 29–34 of §2, **nothing about the CSRF mechanism is confirmed**: not 
 
 ## 7. Single-Flight Refresh
 
-**Design (pure, contract-independent, fully testable with fake timers/mocked `apiClient`):**
+**Corrected design (generic, genuinely contract-independent — the original version below this line hardcoded the real refresh call directly inside the coordinator, which smuggled in an assumption about its shape; Task T06 now builds only the generic primitive):**
 
-```
-module-level: let inFlightRefresh: Promise<boolean> | null = null;
-
-function refreshOnce(): Promise<boolean> {
-  if (inFlightRefresh) return inFlightRefresh;
-  inFlightRefresh = apiClient.post("/api/v1/auth/refresh")
-    .then(() => true)
-    .catch(() => false)
-    .finally(() => { inFlightRefresh = null; });
-  return inFlightRefresh;
+```ts
+function createSingleFlight<T>(fn: () => Promise<T>): () => Promise<T> {
+  let inFlight: Promise<T> | null = null;
+  return () => {
+    if (inFlight) return inFlight;
+    inFlight = fn().finally(() => { inFlight = null; });
+    return inFlight;
+  };
 }
 ```
 
-Every concurrent 401 across any number of simultaneous requests calls `refreshOnce()`; the first caller starts it, every other caller observes `inFlightRefresh` already set and awaits the exact same promise reference. Once settled (success or failure), the module-level reference clears, so a **later, independent** 401 can start a fresh refresh — this is not a one-time lockout, just a per-refresh-attempt dedupe. No queue library, no event emitter framework — one `let` and one promise.
+This primitive has **no knowledge of refresh, `apiClient`, cookies, CSRF, or status codes** — it deduplicates concurrent calls to *any* injected async function, preserving its real resolve value and rejection reason unchanged (never collapsed to a boolean). Wiring it to the real `POST /api/v1/auth/refresh` call — i.e., `const refreshOnce = createSingleFlight(() => apiClient.post("/api/v1/auth/refresh"))` — is Task T07's job, and T07 remains **BLOCKED ON BACKEND CONTRACT** until the backend confirms refresh's real success/failure semantics (§2 rows 15/18/20/22).
+
+Every concurrent 401 across any number of simultaneous requests would call the wired `refreshOnce()`; the first caller starts it, every other caller observes the same in-flight promise and awaits that exact reference. Once settled (success or failure), the slot clears, so a **later, independent** 401 can start a fresh refresh — this is not a one-time lockout, just a per-attempt dedupe. No queue library, no event emitter framework — one closure variable and one promise.
 
 ---
 
@@ -325,11 +327,11 @@ Checked against native/already-installed capability before proposing anything (p
 
 | Skill | Applies to |
 |---|---|
-| `bekaa3d-brand-ui` | T03 (login form), T11 (responsive/accessibility pass) |
-| `bekaa3d-api-contract` | T02 (login mutation), T04 (bootstrap), T06/T07 (refresh/401), T08 (CSRF — blocked), T09 (logout), planning itself (this document) |
+| `bekaa3d-brand-ui` | T03 (login form, once unblocked), T11 (responsive/accessibility pass) |
+| `bekaa3d-api-contract` | T02 (login mutation — blocked), T04 (bootstrap — blocked), T07 (401 wiring — blocked), T08 (CSRF — blocked), T09 (logout — blocked), planning itself (this document). **Not** T06 or T10 — both are now generic primitives with zero contract knowledge by design. |
 | `bekaa3d-frontend-slice-dod` | T11 (integration pass), T13–T14 (final verification) |
 | `bekaa3d-commerce-ux` | **Not used anywhere in this slice** (§0) |
-| `superpowers:test-driven-development` | Every task marked TDD REQUIRED/USEFUL below (security/business-behavior tasks — T01, T02, T04's interface half, T05, T06, T07, T09, T10) |
+| `superpowers:test-driven-development` | Every task marked TDD REQUIRED below — currently buildable: T01, T05 (vs. mock), T06, T10; blocked until their gates clear: T02, T03, T04, T07, T09 |
 | `superpowers:verification-before-completion` | Every task |
 | `superpowers:requesting-code-review` | T11 (whole-slice gate) and T14 (final real-backend gate) |
 
@@ -357,28 +359,76 @@ Checked against native/already-installed capability before proposing anything (p
 
 ---
 
-## Task Dependency Graph
+## Task Status Classification (corrected — see changelog below)
+
+> **CORRECTED at the first post-planning review.** The original version of this plan marked T02 (login mutation) and T09 (logout) as "CAN IMPLEMENT NOW" merely because their fields were *likely* (`{email,password}`, no body) — inconsistent with this same plan's own Contract Confidence Table, which lists their exact request/response semantics as unconfirmed. Corrected below. T06 and T10 were also re-examined and found to contain real, extractable, genuinely contract-independent sub-pieces once their HTTP/business-wiring halves are separated out — both are now split the same way T04 already was in the original version.
+
+Four honest categories, used consistently from here on:
+
+- **CAN IMPLEMENT NOW** — no backend contract gap and no pending architecture decision blocks real, final code.
+- **IMPLEMENTABLE NOW / REAL BACKEND ACCEPTANCE LATER** — the code can be written and unit/integration-tested for real today (against a mock or a generic injected dependency), but its *real-world* correctness cannot be proven until a backend-contract or architecture gap closes.
+- **BLOCKED ON BACKEND CONTRACT** — writing the real implementation would require inventing an unconfirmed backend detail (a field name, a status code, a body shape, a CSRF requirement, etc.). No code is written until the backend confirms.
+- **BLOCKED ON ARCHITECTURE DECISION** — the backend contract isn't actually the blocker; a *project-side* decision (the §1 bootstrap-mechanism choice, or an explicit policy sign-off) is.
+
+| Task | Corrected classification | Why |
+|---|---|---|
+| T01 `returnTo` validator | **CAN IMPLEMENT NOW** | Pure frontend logic; no backend involvement at all (unchanged from the original plan). |
+| T02 Login mutation | **BLOCKED ON BACKEND CONTRACT** | Was incorrectly "CAN IMPLEMENT NOW" — calling the real endpoint requires committing to assumed field names (`{email,password}`), an assumed success/failure shape, and an assumed CSRF-exemption, none of which is confirmed (§2 rows 2/3/5/6/7/8/9/32). |
+| T03 Login page | **BLOCKED ON BACKEND CONTRACT** | Depends on T02's assumed schema; as scoped (the real business form wired to the real mutation), it inherits T02's blocker. A presentational-only `LoginForm` shell *could* theoretically be isolated from the real mutation (no business schema, just markup/a11y structure) — not split out as its own task ID in this correction to avoid inflating the task count for a sub-slice no one has asked to prioritize; flagged here as a legitimate future split if a team wants visual-only login UI work scheduled before the contract lands. |
+| T04 AuthProvider | **BLOCKED ON ARCHITECTURE DECISION** | Was "SPLIT" in the original version with an "interface half" marked CAN IMPLEMENT NOW. Corrected: even the interface half must not ship a `user` field that implies real metadata exists while §1 is unresolved — so the *entire* task, including its shell, waits for one of §1's four options to be approved. (The shell's *design* — §9's four-field `AuthContextValue` shape — remains valid design work and needs no further planning once unblocked; it just isn't built yet.) |
+| T05 ProtectedRoute | **IMPLEMENTABLE NOW / REAL BACKEND ACCEPTANCE LATER** | Its loading/authenticated/anonymous-redirect logic can be fully built and unit-tested today against a *mocked* `AuthProvider` context value (three literal states fed in directly) — this requires no real contract, since it never calls an endpoint itself. Its real-world correctness (does "authenticated" ever actually become true against a real session) is gated on T04. |
+| T06 Single-flight coordinator | **CAN IMPLEMENT NOW, but redesigned to be fully generic** | The original design hardcoded `apiClient.post("/api/v1/auth/refresh")` and collapsed success/failure to a boolean — that encodes assumed refresh semantics. Corrected: T06 now builds `createSingleFlight<T>(fn: () => Promise<T>): () => Promise<T>` — a generic async-deduplication primitive with **zero knowledge** of refresh, cookies, CSRF, endpoints, or status codes. It would behave identically if used to deduplicate any other concurrent async call. Wiring an actual refresh call into it is a separate, later, contract-blocked step (absorbed into T07, not a task of its own). |
+| T07 401 integration wrapper | **BLOCKED ON BACKEND CONTRACT** | Was incorrectly "CAN IMPLEMENT NOW." Unlike T06's pure dedup primitive, T07's entire reason for existing is deciding *which* 401s are refreshable and *which* requests are safe to replay — exactly the two decisions §2 rows 35/37 and this correction's own instruction say must not be encoded into production code before the backend confirms enough to make them safely. No "pure utility" version is planned either, since a generic version of this specific wrapper would still have to take a stance on retry-after-refresh semantics to be useful, and that stance is the blocked part. |
+| T08 CSRF plumbing | **BLOCKED ON BACKEND CONTRACT** | Unchanged in substance from the original "BLOCKED ON CSRF CONTRACT" — relabeled to fit the four-category scheme used consistently now. |
+| T09 Logout | **BLOCKED ON BACKEND CONTRACT** | Was incorrectly "CAN IMPLEMENT NOW." Calling the real endpoint requires an assumed body shape, an assumed CSRF-exemption, and — explicitly flagged in the original plan itself as a non-silent decision point — the unresolved local-clear-on-network-failure policy (§2 rows 24/25/26/27/28). |
+| T10 Cross-tab logout | **CAN IMPLEMENT NOW, but redesigned to separate the signal from the wiring** | The original design wired `announceLogout()` directly into `useLogout`'s success handler, inheriting T09's blocker by association. Corrected: the `BroadcastChannel` wrapper itself (`announceLogout()`/`onLogoutAnnounced()`, posting/receiving an opaque `{type:"logout"}` message) has **no knowledge of logout's HTTP semantics at all** — it doesn't know what triggered the broadcast, only that something did. That primitive is genuinely contract-independent and buildable today. *Wiring* it into `useLogout`'s success handler remains deferred until T09 unblocks (a one-line call once it does). |
+| T11 Integration/security pass | **Pending — transitively blocked** | Depends on T02/T03/T04/T07/T09 all being real, all of which are now contract/architecture-blocked. Not schedulable until enough of those clear. |
+| T12 E2E | **Pending — transitively blocked** | Depends on T11. |
+| T13 Docs | **Pending — transitively blocked** | Depends on T12 (can draft early, per the original plan). |
+| T14 Real-backend/CSRF acceptance | **BLOCKED ON BACKEND CONTRACT + backend availability** | Unchanged — already explicitly blocked in the original plan. |
+
+---
+
+## Task Dependency Graph (corrected)
 
 ```
-T01 (returnTo validator) ──────────────────────────────────────────┐
-T02 (login schema+mutation) ── T03 (login page) ────────────────────┤
-                                                                      │
-T04 (AuthProvider: interface now / bootstrap queryFn BLOCKED §1) ─┬─ T05 (ProtectedRoute, testable vs. mocked AuthProvider now)
-                                                                   │
-T06 (single-flight refresh coordinator) ── T07 (401 integration wrapper)
-                                                                   │
-T04 ──────────────────────────────────────────────────────────── T09 (logout) ── T10 (cross-tab logout)
-T08 (CSRF — BLOCKED ON CSRF CONTRACT, placeholder only, no edges into anything else yet)
+T01 (returnTo validator) — CAN IMPLEMENT NOW, no edges in
+T06 (generic single-flight primitive) — CAN IMPLEMENT NOW, no edges in
+T10 (generic cross-tab signal primitive) — CAN IMPLEMENT NOW, no edges in
 
-{T01,T02,T03,T04(interface),T05,T06,T07,T09,T10} ── T11 (integration/a11y/security pass) ── T12 (E2E) ── T13 (docs) ── T14 (real-backend + CSRF acceptance)
+T02 (login mutation, BLOCKED ON BACKEND CONTRACT) ── T03 (login page, BLOCKED ON BACKEND CONTRACT)
+
+T04 (AuthProvider, BLOCKED ON ARCHITECTURE DECISION §1) ── T05 (ProtectedRoute, IMPLEMENTABLE NOW vs. mock / REAL ACCEPTANCE LATER)
+                                                        └── T09 (logout, BLOCKED ON BACKEND CONTRACT) ── [wires T10's primitive in]
+
+T06 ── T07 (401 wrapper, BLOCKED ON BACKEND CONTRACT — needs T06's primitive once unblocked)
+
+T08 (CSRF, BLOCKED ON BACKEND CONTRACT, no edges in or out yet)
+
+{T01..T10 all real} ── T11 (integration/a11y/security pass) ── T12 (E2E) ── T13 (docs) ── T14 (real-backend + CSRF acceptance)
 ```
 
-- **T01, T02, T06** have no dependency on anything else in this slice — fully parallel-safe.
-- **T03** needs T02. **T05** needs T04's interface half only (not its blocked bootstrap half) — testable against a mocked `AuthProvider` today. **T07** needs T06. **T09** needs T04's interface half (for the query-key convention) and should reuse T06/T07's module if logout itself ever needs refresh-aware retry (it shouldn't — logout calls `apiClient` directly, §6). **T10** needs T09.
-- **T08** has no outgoing edges yet — it unblocks itself only when the CSRF contract lands, at which point it would gain edges into T02/T06/T07/T09 (every mutating call) as a follow-up, not predicted further here.
-- **T11** depends on everything else being real. **T12** depends on T11. **T13** can draft early but finalizes after T12. **T14** depends on T12 and on real backend availability, and additionally on T08 for its CSRF-specific proof.
+- **Fully unblocked today, zero dependencies:** T01, T06 (generic primitive), T10 (generic primitive).
+- **T05** is unit-testable today against a mocked context (no edge into a *blocked* task for that purpose) but its real integration edge into T04 remains until §1 resolves.
+- **T02→T03**, **T04→T09**, **T06→T07** are the contract/architecture-blocked chains — none of them can start until their respective gate clears.
+- **T08** still has no outgoing edges — unblocking it later adds edges into T02/T06-via-T07/T09 as a follow-up, not predicted further here.
+- **T11** depends on T01–T10 all being real (not just T01/T06/T10's primitives) — it cannot start meaningfully until the backend contract and the §1 decision both land. **T12** depends on T11. **T13** can draft early. **T14** depends on T12, real backend availability, and T08.
 
-**Critical path:** T04's architecture decision (§1) → T04's bootstrap half → T05's real integration → T11 → T12 → T13/T14. Everything else (T01/T02/T03/T06/T07/T09/T10) can proceed in parallel without waiting on that decision.
+**Critical path (corrected):** the backend answering the Backend Questions (login/refresh/logout fields+semantics, CSRF) **and** the §1 bootstrap-mechanism decision — both now gate almost the entire slice, not just T04 as the original version implied. Only T01, T06's primitive, and T10's primitive are free of that critical path entirely.
+
+---
+
+## Optimized Implementation Batches (corrected)
+
+| Batch | Contents | Gate to start |
+|---|---|---|
+| **Batch 1 — Safe, contract-independent infrastructure** | T01 (`returnTo` validator), T06 (generic single-flight primitive), T10 (generic cross-tab signal primitive) | None — startable immediately |
+| **Batch 2 — Login** | T02 (login mutation), T03 (login page) | Backend confirms login's request/response contract (Backend Questions "LOGIN") |
+| **Batch 3 — Bootstrap, protection, refresh wiring, logout, CSRF** | T04 (AuthProvider), T05 (ProtectedRoute real integration), T07 (401 wrapper wired to T06), T09 (logout, wires T10's primitive in), T08 (CSRF, if its own contract has also landed by then) | The §1 bootstrap decision **and** the backend confirming refresh/logout/CSRF contracts |
+| **Batch 4 — Integration/security/E2E/docs** | T11, T12, T13 | Batches 2 and 3 both landed |
+| **Real backend acceptance (separate, final gate)** | T14 | Real backend reachable, CSRF contract confirmed |
+
+This replaces the original plan's four-batch shape (which bundled T02/T03 into "Batch 1" and T04/T05 into "Batch 2" without registering that both were contract/architecture-blocked). **Batch 1 above is the only batch currently startable without any external unblock** — see Part B of this correction for its actual execution.
 
 ---
 
@@ -387,15 +437,15 @@ T08 (CSRF — BLOCKED ON CSRF CONTRACT, placeholder only, no edges into anything
 | Task | TDD status |
 |---|---|
 | T01 | TDD REQUIRED (pure function, exhaustive attack-string matrix) |
-| T02 | TDD REQUIRED |
-| T03 | TDD REQUIRED |
-| T04 | TDD REQUIRED for the interface half (mockable); the bootstrap `queryFn` half is TDD REQUIRED once unblocked |
-| T05 | TDD REQUIRED |
-| T06 | TDD REQUIRED (highest-value isolated security module — single-flight correctness) |
-| T07 | TDD REQUIRED |
+| T02 | TDD REQUIRED once unblocked |
+| T03 | TDD REQUIRED once unblocked |
+| T04 | TDD REQUIRED once unblocked |
+| T05 | TDD REQUIRED (buildable now against a mocked context) |
+| T06 | TDD REQUIRED (buildable now — generic primitive, highest-value isolated security module) |
+| T07 | TDD REQUIRED once unblocked |
 | T08 | VERIFICATION ONLY — no implementation exists to test yet; task is a tracked placeholder |
-| T09 | TDD REQUIRED |
-| T10 | TDD REQUIRED |
+| T09 | TDD REQUIRED once unblocked |
+| T10 | TDD REQUIRED (buildable now — generic primitive) |
 | T11 | Verification pass — not new-feature TDD; DoD-checklist-driven |
 | T12 | E2E — behavior-defined-before-done, not unit RED/GREEN |
 | T13 | CONFIG/DOCS — TDD not required |
@@ -426,16 +476,16 @@ T08 (CSRF — BLOCKED ON CSRF CONTRACT, placeholder only, no edges into anything
 
 ### FVS003-T02 — Login Schema & Mutation
 
-**Status:** CAN IMPLEMENT NOW (field names ASSUMED per §2 row 2 — flagged, not claimed confirmed).
+**Status:** **BLOCKED ON BACKEND CONTRACT** (corrected — see the Task Status Classification section above). **Do NOT implement until the backend confirms:** login request field names, success status/body, failure status/signal, cookie/session behavior relevant to the frontend, and whether CSRF applies to login (§2 rows 2/3/5/6/7/8/9/10/32). The `{email,password}` shape below is this plan's working *expectation*, not a confirmed contract — it must not be coded against until confirmed, even though it is likely correct.
 **Purpose:** The real login mutation, enumeration-safe by construction.
-**Depends on:** None.
-**Contract gates:** Rows 2, 3, 5, 6, 7, 8, 9 of §2 are ASSUMED/unconfirmed — implementation proceeds on the assumed `{email,password}` shape (matching registration) and generic-failure-only error handling; this task does not invent a distinct error code/field for invalid-credential vs. lockout beyond what `ApiError.kind`/`status`/`retryAfterSeconds` already expose.
-**Files expected:** `src/lib/auth/useLogin.ts`, `useLogin.test.ts`.
-**Implementation actions:**
-1. RED: mutation tests mirroring `useRegister.test.ts`'s own rigor — exact path `/api/v1/auth/login`, exact body `{email,password}`, no trailing slash, `retry:false`, network/timeout/http-error pass-through unchanged, a `429` with `retryAfterSeconds` surfaces unchanged (no invented countdown at this layer — that's T03's UI concern).
+**Depends on:** None (architecturally), but **execution is blocked** until the Backend Questions "LOGIN" group is answered.
+**Contract gates:** Rows 2, 3, 5, 6, 7, 8, 9, 10, 32 of §2 are unconfirmed — every one of them would need to be invented to write real code today, which this task does not do.
+**Files expected (once unblocked):** `src/lib/auth/useLogin.ts`, `useLogin.test.ts`.
+**Implementation actions (once unblocked):**
+1. RED: mutation tests mirroring `useRegister.test.ts`'s own rigor — exact confirmed path/body, no trailing slash, `retry:false`, network/timeout/http-error pass-through unchanged, a `429` with `retryAfterSeconds` surfaces unchanged (no invented countdown at this layer — that's T03's UI concern).
 2. GREEN: implement `useLogin()` using `apiClient.post`, called **directly** (never through T07's `authenticatedRequest` wrapper — §6's exclusion rule).
-**Do NOT:** add a field beyond email/password; invent a distinct "account locked" `ApiError` shape; auto-retry.
-**Tests:** TDD required.
+**Do NOT:** add a field beyond whatever the backend actually confirms; invent a distinct "account locked" `ApiError` shape; auto-retry; begin this task before the contract is confirmed merely because the shape seems obvious.
+**Tests:** TDD required once unblocked.
 **Acceptance criteria:** Matches `useRegister`'s own proven pattern exactly; `retry:false` proven with the fake-timer technique FVS-002 Batch 4's independent review required (not a bare immediate call-count check).
 **Verification:** `npm run test -- useLogin`, full suite.
 **Skills/tools:** `bekaa3d-api-contract`, `superpowers:test-driven-development`.
@@ -445,12 +495,12 @@ T08 (CSRF — BLOCKED ON CSRF CONTRACT, placeholder only, no edges into anything
 
 ### FVS003-T03 — Login Page (`/login`)
 
-**Status:** CAN IMPLEMENT NOW.
+**Status:** **BLOCKED ON BACKEND CONTRACT** (corrected — inherits T02's blocker, since this page is the real business form wired to the real mutation and schema). A presentational-only `LoginForm` shell with no business schema is a legitimate future split (see the Task Status Classification table above) but is not carved out as its own task ID here; nothing in this task proceeds until T02 unblocks.
 **Purpose:** The real login form and enumeration-safe failure UX.
 **Depends on:** T02 (and T01, since a successful login redirects through the `returnTo` validator).
-**Contract gates:** Same ASSUMED rows as T02; additionally row 9 (lockout signal) — no lockout duration/countdown is rendered unless `retryAfterSeconds` is actually present on a `429`.
-**Files expected:** `src/app/login/page.tsx`, `page.test.tsx`.
-**Implementation actions:**
+**Contract gates:** Same unconfirmed rows as T02; additionally row 9 (lockout signal) — no lockout duration/countdown is rendered unless `retryAfterSeconds` is actually present on a `429`.
+**Files expected (once unblocked):** `src/app/login/page.tsx`, `page.test.tsx`.
+**Implementation actions (once unblocked):**
 1. RED: page tests — renders labeled email/password fields + submit (reusing `Form`/`TextField`/`PasswordField`/`Button`); client-validation blocks an empty submit without calling the mutation; a credential-rejection failure (any `ApiError.kind:"http"` 4xx) shows exactly "Invalid email or password." — never a distinct "no such user" vs. "wrong password" copy, and never for two different mocked failure reasons does the copy differ (enumeration-safety test, same pattern as FVS-002's register/resend); a `429` with `retryAfterSeconds` shows a safe "too many attempts, wait about Ns" message, a `429` without it shows a safe generic message with no invented duration; network/timeout get their own safe messages; double-submit prevented via `Form`'s existing `fieldset disabled={isSubmitting}` guard; on success, navigates to the validated `returnTo` (or `/` if absent/unsafe) via T01's resolver.
 2. GREEN: implement the page, `type="text"`+`inputMode="email"` for the email field (same auto-trim-avoidance reasoning as FVS-002), `w-full` on the submit button from the start (do not repeat FVS-002's own found-and-fixed mobile-CTA defect).
 **Do NOT:** invent a password-strength hint (login isn't registration — there's nothing to hint at); invent a lockout countdown without `retryAfterSeconds`; trim/normalize either field unless a confirmed rule says to.
@@ -464,30 +514,28 @@ T08 (CSRF — BLOCKED ON CSRF CONTRACT, placeholder only, no edges into anything
 
 ### FVS003-T04 — Auth Session Query & `AuthProvider`
 
-**Status:** **SPLIT.** Interface/shell half: CAN IMPLEMENT NOW. Bootstrap `queryFn` half: **BLOCKED ON ARCHITECTURE DECISION** (§1 — one of options A–D must be approved first).
+**Status:** **BLOCKED ON ARCHITECTURE DECISION** (corrected — the original version split this into an "interface half" marked CAN IMPLEMENT NOW; that was wrong). **Do not implement any part of this task, including the context shell, until one of §1's four options (A–D) is approved.** The concern raised at correction time: even a deliberately-placeholder `AuthContextValue.user` field, shipped before §1 resolves, risks implying real user metadata exists or will shortly — safer to not write the shell at all than to write one with a field whose future shape is still genuinely unknown. The four-field shape in §9 remains the *design* (no further design work needed once unblocked); it is simply not coded yet.
 **Purpose:** The single source of truth for "is anyone logged in," and the thin context wrapper the rest of the app consumes.
-**Depends on:** None for the interface half; the §1 decision for the bootstrap half.
-**Contract gates:** §1 (AUTH BOOTSTRAP ENDPOINT) blocks the `queryFn` body. Rows 6/14/23 of §2 (does login/refresh ever return user/session data) directly affect which option gets chosen and therefore what `SafeUser` can actually contain.
-**Files expected:** `src/lib/auth/AuthProvider.tsx`, `AuthProvider.test.tsx`, `src/lib/auth/authQueryKey.ts` (the shared `["auth","session"]` key + the `AUTH_SCOPED_QUERY_KEY_PREFIX` convention from §13).
-**Implementation actions (interface half, now):**
-1. RED/GREEN: `AuthProvider` context shape (`user`/`isAuthenticated`/`isLoading`/`logout`), wired to a TanStack `useQuery(["auth","session"], queryFn, { staleTime: Infinity, retry: false })` where `queryFn` is, for now, an explicitly-labeled placeholder that the architecture decision will replace — **this placeholder must make no network call and must not be mistaken for real bootstrap behavior**; the safest placeholder is one that throws/rejects immediately with a clearly-named error (e.g. `AUTH_BOOTSTRAP_NOT_YET_IMPLEMENTED`), which TanStack Query surfaces as an error state that `AuthProvider` maps to `isAuthenticated: false` — i.e., until unblocked, the app behaves as "always anonymous," which is safe (never a false "authenticated"), never "always authenticated" (which would be unsafe).
-**Implementation actions (bootstrap half, once §1 is resolved):**
-2. RED/GREEN: replace the placeholder `queryFn` with whichever of options A–D was approved, including the React Strict Mode double-invoke guard named in Review Focus item 3 if the chosen option performs a side-effecting call (e.g. Option C's speculative refresh).
-**Do NOT:** persist any part of the session to browser storage; add fields to `AuthContextValue` beyond the four listed in §9; let this placeholder silently ship as "done" — T11 must re-verify the real bootstrap half is in place before the slice is considered integration-complete.
-**Tests:** TDD required for both halves, run separately as each lands.
-**Acceptance criteria:** Interface half: `AuthProvider` correctly projects any given query state (loading/error/success) into the four public fields, provable against a mocked query result. Bootstrap half (once unblocked): a real returning session resolves `isAuthenticated: true` without ever reading a cookie value or `localStorage`.
+**Depends on:** The §1 architecture decision — nothing in this task starts before then.
+**Contract gates:** §1 (AUTH BOOTSTRAP ENDPOINT) blocks the entire task. Rows 6/14/23 of §2 (does login/refresh ever return user/session data) directly affect which option gets chosen and therefore what the eventual `user` field can actually contain.
+**Files expected (once unblocked):** `src/lib/auth/AuthProvider.tsx`, `AuthProvider.test.tsx`, `src/lib/auth/authQueryKey.ts` (the shared `["auth","session"]` key + the `AUTH_SCOPED_QUERY_KEY_PREFIX` convention from §13).
+**Implementation actions (once §1 is resolved):**
+1. RED/GREEN: `AuthProvider` context shape (`user`/`isAuthenticated`/`isLoading`/`logout`), wired to a TanStack `useQuery(["auth","session"], queryFn, { staleTime: Infinity, retry: false })`, where `queryFn` implements whichever of options A–D was approved, including the React Strict Mode double-invoke guard named in Review Focus item 3 if the chosen option performs a side-effecting call (e.g. Option C's speculative refresh).
+**Do NOT:** persist any part of the session to browser storage; add fields to `AuthContextValue` beyond the four listed in §9; write any version of this file — including a "placeholder" — before §1 resolves.
+**Tests:** TDD required once unblocked.
+**Acceptance criteria:** `AuthProvider` correctly projects the real query state (loading/error/success) into the four public fields; a real returning session resolves `isAuthenticated: true` without ever reading a cookie value or `localStorage`.
 **Verification:** `npm run test -- AuthProvider`, full suite.
 **Skills/tools:** `bekaa3d-api-contract`, `superpowers:test-driven-development`.
-**Suggested commit message:** `feat: add auth session query and AuthProvider` (interface half) / a separate follow-up commit for the bootstrap half once unblocked.
+**Suggested commit message:** `feat: add auth session query and AuthProvider` (once unblocked).
 
 ---
 
 ### FVS003-T05 — `ProtectedRoute`
 
-**Status:** CAN IMPLEMENT NOW (against a mocked `AuthProvider` context — same pattern FVS-002 used for mocking `useRegister`/`useVerifyEmail` at the page level). Full real-world correctness depends on T04's bootstrap half landing.
+**Status:** **IMPLEMENTABLE NOW / REAL BACKEND ACCEPTANCE LATER** (corrected — clarified from the original "CAN IMPLEMENT NOW"). Its own logic can be fully built and unit-tested today against a **mocked** `AuthProvider` context value (three literal states fed in directly — this test technique requires no real `AuthProvider` to exist yet, only an agreed-upon shape for the context value, which §9's design already settles). Its real-world correctness — does "authenticated" ever actually become `true` against a genuine session — is gated on T04, which is now fully blocked (see T04's corrected status above). **Do not claim this task is "done" in any sense beyond "unit-tested against a mock" until T04 unblocks and a real integration pass (T11) confirms it.**
 **Purpose:** The reusable gate every future authenticated page/slice wraps itself in.
-**Depends on:** T04 (interface half only), T01 (`returnTo` resolver).
-**Contract gates:** None of its own; inherits T04's.
+**Depends on:** T04's eventual interface (design-only dependency, not an execution-order one — T05 can be built before T04 exists, as long as it imports/mocks the *agreed* context shape from §9), T01 (`returnTo` resolver).
+**Contract gates:** None of its own; its real-world acceptance inherits T04's §1 blocker.
 **Files expected:** `src/components/auth/ProtectedRoute.tsx`, `ProtectedRoute.test.tsx`.
 **Implementation actions:**
 1. RED: tests mocking `AuthProvider`'s context value directly (three states) — loading renders `LoadingSpinner` and nothing else; authenticated renders `children`; anonymous renders nothing and calls `router.replace` with `/login?returnTo=<encoded current path>`; a malicious current path (per T01's matrix) never appears unescaped/unsafe in the generated redirect.
@@ -503,39 +551,39 @@ T08 (CSRF — BLOCKED ON CSRF CONTRACT, placeholder only, no edges into anything
 
 ### FVS003-T06 — Single-Flight Refresh Coordinator
 
-**Status:** CAN IMPLEMENT NOW.
-**Purpose:** The highest-value isolated security module in this slice (§7, §10).
+**Status:** **CAN IMPLEMENT NOW — redesigned to be generic** (corrected). The original design hardcoded `apiClient.post("/api/v1/auth/refresh")` directly inside the coordinator, which smuggled in an assumption about the refresh call's shape/semantics. Corrected: this task now builds a fully generic async single-flight primitive with **zero knowledge of refresh, cookies, CSRF, endpoints, or status codes** — it would behave identically deduplicating any other concurrent async call. Wiring an actual refresh call into it is T07's job, and T07 remains blocked.
+**Purpose:** The highest-value isolated, genuinely contract-independent security primitive in this slice.
 **Depends on:** None.
-**Contract gates:** Rows 15/18/20/22 of §2 are unconfirmed but don't block this task — it only needs "refresh is `POST /api/v1/auth/refresh`, 2xx=success, non-2xx=failure," which is already settled enough to build and test against.
-**Files expected:** `src/lib/auth/refreshCoordinator.ts`, `refreshCoordinator.test.ts`.
+**Contract gates:** None at all — by design, this module never imports `apiClient` or references any endpoint/path/status code.
+**Files expected:** `src/lib/auth/singleFlight.ts`, `singleFlight.test.ts`.
 **Implementation actions:**
-1. RED: tests — a single 401-triggered call starts exactly one `apiClient.post("/api/v1/auth/refresh")`; five concurrent calls while one is in flight all resolve from the same promise (spy call-count stays at 1); after the in-flight promise settles (success or failure), a new call starts a genuinely new refresh (call count becomes 2); success resolves `true`, failure resolves `false` without throwing (callers decide what to do with the boolean).
-2. GREEN: implement exactly the module-level `let`/promise design from §7.
-**Do NOT:** build a generic request-queue library; add retry/backoff to the refresh call itself (refresh either works or it doesn't — retrying a refresh is exactly the "refresh recursion" risk this plan forbids).
-**Tests:** TDD required — this is Review Focus item 1's owning task.
-**Acceptance criteria:** Concurrent-401-storm test (Review Focus item 1) passes with exactly one underlying call.
-**Verification:** `npm run test -- refreshCoordinator`, full suite.
-**Skills/tools:** `bekaa3d-api-contract`, `superpowers:test-driven-development`.
-**Suggested commit message:** `feat: add single-flight refresh coordinator`
+1. RED: tests against a **generic injected async function** (a `vi.fn()` resolving/rejecting on demand, not `apiClient`) — a single call to the wrapped function starts exactly one underlying call; five concurrent calls while one is in flight all resolve/reject from the exact same promise (spy call-count stays at 1); after the in-flight promise settles (success **or** rejection — both must clear the in-flight slot, not just success), a new call starts a genuinely new underlying call (call count becomes 2); the wrapper preserves the original function's resolve value and rejection reason unchanged (no boolean-collapsing, no swallowed errors) — callers decide what a rejection means.
+2. GREEN: implement `createSingleFlight<T>(fn: () => Promise<T>): () => Promise<T>` exactly per §7's corrected generic design.
+**Do NOT:** import `apiClient`, reference `/api/v1/auth/refresh` or any other path, add retry/backoff, convert the result to a boolean, or build a generic request-queue library — this is a single, minimal, reusable dedup primitive and nothing more.
+**Tests:** TDD required — this is Review Focus item 1's owning primitive (its actual wiring into a real refresh call happens in T07, blocked).
+**Acceptance criteria:** The concurrent-call dedup property holds against an arbitrary injected async function, proving the primitive itself needs no contract knowledge to be correct.
+**Verification:** `npm run test -- singleFlight`, full suite.
+**Skills/tools:** `superpowers:test-driven-development`.
+**Suggested commit message:** `feat: add generic single-flight async coordinator`
 
 ---
 
 ### FVS003-T07 — `authenticatedRequest` 401 Integration Wrapper
 
-**Status:** CAN IMPLEMENT NOW.
-**Purpose:** Wires T06's coordinator into actual request retry behavior, with the replay-safety scoping from §11 (GET-only auto-retry).
-**Depends on:** T06.
-**Contract gates:** Row 37 of §2 (write-replay safety) is explicitly NOT resolved by this task — it is designed around, per §11.
-**Files expected:** `src/lib/auth/authenticatedRequest.ts`, `authenticatedRequest.test.ts`.
-**Implementation actions:**
-1. RED: tests — a wrapped GET that 401s triggers exactly one refresh (via T06, mocked) then retries the original GET exactly once, succeeding if the retry succeeds; a wrapped GET whose retry also 401s surfaces the final error without a second refresh attempt; a wrapped POST that 401s does **not** auto-retry (resolves with the refresh outcome recorded but the original mutation is never re-sent) unless the caller passed `{ retryAfterRefresh: true }`, in which case it behaves like the GET case; a non-401 error passes through completely unchanged (no refresh attempted for a 500, a network error, a timeout, or any other status).
-2. GREEN: implement `authenticatedRequest<T>(call: () => Promise<T>, options?: { retryAfterRefresh?: boolean; isRead?: boolean }): Promise<T>`, calling T06's `refreshOnce()` only on an `ApiError` with `kind:"http"` and `status:401`.
-**Do NOT:** import this module into `useLogin`/`useLogout`/the refresh coordinator's own call (§6's exclusion rule — enforced by simply never doing it, verified by code review in T11); attempt a second refresh if the retried call also 401s.
-**Tests:** TDD required.
-**Acceptance criteria:** Review Focus item 1 (concurrent storm) and the no-recursion rule both provably hold through this wrapper, not just through T06 in isolation.
+**Status:** **BLOCKED ON BACKEND CONTRACT** (corrected — the original version marked this "CAN IMPLEMENT NOW," which was wrong). Unlike T06's now-generic primitive, this task's entire purpose is deciding *which* 401s are refreshable and *which* requests are safe to replay — exactly the two decisions §2 rows 35/37 (and this correction's own instruction) say must not be encoded into production code before the backend confirms enough to make them safely. No "pure utility" fallback version is planned either: a generic version of this specific wrapper would still have to take a real stance on retry-after-refresh semantics to be useful for anything, and that stance is precisely the blocked part. **Do not implement any version of this module until the backend confirms refresh's real success/failure contract (§2 rows 15/18/20/22) and the Backend Questions "401/REPLAY" item is answered.**
+**Purpose:** Wires T06's generic primitive into actual request retry behavior, once the policy it would encode is safe to encode.
+**Depends on:** T06 (available today), and the backend contract items above (not available today).
+**Contract gates:** Row 37 of §2 (write-replay safety) and row 35 (which 401s are refreshable) both block real implementation; §11's GET-only-by-default scoping remains this plan's own recommended policy for whenever this task unblocks, not something built speculatively now.
+**Files expected (once unblocked):** `src/lib/auth/authenticatedRequest.ts`, `authenticatedRequest.test.ts`.
+**Implementation actions (once unblocked):**
+1. RED: tests — a wrapped GET that 401s triggers exactly one refresh (via T06's primitive, mocked) then retries the original GET exactly once, succeeding if the retry succeeds; a wrapped GET whose retry also 401s surfaces the final error without a second refresh attempt; a wrapped POST that 401s does **not** auto-retry (resolves with the refresh outcome recorded but the original mutation is never re-sent) unless the caller passed `{ retryAfterRefresh: true }`, in which case it behaves like the GET case; a non-401 error passes through completely unchanged (no refresh attempted for a 500, a network error, a timeout, or any other status).
+2. GREEN: implement `authenticatedRequest<T>(call: () => Promise<T>, options?: { retryAfterRefresh?: boolean; isRead?: boolean }): Promise<T>`, calling T06's primitive (wired to a real refresh call, once confirmed) only on an `ApiError` with `kind:"http"` and `status:401`.
+**Do NOT:** import this module into `useLogin`/`useLogout`/the refresh call's own invocation (§6's exclusion rule — enforced by simply never doing it, verified by code review in T11); attempt a second refresh if the retried call also 401s; begin any part of this task before the contract confirms enough to make its central decisions safely.
+**Tests:** TDD required once unblocked.
+**Acceptance criteria:** Review Focus item 1 (concurrent storm) and the no-recursion rule both provably hold through this wrapper, not just through T06's primitive in isolation.
 **Verification:** `npm run test -- authenticatedRequest`, full suite.
 **Skills/tools:** `bekaa3d-api-contract`, `superpowers:test-driven-development`.
-**Suggested commit message:** `feat: add authenticated-request 401 retry wrapper`
+**Suggested commit message:** `feat: add authenticated-request 401 retry wrapper` (once unblocked).
 
 ---
 
@@ -558,40 +606,40 @@ T08 (CSRF — BLOCKED ON CSRF CONTRACT, placeholder only, no edges into anything
 
 ### FVS003-T09 — Logout
 
-**Status:** CAN IMPLEMENT NOW (its own logic is independent of T04's blocked bootstrap half; it only needs T04's query-key convention, which is part of the unblocked interface half).
+**Status:** **BLOCKED ON BACKEND CONTRACT** (corrected — the original version marked this "CAN IMPLEMENT NOW," which was wrong). Calling the real endpoint requires an assumed body shape, an assumed CSRF-exemption, and this task's own explicitly-flagged, currently-unresolved local-clear-on-network-failure policy (§2 rows 24/25/26/27/28). **Do not implement until these are confirmed/decided.**
 **Purpose:** The logout mutation, cache clearing, and `AuthProvider.logout()` wiring.
-**Depends on:** T04 (interface half, for the `["auth","session"]` key convention).
-**Contract gates:** Rows 24/25/26/27/28 of §2 are unconfirmed but don't block a minimal, safe implementation (§ below explains the security decision this task must make explicitly, not silently).
-**Files expected:** `src/lib/auth/useLogout.ts`, `useLogout.test.ts`, plus the `logout` wiring inside `AuthProvider.tsx` (modifies T04's file).
-**Implementation actions:**
-1. RED: mutation test — exact path `/api/v1/auth/logout`, no body (row 24 assumed none), `retry:false`; a successful logout clears the auth query cache (per §13) so `isAuthenticated` flips to `false` synchronously, without waiting for a refetch.
-2. **Explicit, non-silent decision point:** if the backend logout call itself fails (network/timeout/5xx), should the frontend still clear local auth state? This plan does **not** decide this silently — implementers must get explicit sign-off at this task's execution time (not invent an answer), since it's a genuine security/product tradeoff (clearing anyway = user-perceived instant logout but a session that's still technically valid server-side if the network call never arrived; not clearing = a confusing "logout didn't work" UX that may itself be exploitable if the user walks away assuming they're logged out). Record whichever answer is approved in `docs/` (T13) once decided.
-3. GREEN: implement `useLogout()` + `AuthProvider.logout()`, calling `apiClient.post` **directly** (never through T07 — §6).
-**Do NOT:** auto-retry logout; call this through the `authenticatedRequest` wrapper; silently pick the network-failure behavior from step 2 without recording that a decision was made and by whom.
-**Tests:** TDD required.
+**Depends on:** T04 (now fully blocked — see T04's corrected status) for the `["auth","session"]` key convention; the Backend Questions "LOGOUT" group.
+**Contract gates:** Rows 24/25/26/27/28 of §2 all block real implementation.
+**Files expected (once unblocked):** `src/lib/auth/useLogout.ts`, `useLogout.test.ts`, plus the `logout` wiring inside `AuthProvider.tsx`.
+**Implementation actions (once unblocked):**
+1. RED: mutation test — exact confirmed path/body, `retry:false`; a successful logout clears the auth query cache (per §13) so `isAuthenticated` flips to `false` synchronously, without waiting for a refetch.
+2. **Explicit, non-silent decision point (must be resolved before step 3, not invented):** if the backend logout call itself fails (network/timeout/5xx), should the frontend still clear local auth state? This plan does **not** decide this silently — implementers must get explicit sign-off at this task's execution time, since it's a genuine security/product tradeoff (clearing anyway = user-perceived instant logout but a session that's still technically valid server-side if the network call never arrived; not clearing = a confusing "logout didn't work" UX that may itself be exploitable if the user walks away assuming they're logged out). Record whichever answer is approved in `docs/` (T13) once decided.
+3. GREEN: implement `useLogout()` + `AuthProvider.logout()`, calling `apiClient.post` **directly** (never through T07 — §6), and wiring in T10's already-built cross-tab signal primitive (one line: call its `announceLogout()`-equivalent inside the success handler).
+**Do NOT:** auto-retry logout; call this through the `authenticatedRequest` wrapper; silently pick the network-failure behavior from step 2 without recording that a decision was made and by whom; begin this task before the contract/decision items above are resolved.
+**Tests:** TDD required once unblocked.
 **Acceptance criteria:** Cache clears on success; the network-failure decision from step 2 is explicitly recorded, not defaulted into silently.
 **Verification:** `npm run test -- useLogout`, full suite.
 **Skills/tools:** `bekaa3d-api-contract`, `superpowers:test-driven-development`.
-**Suggested commit message:** `feat: add logout mutation and cache clearing`
+**Suggested commit message:** `feat: add logout mutation and cache clearing` (once unblocked).
 
 ---
 
-### FVS003-T10 — Cross-Tab Logout
+### FVS003-T10 — Cross-Tab Logout Signal
 
-**Status:** CAN IMPLEMENT NOW.
-**Purpose:** Logging out in one tab logs the user out in every other open tab of the app.
-**Depends on:** T09.
-**Contract gates:** None (§2 row 38 — architecture decision, this plan's own).
-**Files expected:** `src/lib/auth/crossTabLogout.ts`, `crossTabLogout.test.ts`.
+**Status:** **CAN IMPLEMENT NOW — redesigned to separate the signal primitive from the logout wiring** (corrected). The original design wired `announceLogout()` directly into `useLogout`'s success handler as part of this same task, which inherited T09's blocker by association even though the broadcast mechanism itself knows nothing about logout's HTTP semantics. Corrected: this task now builds **only** the generic, opaque signal primitive. Wiring it into `useLogout`'s success handler is a one-line addition that happens as part of T09, once T09 unblocks — not duplicated or pre-empted here.
+**Purpose:** The reusable, content-free, same-browser cross-tab signaling mechanism that logout (once unblocked) and any future cross-tab-relevant event can build on.
+**Depends on:** None.
+**Contract gates:** None — this module never calls `apiClient`, never references `/logout`, and has no opinion about what triggers a broadcast.
+**Files expected:** `src/lib/auth/crossTabSignal.ts`, `crossTabSignal.test.ts`.
 **Implementation actions:**
-1. RED: tests — a thin wrapper around `BroadcastChannel("bekaa3d-auth")` (or an equivalent small abstraction) exposing `announceLogout()` and `onLogoutAnnounced(callback)`; posting from one instance is observed by a second instance (jsdom supports `BroadcastChannel` — confirm at implementation time; if the test environment genuinely lacks it, mock it explicitly and say so, never silently skip the test); the message payload is an opaque, content-free signal (e.g. `{ type: "logout" }`) — no token, no user data, nothing identifying.
-2. GREEN: implement the wrapper; wire `AuthProvider` to call `announceLogout()` inside `useLogout`'s success handler and to call `queryClient.setQueryData(["auth","session"], anonymousShape)` when `onLogoutAnnounced` fires in another tab.
-**Do NOT:** broadcast any token/user data; fall back to a `localStorage` `storage`-event mechanism without an explicit decision to do so (§17 — not planned by default).
-**Tests:** TDD required — this is Review Focus item 5's owning task.
-**Acceptance criteria:** A simulated second-tab broadcast flips the receiving tab's `isAuthenticated` to `false` without a network call.
-**Verification:** `npm run test -- crossTabLogout`, full suite.
+1. RED: tests — a thin wrapper around `BroadcastChannel("bekaa3d-auth")` exposing `announce(eventType: string)` and `onAnnounced(callback: (eventType: string) => void)`; posting from one instance is observed by a second instance (jsdom supports `BroadcastChannel` — confirm at implementation time; if the test environment genuinely lacks it, mock it explicitly and say so, never silently skip the test); the message payload is always an opaque string tag (e.g. `"logout"`) — never a token, user data, or anything identifying; posting and receiving on the *same* channel instance does not echo back to its own sender (standard `BroadcastChannel` behavior — assert it explicitly rather than assuming).
+2. GREEN: implement the wrapper as a small, generic, reusable primitive — not logout-specific in its own type signature, even though logout is its first real caller.
+**Do NOT:** give this module any knowledge of auth state, `AuthProvider`, or the query client; wire it into `useLogout` here (that happens in T09, once unblocked); broadcast any token/user data; fall back to a `localStorage` `storage`-event mechanism without an explicit decision to do so (§17 — not planned by default).
+**Tests:** TDD required — this is Review Focus item 5's owning primitive (its actual logout-triggered usage is proven once T09 unblocks).
+**Acceptance criteria:** A simulated second-tab broadcast is observed by a receiver registered via `onAnnounced`, proving the primitive itself needs no auth/logout contract knowledge to be correct.
+**Verification:** `npm run test -- crossTabSignal`, full suite.
 **Skills/tools:** `superpowers:test-driven-development`.
-**Suggested commit message:** `feat: add cross-tab logout broadcast`
+**Suggested commit message:** `feat: add cross-tab signal primitive`
 
 ---
 
