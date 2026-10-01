@@ -36,15 +36,21 @@ Edit `.env.local` to point at wherever you actually run the backend.
 
 ## Development Proxy
 
-The browser never learns the backend's real origin. It only ever calls same-origin `/api/...` paths; `next.config.ts`'s `rewrites()` forwards those to the real backend, server-side:
+The browser never learns the backend's real origin. It only ever calls same-origin `/api/...` paths; `next.config.ts`'s `rewrites()` forwards those to the real backend, server-side. **Two different rules apply, because the backend's own path shape differs by endpoint family (corrected at FVS-002 BATCH 2 — the original single-rule version below was wrong for versioned API paths):**
 
 ```
-frontend request:  /api/:path*
-                    ↓ (next.config.ts rewrite, strips the /api prefix)
-backend request:    ${API_PROXY_TARGET}/:path*
+Health endpoints (backend path has NO /api prefix):
+frontend request:  /api/health/:path*
+                    ↓ (strips the /api prefix)
+backend request:    ${API_PROXY_TARGET}/health/:path*
+
+Versioned API endpoints (backend path KEEPS its /api prefix):
+frontend request:  /api/v1/:path*
+                    ↓ (preserves the /api prefix)
+backend request:    ${API_PROXY_TARGET}/api/v1/:path*
 ```
 
-Example: a frontend call to `/api/health/ready` reaches the backend's `GET /health/ready`. `apiClient` itself never constructs or receives an absolute backend URL.
+Examples: a frontend call to `/api/health/ready` reaches the backend's `GET /health/ready` (stripped). A frontend call to `/api/v1/auth/register` reaches the backend's `POST /api/v1/auth/register` (preserved, not `/v1/auth/register`). `apiClient` itself never constructs or receives an absolute backend URL; the two rules are ordered specific-before-general in `next.config.ts` (`/api/health/:path*` first), since a plain rewrites array is tried in source order and the first match wins.
 
 **If `API_PROXY_TARGET` is unset:** `rewrites()` registers no rewrite rule at all — not a hardcoded fallback, not an invalid `undefined/...` destination. The app still builds and runs; any `/api/...` request just falls through to Next's normal routing (effectively unmatched) until you configure the variable.
 
@@ -107,6 +113,7 @@ The only currently-confirmed endpoint is `GET /api/health/ready`. No product/ord
 - `type`, `title`, `detail`, `instance` — the four confirmed RFC 9457 Problem Details fields, populated only when the body was valid JSON and actually contained them. Assume nothing — any of these may be `undefined`.
 - `status` — the real HTTP status code, but populated **only** for `kind: "http"` (stays `undefined` for `"parse"`/`"network"`/`"timeout"`).
 - `correlationId` — reserved on the type, **never populated by any current code**. The backend's correlation/request-ID header name is not yet confirmed (see Open Contract Questions).
+- `retryAfterSeconds` — added in FVS-002 BATCH 3. Populated only for a non-2xx response that carries a `Retry-After` header expressed as a valid, finite, non-negative whole number of seconds (the backend's confirmed rate-limit contract uses this form, not an HTTP-date). Missing or malformed values leave this `undefined` — never guessed. No raw `Headers`/`Response` object is ever exposed; this is the only header value `apiClient` surfaces.
 - `raw` — the full parsed body, or the raw response text if it didn't parse. Diagnostic only.
 - `message` — a safe, frontend-authored fallback string. See below.
 
@@ -182,6 +189,56 @@ Query configuration: `staleTime: 0`; `retry: 2` (initial attempt + 2 retries = 3
 - Multiple toasts can be shown safely; there is no ordering/queueing/eviction policy yet (deferred until a slice actually needs one).
 - **Not currently wired to any real event.** Nothing outside its own tests calls `showToast()` — a future slice with a real mutation/success/failure event is expected to be its first real caller.
 
+## FVS-002 — Registration & Email Verification
+
+A visitor can register, receive enumeration-safe "check your email" messaging, verify via an emailed link, and resend the verification email with cooldown handling. No auto-login, no new auth/session architecture — that remains FVS-003's scope. See `FVS-002-IMPLEMENTATION-PLAN.md` for the full task-by-task plan and contract-confidence table; this section documents only what is actually committed.
+
+### Register (`/register`)
+
+`src/app/register/page.tsx`, mutation in `src/lib/auth/useRegister.ts`.
+
+- Fields: exactly `email` and `password` — `POST /api/v1/auth/register`, body `{ email, password }`, no trailing slash.
+- Password rule: **8–256 Unicode code points**, counted via `[...password].length` (never `.length`, which counts UTF-16 code units and would over-count characters outside the Basic Multilingual Plane). No complexity rule (no required uppercase/digit/symbol). Control characters are rejected client-side. Neither field is trimmed before submission — `type="text"` + `inputMode="email"` is used instead of `type="email"` specifically because an `<input type="email">` auto-trims its own value, which would silently violate this.
+- **Enumeration-safe by construction:** success is HTTP 202 with body `{ message }` — that `message` is never read or rendered; the UI shows one fixed, frontend-authored "check your email" string regardless of whether the backend implies a new or an existing account.
+- No auth/session state is created; no cookies are set. The success view links toward `/login` (FVS-003's route, not built here).
+- Double-submission is prevented by `Form`'s existing `fieldset disabled={isSubmitting}` guard; the mutation also sets `retry: false`.
+
+### Verify Email (`/verify-email`)
+
+`src/app/verify-email/page.tsx`, mutation in `src/lib/auth/useVerifyEmail.ts`.
+
+- The emailed link format is `{FRONTEND_BASE_URL}/verify-email#token=...` — **the token travels in the URL fragment, never a query string.** `useSearchParams()` cannot see a fragment and is never used for this; the token is read client-side from `window.location.hash` via a small `URLSearchParams`-based parser (`parseTokenFromHash`), which safely handles a missing/empty hash, a missing `token` key, an empty value, unrelated fragment fields, and percent-encoded content without throwing.
+- **The token is removed from the visible URL immediately after capture** (`history.replaceState`, no navigation/reload) — so the secret does not linger in `window.location.hash` for the rest of the page's lifetime. This runs once, client-only, and never causes a second verification request.
+- Locally, a token must be exactly 43 characters to even attempt verification; no alphabet/regex is invented beyond that length check (the backend has not confirmed one). A locally-invalid token is never sent to the backend.
+- The token is captured into component state and used exactly once; it is never logged, never written to `localStorage`/`sessionStorage`/a cookie, and never rendered in any error text. A `useRef` single-consumption guard ensures at most one `POST` fires per page instance even under React Strict Mode's development-only double-invoke of effects.
+- Request: `POST /api/v1/auth/verify-email`, body `{ token }`, no trailing slash, `retry: false`. A 204 (empty body) is treated as success — `apiClient` already resolves `undefined` for an empty/unparseable 2xx body, so no response content is required.
+- State mapping: **204** → success (with a `/login` link). **400** `INVALID_TOKEN` → one generic "invalid link" state — this deliberately covers an invalid token, a used token, and an already-verified re-click alike, since the backend returns the same code for all three; there is no separate "already verified" success state. **410** `RESOURCE_EXPIRED` → a distinct "expired" state, whose copy always communicates both halves of: "if you already verified your email, log in — otherwise request a new link." Separately, a **429** gets its own safe rate-limit message (using `retryAfterSeconds` when available), and a network/timeout/other failure each get their own safe generic message — these four are the standard transport-failure layer every mutation-consuming page in this slice has, orthogonal to the two token-validity states above (see `FVS-002-IMPLEMENTATION-PLAN.md` §13's BATCH 4 clarification).
+- On success, focus moves to the page's heading (not silently to `<body>`) — same pattern used on the register success view.
+
+### Resend Verification (`/verify-email/resend`)
+
+`src/app/verify-email/resend/page.tsx`, mutation in `src/lib/auth/useResendVerification.ts`, countdown in `src/lib/auth/useCooldown.ts`.
+
+- Field: exactly `email` — `POST /api/v1/auth/resend-verification`, body `{ email }`, no trailing slash. Same client email-shape rule as registration; not trimmed.
+- **Enumeration-safe:** every successful 202 renders the identical fixed copy ("If an account exists for that email, a verification email was sent.") regardless of whether the account exists, doesn't exist, or the backend's own server-side cooldown silently suppressed the email — the frontend never tries to infer account existence.
+- **120-second success cooldown:** every successful 202 starts a cooldown of exactly `Date.now() + 120_000` — an **absolute deadline**, never a decrementing counter, so a throttled/backgrounded timer gap self-corrects on the next tick instead of drifting. The resend button is disabled for the cooldown's duration.
+- **429 rate-limit cooldown is a separate thing from the 120s success cooldown.** If the response carries a valid `Retry-After` (via `ApiError.retryAfterSeconds`), the frontend disables resend until `Date.now() + retryAfterSeconds * 1000` instead — which may be far longer than 120 seconds (confirmed per-IP limits: register=5/hr, resend=5/hr, verify=20/hr). A missing/malformed `Retry-After` shows a generic rate-limit failure without inventing a duration.
+- Accessibility: one `aria-live="polite"` announcement when the cooldown starts ("Resend available at HH:MM:SS", local browser time, stable while the deadline doesn't change) and one more when it completes ("You can resend the verification email now.") — never once per tick. The visible ticking countdown text is a separate, plain (non-live) element so it never spams screen readers; this was a real, found-and-fixed defect during FVS-002's integration pass (the rate-limit warning `Alert` previously recomputed its message from the ticking seconds every render, which re-announced every second for any `Retry-After` under 60s — fixed by freezing that message once, at the moment the 429 is caught).
+- On a successful resend, focus moves to the success message (the page stays on the same form, unlike register/verify-email's dedicated success views).
+- No cooldown state, email, or token is persisted to `localStorage`/`sessionStorage`/a cookie anywhere in this slice.
+
+### Errors
+
+RFC 9457 base Problem Details handling (`type`/`title`/`status`/`detail`/`instance`) is shared with FVS-001 — see the ApiError Contract section above. The exact field-level `errors[]` validation-error extension shape is **still unconfirmed** by the backend; no code anywhere in this slice invents it. Server-side field validation failures surface only through the existing generic `ApiError`/`Alert` path. `ApiError.raw`/`.detail`/`.type`/`.title`/`.instance` are never rendered to the user in any FVS-002 page — only safe, frontend-authored copy.
+
+### Captcha
+
+Cloudflare Turnstile is planned for registration and resend but is **not implemented**. No Turnstile dependency is installed, no placeholder widget is rendered, and no captcha field/token exists anywhere in this slice's code. The exact field name and request contract are pending backend confirmation.
+
+### Real Backend / Outbox Acceptance
+
+A deterministic, backend-independent E2E spec exists (`e2e/register-and-verify.spec.ts`) proving the full register → check-email → (simulated email link) → verify → `/login`-prompt flow via Playwright route interception — it never contacts a real backend. **Real-backend acceptance (FVS002-T14) remains pending** and is a genuine, separate gate, not satisfied by the E2E spec above. The current manual workaround for inspecting a real verification token during development is to stop the backend's worker and inspect the `email_outbox` table directly via SQL; an automated, file-based dev/test email provider is being built on the backend side but is not ready yet.
+
 ## Testing
 
 ### Unit / Component Tests
@@ -202,9 +259,9 @@ Why no MSW: FVS-001's network surface is intentionally tiny — one client, one 
 npm run test:e2e
 ```
 
-Runs **only** `e2e/smoke.spec.ts` (Playwright's `smoke` project in `playwright.config.ts`). Deliberately backend-independent — verified to pass whether or not a real backend is running.
+Runs **only** `e2e/smoke.spec.ts` and `e2e/register-and-verify.spec.ts` (both matched by Playwright's `smoke` project in `playwright.config.ts`). Deliberately backend-independent — verified to pass whether or not a real backend is running.
 
-Current coverage: `/` boots (shell landmarks, SkipLink, foundation content); `/does-not-exist` renders 404 content with a working "Back to home" link and the shell still exactly-once afterward; the readiness/banner state is asserted **tolerantly** — whichever valid state is currently showing is accepted, never a hard-coded expectation.
+Current coverage: `/` boots (shell landmarks, SkipLink, foundation content); `/does-not-exist` renders 404 content with a working "Back to home" link and the shell still exactly-once afterward; the readiness/banner state is asserted **tolerantly** — whichever valid state is currently showing is accepted, never a hard-coded expectation. `register-and-verify.spec.ts` (FVS002-T12) proves the full register → check-email → verify → `/login`-prompt flow and a short resend smoke check, both via route interception, never a real backend.
 
 No accessibility automation runs here — see below.
 
