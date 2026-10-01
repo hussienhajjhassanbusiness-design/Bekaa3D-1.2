@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/components/feedback/ToastProvider";
+import { useAuth } from "@/lib/auth/AuthProvider";
 import RootLayout from "./layout";
 
 // FVS001-T14 — the one composition-level integration test: proves the REAL
@@ -47,7 +48,12 @@ function renderLayoutDocument(children: React.ReactNode): Document {
 function ContextProbe() {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
-  const ok = typeof showToast === "function" && queryClient != null;
+  const auth = useAuth();
+  const ok =
+    typeof showToast === "function" &&
+    queryClient != null &&
+    typeof auth.isLoading === "boolean" &&
+    typeof auth.isAuthenticated === "boolean";
   return <div data-testid="context-probe">{ok ? "context-ok" : "context-missing"}</div>;
 }
 
@@ -86,7 +92,7 @@ describe("RootLayout composition (FVS001-T14)", () => {
     expect(main?.querySelector('[data-testid="route-content"]')).not.toBeNull();
   });
 
-  it("provides working QueryProvider/ToastProvider context to descendants (a real context probe, not just absence of a crash)", () => {
+  it("provides working QueryProvider/AuthProvider/ToastProvider context to descendants (a real context probe, not just absence of a crash)", () => {
     const doc = renderLayoutDocument(<ContextProbe />);
 
     expect(doc.querySelector('[data-testid="context-probe"]')?.textContent).toBe("context-ok");

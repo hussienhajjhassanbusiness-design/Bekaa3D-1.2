@@ -6,6 +6,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { BackendUnreachableBanner } from "@/components/feedback/BackendUnreachableBanner";
+import { AuthProvider } from "@/lib/auth/AuthProvider";
 
 export const metadata: Metadata = {
   title: "Create Next App",
@@ -30,12 +31,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en">
       <body>
         <QueryProvider>
-          <ToastProvider>
-            <AppLayout header={<Header />} footer={<Footer />}>
-              {process.env.NODE_ENV === "development" ? <BackendUnreachableBanner /> : null}
-              {children}
-            </AppLayout>
-          </ToastProvider>
+          <AuthProvider>
+            <ToastProvider>
+              <AppLayout header={<Header />} footer={<Footer />}>
+                {process.env.NODE_ENV === "development" ? <BackendUnreachableBanner /> : null}
+                {children}
+              </AppLayout>
+            </ToastProvider>
+          </AuthProvider>
         </QueryProvider>
       </body>
     </html>
