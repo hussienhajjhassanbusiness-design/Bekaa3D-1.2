@@ -115,7 +115,7 @@ POST /api/v1/auth/refresh
 **Frontend capability:** A verified customer logs in, stays logged in across page loads via httpOnly cookies, is silently refreshed, and is logged out (locally and cross-tab). Protected routes redirect anonymous users to `/login` with a return-to path.
 **Routes:** `/login`; no dedicated logout route (action, not a page).
 **Components:** `LoginForm`, `ProtectedRoute` wrapper, `AuthProvider` (context exposing `user`/`isAuthenticated`/`isLoading`).
-**State:** **Authentication state** — since the session lives in httpOnly cookies (per VS-003), the frontend cannot read the cookie directly; auth state is derived from calling `GET /api/v1/me` (FVS-006) on boot and caching the result in TanStack Query, invalidated on login/logout. **CSRF state** — the double-submit token (delivered how? — `NEEDS BACKEND CONFIRMATION`, see §17) is read and attached to every mutating request by the API client from FVS-001.
+**State:** **Authentication state** — since the session lives in httpOnly cookies (per VS-003), the frontend cannot read the cookie directly; auth state is derived from calling `GET /api/v1/me` on boot (confirmed at FVS-003 BATCH 3A as an explicit, approved cross-slice dependency pulled forward from VS-006 — see `FVS-003-IMPLEMENTATION-PLAN.md` §1 — not a circular FVS-006-depends-on-FVS-003-depends-on-FVS-006 reference as an earlier draft of this line implied) and caching the result in TanStack Query, invalidated on login/logout. **CSRF state** — confirmed at BATCH 3A: a JS-readable `csrf_token` cookie, echoed in an `X-CSRF-Token` header on every CSRF-required mutating request (see the implementation plan §5) — no longer `NEEDS BACKEND CONFIRMATION`.
 **API integration:** Login failures are enumeration-safe (generic "invalid email or password", no "user not found" vs "wrong password" distinction) and reflect the backend's progressive-delay/lockout behavior without the UI inventing its own lockout copy — it just surfaces whatever the server returns. On any `401` from any endpoint, the API client attempts one silent `POST /refresh`; if that also fails, it clears cached auth state and redirects to `/login?returnTo=...`. Reuse-detected sessions (old refresh token replayed) come back as a revoked session — treated identically to expired-session UX.
 **UX states:** Submitting; invalid credentials; account locked/rate-limited (generic copy, no specifics that aid an attacker); session-expired mid-app (silent refresh, or forced re-login if refresh also fails); logged out confirmation.
 **Responsive behavior:** Same single-column form pattern as FVS-002.
@@ -1395,12 +1395,10 @@ Each item below is `NEEDS BACKEND CONFIRMATION` — this plan does not guess an 
 **Recommended question:** What is the exact JSON shape of a 422 validation-error problem response, field-by-field?
 
 ---
-**Issue:** Auth cookie names and CSRF header contract
+**Issue:** Auth cookie names and CSRF header contract — **RESOLVED at FVS-003 BATCH 3A**
 **Backend slice:** VS-003
-**Why frontend needs clarification:** The API client (FVS-001) must attach the correct CSRF header name on every mutating request.
-**What is currently defined:** "Double-submit CSRF," short-lived access cookie, rotating refresh cookie.
-**What is missing:** Cookie names, the CSRF token's delivery mechanism (readable cookie value vs response body), and the exact header name expected on mutations.
-**Recommended question:** What cookie name carries the CSRF token, and what request header name must the frontend echo it in?
+**What is currently defined:** Cookie names: `access_token` (httpOnly, Path `/`, 15m), `refresh_token` (httpOnly, Path `/api/v1/auth`, 30d), `csrf_token` (JS-readable, `SameSite=Lax`, Path `/`, 30d, does not rotate on refresh). CSRF header: `X-CSRF-Token`. Required for refresh/logout/every authenticated write; exempt for login and anonymous POSTs (register/verify/resend/password-reset).
+**What is missing:** Nothing further — resolved. See `FVS-003-IMPLEMENTATION-PLAN.md` §2 rows 10–13, 29–34 and §5.
 
 ---
 **Issue:** Idempotency-Key mechanism for checkout/offer-checkout/refund creation
