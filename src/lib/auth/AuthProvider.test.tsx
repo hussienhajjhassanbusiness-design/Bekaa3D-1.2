@@ -3,7 +3,9 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode, createElement, type ReactNode } from "react";
 import { AuthProvider, useAuth } from "./AuthProvider";
-import { getAuthSessionQueryOptions } from "./authSession";
+import { getAuthSessionQueryOptions, AUTH_SESSION_QUERY_KEY } from "./authSession";
+import * as crossTabSignalModule from "./crossTabSignal";
+import { useLogout } from "./useLogout";
 
 // FVS-003-IMPLEMENTATION-PLAN.md §9 (confirmed BATCH 3A) — AuthProvider is a
 // thin context wrapper around the one `["auth","session"]` query; it never
@@ -13,8 +15,18 @@ import { getAuthSessionQueryOptions } from "./authSession";
 // tests only the context-projection behavior — mocking `bootstrapAuthSession`
 // alone would not work, since the real `getAuthSessionQueryOptions` binds to
 // it internally by module-private reference, not through the mocked export.
-vi.mock("./authSession", () => ({ getAuthSessionQueryOptions: vi.fn() }));
+vi.mock("./authSession", async () => {
+  const actual = await vi.importActual<typeof import("./authSession")>("./authSession");
+  return { ...actual, getAuthSessionQueryOptions: vi.fn() };
+});
 const mockedGetOptions = vi.mocked(getAuthSessionQueryOptions);
+
+// Part F (confirmed BATCH 3B) — useLogout's own transport/retry/CSRF
+// behavior is proven separately in useLogout.test.ts; here it's mocked so
+// these tests exercise only AuthProvider's forwarding of `logout` and its
+// cross-tab wiring.
+vi.mock("./useLogout", () => ({ useLogout: vi.fn() }));
+const mockedUseLogout = vi.mocked(useLogout);
 
 function createWrapper() {
   const queryClient = new QueryClient();
@@ -54,6 +66,8 @@ function mockBootstrap(queryFn: () => Promise<typeof SAFE_USER | null>) {
 
 beforeEach(() => {
   mockedGetOptions.mockReset();
+  mockedUseLogout.mockReset();
+  mockedUseLogout.mockReturnValue({ mutateAsync: vi.fn() } as never);
 });
 
 describe("AuthProvider / useAuth", () => {
@@ -119,5 +133,173 @@ describe("AuthProvider / useAuth", () => {
 
     await waitFor(() => expect(screen.getByTestId("loading")).toHaveTextContent("false"));
     expect(queryFn).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Part F (confirmed BATCH 3B) — cross-tab logout wiring. `createCrossTabSignal`
+// is spied on directly so these tests can capture the subscribed listener
+// (simulating a message arriving from another tab) and assert on
+// announce/subscribe/close calls, matching the useLogout.test.ts precedent.
+describe("AuthProvider cross-tab logout wiring", () => {
+  function createClientWrapper() {
+    const queryClient = new QueryClient();
+    const Wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(QueryClientProvider, { client: queryClient }, createElement(AuthProvider, null, children));
+    return { queryClient, Wrapper };
+  }
+
+  function mockSignal() {
+    const announce = vi.fn();
+    const close = vi.fn();
+    let listener: ((eventType: string) => void) | undefined;
+    const subscribe = vi.fn((cb: (eventType: string) => void) => {
+      listener = cb;
+      return vi.fn();
+    });
+    vi.spyOn(crossTabSignalModule, "createCrossTabSignal").mockReturnValue({ announce, subscribe, close });
+    return {
+      announce,
+      close,
+      subscribe,
+      deliver: (eventType: string) => listener?.(eventType),
+    };
+  }
+
+  it("subscribes to the cross-tab signal on mount and unsubscribes + closes it on unmount", () => {
+    mockBootstrap(() => Promise.resolve(null));
+    const unsubscribe = vi.fn();
+    const subscribe = vi.fn().mockReturnValue(unsubscribe);
+    const close = vi.fn();
+    vi.spyOn(crossTabSignalModule, "createCrossTabSignal").mockReturnValue({
+      announce: vi.fn(),
+      subscribe,
+      close,
+    });
+    const { Wrapper } = createClientWrapper();
+
+    const { unmount } = render(<Probe />, { wrapper: Wrapper });
+    expect(subscribe).toHaveBeenCalledTimes(1);
+
+    unmount();
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it("receiving a 'logout' cross-tab event sets the session anonymous immediately", async () => {
+    mockBootstrap(() => Promise.resolve(SAFE_USER));
+    const signal = mockSignal();
+    const { Wrapper, queryClient } = createClientWrapper();
+    render(<Probe />, { wrapper: Wrapper });
+
+    await waitFor(() => expect(screen.getByTestId("authenticated")).toHaveTextContent("true"));
+
+    signal.deliver("logout");
+
+    expect(queryClient.getQueryData(AUTH_SESSION_QUERY_KEY)).toBeNull();
+    await waitFor(() => expect(screen.getByTestId("authenticated")).toHaveTextContent("false"));
+  });
+
+  it("ignores cross-tab events other than the literal string 'logout'", async () => {
+    mockBootstrap(() => Promise.resolve(SAFE_USER));
+    const signal = mockSignal();
+    const { Wrapper, queryClient } = createClientWrapper();
+    render(<Probe />, { wrapper: Wrapper });
+    await waitFor(() => expect(screen.getByTestId("authenticated")).toHaveTextContent("true"));
+
+    signal.deliver("login");
+    signal.deliver("session-updated");
+    signal.deliver("");
+
+    expect(queryClient.getQueryData(AUTH_SESSION_QUERY_KEY)).toEqual(SAFE_USER);
+    expect(screen.getByTestId("authenticated")).toHaveTextContent("true");
+  });
+
+  it("the incoming logout handler never calls the backend logout mutation and never re-announces (no broadcast loop)", async () => {
+    mockBootstrap(() => Promise.resolve(SAFE_USER));
+    const mutateAsync = vi.fn();
+    mockedUseLogout.mockReturnValue({ mutateAsync } as never);
+    const signal = mockSignal();
+    const { Wrapper } = createClientWrapper();
+    render(<Probe />, { wrapper: Wrapper });
+    await waitFor(() => expect(screen.getByTestId("authenticated")).toHaveTextContent("true"));
+
+    signal.deliver("logout");
+
+    expect(mutateAsync).not.toHaveBeenCalled();
+    expect(signal.announce).not.toHaveBeenCalled();
+  });
+
+  it("exposes a logout() action on the context that forwards to useLogout's mutateAsync", async () => {
+    mockBootstrap(() => Promise.resolve(SAFE_USER));
+    const mutateAsync = vi.fn().mockResolvedValue({ serverConfirmed: true });
+    mockedUseLogout.mockReturnValue({ mutateAsync } as never);
+    mockSignal();
+
+    function LogoutProbe() {
+      const { logout } = useAuth();
+      return (
+        <button
+          onClick={() => {
+            void logout();
+          }}
+        >
+          Log out
+        </button>
+      );
+    }
+    const { Wrapper } = createClientWrapper();
+    render(<LogoutProbe />, { wrapper: Wrapper });
+
+    screen.getByRole("button").click();
+
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it("the public interface exposes exactly user/isAuthenticated/isLoading/logout — no refreshSession, login, setUser, setAuthenticated, tokens, or roles helpers", async () => {
+    mockBootstrap(() => Promise.resolve(SAFE_USER));
+    mockSignal();
+    function ShapeProbe() {
+      const value = useAuth() as unknown as Record<string, unknown>;
+      return <span data-testid="shape">{Object.keys(value).sort().join(",")}</span>;
+    }
+    const { Wrapper } = createClientWrapper();
+    render(<ShapeProbe />, { wrapper: Wrapper });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("shape")).toHaveTextContent("isAuthenticated,isLoading,logout,user")
+    );
+  });
+
+  it("Review Focus: a stale in-flight auth refetch (as a concurrent login's invalidateQueries would trigger) does not re-authenticate the session after an incoming cross-tab logout", async () => {
+    mockBootstrap(() => Promise.resolve(null));
+    const signal = mockSignal();
+    const { Wrapper, queryClient } = createClientWrapper();
+    render(<Probe />, { wrapper: Wrapper });
+    await waitFor(() => expect(screen.getByTestId("loading")).toHaveTextContent("false"));
+
+    // Simulate "Tab B is mid-login": its own invalidateQueries has kicked
+    // off a refetch of the canonical auth query that is still in flight.
+    // fetchQuery's own explicit queryFn overrides the mounted query's
+    // bound one for this one fetch, standing in for a concurrent refetch.
+    let resolveRefetch!: (user: typeof SAFE_USER) => void;
+    const refetchPromise = queryClient.fetchQuery({
+      queryKey: AUTH_SESSION_QUERY_KEY,
+      queryFn: () => new Promise<typeof SAFE_USER>((resolve) => { resolveRefetch = resolve; }),
+    });
+    // Let the refetch's queryFn actually start (its executor assigns
+    // resolveRefetch) before delivering the logout signal — otherwise
+    // cancellation would simply pre-empt a fetch that never began, which
+    // isn't the in-flight race this test means to exercise.
+    await waitFor(() => expect(typeof resolveRefetch).toBe("function"));
+
+    // "Tab A" broadcasts logout while that refetch is still pending.
+    signal.deliver("logout");
+    expect(queryClient.getQueryData(AUTH_SESSION_QUERY_KEY)).toBeNull();
+
+    // The stale login completion resolves AFTER the logout signal.
+    resolveRefetch(SAFE_USER);
+    await refetchPromise;
+
+    expect(queryClient.getQueryData(AUTH_SESSION_QUERY_KEY)).toBeNull();
   });
 });

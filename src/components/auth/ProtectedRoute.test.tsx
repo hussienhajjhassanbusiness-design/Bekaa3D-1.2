@@ -35,6 +35,7 @@ function authState(overrides: Partial<AuthContextValue>): AuthContextValue {
     user: null,
     isAuthenticated: false,
     isLoading: false,
+    logout: vi.fn(),
     ...overrides,
   };
 }

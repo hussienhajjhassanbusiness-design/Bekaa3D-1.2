@@ -1,35 +1,72 @@
 "use client";
 
-// FVS-003-IMPLEMENTATION-PLAN.md §9 (confirmed BATCH 3A) — a thin context
-// wrapper around the single `["auth","session"]` TanStack Query. Never a
-// second, independently-settable state store: `isAuthenticated`/`user` are
-// always derived from the query's own data, not tracked separately.
+// FVS-003-IMPLEMENTATION-PLAN.md §9/§10/Part F (confirmed BATCH 3A/3B) — a
+// thin context wrapper around the single `["auth","session"]` TanStack
+// Query. Never a second, independently-settable state store:
+// `isAuthenticated`/`user` are always derived from the query's own data,
+// not tracked separately. The one justified addition over Batch 3A's
+// {user, isAuthenticated, isLoading} is `logout` (T09's mutation, exposed
+// here since this is the one place every protected consumer already
+// reads auth state from) — never `refreshSession`/`login`/`setUser`/
+// `setAuthenticated`/tokens/roles, which stay owned elsewhere.
 //
-// Deliberately does NOT expose `logout` yet — wiring it requires T09
-// (logout mutation + cache clearing), which is deferred to Batch 3B.
-// Fabricating a placeholder logout function now was considered and
-// rejected (see the plan's own T04 task definition) — a function that
-// does nothing, or that throws, is worse than simply not existing yet.
-import { createContext, useContext, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { getAuthSessionQueryOptions, type SafeUser } from "./authSession";
+// Cross-tab wiring (T10): subscribes to the generic, opaque
+// crossTabSignal for the literal event string "logout" only (never any
+// other payload). On receipt: cancels any in-flight auth-session fetch
+// before setting the query anonymous — the "smallest deterministic
+// guard" against the Tab-A-logout/Tab-B-mid-login race, where a login's
+// own invalidateQueries-triggered refetch could otherwise resolve AFTER
+// the incoming logout and silently re-authenticate the tab.
+// cancelQueries() is TanStack Query's own built-in mechanism for exactly
+// this (the same pattern optimistic updates use to stop a racing refetch
+// from clobbering a just-applied local value) — no bespoke epoch/
+// generation counter was needed. The incoming handler never calls the
+// backend again, never re-announces (so it can never loop), and never
+// refreshes.
+import { createContext, useContext, useEffect, type ReactNode } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { getAuthSessionQueryOptions, AUTH_SESSION_QUERY_KEY, type SafeUser } from "./authSession";
+import { createCrossTabSignal } from "./crossTabSignal";
+import { useLogout, type LogoutResult } from "./useLogout";
+
+const LOGOUT_EVENT = "logout";
 
 export interface AuthContextValue {
   user: SafeUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  logout: () => Promise<LogoutResult>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const query = useQuery(getAuthSessionQueryOptions());
+  const queryClient = useQueryClient();
+  const logoutMutation = useLogout();
   const user = query.data ?? null;
+
+  useEffect(() => {
+    const signal = createCrossTabSignal();
+    const unsubscribe = signal.subscribe((eventType) => {
+      if (eventType !== LOGOUT_EVENT) {
+        return;
+      }
+      queryClient.cancelQueries({ queryKey: AUTH_SESSION_QUERY_KEY });
+      queryClient.setQueryData(AUTH_SESSION_QUERY_KEY, null);
+    });
+
+    return () => {
+      unsubscribe();
+      signal.close();
+    };
+  }, [queryClient]);
 
   const value: AuthContextValue = {
     user,
     isAuthenticated: user !== null,
     isLoading: query.isLoading,
+    logout: () => logoutMutation.mutateAsync(),
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
