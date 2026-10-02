@@ -35,6 +35,7 @@ function authState(overrides: Partial<AuthContextValue>): AuthContextValue {
     user: null,
     isAuthenticated: false,
     isLoading: false,
+    isError: false,
     logout: vi.fn(),
     ...overrides,
   };
@@ -172,6 +173,38 @@ describe("ProtectedRoute", () => {
 
     expect(screen.queryByTestId("protected-content")).not.toBeInTheDocument();
     await waitFor(() => expect(mockReplace).toHaveBeenCalledTimes(1));
+  });
+
+  // FVS-006-IMPLEMENTATION-PLAN.md T01 — an unexpected transport/server
+  // failure (AuthProvider's isError:true) says nothing about whether the
+  // session is actually valid. Redirecting to /login in this case would
+  // reproduce the exact cross-slice defect found and fixed at FVS-006:
+  // bouncing a possibly-still-authenticated customer out on a transient
+  // blip. ProtectedRoute must render children (not redirect) so the page
+  // itself can show its own retryable error via useAuth().isError.
+  it("renders children (not a redirect) when the auth query genuinely errors, even though isAuthenticated is false", () => {
+    mockedUseAuth.mockReturnValue(authState({ isError: true }));
+    render(
+      <ProtectedRoute>
+        <div data-testid="protected-content">secret</div>
+      </ProtectedRoute>
+    );
+
+    expect(screen.getByTestId("protected-content")).toBeInTheDocument();
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it("does not redirect when the auth query genuinely errors", async () => {
+    mockedUseAuth.mockReturnValue(authState({ isError: true }));
+    render(
+      <ProtectedRoute>
+        <div>secret</div>
+      </ProtectedRoute>
+    );
+
+    // Give any stray effect a tick to fire, then confirm it never did.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(mockReplace).not.toHaveBeenCalled();
   });
 
   it("does not call replace more than once across re-renders while anonymous", async () => {

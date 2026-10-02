@@ -36,11 +36,12 @@ function createWrapper() {
 }
 
 function Probe() {
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading, isError } = useAuth();
   return (
     <div>
       <span data-testid="loading">{String(isLoading)}</span>
       <span data-testid="authenticated">{String(isAuthenticated)}</span>
+      <span data-testid="error">{String(isError)}</span>
       <span data-testid="email">{user?.email ?? "none"}</span>
     </div>
   );
@@ -94,7 +95,23 @@ describe("AuthProvider / useAuth", () => {
 
     await waitFor(() => expect(screen.getByTestId("loading")).toHaveTextContent("false"));
     expect(screen.getByTestId("authenticated")).toHaveTextContent("false");
+    expect(screen.getByTestId("error")).toHaveTextContent("false");
     expect(screen.getByTestId("email")).toHaveTextContent("none");
+  });
+
+  // FVS-006-IMPLEMENTATION-PLAN.md T01 — bootstrapAuthSession now re-throws
+  // a genuine transport/server failure instead of resolving anonymous (see
+  // authSession.ts). AuthProvider must surface this as a distinct isError
+  // state — never indistinguishable from confirmed-anonymous — so a
+  // consumer (ProtectedRoute, the profile page) can choose not to treat an
+  // unexpected failure as "log this user out."
+  it("projects isError:true (not authenticated, not a false anonymous) when the bootstrap query genuinely errors", async () => {
+    mockBootstrap(() => Promise.reject(new Error("network down")));
+    render(<Probe />, { wrapper: createWrapper() });
+
+    await waitFor(() => expect(screen.getByTestId("loading")).toHaveTextContent("false"));
+    expect(screen.getByTestId("error")).toHaveTextContent("true");
+    expect(screen.getByTestId("authenticated")).toHaveTextContent("false");
   });
 
   it("throws a clear error when useAuth is called outside an AuthProvider", () => {
@@ -347,7 +364,7 @@ describe("AuthProvider cross-tab logout wiring", () => {
     await waitFor(() => expect(observedResult).toEqual({ serverConfirmed: false }));
   });
 
-  it("the public interface exposes exactly user/isAuthenticated/isLoading/logout — no refreshSession, login, setUser, setAuthenticated, tokens, or roles helpers", async () => {
+  it("the public interface exposes exactly user/isAuthenticated/isLoading/isError/logout — no refreshSession, login, setUser, setAuthenticated, tokens, or roles helpers", async () => {
     mockBootstrap(() => Promise.resolve(SAFE_USER));
     mockSignal();
     function ShapeProbe() {
@@ -358,7 +375,7 @@ describe("AuthProvider cross-tab logout wiring", () => {
     render(<ShapeProbe />, { wrapper: Wrapper });
 
     await waitFor(() =>
-      expect(screen.getByTestId("shape")).toHaveTextContent("isAuthenticated,isLoading,logout,user")
+      expect(screen.getByTestId("shape")).toHaveTextContent("isAuthenticated,isError,isLoading,logout,user")
     );
   });
 

@@ -4,9 +4,20 @@
 // rendering on the REAL AuthProvider interface, never a second,
 // independently-tracked auth state. Protected children are never rendered
 // before auth resolves: while loading, only the LoadingSpinner renders;
-// while anonymous, nothing renders and the user is redirected to
+// while CONFIRMED anonymous, nothing renders and the user is redirected to
 // /login?returnTo=<current path>, preserving the pathname and query
 // string (never the origin) via the existing returnTo builder.
+//
+// #ARCHITECTURE-CANONICAL-AUTH-QUERY — a genuine transport/server failure
+// (isError:true) is never treated as confirmed-anonymous: redirecting here
+// would bounce a possibly-still-authenticated customer to /login on a
+// transient network blip (a real cross-slice defect found and fixed at
+// FVS-006 — see authSession.ts/AuthProvider.tsx). On isError, children
+// render anyway; it is the individual page's job (via useAuth().isError)
+// to show its own retryable error instead of whatever authenticated
+// content it would normally render. The real security boundary is always
+// each page's own API calls, which independently 401 if the session truly
+// isn't valid.
 //
 // Invariant owned by callers, not enforced here: ProtectedRoute must never
 // wrap /login itself, or an anonymous visit to /login would redirect back
@@ -18,7 +29,7 @@ import { LoadingSpinner } from "@/components/feedback/LoadingSpinner";
 import { buildLoginRedirectPath } from "@/lib/auth/returnTo";
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, isError } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -26,17 +37,19 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
   const query = searchParams.toString();
   const currentPath = query ? `${pathname}?${query}` : pathname;
 
+  const confirmedAnonymous = !isLoading && !isAuthenticated && !isError;
+
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    if (confirmedAnonymous) {
       router.replace(buildLoginRedirectPath(currentPath));
     }
-  }, [isLoading, isAuthenticated, currentPath, router]);
+  }, [confirmedAnonymous, currentPath, router]);
 
   if (isLoading) {
     return <LoadingSpinner />;
   }
 
-  if (!isAuthenticated) {
+  if (confirmedAnonymous) {
     return null;
   }
 

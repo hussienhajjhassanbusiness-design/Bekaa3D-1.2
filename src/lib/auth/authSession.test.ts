@@ -111,19 +111,74 @@ describe("bootstrapAuthSession", () => {
     expect(mockedRefreshSession).toHaveBeenCalledTimes(1);
   });
 
-  it("an unexpected failure (network, timeout, 500, or a 401 with a different code) resolves anonymous, never authenticated", async () => {
+  it("a 401 with a different/unrecognized code resolves anonymous, never authenticated — still a definitive auth signal", async () => {
     document.cookie = "csrf_token=abc";
-
-    vi.spyOn(apiClient, "get").mockRejectedValue({ kind: "network", message: "x", raw: undefined });
-    await expect(bootstrapAuthSession()).resolves.toBeNull();
-
-    vi.spyOn(apiClient, "get").mockRejectedValue(httpError(500));
-    await expect(bootstrapAuthSession()).resolves.toBeNull();
 
     vi.spyOn(apiClient, "get").mockRejectedValue(httpError(401, "MFA_REQUIRED"));
     await expect(bootstrapAuthSession()).resolves.toBeNull();
 
     expect(mockedRefreshSession).not.toHaveBeenCalled();
+  });
+
+  // FVS-006-IMPLEMENTATION-PLAN.md T01 — a genuine transport/server failure
+  // says NOTHING about whether the current session is valid. Collapsing it
+  // into "anonymous" was a real cross-slice defect: it would bounce a
+  // customer with a perfectly valid session to /login on a transient
+  // network blip or a 500, instead of letting the UI show a retryable
+  // error. These three cases must now REJECT (so the TanStack query
+  // genuinely errors) rather than resolve null.
+  it("re-throws a network failure rather than resolving anonymous", async () => {
+    document.cookie = "csrf_token=abc";
+    const error = { kind: "network", message: "x", raw: undefined };
+    vi.spyOn(apiClient, "get").mockRejectedValue(error);
+
+    await expect(bootstrapAuthSession()).rejects.toBe(error);
+    expect(mockedRefreshSession).not.toHaveBeenCalled();
+  });
+
+  it("re-throws a timeout failure rather than resolving anonymous", async () => {
+    document.cookie = "csrf_token=abc";
+    const error = { kind: "timeout", message: "x", raw: undefined };
+    vi.spyOn(apiClient, "get").mockRejectedValue(error);
+
+    await expect(bootstrapAuthSession()).rejects.toBe(error);
+  });
+
+  it("re-throws a 500 server error rather than resolving anonymous", async () => {
+    document.cookie = "csrf_token=abc";
+    const error = httpError(500);
+    vi.spyOn(apiClient, "get").mockRejectedValue(error);
+
+    await expect(bootstrapAuthSession()).rejects.toBe(error);
+  });
+
+  it("re-throws an unparseable (parse) response rather than resolving anonymous", async () => {
+    document.cookie = "csrf_token=abc";
+    const error = { kind: "parse", message: "x", raw: undefined };
+    vi.spyOn(apiClient, "get").mockRejectedValue(error);
+
+    await expect(bootstrapAuthSession()).rejects.toBe(error);
+  });
+
+  it("re-throws a transport failure on the post-refresh /me retry too, rather than resolving anonymous", async () => {
+    document.cookie = "csrf_token=abc";
+    const retryError = httpError(500);
+    vi.spyOn(apiClient, "get")
+      .mockRejectedValueOnce(httpError(401, "AUTH_REQUIRED"))
+      .mockRejectedValueOnce(retryError);
+    mockedRefreshSession.mockResolvedValue(true);
+
+    await expect(bootstrapAuthSession()).rejects.toBe(retryError);
+  });
+
+  it("still resolves anonymous (not an error) when the post-refresh /me retry is still AUTH_REQUIRED", async () => {
+    // Regression guard: the new transport-error re-throw must not change
+    // this already-correct, already-tested confirmed-anonymous outcome.
+    document.cookie = "csrf_token=abc";
+    vi.spyOn(apiClient, "get").mockRejectedValue(httpError(401, "AUTH_REQUIRED"));
+    mockedRefreshSession.mockResolvedValue(true);
+
+    await expect(bootstrapAuthSession()).resolves.toBeNull();
   });
 });
 

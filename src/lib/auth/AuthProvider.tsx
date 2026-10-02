@@ -35,6 +35,13 @@ export interface AuthContextValue {
   user: SafeUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  // #ARCHITECTURE-CANONICAL-AUTH-QUERY — true only for a genuine
+  // transport/server failure (bootstrapAuthSession re-throws these; see
+  // authSession.ts), never for a confirmed-anonymous outcome. Consumers
+  // (ProtectedRoute, FVS-006's profile page) use this to show a retryable
+  // error instead of treating an unexpected failure as "log this user
+  // out" — found and fixed as a real cross-slice defect at FVS-006.
+  isError: boolean;
   logout: () => Promise<LogoutResult>;
 }
 
@@ -66,6 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user,
     isAuthenticated: user !== null,
     isLoading: query.isLoading,
+    isError: query.isError,
     logout: () => logoutMutation.mutateAsync(),
   };
 
