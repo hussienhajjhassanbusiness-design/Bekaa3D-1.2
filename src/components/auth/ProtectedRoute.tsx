@@ -22,13 +22,28 @@
 // Invariant owned by callers, not enforced here: ProtectedRoute must never
 // wrap /login itself, or an anonymous visit to /login would redirect back
 // to /login in a loop.
-import { useEffect, type ReactNode } from "react";
+import { Suspense, useEffect, type ReactNode } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { LoadingSpinner } from "@/components/feedback/LoadingSpinner";
 import { buildLoginRedirectPath } from "@/lib/auth/returnTo";
 
+// useSearchParams() opts any page using it out of static prerendering
+// unless wrapped in Suspense (Next.js App Router requirement) — wrapped
+// once here so every current/future ProtectedRoute consumer gets this for
+// free, rather than each page remembering its own Suspense boundary (the
+// same requirement login/page.tsx satisfies for its own direct
+// useSearchParams() call). The fallback is never visible in practice,
+// since this value is available synchronously on the client.
 export function ProtectedRoute({ children }: { children: ReactNode }) {
+  return (
+    <Suspense fallback={<LoadingSpinner />}>
+      <ProtectedRouteInner>{children}</ProtectedRouteInner>
+    </Suspense>
+  );
+}
+
+function ProtectedRouteInner({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading, isError } = useAuth();
   const router = useRouter();
   const pathname = usePathname();

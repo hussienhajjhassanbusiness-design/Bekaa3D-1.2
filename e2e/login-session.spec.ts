@@ -86,8 +86,17 @@ test.describe("Login flow (FVS-003 BATCH 4 T12)", () => {
     await expect(page).toHaveURL(/\/account$/, { timeout: 15_000 });
     expect(await page.evaluate(() => document.cookie)).toContain("csrf_token=test-value");
 
-    // No login failure state is visible.
-    await expect(page.getByRole("alert")).toHaveCount(0);
+    // No login failure state is visible. Next.js's own route announcer
+    // also carries role="alert" on every client-side navigation (it just
+    // fired here, announcing the destination page's heading) — but it
+    // lives inside a closed-from-the-light-DOM shadow root (see
+    // app-router-announcer.js), so a plain querySelectorAll from the main
+    // document never sees it, unlike Playwright's own getByRole (which
+    // pierces shadow DOM and would wrongly count it).
+    const failureAlertCount = await page.evaluate(
+      () => document.querySelectorAll('[role="alert"]').length
+    );
+    expect(failureAlertCount).toBe(0);
   });
 
   test("falls back to / when returnTo is absent", async ({ page }) => {
