@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useQueryClient } from "@tanstack/react-query";
 import { ProfileCard } from "./ProfileCard";
@@ -119,6 +119,32 @@ describe("ProfileCard", () => {
     await user.click(screen.getByRole("button", { name: /retry/i }));
 
     expect(refetchQueries).toHaveBeenCalledWith({ queryKey: AUTH_SESSION_QUERY_KEY });
+  });
+
+  it("disables the Retry button and marks it busy while a retry is in flight, so it can't be mashed repeatedly", async () => {
+    let resolveRefetch!: () => void;
+    refetchQueries.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveRefetch = resolve;
+      })
+    );
+    mockedUseAuth.mockReturnValue(authState({ isError: true }));
+    const user = userEvent.setup();
+    render(<ProfileCard />);
+
+    const retryButton = screen.getByRole("button", { name: /retry/i });
+    await user.click(retryButton);
+
+    expect(retryButton).toBeDisabled();
+    expect(retryButton).toHaveAttribute("aria-busy", "true");
+    expect(refetchQueries).toHaveBeenCalledTimes(1);
+
+    // A second click while still in flight must not fire a second refetch.
+    await user.click(retryButton);
+    expect(refetchQueries).toHaveBeenCalledTimes(1);
+
+    resolveRefetch();
+    await waitFor(() => expect(retryButton).not.toBeDisabled());
   });
 
   it("renders no editable input of any kind", () => {

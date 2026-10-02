@@ -13,11 +13,16 @@
 // would bounce a possibly-still-authenticated customer to /login on a
 // transient network blip (a real cross-slice defect found and fixed at
 // FVS-006 — see authSession.ts/AuthProvider.tsx). On isError, children
-// render anyway; it is the individual page's job (via useAuth().isError)
-// to show its own retryable error instead of whatever authenticated
-// content it would normally render. The real security boundary is always
-// each page's own API calls, which independently 401 if the session truly
-// isn't valid.
+// render anyway — ProtectedRoute itself does NOT guarantee safety at that
+// point. For a page family whose content comes from its own independent,
+// per-render API call (reads/writes wrapped in authenticatedRequest),
+// that call's own 401 handling is the real safety net. But a page like
+// FVS-006's ProfileCard has no such call — it only reads the already-
+// cached useAuth() result — so EVERY consumer of this component that
+// renders cached data must check useAuth().isError itself before
+// trusting isAuthenticated/user, and show its own retryable error instead
+// of real content when isError is true. Do not assume ProtectedRoute
+// alone makes a cached-data page safe on error.
 //
 // Invariant owned by callers, not enforced here: ProtectedRoute must never
 // wrap /login itself, or an anonymous visit to /login would redirect back

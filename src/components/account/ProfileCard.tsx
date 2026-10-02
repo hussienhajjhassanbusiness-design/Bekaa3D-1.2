@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth/AuthProvider";
@@ -39,9 +40,15 @@ function ProfileCardSkeleton() {
 export function ProfileCard() {
   const { user, isLoading, isError } = useAuth();
   const queryClient = useQueryClient();
+  const [isRetrying, setIsRetrying] = useState(false);
 
-  function handleRetry() {
-    void queryClient.refetchQueries({ queryKey: AUTH_SESSION_QUERY_KEY });
+  async function handleRetry() {
+    setIsRetrying(true);
+    try {
+      await queryClient.refetchQueries({ queryKey: AUTH_SESSION_QUERY_KEY });
+    } finally {
+      setIsRetrying(false);
+    }
   }
 
   if (isLoading) {
@@ -52,7 +59,7 @@ export function ProfileCard() {
     return (
       <div>
         <Alert variant="error" message={ERROR_MESSAGE} />
-        <Button onClick={handleRetry} className="mt-4">
+        <Button onClick={handleRetry} isLoading={isRetrying} className="mt-4">
           Retry
         </Button>
       </div>
