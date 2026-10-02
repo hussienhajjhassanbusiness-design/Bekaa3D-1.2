@@ -581,6 +581,137 @@ in this environment at any point in this engagement, matching FVS-001's and
 FVS-002's own still-pending real-backend gates. This is a genuine, separate
 gate, not satisfied by anything in this section.
 
+## FVS-006 — Customer Account Shell & Profile
+
+A logged-in customer sees an account shell (nav + content region) and a
+read-only profile (email, verification status). `/account` redirects to
+`/account/profile`. No edit form exists — VS-006 is deliberately
+read-only; see `FVS-006-IMPLEMENTATION-PLAN.md` for the full task-by-task
+plan. This section documents only what is actually committed.
+
+### One canonical query, no second `/me` fetch
+
+`AccountLayout` and `ProfileCard` both read the same `useAuth()` context
+FVS-003 already established — neither mounts a second `useQuery`, calls
+`apiClient.get("/api/v1/me")` directly, or introduces a second query key.
+`ProfileCard`'s Retry button targets the exact same canonical key
+(`queryClient.refetchQueries({queryKey: AUTH_SESSION_QUERY_KEY})`,
+`src/lib/auth/authSession.ts`'s own exported constant) — never a new
+fetch path.
+
+### A real cross-slice defect found and fixed here
+
+Building this slice's own error state ("show a retry button if `/me`
+fails after a session is otherwise valid") surfaced a genuine bug in
+FVS-003's bootstrap logic: `bootstrapAuthSession()` previously caught
+*every* `/me` failure — including a plain network error, our own
+request timeout, an unparseable response, or a `5xx` — and resolved
+anonymous (`null`), identically to a confirmed logged-out session. Since
+the query never rejected, there was no way to tell "this session is
+genuinely invalid" apart from "the server/network just broke for a
+second." A customer with a perfectly valid session could have been
+silently bounced to `/login` by a transient blip.
+
+Fixed in `src/lib/auth/authSession.ts`: a definitive 401 (`AUTH_REQUIRED`
+or any other code) still resolves anonymous, unchanged — a real 4xx is
+still a real "not authenticated" signal. Only `network`/`timeout`/`parse`
+failures and any `5xx` now re-throw, so the `["auth","session"]` query
+genuinely errors. `AuthProvider` exposes exactly one new field,
+`isError: boolean` (nothing else — no new store, no new hook).
+`ProtectedRoute` no longer redirects when `isError` is true; it renders
+`children` so the page itself can show a retryable error.
+
+**This shifts the safety obligation onto each page that reads cached
+auth data.** `ProtectedRoute` rendering children on `isError` does *not*
+by itself make a page safe — it only means the page won't be wrongly
+logged out. `ProfileCard` (and any future `/account/*` page built the
+same way, reading only `useAuth()` with no API call of its own) must
+check `useAuth().isError` itself, before trusting `isAuthenticated`/
+`user`, and show its own retry UI instead of real content when it's
+true. A future page that forgets this check would be relying on a
+safety net that doesn't exist for this page family — see the comment in
+`ProtectedRoute.tsx` itself for the exact invariant.
+
+### Account shell owns `/account/*` protection
+
+`src/components/account/AccountLayout.tsx` wraps `ProtectedRoute`
+(reused, never duplicated into a `CustomerProtectedRoute`) and renders
+the nav + content region only once `ProtectedRoute` actually lets
+children through. No `/account/*` page wraps its own second
+`ProtectedRoute` — `src/app/account/layout.tsx` mounts the shell once for
+the whole route group.
+
+The content region is a `<section aria-label="Account content">`, never
+a second `<main>` — `AppLayout` already renders the one `<main
+id="main-content">` landmark at the root layout for every route.
+
+### Account navigation registry
+
+`src/components/account/accountNavItems.ts` exports `ACCOUNT_NAV_ITEMS`
+— today exactly one entry (`Profile`). This is the single place every
+later `/account/*` slice (Orders, Downloads, Offers, Wishlist, Reviews,
+Addresses, Notifications) adds itself to as its own route lands; no
+disabled/dead placeholder link is rendered ahead of that. The nav is a
+real `<nav aria-label="Account">` with real `Link` elements, and the
+active route gets `aria-current="page"` via `usePathname()`.
+
+Responsive behavior is pure CSS (this project's existing named
+`tablet:`/768px breakpoint token, no JS viewport detection): a
+horizontal, `overflow-x-auto` tab row on mobile; a vertical sidebar
+beside the content region at `tablet:` and above.
+
+### Profile — read-only, by design
+
+`src/components/account/ProfileCard.tsx` displays the user's email, a
+human-readable verification status, and nothing else fetched from the
+response. **There is no edit-profile form, no Save/Edit/Cancel control,
+and no input/textarea/select anywhere in this component** — VS-006
+defines no mutable profile field for V1, so none is invented here. If a
+mutable field is ever approved, it is a requirement change for a future
+slice, not something this one guesses at.
+
+**Unverified banner:** when `emailVerified` is `false`, a warning banner
+appears, linking to the existing `/verify-email/resend` route (FVS-002)
+— never a new route. When `emailVerified` is `true`, the banner is fully
+absent (not merely hidden).
+
+**Loading:** a simple skeleton (`role="status"`, motion-reduce-safe via
+the same Tailwind variant pattern `LoadingSpinner`/`Toast` already use)
+— no skeleton library installed.
+
+**Account-state display decision (from this slice's own audit):** the
+confirmed `/me` response has no literal `account_state`/`status`/
+`enabled` field — `vertical-slice-plan.md`'s "verification/account
+state" and `FRONTEND-VERTICAL-SLICE-PLAN.md`'s "account state" are both
+prose that predates the real, field-level contract sync FVS-003
+confirmed. `ProfileCard` shows a fixed "Account status: Active" line,
+but this is explicitly a **derived display, never a fabricated API
+field** — justified only because a successful `/me` response is, per
+FVS-003's own confirmed contract, impossible for an inactive account
+("account-active state rechecked server-side on every call"). The code
+comment at this exact line makes the same point, so a future reader
+doesn't mistake it for a real response field.
+
+### Deterministic E2E coverage
+
+`e2e/account-profile.spec.ts` (FVS006-T06) covers, via route
+interception against a real browser (never a real backend): the
+`/account` → `/account/profile` redirect with a real authenticated
+session; the unverified-banner path and its exact resend link; an
+anonymous visit redirecting to `/login` with the safe `returnTo`
+preserved; absence of any edit UI; mobile nav visibility/keyboard-
+reachability; a six-viewport overflow/layout check; and — the strongest
+evidence for this slice's own bootstrap fix — a real `500` from `/me`
+showing a retryable error (never a false redirect to `/login`), with
+Retry genuinely re-fetching and rendering the real profile afterward.
+
+### Real backend acceptance — still pending
+
+FVS006-T07 (the real register→login→`/account/profile` loop against an
+actual backend) has not been attempted — no real backend has been
+reachable in this environment at any point in this engagement, matching
+every prior slice's own still-pending real-backend gate.
+
 ## Testing
 
 ### Unit / Component Tests
@@ -601,9 +732,9 @@ Why no MSW: FVS-001's network surface is intentionally tiny — one client, one 
 npm run test:e2e
 ```
 
-Runs **only** `e2e/smoke.spec.ts`, `e2e/register-and-verify.spec.ts`, and `e2e/login-session.spec.ts` (all three matched by Playwright's `smoke` project in `playwright.config.ts`). Deliberately backend-independent — verified to pass whether or not a real backend is running.
+Runs **only** `e2e/smoke.spec.ts`, `e2e/register-and-verify.spec.ts`, `e2e/login-session.spec.ts`, and `e2e/account-profile.spec.ts` (all four matched by Playwright's `smoke` project in `playwright.config.ts`). Deliberately backend-independent — verified to pass whether or not a real backend is running.
 
-Current coverage: `/` boots (shell landmarks, SkipLink, foundation content); `/does-not-exist` renders 404 content with a working "Back to home" link and the shell still exactly-once afterward; the readiness/banner state is asserted **tolerantly** — whichever valid state is currently showing is accepted, never a hard-coded expectation. `register-and-verify.spec.ts` (FVS002-T12) proves the full register → check-email → verify → `/login`-prompt flow and a short resend smoke check, both via route interception, never a real backend. `login-session.spec.ts` (FVS003-T12) proves the login flow — see the FVS-003 section above for its exact scope.
+Current coverage: `/` boots (shell landmarks, SkipLink, foundation content); `/does-not-exist` renders 404 content with a working "Back to home" link and the shell still exactly-once afterward; the readiness/banner state is asserted **tolerantly** — whichever valid state is currently showing is accepted, never a hard-coded expectation. `register-and-verify.spec.ts` (FVS002-T12) proves the full register → check-email → verify → `/login`-prompt flow and a short resend smoke check, both via route interception, never a real backend. `login-session.spec.ts` (FVS003-T12) proves the login flow — see the FVS-003 section above for its exact scope. `account-profile.spec.ts` (FVS006-T06) proves the account shell/profile flow — see the FVS-006 section above for its exact scope.
 
 No accessibility automation runs here — see below.
 
