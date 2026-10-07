@@ -6,6 +6,13 @@ import { test, expect } from "@playwright/test";
 // dedicated tolerance test below. This is the ONLY spec the "smoke"
 // Playwright project matches (see playwright.config.ts); backend
 // connectivity has its own separate spec and script.
+//
+// FVS-022 follow-up — `/` is now the real Bekaa3D home surface
+// (HeroSection only, no fetched data), not the FVS-001 placeholder.
+// The heading assertions below still use the exact same approved
+// tagline text (HeroSection's own default), so they were left
+// unmodified; new tests below prove the placeholder paragraph is gone
+// and that no dead/fabricated content was introduced in its place.
 
 test.describe("Frontend smoke (FVS001-T16)", () => {
   test("/ boots the composed shell with foundation content, landmarks, and SkipLink", async ({ page }) => {
@@ -42,6 +49,30 @@ test.describe("Frontend smoke (FVS001-T16)", () => {
     await expect(page.getByRole("contentinfo")).toHaveCount(1);
   });
 
+  test("/ no longer renders the retired FVS-001 placeholder paragraph", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByText(/FVS-001 frontend foundation slice/i)).toHaveCount(0);
+  });
+
+  test("/ exposes no dead Shop/Bring Your Idea/Contact call-to-action — those routes don't exist yet", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await expect(page.getByRole("link", { name: /shop/i })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /bring your idea/i })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /contact/i })).toHaveCount(0);
+  });
+
+  test("/ shows no fabricated featured-product content — FeaturedProductsSection remains unbuilt", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    // Hero-only composition: exactly one heading (the h1) exists anywhere
+    // on the page — no second section's heading (e.g. a featured-products
+    // heading) has been added.
+    await expect(page.getByRole("heading")).toHaveCount(1);
+  });
+
   test("the readiness banner, whatever it shows, never breaks the shell — no specific backend state is required", async ({
     page,
   }) => {
@@ -71,4 +102,25 @@ test.describe("Frontend smoke (FVS001-T16)", () => {
       );
     }
   });
+});
+
+test.describe("Home hero responsive check (FVS-022 follow-up)", () => {
+  const VIEWPORTS = [320, 375, 768, 1024, 1440, 1920];
+
+  for (const width of VIEWPORTS) {
+    test(`no horizontal overflow at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/", { waitUntil: "networkidle" });
+
+      const [scrollWidth, clientWidth] = await page.evaluate(() => [
+        document.documentElement.scrollWidth,
+        document.documentElement.clientWidth,
+      ]);
+      expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
+
+      await expect(
+        page.getByRole("heading", { level: 1, name: "Bekaa3D — Engineered Grade 3D Solutions" })
+      ).toBeVisible();
+    });
+  }
 });
