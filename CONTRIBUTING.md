@@ -1,6 +1,6 @@
 # Contributing
 
-Short, practical rules for working on Bekaa3D with more than one person. For architecture, naming, and invariants see [`CLAUDE.md`](CLAUDE.md); the specification itself is [`docs/SRS.md`](docs/SRS.md).
+Short, practical rules for working on Bekaa3D with more than one person. The specification is [`docs/SRS.md`](docs/SRS.md): it wins over every other document. Canonical names are in [`docs/requirments/domain-glossary.md`](docs/requirments/domain-glossary.md), per-entity rules and invariants in [`docs/requirments/entities-and-business-rules.md`](docs/requirments/entities-and-business-rules.md), and architecture decisions in [`docs/adr/`](docs/adr/README.md).
 
 ## Branching and review
 
@@ -110,4 +110,13 @@ uv pip compile pyproject.toml --extra dev --universal --python-version 3.13 --ge
 
 ## Secrets
 
-`.env` is git-ignored and must never be committed. Copying `.env.example` is not enough: replace every placeholder with a locally generated value. See the **Local secrets** section in [`CLAUDE.md`](CLAUDE.md) for why `IP_HASH_SALT` in particular matters.
+`.env` is git-ignored and must never be committed. Copying `.env.example` is not enough: replace every placeholder with a locally generated value before the stack is trusted with anything but throwaway data.
+
+`IP_HASH_SALT` matters most. It salts the IP addresses stored in `audit_logs` and `sessions`, and the IPv4 space is small enough (about 4 billion addresses) that anyone who knows the salt can reverse those hashes by brute force. Generate it, and the other secrets, locally:
+
+```bash
+python -c "import secrets; print(secrets.token_hex(16))"   # IP_HASH_SALT
+python -c "import secrets; print(secrets.token_hex(32))"   # JWT_SIGNING_KEY, CSRF_SECRET, MFA_SECRET_KEY
+```
+
+Never paste a real secret into a tracked file, the README, a commit message, an issue, or a chat.
