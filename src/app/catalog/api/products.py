@@ -1,18 +1,14 @@
 """`/api/v1/admin/products` (api-endpoints.md 15.1, docs/products.md). Mounted
 under the admin router, so `require_admin` and the admin rate limit already apply."""
 
-import base64
-import binascii
-import json
-from datetime import datetime
 from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, status
-from fastapi.exceptions import RequestValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_session
+from app.catalog.api.product_cursor import bad_query, decode_cursor, encode_cursor
 from app.catalog.api.product_schemas import (
     AdminProductCreate,
     AdminProductDetail,
@@ -42,6 +38,7 @@ from app.catalog.domain.exceptions import (
     VersionConflictError,
 )
 from app.catalog.domain.product import Product
+from app.catalog.domain.storefront import CursorKey
 from app.catalog.infrastructure.product_image_repository import ProductImageRepository
 from app.catalog.infrastructure.product_repository import (
     ProductFilter,
@@ -139,37 +136,9 @@ async def _detail(session: AsyncSession, product: Product) -> AdminProductDetail
     return AdminProductDetail.from_entity(product, images, get_settings().media_public_url)
 
 
-def _encode_cursor(sort: str, product: AdminProductDetail) -> str:
-    key: Any = (
-        product.created_at.isoformat() if sort == "-created_at" else product.price.amount_cents
-    )
-    raw = json.dumps({"s": sort, "k": key, "i": str(product.id)}, separators=(",", ":"))
-    return base64.urlsafe_b64encode(raw.encode()).decode("ascii").rstrip("=")
-
-
-def _bad_query(name: str, message: str) -> RequestValidationError:
-    return RequestValidationError([{"loc": ("query", name), "msg": message, "type": "value_error"}])
-
-
-def _decode_cursor(raw: str | None, sort: str) -> tuple[int | datetime, UUID] | None:
-    """Strict: a cursor from another sort, or any malformed field, is a 422."""
-    if raw is None:
-        return None
-    try:
-        payload = json.loads(base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4)))
-        if not isinstance(payload, dict) or payload.get("s") != sort:
-            raise ValueError
-        key, product_id = payload["k"], UUID(payload["i"])
-        if sort == "-created_at":
-            parsed = datetime.fromisoformat(key)
-            if parsed.tzinfo is None:
-                raise ValueError
-            return parsed, product_id
-        if type(key) is not int:
-            raise ValueError
-        return key, product_id
-    except (ValueError, TypeError, KeyError, binascii.Error, UnicodeDecodeError) as exc:
-        raise _bad_query("cursor", "cursor is not a valid pagination cursor") from exc
+def _next_cursor(sort: str, product: AdminProductDetail) -> str:
+    key: CursorKey = product.created_at if sort == "-created_at" else product.price.amount_cents
+    return encode_cursor(sort, key, product.id)
 
 
 @admin_router.get(
@@ -192,7 +161,7 @@ async def admin_list_products(
     session: AsyncSession = Depends(get_session),
 ) -> AdminProductPage:
     if q is not None and has_control_characters(q):
-        raise _bad_query("q", "must not contain control characters")
+        raise bad_query("q", "must not contain control characters")
     filters = ProductFilter(
         product_type=type,
         category_id=category_id,
@@ -203,14 +172,14 @@ async def admin_list_products(
         q=q,
     )
     rows = await ProductRepository(session).list_page(
-        limit=limit + 1, sort=sort, filters=filters, after=_decode_cursor(cursor, sort)
+        limit=limit + 1, sort=sort, filters=filters, after=decode_cursor(cursor, sort)
     )
     images = await ProductImageRepository(session).live_for_products(r.id for r in rows[:limit])
     media = get_settings().media_public_url
     page = [AdminProductDetail.from_entity(r, images[r.id], media) for r in rows[:limit]]
     has_more = len(rows) > limit
     return AdminProductPage(
-        items=page, next_cursor=_encode_cursor(sort, page[-1]) if has_more and page else None
+        items=page, next_cursor=_next_cursor(sort, page[-1]) if has_more and page else None
     )
 
 

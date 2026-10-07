@@ -222,8 +222,8 @@ These are intentionally outside `/api/v1`.
 
 | Method + Path | Auth / Authorization | Request | Success | Errors | Pagination / Filter / Sort | Side Effects / Notes |
 |---|---|---|---|---|---|---|
-| `GET /api/v1/products` | Public | query params | `200 ProductPage` | 400, 429 | Cursor; filters: `type`, `category_id`, `material_id`, `colour_id`, `price_min_cents`, `price_max_cents`, `min_rating`, `featured`, `q`; sorts: `price`, `-price`, `-average_rating`, `-created_at` | Only non-deleted, visible products in active categories; unavailable products remain visible |
-| `GET /api/v1/products/{slug}` | Public | — | `200 ProductDetail` | 404, 429 | — | Response includes relevant commerce capabilities and SEO fields |
+| `GET /api/v1/products` | Public | query params | `200 ProductPage` | 422, 429 | Cursor; filters: `type`, `category_id`, `material_id`, `colour_id`, `price_min_cents`, `price_max_cents`, `min_rating`, `featured`, `q`; sorts: `price`, `-price`, `-average_rating`, `-created_at` | Only non-deleted, visible products in active categories; unavailable products remain visible |
+| `GET /api/v1/products/{slug}` | Public | — | `200 ProductDetail` | 404, 429 | — | Response includes relevant commerce capabilities (ADR-022) and SEO fields |
 | `GET /api/v1/products/{slug}/reviews` | Public | query params | `200 ReviewPage` | 404, 429 | Cursor; optional `rating`, `verified_purchase`; sort `-created_at` default | Hidden/deleted reviews excluded |
 | `GET /api/v1/search/suggestions` | Public | `q`, `limit` | `200 SearchSuggestionList` | 400, 429 | Hard limit; V1 max 10 | Trigram typo tolerance |
 | `GET /api/v1/categories` | Public | — | `200 CategoryList` | 429 | Hard-limited reference list | Active categories only |
@@ -236,7 +236,7 @@ These are intentionally outside `/api/v1`.
 - facets combine with logical AND;
 - `q` searches translated product name/description;
 - `material_id` and `colour_id` apply only where meaningful;
-- server may reject nonsensical sort/filter combinations with `400 VALIDATION_ERROR`;
+- server may reject nonsensical sort/filter combinations with `422 VALIDATION_ERROR` (the §5.2 status; VS-015, see `docs/storefront-catalogue.md`);
 - `limit` is bounded by the global maximum.
 
 ---

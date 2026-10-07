@@ -1,5 +1,4 @@
 from dataclasses import dataclass, fields
-from datetime import datetime
 from typing import Any, Literal, NoReturn
 from uuid import UUID
 
@@ -17,6 +16,7 @@ from app.catalog.domain.product import (
     ProductAttributes,
     ProductDraft,
 )
+from app.catalog.domain.storefront import CursorKey
 from app.catalog.infrastructure.models import ProductModel
 from app.catalog.infrastructure.repositories import _violates
 
@@ -138,7 +138,7 @@ class ProductRepository:
         limit: int,
         sort: ProductSort,
         filters: ProductFilter,
-        after: tuple[int | datetime, UUID] | None = None,
+        after: tuple[CursorKey, UUID] | None = None,
     ) -> list[Product]:
         stmt = self._filtered(filters)
         column = SORT_COLUMNS[sort]
@@ -146,7 +146,9 @@ class ProductRepository:
         if after is not None:
             key, after_id = after
             pair = tuple_(column, ProductModel.id)
-            bound = tuple_(literal(key), literal(after_id, postgresql.UUID(as_uuid=True)))
+            bound = tuple_(
+                literal(key, column.type), literal(after_id, postgresql.UUID(as_uuid=True))
+            )
             stmt = stmt.where(pair < bound if descending else pair > bound)
         order = (column.desc(), ProductModel.id.desc()) if descending else (column, ProductModel.id)
         stmt = stmt.order_by(*order).limit(limit)

@@ -18,7 +18,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 | VS-012 | Partitioned audit log and audit-log viewer | VS-002, VS-005 | Done |
 | VS-013 | Admin product management | VS-010 | Done |
 | VS-014 | Product images with storage and malware scanning | VS-013 | Done |
-| VS-015 | Public catalogue: browse, filter, sort, detail | VS-013, VS-014 | Not started |
+| VS-015 | Public catalogue: browse, filter, sort, detail | VS-013, VS-014 | Done |
 | VS-016 | Search and autocomplete | VS-015 | Not started |
 | VS-017 | STL bundle upload and version publishing | — | Removed (ADR-019) |
 | VS-018 | Entitlements: admin grant and STL library | — | Removed (ADR-019) |
@@ -356,7 +356,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - Ports and adapters in `app.integrations`: `StoragePort`/`LocalStorage`, `MalwareScannerPort`/`ClamAvScanner` (clamd `INSTREAM`, no new dependency)/`FakeScanner`, `ImageSanitizerPort`/`PillowImageSanitizer`. New dependency: Pillow.
 
 ## VS-015 — Public catalogue: browse, filter, sort, detail
-**Status:** Not started
+**Status:** Done
 **Depends on:** VS-013, VS-014
 **Goal:** A visitor browses physical and STL products with facets and sorting, and opens any visible product page.
 - **Model / migration:** Partial catalogue indexes from SRS §21.3 (type/category/price, type/material/colour/price, rating, newest), all `WHERE deleted_at IS NULL AND is_visible`. *Already created by VS-013 (`fc18b48a1780`, `ix_products_browse_*`), so no migration is expected.*
@@ -374,6 +374,10 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 - **Done when:**
   - Browse is under 500 ms p95 with 10,000 products (NFR-01).
   - Unavailable products show but are marked unavailable.
+- **As built:**
+  - No migration; contract in [`storefront-catalogue.md`](storefront-catalogue.md); capability flags in ADR-022.
+  - Owner decisions: `ProductDetail.capabilities` (`can_add_to_cart`, `can_offer`, `whatsapp_available`) derived from product state only; no STL delivery-promise field until SRS §30.2 closes; bad query values are `422 VALIDATION_ERROR` (api-endpoints.md §7.1 corrected from 400); `q` is left to VS-016; a product whose price or rating changes mid-browse may cross the cursor (documented limit); disabled materials/colours still show on their products.
+  - The product cursor is shared with the admin list (`app/catalog/api/product_cursor.py`). Visibility is one predicate used by both list and detail.
 
 ## VS-016 — Search and autocomplete
 **Status:** Not started

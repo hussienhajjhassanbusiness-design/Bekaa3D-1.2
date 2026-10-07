@@ -9,7 +9,7 @@ project had no slug code before this slice.
 import pytest
 
 from app.catalog.domain.exceptions import InvalidSlugError
-from app.catalog.domain.slug import MAX_SLUG_LENGTH, normalise_slug
+from app.catalog.domain.slug import MAX_SLUG_LENGTH, is_canonical_slug, normalise_slug
 
 
 @pytest.mark.parametrize(
@@ -81,3 +81,15 @@ def test_the_error_carries_the_original_input_and_a_reason() -> None:
         normalise_slug("Desk Lamps")
     assert raised.value.slug == "Desk Lamps"
     assert raised.value.reason
+
+
+@pytest.mark.parametrize("text", ["dragon", "desk-lamp-2", "a" * 200])
+def test_canonical_slugs_are_recognised(text: str) -> None:
+    assert is_canonical_slug(text)
+
+
+@pytest.mark.parametrize(
+    "text", ["", "Dragon", "dragon\n", " dragon", "dragon--x", "-dragon", "dra\x00gon", "a" * 201]
+)
+def test_anything_not_stored_that_way_is_not_canonical(text: str) -> None:
+    assert not is_canonical_slug(text)
