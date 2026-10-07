@@ -114,6 +114,10 @@ T01 (incl. T05) and T03 (incl. T02/T04). T06/T07/T09/T10 are each blocked for a 
 
 **T10 — Real backend acceptance:** Blocked on backend availability.
 
+**Independent-review follow-up notes (not fixed this batch, not forbidden-area violations):**
+- `MoneyInput` has no externally-injectable error prop — only an internal parse-error state — so a future server-returned `rateCents` field error would render via its `hint` prop (plain caption, no `aria-invalid`) rather than with the same error styling `TextField`'s `error` prop gives `displayName`. Fixing this cleanly means extending `MoneyInput`'s own API, which has other consumers (FVS-011/014, future FVS-032/033) — out of scope for this slice; revisit when T06 (real API, including validation-error shape) unblocks.
+- `ShippingZoneManager` submits `rateCents: null` without a client-side guard if the field is cleared. This is a deliberate "defer to server" choice (inventing a client-side "rate is required" rule has no confirmed backing), not an oversight — recorded explicitly here since independent review flagged the absence of a comment/test distinguishing the two.
+
 ---
 
 ## Global Constraints

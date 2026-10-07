@@ -124,6 +124,18 @@ describe("ShippingZoneManager", () => {
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ rateCents: 10 }), null);
   });
 
+  it("submits a null rate without a client-side guard — deliberately deferred to server validation, not an oversight", async () => {
+    const onSave = vi.fn();
+    const user = userEvent.setup();
+    render(<ShippingZoneManager zones={[]} currency="USD" onSave={onSave} onArchive={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: /add zone/i }));
+    await user.type(screen.getByLabelText("Name"), "No Rate Yet");
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+    expect(onSave).toHaveBeenCalledWith({ displayName: "No Rate Yet", rateCents: null }, null);
+  });
+
   it("disables Save while isSaving, preventing a duplicate submit", async () => {
     const user = userEvent.setup();
     render(<ShippingZoneManager zones={[]} currency="USD" onSave={vi.fn()} onArchive={vi.fn()} isSaving />);
