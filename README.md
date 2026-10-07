@@ -215,4 +215,4 @@ Reset tokens and verification tokens live in separate tables and cannot be redee
 
 ## Conventions
 
-See [`CLAUDE.md`](CLAUDE.md) for the working conventions used in this codebase (architecture rules, naming, and invariants that must hold under concurrency).
+Working conventions are in [`CONTRIBUTING.md`](CONTRIBUTING.md). Architecture rules, naming and the invariants that must hold under concurrency come from the [SRS](docs/SRS.md), the [domain glossary](docs/requirments/domain-glossary.md), [`entities-and-business-rules.md`](docs/requirments/entities-and-business-rules.md) and the [ADR index](docs/adr/README.md).
