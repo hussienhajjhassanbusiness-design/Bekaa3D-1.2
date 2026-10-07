@@ -33,12 +33,12 @@ export function HeroSection({ heading = DEFAULT_HEADING, supportingCopy, primary
       {(primaryCta || secondaryCta) && (
         <div className="mt-4 flex gap-3">
           {primaryCta && (
-            <a href={primaryCta.href} className="rounded bg-primary px-4 py-2 text-white">
+            <a href={primaryCta.href} className="rounded-md bg-brand-dark-green px-4 py-2 text-text-on-brand">
               {primaryCta.label}
             </a>
           )}
           {secondaryCta && (
-            <a href={secondaryCta.href} className="rounded border border-primary px-4 py-2 text-primary">
+            <a href={secondaryCta.href} className="rounded-md border border-brand-dark-green px-4 py-2 text-brand-dark-green">
               {secondaryCta.label}
             </a>
           )}

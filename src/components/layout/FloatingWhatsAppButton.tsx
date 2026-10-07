@@ -37,7 +37,7 @@ export function FloatingWhatsAppButton({ whatsappNumber }: FloatingWhatsAppButto
       target="_blank"
       rel="noopener noreferrer"
       aria-label="Chat with us on WhatsApp"
-      className="fixed right-4 z-50 rounded-full bg-success p-3 text-white shadow-lg"
+      className="fixed right-4 z-50 rounded-full bg-brand-green p-3 text-text-on-brand shadow-lg"
       style={{ bottom: "calc(1rem + var(--mobile-sticky-action-offset, 0px))" }}
     >
       <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">

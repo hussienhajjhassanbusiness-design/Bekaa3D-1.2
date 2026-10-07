@@ -63,6 +63,7 @@ describe("FloatingWhatsAppButton", () => {
     const spy = vi.spyOn(Storage.prototype, "setItem");
     render(<FloatingWhatsAppButton whatsappNumber="96170123456" />);
     expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
   });
 
   it("renders fixed/floating positioning classes", () => {
