@@ -23,8 +23,20 @@ export type UploadDriver = (file: File, handlers: UploadDriverHandlers) => Promi
 export interface FileUploaderProps {
   label: string;
   config: UploadValidationConfig;
-  driver: UploadDriver;
+  // Omit entirely for deferred-selection mode: accepted files are held
+  // in memory only (status "selected"), never uploaded, and reported to
+  // the parent via `onSelectionChange` — e.g. BYI attachments, bundled
+  // into one later request by a parent form
+  // (FVS-015-IMPLEMENTATION-PLAN.md §0/§5). Supply it for immediate-
+  // upload mode — e.g. admin product images — where each accepted file
+  // starts uploading right away through the injected transport.
+  driver?: UploadDriver;
   multiple?: boolean;
+  // Called with the current list of selected/queued File objects
+  // whenever it changes (add or remove). Primarily meaningful in
+  // deferred mode, where it is the only way a parent learns what's
+  // selected; harmless and unused in immediate mode.
+  onSelectionChange?: (files: File[]) => void;
 }
 
 const GENERIC_FAILURE_MESSAGE = "Upload failed. Please try again.";
@@ -48,7 +60,13 @@ function createLocalId(): string {
 // "done" means only "the injected driver resolved { ok: true }" — never
 // rendered as a backend-specific claim; see uploadTypes.ts's own note on
 // why "accepted"/"scanning"/"stored" are not modeled here.
-export function FileUploader({ label, config, driver, multiple = false }: FileUploaderProps) {
+//
+// Transport-independent by design: the selection/dropzone/precheck/list
+// UX below is identical in both modes. `driver` present → immediate
+// upload starts the moment a file is accepted. `driver` absent →
+// deferred selection: accepted files sit in memory as "selected" and
+// are reported via `onSelectionChange`; nothing is ever sent.
+export function FileUploader({ label, config, driver, multiple = false, onSelectionChange }: FileUploaderProps) {
   const inputId = useId();
   const [queue, setQueue] = useState<UploadQueueItem[]>([]);
   const [localRejections, setLocalRejections] = useState<readonly UploadPrecheckRejection[]>([]);
@@ -64,14 +82,14 @@ export function FileUploader({ label, config, driver, multiple = false }: FileUp
     setQueue((prev) => prev.map((item) => (item.id === id ? { ...item, ...patch } : item)));
   }
 
-  async function startUpload(item: UploadQueueItem) {
+  async function startUpload(item: UploadQueueItem, activeDriver: UploadDriver) {
     const controller = new AbortController();
     controllersRef.current.set(item.id, controller);
     updateItem(item.id, { status: "uploading", progress: 0 });
     announce(`${item.file.name}: uploading`);
 
     try {
-      const result = await driver(item.file, {
+      const result = await activeDriver(item.file, {
         onProgress: (percent) => updateItem(item.id, { progress: percent }),
         signal: controller.signal,
       });
@@ -109,10 +127,37 @@ export function FileUploader({ label, config, driver, multiple = false }: FileUp
     const { accepted, rejected } = precheckFiles(files, config, queue.length);
     setLocalRejections(rejected);
 
-    for (const file of accepted) {
-      const item: UploadQueueItem = { id: createLocalId(), file, status: "queued", progress: 0 };
-      setQueue((prev) => [...prev, item]);
-      void startUpload(item);
+    if (accepted.length === 0) {
+      return;
+    }
+
+    const newItems: UploadQueueItem[] = accepted.map((file) => ({
+      id: createLocalId(),
+      file,
+      status: driver ? "queued" : "selected",
+      progress: 0,
+    }));
+    const nextQueue = [...queue, ...newItems];
+    setQueue(nextQueue);
+    onSelectionChange?.(nextQueue.map((item) => item.file));
+
+    if (driver) {
+      const activeDriver = driver;
+      for (const item of newItems) {
+        void startUpload(item, activeDriver);
+      }
+    } else {
+      announce(newItems.length === 1 ? `${newItems[0]!.file.name} added.` : `${newItems.length} files added.`);
+    }
+  }
+
+  function handleRemove(id: string) {
+    const removed = queue.find((item) => item.id === id);
+    const nextQueue = queue.filter((item) => item.id !== id);
+    setQueue(nextQueue);
+    onSelectionChange?.(nextQueue.map((item) => item.file));
+    if (removed) {
+      announce(`${removed.file.name} removed.`);
     }
   }
 
@@ -137,9 +182,12 @@ export function FileUploader({ label, config, driver, multiple = false }: FileUp
 
   function handleRetry(id: string) {
     const item = queue.find((candidate) => candidate.id === id);
-    if (item) {
+    // Retry only ever renders for status "failed", which only occurs in
+    // immediate mode — `driver` is guaranteed present by construction,
+    // but TypeScript can't see that across the render/callback boundary.
+    if (item && driver) {
       cancelledIdsRef.current.delete(id);
-      void startUpload(item);
+      void startUpload(item, driver);
     }
   }
 
@@ -187,6 +235,12 @@ export function FileUploader({ label, config, driver, multiple = false }: FileUp
               {item.status === "failed" && (
                 <Button type="button" onClick={() => handleRetry(item.id)}>
                   Retry
+                </Button>
+              )}
+
+              {item.status === "selected" && (
+                <Button type="button" onClick={() => handleRemove(item.id)}>
+                  Remove {item.file.name}
                 </Button>
               )}
             </li>

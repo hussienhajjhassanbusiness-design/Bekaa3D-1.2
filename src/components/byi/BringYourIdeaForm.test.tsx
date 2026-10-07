@@ -5,14 +5,13 @@ import { BringYourIdeaForm } from "./BringYourIdeaForm";
 
 // FVS-015-IMPLEMENTATION-PLAN.md T02/T03 — only the two backend-
 // confirmed fields exist (description, attachments) — no name/email/
-// phone/address/budget was invented. Attachments reuse the EXISTING
-// `precheckFiles` pure helper from FVS-012's uploadTypes.ts rather than
-// a second uploader; FVS-012's `FileUploader` component itself is NOT
-// reused here, because its per-file immediate-upload-on-selection model
-// doesn't match VS-014's confirmed single bundled multipart
-// `CustomRequestCreate` request (see plan §0's audit finding) — this
-// form only collects File objects locally, with zero upload attempted
-// until the (currently blocked) real submission adapter exists.
+// phone/address/budget was invented. UPLOADER-REUSE FOLLOW-UP: this
+// form now reuses FVS-012's shared `FileUploader` directly in its
+// deferred-selection mode (no `driver` prop) instead of a second,
+// duplicated attachment picker — the selection/precheck/list UX is
+// transport-independent (see FileUploader.tsx/uploadTypes.ts). Nothing
+// is uploaded while files are merely selected; the real submission
+// adapter remains blocked.
 
 function makeFile(name: string, type: string, sizeBytes = 10): File {
   return new File([new Uint8Array(sizeBytes)], name, { type });
@@ -128,6 +127,21 @@ describe("BringYourIdeaForm", () => {
   it("renders a supplied captcha slot without building a fake captcha itself", () => {
     render(<BringYourIdeaForm onSubmit={vi.fn()} captchaSlot={<div data-testid="captcha-slot">real widget here</div>} />);
     expect(screen.getByTestId("captcha-slot")).toBeInTheDocument();
+  });
+
+  it("uses the shared FileUploader selection UI, not a duplicated picker", () => {
+    render(<BringYourIdeaForm onSubmit={vi.fn()} />);
+    expect(screen.getByTestId("file-dropzone")).toBeInTheDocument();
+  });
+
+  it("never shows a fake progress bar or upload-complete state while files are merely selected", async () => {
+    const user = userEvent.setup();
+    render(<BringYourIdeaForm onSubmit={vi.fn()} />);
+
+    await user.upload(screen.getByLabelText(/attachments/i), makeFile("idea.png", "image/png"));
+
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+    expect(screen.queryByText(/uploaded/i)).not.toBeInTheDocument();
   });
 
   it("never makes a network/fetch call", () => {

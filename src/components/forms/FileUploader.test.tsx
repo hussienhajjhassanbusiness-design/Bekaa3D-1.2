@@ -247,3 +247,140 @@ describe("FileUploader", () => {
     fetchSpy.mockRestore();
   });
 });
+
+// FVS-015 UPLOADER-REUSE FOLLOW-UP — omitting `driver` switches the
+// component into deferred-selection mode: the shared selection/precheck
+// layer is transport-independent. Files are held in local memory as
+// "selected" (never "uploading"/"done" — nothing is sent), and the
+// currently-selected File list is reported to the parent via
+// `onSelectionChange`. This is the seam BringYourIdeaForm reuses instead
+// of a second, duplicated attachment picker.
+describe("FileUploader (deferred selection mode, no driver)", () => {
+  it("never calls an upload driver when none is supplied", async () => {
+    const user = userEvent.setup();
+    render(<FileUploader label="Attachments" config={{}} />);
+
+    await user.upload(screen.getByLabelText("Attachments"), makeFile("idea.png", "image/png"));
+
+    expect(screen.getByText("idea.png")).toBeInTheDocument();
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+    expect(screen.queryByText(/uploaded/i)).not.toBeInTheDocument();
+  });
+
+  it("reports the selected files to the parent via onSelectionChange", async () => {
+    const onSelectionChange = vi.fn();
+    const user = userEvent.setup();
+    render(<FileUploader label="Attachments" config={{}} onSelectionChange={onSelectionChange} multiple />);
+    const file = makeFile("idea.png", "image/png");
+
+    await user.upload(screen.getByLabelText("Attachments"), file);
+
+    expect(onSelectionChange).toHaveBeenLastCalledWith([file]);
+  });
+
+  it("reports an updated list to the parent when a selected file is removed", async () => {
+    const onSelectionChange = vi.fn();
+    const user = userEvent.setup();
+    render(<FileUploader label="Attachments" config={{}} onSelectionChange={onSelectionChange} />);
+
+    await user.upload(screen.getByLabelText("Attachments"), makeFile("idea.png", "image/png"));
+    await user.click(screen.getByRole("button", { name: /remove idea\.png/i }));
+
+    expect(onSelectionChange).toHaveBeenLastCalledWith([]);
+  });
+
+  it("removing a selected file also removes it from the visible list", async () => {
+    const user = userEvent.setup();
+    render(<FileUploader label="Attachments" config={{}} />);
+
+    await user.upload(screen.getByLabelText("Attachments"), makeFile("idea.png", "image/png"));
+    await user.click(screen.getByRole("button", { name: /remove idea\.png/i }));
+
+    expect(screen.queryByText("idea.png")).not.toBeInTheDocument();
+  });
+
+  it("applies the supplied MIME precheck in deferred mode too", async () => {
+    const onSelectionChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <FileUploader label="Attachments" config={{ allowedMimeTypes: ["image/png"] }} onSelectionChange={onSelectionChange} />
+    );
+    const file = makeFile("notes.txt", "text/plain");
+
+    await user.upload(screen.getByLabelText("Attachments"), file);
+
+    expect(screen.getByRole("alert")).toHaveTextContent("notes.txt");
+    expect(onSelectionChange).not.toHaveBeenCalled();
+  });
+
+  it("applies the supplied size precheck in deferred mode too", async () => {
+    const user = userEvent.setup();
+    render(<FileUploader label="Attachments" config={{ maxBytes: 5 }} />);
+    const file = makeFile("big.png", "image/png", 100);
+
+    await user.upload(screen.getByLabelText("Attachments"), file);
+
+    expect(screen.getByRole("alert")).toHaveTextContent("big.png");
+  });
+
+  it("applies the supplied count precheck in deferred mode too", async () => {
+    const user = userEvent.setup();
+    render(<FileUploader label="Attachments" config={{ maxFiles: 1 }} multiple />);
+    const files = [makeFile("one.png", "image/png"), makeFile("two.png", "image/png")];
+
+    await user.upload(screen.getByLabelText("Attachments"), files);
+
+    expect(screen.getByText("one.png")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("two.png");
+  });
+
+  it("never renders Cancel/Retry controls for a merely-selected file (nothing is in flight)", async () => {
+    const user = userEvent.setup();
+    render(<FileUploader label="Attachments" config={{}} />);
+
+    await user.upload(screen.getByLabelText("Attachments"), makeFile("idea.png", "image/png"));
+
+    expect(screen.queryByRole("button", { name: /cancel/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /retry/i })).not.toBeInTheDocument();
+  });
+
+  it("announces a selected file via the same aria-live region", async () => {
+    const user = userEvent.setup();
+    render(<FileUploader label="Attachments" config={{}} />);
+
+    await user.upload(screen.getByLabelText("Attachments"), makeFile("idea.png", "image/png"));
+
+    expect(screen.getByRole("status")).toHaveTextContent(/idea\.png/i);
+  });
+
+  it("announces a removed file via the same aria-live region", async () => {
+    const user = userEvent.setup();
+    render(<FileUploader label="Attachments" config={{}} />);
+
+    await user.upload(screen.getByLabelText("Attachments"), makeFile("idea.png", "image/png"));
+    await user.click(screen.getByRole("button", { name: /remove idea\.png/i }));
+
+    expect(screen.getByRole("status")).toHaveTextContent(/removed/i);
+  });
+
+  it("still never writes to localStorage or sessionStorage in deferred mode", async () => {
+    const spy = vi.spyOn(Storage.prototype, "setItem");
+    const user = userEvent.setup();
+    render(<FileUploader label="Attachments" config={{}} />);
+
+    await user.upload(screen.getByLabelText("Attachments"), makeFile("idea.png", "image/png"));
+
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("still never makes a real network/fetch call in deferred mode", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const user = userEvent.setup();
+    render(<FileUploader label="Attachments" config={{}} />);
+
+    await user.upload(screen.getByLabelText("Attachments"), makeFile("idea.png", "image/png"));
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
+});

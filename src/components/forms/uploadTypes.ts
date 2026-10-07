@@ -9,18 +9,29 @@
 // model's terms via the injected `UploadDriver` seam (see
 // FileUploader.tsx).
 //
+// The selection/precheck layer below is transport-independent: whether
+// a selected file begins uploading immediately (an injected `driver`,
+// e.g. admin product images) or is merely held in memory until a
+// parent bundles it into one later request (no `driver`, e.g. BYI
+// attachments — FVS-015-IMPLEMENTATION-PLAN.md §0/§5) are two separate
+// orchestration strategies built on the same selection/precheck/list UX,
+// not two different components.
+//
 // Deliberately local-only states: "queued" | "uploading" | "failed" |
-// "done". No "accepted"/"scanning"/"quarantined"/"stored" — those would
-// be claims about backend vocabulary this plan has not confirmed exists
-// (FRONTEND-VERTICAL-SLICE-PLAN.md §11 anticipates a future "scanning"
-// polling phase as a frontend architecture *intention*, but VS-012's own
-// backend text never confirms whether the upload response is
-// synchronous accept/reject or async-with-a-pending-scan-state — that
-// stays a recorded, contract-gated discrepancy, not a guess baked into
-// this model). "done" means only "the injected driver resolved success"
-// — it is the driver's job, once the real contract lands, to decide
-// what counts as success; this component has no independent opinion.
-export type UploadStatus = "queued" | "uploading" | "failed" | "done";
+// "done" | "selected". No "accepted"/"scanning"/"quarantined"/"stored"
+// — those would be claims about backend vocabulary this plan has not
+// confirmed exists (FRONTEND-VERTICAL-SLICE-PLAN.md §11 anticipates a
+// future "scanning" polling phase as a frontend architecture
+// *intention*, but VS-012's own backend text never confirms whether the
+// upload response is synchronous accept/reject or
+// async-with-a-pending-scan-state — that stays a recorded,
+// contract-gated discrepancy, not a guess baked into this model).
+// "done" means only "the injected driver resolved success" — it is the
+// driver's job, once the real contract lands, to decide what counts as
+// success; this component has no independent opinion. "selected" is the
+// deferred-mode terminal state — a file sitting in memory, nothing sent
+// — and must never be confused with "done"/"uploaded".
+export type UploadStatus = "queued" | "uploading" | "failed" | "done" | "selected";
 
 export interface UploadQueueItem {
   id: string;
