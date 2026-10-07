@@ -27,6 +27,7 @@ Only expensive-to-reverse decisions belong here. Folder names and small refactor
 - [ADR-019: Deliver purchased STL files manually by email; the platform stores no STL files](ADR-019-manual-stl-delivery.md)
 - [ADR-020: Use an optimistic `version` column for administrator edits](ADR-020-optimistic-versioning-for-admin-edits.md)
 - [ADR-021: Scan the raw upload, then re-encode; store before the row commits](ADR-021-image-upload-pipeline.md)
+- [ADR-022: Derive storefront commerce capabilities from product state only](ADR-022-storefront-commerce-capabilities.md)
 
 ## Governance
 

@@ -23,6 +23,7 @@ In development, following the vertical-slice plan in [`docs/vertical-slice-plan.
 - **VS-012** — monthly-partitioned audit log with a read-only admin viewer; admin PII reads audited and kept out of the access log; contexts talk only through published ports
 - **VS-013** — admin product management for physical and STL products: database-enforced type integrity, optimistic versioning (`409 VERSION_CONFLICT`), soft delete releasing the slug, and a used category, material or colour cannot be archived (`409 CATEGORY_IN_USE`)
 - **VS-014** — product images: content-checked, malware-scanned and re-encoded uploads, one cover per product, reordering, soft delete, and a daily orphan-file reaper
+- **VS-015** — public catalogue: browse physical and STL products with AND-combined facets, price/rating/newest sorts and stable cursors; product pages with gallery, SEO fields and commerce capabilities; hidden, deleted and inactive-category products never show
 
 Each slice adds one complete, tested, end-to-end capability. Build order and the status of every slice live in [`docs/vertical-slice-plan.md`](docs/vertical-slice-plan.md); the SRS [Build Phases](docs/SRS.md#28-build-phases) describe scope, not order.
 

@@ -2,7 +2,7 @@
 
 The administrator's product catalogue: physical and STL products in one table,
 created and maintained through `/api/v1/admin/products`. Introduced by VS-013.
-The public catalogue (VS-015), images (VS-014), search (VS-016) and the
+The public catalogue (VS-015, [storefront-catalogue.md](storefront-catalogue.md)), images (VS-014), search (VS-016) and the
 aggregates' writers (reviews VS-036, wishlist VS-038) build on it.
 
 ## The table
