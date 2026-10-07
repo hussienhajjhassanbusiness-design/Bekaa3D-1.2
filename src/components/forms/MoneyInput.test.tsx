@@ -184,6 +184,35 @@ describe("MoneyInput", () => {
     expect(screen.getByLabelText("Price (USD)")).toHaveValue("10.00");
   });
 
+  it("renders an externally-supplied error (e.g. a server validation failure) with the same accessible error treatment as a parse error", () => {
+    render(<MoneyInput label="Price" currencyLabel="USD" valueCents={0} onChangeCents={vi.fn()} error="Rate must be at least 0." />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Rate must be at least 0.");
+    expect(screen.getByLabelText("Price (USD)")).toHaveAttribute("aria-invalid", "true");
+  });
+
+  it("marks the field invalid (red border) when an externally-supplied error is present", () => {
+    render(<MoneyInput label="Price" currencyLabel="USD" valueCents={0} onChangeCents={vi.fn()} error="Rate must be at least 0." />);
+
+    expect(screen.getByLabelText("Price (USD)").className).toMatch(/border-danger/);
+  });
+
+  it("a local parse error takes precedence over a stale externally-supplied error", async () => {
+    const user = userEvent.setup();
+    render(<MoneyInput label="Price" currencyLabel="USD" valueCents={null} onChangeCents={vi.fn()} error="Rate must be at least 0." />);
+
+    await user.type(screen.getByLabelText("Price (USD)"), "-5");
+
+    expect(screen.getByRole("alert")).toHaveTextContent(/negative/i);
+  });
+
+  it("shows no error styling at all when neither a parse error nor an externally-supplied error exists", () => {
+    render(<MoneyInput label="Price" currencyLabel="USD" valueCents={0} onChangeCents={vi.fn()} />);
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Price (USD)")).not.toHaveAttribute("aria-invalid");
+  });
+
   it("never makes a network/fetch call", () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     render(<MoneyInput label="Price" currencyLabel="USD" valueCents={0} onChangeCents={vi.fn()} />);

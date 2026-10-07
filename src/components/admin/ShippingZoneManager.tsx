@@ -146,7 +146,7 @@ export function ShippingZoneManager({
             currencyLabel={currency}
             valueCents={draftRateCents}
             onChangeCents={setDraftRateCents}
-            hint={fieldErrors?.rateCents}
+            error={fieldErrors?.rateCents}
           />
           <div className="flex items-center gap-2">
             <Button type="submit" disabled={isSaving} isLoading={isSaving}>

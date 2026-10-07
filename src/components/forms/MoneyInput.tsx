@@ -11,6 +11,14 @@ export interface MoneyInputProps {
   valueCents: number | null;
   onChangeCents: (next: number | null) => void;
   hint?: string;
+  // Externally-supplied error (e.g. a server validation failure) —
+  // rendered with the exact same accessible treatment as this
+  // component's own internal parse error. A local parse error always
+  // takes precedence (it reflects the text currently on screen; a
+  // stale external error about a prior value would be misleading).
+  // The caller owns clearing this once it's no longer applicable
+  // (same convention TextField's own `error` prop already uses).
+  error?: string;
 }
 
 export type MoneyParseResult =
@@ -69,13 +77,17 @@ const ERROR_MESSAGES: Record<Exclude<MoneyParseResult, { ok: true }>["reason"], 
   "too-many-decimals": "Enter an amount with at most 2 decimal places.",
 };
 
-export function MoneyInput({ label, currencyLabel, valueCents, onChangeCents, hint }: MoneyInputProps) {
+export function MoneyInput({ label, currencyLabel, valueCents, onChangeCents, hint, error: externalError }: MoneyInputProps) {
   const inputId = useId();
   const hintId = useId();
   const errorId = useId();
 
   const [rawText, setRawText] = useState(() => (valueCents === null ? "" : formatCentsToDecimal(valueCents)));
-  const [error, setError] = useState<string | null>(null);
+  const [parseError, setParseError] = useState<string | null>(null);
+  // A local parse error always takes precedence over a stale
+  // externally-supplied one — it reflects the text currently on
+  // screen, which a prior server error does not.
+  const displayedError = parseError ?? externalError ?? null;
   // Tracks the cents value this component itself last emitted, so the
   // external-sync effect below can tell "the parent re-rendered with the
   // value we just emitted" (skip — would clobber in-progress typing like
@@ -87,7 +99,7 @@ export function MoneyInput({ label, currencyLabel, valueCents, onChangeCents, hi
     if (valueCents !== lastEmittedRef.current) {
       lastEmittedRef.current = valueCents;
       setRawText(valueCents === null ? "" : formatCentsToDecimal(valueCents));
-      setError(null);
+      setParseError(null);
     }
   }, [valueCents]);
 
@@ -96,7 +108,7 @@ export function MoneyInput({ label, currencyLabel, valueCents, onChangeCents, hi
     setRawText(next);
 
     if (next.trim() === "") {
-      setError(null);
+      setParseError(null);
       lastEmittedRef.current = null;
       onChangeCents(null);
       return;
@@ -107,16 +119,16 @@ export function MoneyInput({ label, currencyLabel, valueCents, onChangeCents, hi
       // Deliberately does not call onChangeCents here — an unparseable
       // in-progress edit (e.g. "12.") must never emit a corrupted cents
       // value; the last valid value stands until the user fixes it.
-      setError(ERROR_MESSAGES[result.reason]);
+      setParseError(ERROR_MESSAGES[result.reason]);
       return;
     }
 
-    setError(null);
+    setParseError(null);
     lastEmittedRef.current = result.cents;
     onChangeCents(result.cents);
   }
 
-  const describedBy = [hint ? hintId : null, error ? errorId : null].filter(Boolean).join(" ") || undefined;
+  const describedBy = [hint ? hintId : null, displayedError ? errorId : null].filter(Boolean).join(" ") || undefined;
 
   return (
     <div>
@@ -130,9 +142,9 @@ export function MoneyInput({ label, currencyLabel, valueCents, onChangeCents, hi
         value={rawText}
         onChange={handleChange}
         aria-describedby={describedBy}
-        aria-invalid={error ? true : undefined}
+        aria-invalid={displayedError ? true : undefined}
         className={`mt-1 w-full rounded-sm border px-3 py-2 text-body text-text-primary ${
-          error ? "border-danger" : "border-border-default"
+          displayedError ? "border-danger" : "border-border-default"
         }`}
       />
       {hint && (
@@ -140,9 +152,9 @@ export function MoneyInput({ label, currencyLabel, valueCents, onChangeCents, hi
           {hint}
         </p>
       )}
-      {error && (
+      {displayedError && (
         <p id={errorId} role="alert" className="mt-1 text-caption text-danger">
-          {error}
+          {displayedError}
         </p>
       )}
     </div>

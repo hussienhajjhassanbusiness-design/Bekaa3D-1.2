@@ -162,6 +162,24 @@ describe("ShippingZoneManager", () => {
     expect(screen.getByText("This name is already in use.")).toBeInTheDocument();
   });
 
+  it("shows a server-returned rate field error with real error semantics, not a plain hint", async () => {
+    const user = userEvent.setup();
+    render(
+      <ShippingZoneManager
+        zones={[]}
+        currency="USD"
+        onSave={vi.fn()}
+        onArchive={vi.fn()}
+        fieldErrors={{ rateCents: "Rate must be at least 0." }}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: /add zone/i }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Rate must be at least 0.");
+    expect(screen.getByLabelText(/rate \(usd\)/i)).toHaveAttribute("aria-invalid", "true");
+  });
+
   it("clicking Archive opens the shared ConfirmDialog, not a new modal", async () => {
     const user = userEvent.setup();
     render(<ShippingZoneManager zones={[makeZone()]} currency="USD" onSave={vi.fn()} onArchive={vi.fn()} />);
