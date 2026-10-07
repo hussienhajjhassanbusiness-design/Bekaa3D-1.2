@@ -42,6 +42,11 @@ describe("buildWhatsAppHref", () => {
   it("returns null for a number containing hyphens", () => {
     expect(buildWhatsAppHref("961-70-123456", "Hello")).toBeNull();
   });
+
+  it("defaults to an empty message when none is supplied — lets a generic (non-product) WhatsApp link reuse this helper without inventing filler text", () => {
+    const href = buildWhatsAppHref("96170123456");
+    expect(href).toBe("https://wa.me/96170123456?text=");
+  });
 });
 
 describe("buildWhatsAppProductMessage", () => {

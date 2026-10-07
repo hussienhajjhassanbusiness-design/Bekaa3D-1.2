@@ -14,7 +14,7 @@
 // (a future settings adapter, once the real format is confirmed) must
 // supply `normalizedNumber` as digits only. A value that doesn't meet
 // that precondition is rejected outright (`null`), never "cleaned up."
-export function buildWhatsAppHref(normalizedNumber: string, message: string): string | null {
+export function buildWhatsAppHref(normalizedNumber: string, message: string = ""): string | null {
   if (!/^\d+$/.test(normalizedNumber)) {
     return null;
   }
