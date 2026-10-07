@@ -1,0 +1,110 @@
+"use client";
+
+import { useEffect, useRef, type MouseEvent, type ReactNode } from "react";
+
+export interface DialogShellProps {
+  open: boolean;
+  onClose: () => void;
+  // Suppresses Escape/backdrop-click while true (e.g. a pending
+  // mutation) — mirrors the exact invariant ConfirmDialog already had
+  // (`isConfirming`), generalized to any busy state.
+  isBusy?: boolean;
+  labelledBy: string;
+  describedBy?: string;
+  children: ReactNode;
+}
+
+const FOCUSABLE_SELECTOR = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
+// #SHARED-DIALOG-SHELL
+//
+// Extracted from FVS-007's own ConfirmDialog (which had its own
+// independent focus-trap/Escape/backdrop implementation) so neither it
+// nor any future dialog (e.g. FVS-019's GrantEntitlementDialog) needs a
+// second, separately-maintained copy of the same accessible-dialog
+// mechanics. Carries NO business/domain knowledge — title, description,
+// and actions are entirely the caller's `children`; this shell owns
+// only role/aria-modal, the labelledby/describedby wiring, the Tab
+// focus trap, Escape handling, backdrop-click handling, and focus
+// restoration to the triggering element on close.
+//
+// Built as a manually-managed accessible dialog rather than native
+// <dialog>.showModal() — this project's jsdom version does not
+// implement showModal/close, which would make this component
+// untestable at the unit level despite working in a real browser (the
+// same reasoning ConfirmDialog's own original implementation recorded).
+export function DialogShell({ open, onClose, isBusy = false, labelledBy, describedBy, children }: DialogShellProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<Element | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      triggerRef.current = document.activeElement;
+    } else if (triggerRef.current instanceof HTMLElement) {
+      triggerRef.current.focus();
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        if (!isBusy) {
+          onClose();
+        }
+        return;
+      }
+
+      if (event.key === "Tab") {
+        const dialog = dialogRef.current;
+        if (!dialog) {
+          return;
+        }
+        const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (!first || !last) {
+          return;
+        }
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [open, isBusy, onClose]);
+
+  if (!open) {
+    return null;
+  }
+
+  function handleBackdropClick(event: MouseEvent<HTMLDivElement>) {
+    if (event.target === event.currentTarget && !isBusy) {
+      onClose();
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4" onClick={handleBackdropClick}>
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={labelledBy}
+        aria-describedby={describedBy}
+        className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-lg bg-white p-6 shadow-elevation-3"
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
