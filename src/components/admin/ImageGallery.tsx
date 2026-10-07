@@ -1,0 +1,110 @@
+"use client";
+
+import { useState } from "react";
+import { Button } from "@/components/forms/Button";
+import { ConfirmDialog } from "@/components/feedback/ConfirmDialog";
+
+// Frontend-normalized gallery presentation model — NOT a claim about any
+// backend field name. The real product-image response shape (id, URL
+// representation, order field, cover field) is still
+// NEEDS BACKEND CONFIRMATION (FVS-012-IMPLEMENTATION-PLAN.md §1). A
+// future API adapter maps whatever the backend returns onto this shape.
+export interface GalleryImageModel {
+  id: string;
+  src: string;
+  accessibleLabel: string;
+  isCover: boolean;
+}
+
+export interface ImageGalleryProps {
+  images: readonly GalleryImageModel[];
+  onReorder: (nextIds: string[]) => void;
+  onSetCover: (imageId: string) => void;
+  onDelete: (imageId: string) => void;
+  isDeleting?: boolean;
+}
+
+// #FVS012-UPLOAD
+//
+// Reorder is explicit "Move up"/"Move down" buttons, not pointer drag —
+// recorded decision (FVS-012-IMPLEMENTATION-PLAN.md §5/T04): drag adds
+// real complexity without changing what is safe to ship now, these
+// buttons already give every user (mouse, keyboard, touch) a working
+// reorder path with no device-detection branching, and the
+// `onReorder(nextIds)` callback shape is already exactly what a later
+// pointer-drag enhancement would also call — adding drag later needs no
+// redesign here. Order is array order only; the backend's own order
+// field is a future adapter's concern, never claimed by this component.
+//
+// Cover state renders as visible text ("Cover"), never icon/color
+// alone. Delete reuses the existing ConfirmDialog (FVS-007/009) — no new
+// modal. Neither Set Cover nor Delete is treated as locally authoritative:
+// this component only exposes the presentation seam (onSetCover/
+// onDelete); the real mutation and the server's own race/conflict
+// handling are a future adapter's job (T06, blocked).
+export function ImageGallery({ images, onReorder, onSetCover, onDelete, isDeleting = false }: ImageGalleryProps) {
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+
+  function move(index: number, direction: -1 | 1) {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= images.length) {
+      return;
+    }
+    const nextIds = images.map((image) => image.id);
+    const [moved] = nextIds.splice(index, 1);
+    nextIds.splice(targetIndex, 0, moved!);
+    onReorder(nextIds);
+  }
+
+  return (
+    <>
+      <ul>
+      {images.map((image, index) => (
+        <li key={image.id} className="flex items-center gap-3 border-b border-border-default py-3">
+          {/* Plain <img>, not next/image: the real image host/URL format
+              is still an open gap (FRONTEND-VERTICAL-SLICE-PLAN.md §17's
+              "Image/asset URL format" item) — next/image's remote-pattern
+              allowlist can't be configured safely until that's confirmed. */}
+          <img src={image.src} alt={image.accessibleLabel} className="h-16 w-16 rounded-sm object-cover" />
+          <span className="text-body text-text-primary">{image.accessibleLabel}</span>
+          {image.isCover && (
+            <span className="rounded-pill bg-brand-dark-green/15 px-2 py-0.5 text-caption font-semibold text-brand-dark-green">
+              Cover
+            </span>
+          )}
+          <div className="ml-auto flex items-center gap-2">
+            <Button type="button" onClick={() => move(index, -1)} disabled={index === 0}>
+              Move up
+            </Button>
+            <Button type="button" onClick={() => move(index, 1)} disabled={index === images.length - 1}>
+              Move down
+            </Button>
+            {!image.isCover && (
+              <Button type="button" onClick={() => onSetCover(image.id)}>
+                Set as cover
+              </Button>
+            )}
+            <Button type="button" onClick={() => setDeleteTargetId(image.id)}>
+              Delete
+            </Button>
+          </div>
+        </li>
+      ))}
+      </ul>
+
+      <ConfirmDialog
+        open={deleteTargetId !== null}
+        title="Delete image"
+        description="This image will be removed from the gallery."
+        confirmLabel="Delete"
+        isConfirming={isDeleting}
+        onConfirm={() => {
+          if (deleteTargetId) {
+            onDelete(deleteTargetId);
+          }
+        }}
+        onCancel={() => setDeleteTargetId(null)}
+      />
+    </>
+  );
+}
