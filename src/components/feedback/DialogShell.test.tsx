@@ -146,4 +146,18 @@ describe("DialogShell", () => {
     expect(dialog.className).toMatch(/max-w-/);
     expect(dialog.className).toMatch(/w-full/);
   });
+
+  it("uses the exact existing default panel classes when panelClassName is omitted", () => {
+    renderShell();
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.className).toBe(
+      "w-full max-w-md max-h-[90vh] overflow-y-auto rounded-lg bg-white p-6 shadow-elevation-3"
+    );
+  });
+
+  it("replaces the panel classes entirely with a caller-supplied panelClassName (FVS-025 MiniCartDrawer seam)", () => {
+    renderShell({ panelClassName: "fixed inset-y-0 right-0 h-full w-80 bg-white" });
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.className).toBe("fixed inset-y-0 right-0 h-full w-80 bg-white");
+  });
 });

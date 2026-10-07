@@ -12,7 +12,17 @@ export interface DialogShellProps {
   labelledBy: string;
   describedBy?: string;
   children: ReactNode;
+  // Replaces the panel's default class list entirely when supplied —
+  // never merged — so a caller (e.g. FVS-025's MiniCartDrawer) can
+  // position the panel as an edge-anchored drawer/bottom-sheet
+  // (typically via its own `fixed` positioning, escaping the
+  // backdrop's centering layout) without a second focus-trap
+  // implementation. Omitting it keeps the exact existing centered-
+  // modal classes, unchanged for every current caller.
+  panelClassName?: string;
 }
+
+const DEFAULT_PANEL_CLASSNAME = "w-full max-w-md max-h-[90vh] overflow-y-auto rounded-lg bg-white p-6 shadow-elevation-3";
 
 const FOCUSABLE_SELECTOR = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
@@ -33,7 +43,15 @@ const FOCUSABLE_SELECTOR = 'button, [href], input, select, textarea, [tabindex]:
 // implement showModal/close, which would make this component
 // untestable at the unit level despite working in a real browser (the
 // same reasoning ConfirmDialog's own original implementation recorded).
-export function DialogShell({ open, onClose, isBusy = false, labelledBy, describedBy, children }: DialogShellProps) {
+export function DialogShell({
+  open,
+  onClose,
+  isBusy = false,
+  labelledBy,
+  describedBy,
+  children,
+  panelClassName,
+}: DialogShellProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<Element | null>(null);
 
@@ -101,7 +119,7 @@ export function DialogShell({ open, onClose, isBusy = false, labelledBy, describ
         aria-modal="true"
         aria-labelledby={labelledBy}
         aria-describedby={describedBy}
-        className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-lg bg-white p-6 shadow-elevation-3"
+        className={panelClassName ?? DEFAULT_PANEL_CLASSNAME}
       >
         {children}
       </div>
