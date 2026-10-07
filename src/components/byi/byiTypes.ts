@@ -1,15 +1,19 @@
+import type { GuestSubmissionErrorKind } from "@/components/forms/guestSubmissionFeedback";
+
 // #ARCHITECTURE-BYI-SUBMISSION-ADAPTER
 //
 // Frontend-normalized UI error categories ONLY — not a claim about any
 // backend error code. VS-014 (vertical-slice-plan.md) never defines an
 // error-code contract; these are the categories the product itself
-// already requires distinct copy for (captcha failure, rate limiting,
-// attachment rejection, everything else). A future submission adapter
-// maps whatever the real backend response turns out to be onto one of
-// these kinds — this file never guesses that mapping itself, and a
-// component consuming `ByiSubmissionError` never infers a kind from
-// message text.
-export type ByiErrorKind = "captcha" | "rate-limit" | "attachment" | "generic";
+// already requires distinct copy for. Extends the shared
+// `GuestSubmissionErrorKind` (captcha/rate-limit/generic — see
+// `#SHARED-GUEST-SUBMISSION-FEEDBACK`) with BYI's own extra
+// "attachment" category, rather than duplicating the three shared
+// kinds. A future submission adapter maps whatever the real backend
+// response turns out to be onto one of these kinds — this file never
+// guesses that mapping itself, and a component consuming
+// `ByiSubmissionError` never infers a kind from message text.
+export type ByiErrorKind = GuestSubmissionErrorKind | "attachment";
 
 export interface ByiSubmissionError {
   kind: ByiErrorKind;

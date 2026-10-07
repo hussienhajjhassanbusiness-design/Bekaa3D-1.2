@@ -4,7 +4,8 @@ import { useId, useState, type FormEvent, type ReactNode } from "react";
 import { Button } from "@/components/forms/Button";
 import { FileUploader } from "@/components/forms/FileUploader";
 import type { UploadValidationConfig } from "@/components/forms/uploadTypes";
-import type { ByiErrorKind, ByiSubmissionError } from "./byiTypes";
+import { GUEST_SUBMISSION_ERROR_COPY } from "@/components/forms/guestSubmissionFeedback";
+import type { ByiSubmissionError } from "./byiTypes";
 
 export interface BringYourIdeaFormData {
   description: string;
@@ -18,18 +19,6 @@ export interface BringYourIdeaFormProps {
   attachmentConfig?: UploadValidationConfig;
   captchaSlot?: ReactNode;
 }
-
-// Frontend-owned safe copy for captcha/rate-limit guidance — matching
-// vocabulary explicitly given as acceptable product copy
-// (FVS-015-IMPLEMENTATION-PLAN.md §5/T01). "attachment" has no fixed
-// copy here: only the backend-confirmed human-safe rejection field
-// (error.message) is ever shown for it, never a client-invented
-// generic.
-const FIXED_ERROR_COPY: Partial<Record<ByiErrorKind, string>> = {
-  captcha: "Please complete the verification and try again.",
-  "rate-limit": "Please try again in a few minutes.",
-  generic: "Something went wrong. Please try again.",
-};
 
 // #FVS015-BYI-FORM
 //
@@ -67,7 +56,7 @@ export function BringYourIdeaForm({
     onSubmit({ description, attachments });
   }
 
-  const errorText = error ? (error.kind === "attachment" ? error.message : FIXED_ERROR_COPY[error.kind]) : null;
+  const errorText = error ? (error.kind === "attachment" ? error.message : GUEST_SUBMISSION_ERROR_COPY[error.kind]) : null;
 
   return (
     <form onSubmit={handleSubmit}>
