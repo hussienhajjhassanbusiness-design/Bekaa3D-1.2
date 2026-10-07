@@ -1,26 +1,47 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { StatusBadge } from "./StatusBadge";
+import { StatusBadge, describeAdminAccountStatus } from "./StatusBadge";
 
-// FVS-009-IMPLEMENTATION-PLAN.md T02 — accepts a normalized frontend
-// status union, never a claimed backend enum literal (plan §1/§5).
-// Status must be conveyed in text, not color alone.
+// FVS-017-IMPLEMENTATION-PLAN.md T02 — generalized from a fixed
+// "active"/"deactivated" union to a small, still-bounded `{label,
+// tone}` descriptor, so the same component serves both admin-account
+// status (FVS-009) and contact-message status (FVS-017) without
+// becoming an untyped `{status: string; color: string}` component that
+// would destroy its own type guarantees. `tone` stays a controlled,
+// bounded union — never an arbitrary color string.
 
 describe("StatusBadge", () => {
-  it("shows readable text for an active status", () => {
-    render(<StatusBadge status="active" />);
-    expect(screen.getByText("Active")).toBeInTheDocument();
-  });
-
-  it("shows readable text for a deactivated status", () => {
-    render(<StatusBadge status="deactivated" />);
-    expect(screen.getByText("Deactivated")).toBeInTheDocument();
+  it("renders the supplied label as visible text", () => {
+    render(<StatusBadge label="Archived" tone="neutral" />);
+    expect(screen.getByText("Archived")).toBeInTheDocument();
   });
 
   it("never makes a network/fetch call", () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
-    render(<StatusBadge status="active" />);
+    render(<StatusBadge label="Active" tone="positive" />);
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
+  });
+});
+
+describe("describeAdminAccountStatus (FVS-009 regression)", () => {
+  it("describes an active account", () => {
+    expect(describeAdminAccountStatus("active")).toEqual({ label: "Active", tone: "positive" });
+  });
+
+  it("describes a deactivated account", () => {
+    expect(describeAdminAccountStatus("deactivated")).toEqual({ label: "Deactivated", tone: "negative" });
+  });
+
+  it("still renders readable text for an active status end-to-end", () => {
+    const { label, tone } = describeAdminAccountStatus("active");
+    render(<StatusBadge label={label} tone={tone} />);
+    expect(screen.getByText("Active")).toBeInTheDocument();
+  });
+
+  it("still renders readable text for a deactivated status end-to-end", () => {
+    const { label, tone } = describeAdminAccountStatus("deactivated");
+    render(<StatusBadge label={label} tone={tone} />);
+    expect(screen.getByText("Deactivated")).toBeInTheDocument();
   });
 });
