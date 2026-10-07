@@ -50,3 +50,8 @@ def normalise_slug(raw: str) -> str:
             "slug may contain only lowercase letters, digits and single hyphens between them",
         )
     return candidate
+
+
+def is_canonical_slug(text: str) -> bool:
+    """Already canonical, as stored: a lookup by anything else can match no row."""
+    return len(text) <= MAX_SLUG_LENGTH and _SLUG_PATTERN.fullmatch(text) is not None

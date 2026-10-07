@@ -21,10 +21,11 @@ from app.core.config import get_settings
 from tests.smoke.test_vs012_smoke import SMOKE_ELSEWHERE as VS012_SMOKE
 from tests.smoke.test_vs013_smoke import SMOKE_ELSEWHERE as VS013_SMOKE
 from tests.smoke.test_vs014_smoke import SMOKE_ELSEWHERE as VS014_SMOKE
+from tests.smoke.test_vs015_smoke import SMOKE_ELSEWHERE as VS015_SMOKE
 
 _SMOKE_NODE_IDS = frozenset(
     node_id
-    for suite in (VS012_SMOKE, VS013_SMOKE, VS014_SMOKE)
+    for suite in (VS012_SMOKE, VS013_SMOKE, VS014_SMOKE, VS015_SMOKE)
     for ids in suite.values()
     for node_id in ids
 )
