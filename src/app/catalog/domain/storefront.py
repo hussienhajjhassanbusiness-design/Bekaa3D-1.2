@@ -13,6 +13,8 @@ from app.catalog.domain.product import Product
 StorefrontSort = Literal["price", "-price", "-average_rating", "-created_at"]
 DEFAULT_SORT: StorefrontSort = "-created_at"
 MAX_RATING = Decimal(5)
+# `average_rating` is NUMERIC(3,2): a finer bound would be rounded by PostgreSQL.
+RATING_STEP = Decimal("0.01")
 CursorKey = int | Decimal | datetime
 
 _ONLINE_MODES = frozenset({PurchaseMode.ONLINE_ONLY, PurchaseMode.BOTH})
@@ -37,8 +39,11 @@ class StorefrontFilter:
         low, high = self.price_min_cents, self.price_max_cents
         if low is not None and high is not None and low > high:
             errors["price_min_cents"] = "must not exceed price_max_cents"
-        if self.min_rating is not None and not 0 <= self.min_rating <= MAX_RATING:
+        rating = self.min_rating
+        if rating is not None and not 0 <= rating <= MAX_RATING:
             errors["min_rating"] = f"must be between 0 and {MAX_RATING}"
+        elif rating is not None and rating != rating.quantize(RATING_STEP):
+            errors["min_rating"] = "must have at most 2 decimal places"
         if errors:
             raise ProductValidationError(errors)
 

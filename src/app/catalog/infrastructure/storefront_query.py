@@ -96,7 +96,7 @@ def page_statement(
     if after is not None:
         key, after_id = after
         pair = tuple_(column, ProductModel.id)
-        bound = tuple_(literal(key), literal(after_id, postgresql.UUID(as_uuid=True)))
+        bound = tuple_(literal(key, column.type), literal(after_id, postgresql.UUID(as_uuid=True)))
         # The redundant single-column bound is one the browse indexes can seek on.
         if descending:
             stmt = stmt.where(column <= key, pair < bound)

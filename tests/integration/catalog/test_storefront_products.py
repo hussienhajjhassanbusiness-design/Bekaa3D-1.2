@@ -2,7 +2,9 @@
 cursors, payload allowlist and errors. Each test owns its category, so the shared DB
 cannot make a negative assertion pass vacuously (VS-010 audit A-06)."""
 
+import base64
 import itertools
+import json
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
@@ -234,6 +236,19 @@ async def test_every_sort_pages_in_order_with_ties_broken_by_id(
     assert got == [str(r.id) for r in expected]
 
 
+@pytest.mark.parametrize("sort", ["price", "-price"])
+async def test_paging_past_a_price_above_the_int32_range_works(
+    db_session: AsyncSession, sort: str
+) -> None:
+    refs = await seed_refs(db_session)
+    prices = [2**31 - 1, 2**31, 3_000_000_000, 2**62]
+    rows = [await seed_product(db_session, refs, price_cents=p) for p in prices]
+    expected = sorted(rows, key=lambda r: r.price_cents, reverse=sort == "-price")
+    with client_for(main_app) as client:
+        got = _walk(client, 1, category_id=str(refs.category.id), sort=sort)
+    assert got == [str(r.id) for r in expected]
+
+
 async def test_the_default_sort_is_newest_first(db_session: AsyncSession) -> None:
     refs = await seed_refs(db_session)
     base = datetime(2026, 2, 1, tzinfo=UTC)
@@ -244,6 +259,11 @@ async def test_the_default_sort_is_newest_first(db_session: AsyncSession) -> Non
 
 
 # ------------------------------------------------------------------- errors
+
+
+def _forged(sort: str, key: object) -> str:
+    raw = json.dumps({"s": sort, "k": key, "i": str(uuid.uuid4())}).encode()
+    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
 
 
 @pytest.mark.parametrize(
@@ -258,8 +278,11 @@ async def test_the_default_sort_is_newest_first(db_session: AsyncSession) -> Non
         ({"price_min_cents": 501, "price_max_cents": 500}, "price_min_cents"),
         ({"min_rating": "5.01"}, "min_rating"),
         ({"min_rating": "NaN"}, "min_rating"),
+        ({"min_rating": "3.994"}, "min_rating"),
         ({"category_id": "not-a-uuid"}, "category_id"),
         ({"cursor": "garbage"}, "cursor"),
+        ({"cursor": _forged("price", 2**63), "sort": "price"}, "cursor"),
+        ({"cursor": _forged("-average_rating", "10"), "sort": "-average_rating"}, "cursor"),
         ({"cursor": encode_cursor("price", 100, uuid.uuid4()), "sort": "-price"}, "cursor"),
         (
             {

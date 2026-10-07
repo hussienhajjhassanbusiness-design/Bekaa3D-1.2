@@ -146,7 +146,9 @@ class ProductRepository:
         if after is not None:
             key, after_id = after
             pair = tuple_(column, ProductModel.id)
-            bound = tuple_(literal(key), literal(after_id, postgresql.UUID(as_uuid=True)))
+            bound = tuple_(
+                literal(key, column.type), literal(after_id, postgresql.UUID(as_uuid=True))
+            )
             stmt = stmt.where(pair < bound if descending else pair > bound)
         order = (column.desc(), ProductModel.id.desc()) if descending else (column, ProductModel.id)
         stmt = stmt.order_by(*order).limit(limit)

@@ -28,7 +28,13 @@ def test_min_rating_outside_zero_to_five_is_refused(rating: str) -> None:
     assert set(caught.value.errors) == {"min_rating"}
 
 
-@pytest.mark.parametrize("rating", ["0", "5", "3.5"])
+def test_min_rating_finer_than_the_column_is_refused() -> None:
+    with pytest.raises(ProductValidationError) as caught:
+        StorefrontFilter(min_rating=Decimal("3.994"))
+    assert caught.value.errors == {"min_rating": "must have at most 2 decimal places"}
+
+
+@pytest.mark.parametrize("rating", ["0", "5", "3.5", "3.99", "4.50"])
 def test_min_rating_bounds_are_inclusive(rating: str) -> None:
     StorefrontFilter(min_rating=Decimal(rating))
 

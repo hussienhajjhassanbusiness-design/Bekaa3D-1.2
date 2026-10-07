@@ -11,7 +11,8 @@ from uuid import UUID
 
 from fastapi.exceptions import RequestValidationError
 
-from app.catalog.domain.storefront import CursorKey
+from app.catalog.api.product_schemas import PG_BIGINT_MAX
+from app.catalog.domain.storefront import MAX_RATING, RATING_STEP, CursorKey
 
 
 def bad_query(name: str, message: str) -> RequestValidationError:
@@ -36,14 +37,17 @@ def _parse_key(kind: str, key: Any) -> CursorKey:
         if parsed.tzinfo is None:
             raise ValueError
         return parsed
+    # Keys are bounded to what their column holds, so a forged one is a 422, not a DB error.
     if kind == "average_rating":
         if type(key) is not str:
             raise ValueError
         rating = Decimal(key)
-        if not rating.is_finite():
+        if not rating.is_finite() or not 0 <= rating <= MAX_RATING:
+            raise ValueError
+        if rating != rating.quantize(RATING_STEP):
             raise ValueError
         return rating
-    if type(key) is not int:
+    if type(key) is not int or not 0 <= key <= PG_BIGINT_MAX:
         raise ValueError
     return key
 
