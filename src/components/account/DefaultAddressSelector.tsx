@@ -33,6 +33,9 @@ export interface DefaultAddressSelectorProps {
 // (`addressDefaultOptimistic.ts`) once it exists.
 export function DefaultAddressSelector({ options, onSelect, pendingId = null }: DefaultAddressSelectorProps) {
   const statusId = useId();
+  // Unique per instance so multiple selectors rendered on the same
+  // page never collide into one native radio group.
+  const groupName = useId();
   const isPending = pendingId !== null;
 
   return (
@@ -48,7 +51,7 @@ export function DefaultAddressSelector({ options, onSelect, pendingId = null }: 
           <label key={option.id} className="flex items-center gap-2 text-body text-text-primary">
             <input
               type="radio"
-              name="default-address"
+              name={groupName}
               value={option.id}
               checked={option.isDefault}
               disabled={isPending}
