@@ -1,0 +1,60 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# ---- Virtual environments ----
+.venv/
+venv/
+env/
+
+# ---- Testing & QA ----
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# ---- Environment / secrets ----
+.env
+.env.*
+!.env.example
+
+# ---- Alembic (migrations themselves are tracked) ----
+# (no ignore here on purpose — migrations/versions/*.py must be committed)
+
+# ---- Local data / uploaded content ----
+storage/stl_private/*
+storage/uploads_private/*
+storage/media_public/*
+!storage/stl_private/.gitkeep
+!storage/uploads_private/.gitkeep
+!storage/media_public/.gitkeep
+
+# ---- Docker ----
+*.pid
+
+# ---- IDE ----
+.idea/
+.vscode/
+*.swp
+
+# ---- Claude Code local state ----
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+.claude/.hook-state/
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+
+# Claude Code (local only)
+.claude/
+CLAUDE.md

@@ -1,0 +1,153 @@
+Name                                                                     Stmts   Miss Branch BrPart  Cover   Missing
+--------------------------------------------------------------------------------------------------------------------
+src/app/__init__.py                                                          0      0      0      0   100%
+src/app/api/__init__.py                                                      0      0      0      0   100%
+src/app/api/cookies.py                                                      22      0      0      0   100%
+src/app/api/dependencies.py                                                  9      0      0      0   100%
+src/app/api/errors.py                                                       40      0      2      0   100%
+src/app/api/health.py                                                       32      0      0      0   100%
+src/app/api/middleware.py                                                   16      0      0      0   100%
+src/app/api/openapi.py                                                      28      1     14      1    95%   110
+src/app/api/v1/__init__.py                                                   0      0      0      0   100%
+src/app/api/v1/admin.py                                                      9      0      0      0   100%
+src/app/api/v1/auth.py                                                       6      0      0      0   100%
+src/app/api/v1/me.py                                                         6      0      0      0   100%
+src/app/api/v1/router.py                                                    12      0      0      0   100%
+src/app/catalog/__init__.py                                                  0      0      0      0   100%
+src/app/catalog/api/__init__.py                                              0      0      0      0   100%
+src/app/catalog/api/reference_data.py                                      198     21     12      2    89%   144, 148, 151-152, 362, 365-368, 494-497, 526-527, 616-619, 648-649
+src/app/catalog/api/schemas.py                                              95      1      4      1    98%   24
+src/app/catalog/application/__init__.py                                      0      0      0      0   100%
+src/app/catalog/application/commands/__init__.py                             0      0      0      0   100%
+src/app/catalog/application/commands/category_admin.py                      52      1     10      1    97%   143
+src/app/catalog/application/commands/value_admin.py                         54      2     10      3    92%   132, 138->145, 183
+src/app/catalog/domain/__init__.py                                           0      0      0      0   100%
+src/app/catalog/domain/entities.py                                          69      4     20      4    91%   135-136, 148->151, 152-153, 154->156
+src/app/catalog/domain/exceptions.py                                        20      0      0      0   100%
+src/app/catalog/domain/slug.py                                              15      0      8      0   100%
+src/app/catalog/infrastructure/__init__.py                                   0      0      0      0   100%
+src/app/catalog/infrastructure/models.py                                    32      0      0      0   100%
+src/app/catalog/infrastructure/repositories.py                             143     13     24      9    86%   78, 102, 184, 192-195, 248->250, 251-252, 262, 310->312, 313-314, 324
+src/app/core/__init__.py                                                     0      0      0      0   100%
+src/app/core/config.py                                                      41      0      0      0   100%
+src/app/core/database.py                                                     7      0      0      0   100%
+src/app/core/exceptions.py                                                   8      0      0      0   100%
+src/app/core/logging.py                                                     15      0      0      0   100%
+src/app/core/models.py                                                       4      0      0      0   100%
+src/app/core/rate_limit.py                                                  19      0      6      0   100%
+src/app/core/security.py                                                    16      0      2      0   100%
+src/app/digital_assets/__init__.py                                           0      0      0      0   100%
+src/app/digital_assets/api/__init__.py                                       0      0      0      0   100%
+src/app/digital_assets/application/__init__.py                               0      0      0      0   100%
+src/app/digital_assets/domain/__init__.py                                    0      0      0      0   100%
+src/app/digital_assets/infrastructure/__init__.py                            0      0      0      0   100%
+src/app/engagement/__init__.py                                               0      0      0      0   100%
+src/app/engagement/api/__init__.py                                           0      0      0      0   100%
+src/app/engagement/api/notifications.py                                     55      0      8      0   100%
+src/app/engagement/api/schemas.py                                           21      0      0      0   100%
+src/app/engagement/application/__init__.py                                   0      0      0      0   100%
+src/app/engagement/application/services/__init__.py                          0      0      0      0   100%
+src/app/engagement/application/services/notification_writer.py              13      0      2      0   100%
+src/app/engagement/domain/__init__.py                                        0      0      0      0   100%
+src/app/engagement/domain/entities.py                                       16      0      0      0   100%
+src/app/engagement/domain/enums.py                                           8      0      0      0   100%
+src/app/engagement/domain/exceptions.py                                      9      2      0      0    78%   35-36
+src/app/engagement/domain/payload.py                                        30      0     14      0   100%
+src/app/engagement/infrastructure/__init__.py                                0      0      0      0   100%
+src/app/engagement/infrastructure/models.py                                 17      0      0      0   100%
+src/app/engagement/infrastructure/repositories.py                           40      0      6      0   100%
+src/app/fulfillment/__init__.py                                              0      0      0      0   100%
+src/app/fulfillment/api/__init__.py                                          0      0      0      0   100%
+src/app/fulfillment/application/__init__.py                                  0      0      0      0   100%
+src/app/fulfillment/domain/__init__.py                                       0      0      0      0   100%
+src/app/fulfillment/infrastructure/__init__.py                               0      0      0      0   100%
+src/app/identity/__init__.py                                                 0      0      0      0   100%
+src/app/identity/api/__init__.py                                             0      0      0      0   100%
+src/app/identity/api/admin_users.py                                         77      0     10      0   100%
+src/app/identity/api/auth.py                                               117      0      6      0   100%
+src/app/identity/api/dependencies.py                                        54      0     16      0   100%
+src/app/identity/api/mfa.py                                                105     11      4      0    90%   161, 229-230, 345-349, 367-372, 431-432
+src/app/identity/api/profile.py                                              8      0      0      0   100%
+src/app/identity/api/schemas.py                                             92      0      2      0   100%
+src/app/identity/application/__init__.py                                     0      0      0      0   100%
+src/app/identity/application/commands/confirm_password_reset.py             28      0      4      0   100%
+src/app/identity/application/commands/login.py                              66      1     14      1    98%   104
+src/app/identity/application/commands/logout.py                             15      1      2      1    88%   21
+src/app/identity/application/commands/mfa_complete_login.py                 43      2      6      2    92%   95, 102
+src/app/identity/application/commands/mfa_confirm_setup.py                  37      1      6      1    95%   56
+src/app/identity/application/commands/mfa_regenerate_recovery_codes.py      33      2      6      2    90%   48, 58
+src/app/identity/application/commands/mfa_setup.py                          38      1      8      1    96%   59
+src/app/identity/application/commands/mfa_verify.py                         44      1     10      1    96%   61
+src/app/identity/application/commands/refresh_session.py                    45      2      6      2    92%   62, 75
+src/app/identity/application/commands/register_user.py                      20      0      4      0   100%
+src/app/identity/application/commands/request_password_reset.py             17      0      4      0   100%
+src/app/identity/application/commands/resend_verification.py                17      0      2      0   100%
+src/app/identity/application/commands/set_user_active.py                    45      0     12      0   100%
+src/app/identity/application/commands/verify_email.py                       23      1      4      1    93%   27
+src/app/identity/application/services/admin_mfa_gate.py                     17      0      2      0   100%
+src/app/identity/application/services/login_throttle.py                     34      0      6      0   100%
+src/app/identity/application/services/mfa_session.py                        45      5      2      0    89%   78, 119-120, 125-126
+src/app/identity/application/services/password_reset.py                     21      0      4      0   100%
+src/app/identity/application/services/verification.py                       21      1      4      1    92%   42
+src/app/identity/domain/__init__.py                                          0      0      0      0   100%
+src/app/identity/domain/entities.py                                        162      1     30      1    99%   167
+src/app/identity/domain/enums.py                                             6      0      0      0   100%
+src/app/identity/domain/exceptions.py                                       52      0      0      0   100%
+src/app/identity/domain/recovery_codes.py                                   13      0      0      0   100%
+src/app/identity/infrastructure/__init__.py                                  0      0      0      0   100%
+src/app/identity/infrastructure/models.py                                   73      0      0      0   100%
+src/app/identity/infrastructure/password_hasher.py                          14      0      0      0   100%
+src/app/identity/infrastructure/repositories.py                            215      6     24      6    95%   243, 361, 427, 490, 576, 628
+src/app/identity/infrastructure/secret_cipher.py                            16      0      0      0   100%
+src/app/identity/infrastructure/session_tokens.py                           55      0      4      0   100%
+src/app/identity/infrastructure/token_service.py                             6      0      0      0   100%
+src/app/identity/infrastructure/totp.py                                     30      0      4      0   100%
+src/app/integrations/__init__.py                                             0      0      0      0   100%
+src/app/integrations/captcha/__init__.py                                     0      0      0      0   100%
+src/app/integrations/email/__init__.py                                       0      0      0      0   100%
+src/app/integrations/email/console.py                                        7      0      0      0   100%
+src/app/integrations/email/factory.py                                        7      0      2      0   100%
+src/app/integrations/email/ports.py                                          6      1      0      0    83%   10
+src/app/integrations/scanning/__init__.py                                    0      0      0      0   100%
+src/app/integrations/storage/__init__.py                                     0      0      0      0   100%
+src/app/jobs/__init__.py                                                     0      0      0      0   100%
+src/app/jobs/outbox.py                                                      33      0      6      0   100%
+src/app/jobs/purge_unverified.py                                            15      0      2      0   100%
+src/app/jobs/registry.py                                                     7      0      0      0   100%
+src/app/main.py                                                             29      0      0      0   100%
+src/app/negotiation/__init__.py                                              0      0      0      0   100%
+src/app/negotiation/api/__init__.py                                          0      0      0      0   100%
+src/app/negotiation/application/__init__.py                                  0      0      0      0   100%
+src/app/negotiation/domain/__init__.py                                       0      0      0      0   100%
+src/app/negotiation/infrastructure/__init__.py                               0      0      0      0   100%
+src/app/ordering/__init__.py                                                 0      0      0      0   100%
+src/app/ordering/api/__init__.py                                             0      0      0      0   100%
+src/app/ordering/application/__init__.py                                     0      0      0      0   100%
+src/app/ordering/domain/__init__.py                                          0      0      0      0   100%
+src/app/ordering/infrastructure/__init__.py                                  0      0      0      0   100%
+src/app/payments/__init__.py                                                 0      0      0      0   100%
+src/app/payments/api/__init__.py                                             0      0      0      0   100%
+src/app/payments/application/__init__.py                                     0      0      0      0   100%
+src/app/payments/domain/__init__.py                                          0      0      0      0   100%
+src/app/payments/infrastructure/__init__.py                                  0      0      0      0   100%
+src/app/platform/__init__.py                                                 0      0      0      0   100%
+src/app/platform/api/__init__.py                                             0      0      0      0   100%
+src/app/platform/api/schemas.py                                             38      0      0      0   100%
+src/app/platform/api/settings.py                                            91      3     12      3    94%   180, 276, 279
+src/app/platform/application/__init__.py                                     0      0      0      0   100%
+src/app/platform/application/commands/__init__.py                            0      0      0      0   100%
+src/app/platform/application/commands/update_setting.py                     28      1      4      1    94%   72
+src/app/platform/application/services/__init__.py                            0      0      0      0   100%
+src/app/platform/application/services/audit_writer.py                        9      0      0      0   100%
+src/app/platform/application/services/settings_reader.py                    44     19     16      3    50%   60, 72, 75, 79-85, 88-94, 97-98
+src/app/platform/domain/__init__.py                                          0      0      0      0   100%
+src/app/platform/domain/entities.py                                         67      0      4      0   100%
+src/app/platform/domain/enums.py                                            13      0      0      0   100%
+src/app/platform/domain/exceptions.py                                       17      4      0      0    76%   51-56
+src/app/platform/domain/settings_registry.py                                92      2     40      1    96%   335-339
+src/app/platform/infrastructure/__init__.py                                  0      0      0      0   100%
+src/app/platform/infrastructure/models.py                                   46      0      0      0   100%
+src/app/platform/infrastructure/repositories.py                             81      3     12      3    94%   74, 184, 229
+src/app/worker.py                                                           38      9      2      1    75%   41-43, 47, 78-82, 86
+--------------------------------------------------------------------------------------------------------------------
+TOTAL                                                                     3549    123    448     53    95%

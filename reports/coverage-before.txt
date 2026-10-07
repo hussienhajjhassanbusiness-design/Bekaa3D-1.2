@@ -1,0 +1,153 @@
+Name                                                                                             Stmts   Miss Branch BrPart  Cover   Missing
+--------------------------------------------------------------------------------------------------------------------------------------------
+C:/yahyaworking/bekaa3d/src/app/__init__.py                                                          0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/api/__init__.py                                                      0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/api/cookies.py                                                      22      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/api/dependencies.py                                                  9      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/api/errors.py                                                       40      0      2      0   100%
+C:/yahyaworking/bekaa3d/src/app/api/health.py                                                       32      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/api/middleware.py                                                   16      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/api/openapi.py                                                      28      1     14      1    95%   110
+C:/yahyaworking/bekaa3d/src/app/api/v1/__init__.py                                                   0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/api/v1/admin.py                                                      9      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/api/v1/auth.py                                                       6      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/api/v1/me.py                                                         6      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/api/v1/router.py                                                    12      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/catalog/__init__.py                                                  0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/catalog/api/__init__.py                                              0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/catalog/api/reference_data.py                                      198     36     12      4    81%   144, 148, 151-152, 362, 365-368, 394, 415-420, 464, 494-497, 524-527, 537-542, 586, 616-619, 646-649
+C:/yahyaworking/bekaa3d/src/app/catalog/api/schemas.py                                              95      1      4      1    98%   24
+C:/yahyaworking/bekaa3d/src/app/catalog/application/__init__.py                                      0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/catalog/application/commands/__init__.py                             0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/catalog/application/commands/category_admin.py                      52      2     10      2    94%   143, 202
+C:/yahyaworking/bekaa3d/src/app/catalog/application/commands/value_admin.py                         54      3     10      4    89%   132, 138->145, 181, 183
+C:/yahyaworking/bekaa3d/src/app/catalog/domain/__init__.py                                           0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/catalog/domain/entities.py                                          69      4     20      4    91%   135-136, 148->151, 152-153, 154->156
+C:/yahyaworking/bekaa3d/src/app/catalog/domain/exceptions.py                                        20      3      0      0    85%   15-17
+C:/yahyaworking/bekaa3d/src/app/catalog/domain/slug.py                                              15      0      8      0   100%
+C:/yahyaworking/bekaa3d/src/app/catalog/infrastructure/__init__.py                                   0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/catalog/infrastructure/models.py                                    32      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/catalog/infrastructure/repositories.py                             143     25     24      5    76%   78, 102, 184, 192-195, 247-257, 262, 309-319, 324
+C:/yahyaworking/bekaa3d/src/app/core/__init__.py                                                     0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/core/config.py                                                      41      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/core/database.py                                                     7      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/core/exceptions.py                                                   8      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/core/logging.py                                                     15      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/core/models.py                                                       4      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/core/rate_limit.py                                                  19      0      6      0   100%
+C:/yahyaworking/bekaa3d/src/app/core/security.py                                                    16      0      2      0   100%
+C:/yahyaworking/bekaa3d/src/app/digital_assets/__init__.py                                           0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/digital_assets/api/__init__.py                                       0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/digital_assets/application/__init__.py                               0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/digital_assets/domain/__init__.py                                    0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/digital_assets/infrastructure/__init__.py                            0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/engagement/__init__.py                                               0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/engagement/api/__init__.py                                           0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/engagement/api/notifications.py                                     55      0      8      0   100%
+C:/yahyaworking/bekaa3d/src/app/engagement/api/schemas.py                                           21      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/engagement/application/__init__.py                                   0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/engagement/application/services/__init__.py                          0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/engagement/application/services/notification_writer.py              13      0      2      0   100%
+C:/yahyaworking/bekaa3d/src/app/engagement/domain/__init__.py                                        0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/engagement/domain/entities.py                                       16      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/engagement/domain/enums.py                                           8      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/engagement/domain/exceptions.py                                      9      2      0      0    78%   35-36
+C:/yahyaworking/bekaa3d/src/app/engagement/domain/payload.py                                        30      0     14      0   100%
+C:/yahyaworking/bekaa3d/src/app/engagement/infrastructure/__init__.py                                0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/engagement/infrastructure/models.py                                 17      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/engagement/infrastructure/repositories.py                           40      0      6      0   100%
+C:/yahyaworking/bekaa3d/src/app/fulfillment/__init__.py                                              0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/fulfillment/api/__init__.py                                          0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/fulfillment/application/__init__.py                                  0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/fulfillment/domain/__init__.py                                       0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/fulfillment/infrastructure/__init__.py                               0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/identity/__init__.py                                                 0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/identity/api/__init__.py                                             0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/identity/api/admin_users.py                                         77      0     10      0   100%
+C:/yahyaworking/bekaa3d/src/app/identity/api/auth.py                                               117      2      6      0    98%   279-280
+C:/yahyaworking/bekaa3d/src/app/identity/api/dependencies.py                                        54      0     16      0   100%
+C:/yahyaworking/bekaa3d/src/app/identity/api/mfa.py                                                105     12      4      0    89%   160-161, 229-230, 345-349, 367-372, 431-432
+C:/yahyaworking/bekaa3d/src/app/identity/api/profile.py                                              8      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/identity/api/schemas.py                                             92      0      2      0   100%
+C:/yahyaworking/bekaa3d/src/app/identity/application/__init__.py                                     0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/identity/application/commands/confirm_password_reset.py             28      1      4      1    94%   73
+C:/yahyaworking/bekaa3d/src/app/identity/application/commands/login.py                              66      1     14      1    98%   104
+C:/yahyaworking/bekaa3d/src/app/identity/application/commands/logout.py                             15      1      2      1    88%   21
+C:/yahyaworking/bekaa3d/src/app/identity/application/commands/mfa_complete_login.py                 43      2      6      2    92%   95, 102
+C:/yahyaworking/bekaa3d/src/app/identity/application/commands/mfa_confirm_setup.py                  37      1      6      1    95%   56
+C:/yahyaworking/bekaa3d/src/app/identity/application/commands/mfa_regenerate_recovery_codes.py      33      2      6      2    90%   48, 58
+C:/yahyaworking/bekaa3d/src/app/identity/application/commands/mfa_setup.py                          38      1      8      1    96%   59
+C:/yahyaworking/bekaa3d/src/app/identity/application/commands/mfa_verify.py                         44      1     10      1    96%   61
+C:/yahyaworking/bekaa3d/src/app/identity/application/commands/refresh_session.py                    45      2      6      2    92%   62, 75
+C:/yahyaworking/bekaa3d/src/app/identity/application/commands/register_user.py                      20      1      4      1    92%   60
+C:/yahyaworking/bekaa3d/src/app/identity/application/commands/request_password_reset.py             17      0      4      0   100%
+C:/yahyaworking/bekaa3d/src/app/identity/application/commands/resend_verification.py                17      0      2      0   100%
+C:/yahyaworking/bekaa3d/src/app/identity/application/commands/set_user_active.py                    45      0     12      0   100%
+C:/yahyaworking/bekaa3d/src/app/identity/application/commands/verify_email.py                       23      1      4      1    93%   27
+C:/yahyaworking/bekaa3d/src/app/identity/application/services/admin_mfa_gate.py                     17      0      2      0   100%
+C:/yahyaworking/bekaa3d/src/app/identity/application/services/login_throttle.py                     34      0      6      0   100%
+C:/yahyaworking/bekaa3d/src/app/identity/application/services/mfa_session.py                        45      5      2      0    89%   78, 119-120, 125-126
+C:/yahyaworking/bekaa3d/src/app/identity/application/services/password_reset.py                     21      0      4      0   100%
+C:/yahyaworking/bekaa3d/src/app/identity/application/services/verification.py                       21      1      4      1    92%   42
+C:/yahyaworking/bekaa3d/src/app/identity/domain/__init__.py                                          0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/identity/domain/entities.py                                        162      2     30      2    98%   54, 167
+C:/yahyaworking/bekaa3d/src/app/identity/domain/enums.py                                             6      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/identity/domain/exceptions.py                                       52      2      0      0    96%   10-11
+C:/yahyaworking/bekaa3d/src/app/identity/domain/recovery_codes.py                                   13      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/identity/infrastructure/__init__.py                                  0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/identity/infrastructure/models.py                                   73      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/identity/infrastructure/password_hasher.py                          14      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/identity/infrastructure/repositories.py                            215      6     24      6    95%   243, 361, 427, 490, 576, 628
+C:/yahyaworking/bekaa3d/src/app/identity/infrastructure/secret_cipher.py                            16      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/identity/infrastructure/session_tokens.py                           55      4      4      0    93%   138-139, 146-147
+C:/yahyaworking/bekaa3d/src/app/identity/infrastructure/token_service.py                             6      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/identity/infrastructure/totp.py                                     30      0      4      0   100%
+C:/yahyaworking/bekaa3d/src/app/integrations/__init__.py                                             0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/integrations/captcha/__init__.py                                     0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/integrations/email/__init__.py                                       0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/integrations/email/console.py                                        7      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/integrations/email/factory.py                                        7      0      2      0   100%
+C:/yahyaworking/bekaa3d/src/app/integrations/email/ports.py                                          6      1      0      0    83%   10
+C:/yahyaworking/bekaa3d/src/app/integrations/scanning/__init__.py                                    0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/integrations/storage/__init__.py                                     0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/jobs/__init__.py                                                     0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/jobs/outbox.py                                                      33      1      6      1    95%   76
+C:/yahyaworking/bekaa3d/src/app/jobs/purge_unverified.py                                            15      0      2      0   100%
+C:/yahyaworking/bekaa3d/src/app/jobs/registry.py                                                     7      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/main.py                                                             29      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/negotiation/__init__.py                                              0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/negotiation/api/__init__.py                                          0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/negotiation/application/__init__.py                                  0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/negotiation/domain/__init__.py                                       0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/negotiation/infrastructure/__init__.py                               0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/ordering/__init__.py                                                 0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/ordering/api/__init__.py                                             0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/ordering/application/__init__.py                                     0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/ordering/domain/__init__.py                                          0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/ordering/infrastructure/__init__.py                                  0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/payments/__init__.py                                                 0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/payments/api/__init__.py                                             0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/payments/application/__init__.py                                     0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/payments/domain/__init__.py                                          0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/payments/infrastructure/__init__.py                                  0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/platform/__init__.py                                                 0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/platform/api/__init__.py                                             0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/platform/api/schemas.py                                             38      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/platform/api/settings.py                                            91      4     12      4    92%   95, 180, 276, 279
+C:/yahyaworking/bekaa3d/src/app/platform/application/__init__.py                                     0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/platform/application/commands/__init__.py                            0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/platform/application/commands/update_setting.py                     28      1      4      1    94%   72
+C:/yahyaworking/bekaa3d/src/app/platform/application/services/__init__.py                            0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/platform/application/services/audit_writer.py                        9      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/platform/application/services/settings_reader.py                    44     19     16      3    50%   60, 72, 75, 79-85, 88-94, 97-98
+C:/yahyaworking/bekaa3d/src/app/platform/domain/__init__.py                                          0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/platform/domain/entities.py                                         67      0      4      0   100%
+C:/yahyaworking/bekaa3d/src/app/platform/domain/enums.py                                            13      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/platform/domain/exceptions.py                                       17      4      0      0    76%   51-56
+C:/yahyaworking/bekaa3d/src/app/platform/domain/settings_registry.py                                92      2     40      1    96%   335-339
+C:/yahyaworking/bekaa3d/src/app/platform/infrastructure/__init__.py                                  0      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/platform/infrastructure/models.py                                   46      0      0      0   100%
+C:/yahyaworking/bekaa3d/src/app/platform/infrastructure/repositories.py                             81      3     12      3    94%   74, 184, 229
+C:/yahyaworking/bekaa3d/src/app/worker.py                                                           38      9      2      1    75%   41-43, 47, 78-82, 86
+--------------------------------------------------------------------------------------------------------------------------------------------
+TOTAL                                                                                             3549    169    448     58    94%

@@ -1,0 +1,110 @@
+# nginx is deliberately omitted until the protected-download (STL entitlement) slice
+# lands - see docs/adr for the X-Accel-Redirect design.
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      # Host 5432 is taken by a native Windows PostgreSQL service (postgres.exe),
+      # not a Docker container; mapped to 5442 here until that's resolved.
+      # Change back to "5432:5432" once that service is stopped or reconfigured.
+      - "5442:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  clamav:
+    image: clamav/clamav:stable
+    restart: unless-stopped
+    ports:
+      - "3310:3310"
+    volumes:
+      - clamav_defs:/var/lib/clamav
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/clamdcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s # first boot downloads virus definitions
+
+  api:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    command:
+      [
+        "uvicorn",
+        "app.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--app-dir",
+        "src",
+        "--reload",
+      ]
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./src:/app/src
+      - ./migrations:/app/migrations
+      - ./storage/stl_private:/data/stl_private
+      - ./storage/uploads_private:/data/uploads_private
+      - ./storage/media_public:/data/media_public
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - PYTHONPATH=/app/src
+    # Deliberately NOT `arq ... --watch`: arq's watch mode never awaits the
+    # worker task, so a Redis blip kills the poll loop while the process stays
+    # alive and every email in the system silently stops. `python -m app.worker`
+    # exits non-zero instead, and `restart: unless-stopped` brings it back.
+    # Trade-off: worker code changes need `docker compose restart worker`.
+    command: ["python", "-m", "app.worker"]
+    healthcheck:
+      # arq's own check: reads the heartbeat the worker writes to Redis each
+      # poll and fails if it has gone stale, so a stalled-but-running worker
+      # shows as unhealthy instead of looking fine.
+      test: ["CMD", "arq", "app.worker.WorkerSettings", "--check"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    volumes:
+      - ./src:/app/src
+      # reap_orphan_files (VS-014) reconciles this directory against product_images.
+      - ./storage/media_public:/data/media_public
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  clamav_defs:

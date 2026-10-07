@@ -1,0 +1,60 @@
+"""Catalog's repository ports. Pure `Protocol`s: the application layer depends
+on these, never on `app.catalog.infrastructure` (CLAUDE.md, architecture rules;
+BUG-41). `value_admin` declares its own generic `_ValueRepository` port."""
+
+from typing import Protocol
+from uuid import UUID
+
+from app.catalog.domain.entities import Category
+from app.catalog.domain.product import Product, ProductDraft
+from app.catalog.domain.product_image import ProductImage
+
+
+class CategoryStore(Protocol):
+    async def add(self, *, name: str, slug: str, is_active: bool) -> Category: ...
+
+    async def get_by_id_for_update(self, value_id: UUID) -> Category | None: ...
+
+    async def save(self, value: Category) -> None: ...
+
+    async def is_in_use(self, value_id: UUID) -> bool: ...
+
+
+class ProductStore(Protocol):
+    async def add(self, draft: ProductDraft) -> Product: ...
+
+    async def get_by_id(self, product_id: UUID) -> Product | None: ...
+
+    async def save_if_version(self, product: Product, expected_version: int) -> Product | None:
+        """Write and bump `version` only if it is still `expected_version`; else None."""
+        ...
+
+    async def current_version(self, product_id: UUID) -> int | None: ...
+
+    async def get_for_update(self, product_id: UUID) -> Product | None:
+        """Row-locks the product: image changes serialise on it (docs/product-images.md)."""
+        ...
+
+
+class ReferenceLocks(Protocol):
+    async def lock_live(self, field: str, value_id: UUID) -> bool:
+        """Share-lock the value `field` names; False if it is unknown or archived."""
+        ...
+
+
+class ProductImageStore(Protocol):
+    async def live_for_product(self, product_id: UUID) -> list[ProductImage]: ...
+
+    async def add(
+        self,
+        *,
+        product_id: UUID,
+        storage_key: str,
+        alt_text: str | None,
+        sort_order: int,
+        is_cover: bool,
+    ) -> ProductImage: ...
+
+    async def save(self, images: list[ProductImage]) -> None:
+        """Write in the given order, so a cover is cleared before another is set."""
+        ...
