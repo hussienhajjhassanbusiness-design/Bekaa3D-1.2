@@ -65,14 +65,25 @@ export function usePaymentStatusPoller({
     }
 
     const elapsed = Date.now() - startTimeRef.current;
-    if (elapsed >= maxDurationMsRef.current) {
+    const remaining = maxDurationMsRef.current - elapsed;
+    if (remaining <= 0) {
       isTimedOutRef.current = true;
       setIsTimedOut(true);
       return;
     }
 
-    const delay = getDelayMsRef.current(attemptRef.current);
+    // Capped to the remaining budget — independent review found that
+    // checking elapsed only before scheduling let a poll fire up to
+    // a full backoff interval after maxDurationMs had already
+    // elapsed. The capped delay guarantees this timer never fires
+    // later than the configured deadline.
+    const delay = Math.min(getDelayMsRef.current(attemptRef.current), remaining);
     timeoutIdRef.current = setTimeout(() => {
+      if (Date.now() - startTimeRef.current >= maxDurationMsRef.current) {
+        isTimedOutRef.current = true;
+        setIsTimedOut(true);
+        return;
+      }
       attemptRef.current += 1;
       onPollRef.current();
       scheduleNext();

@@ -136,6 +136,8 @@ T01–T07. T08–T10 are each blocked for a distinct, documented reason.
 
 **T10 — Real backend acceptance:** Blocked on backend availability.
 
+**Independent-review follow-up (FVS-027 Important finding, resolved):** `usePaymentStatusPoller`'s `maxDurationMs` was a soft, not hard, ceiling under backoff — `elapsed` was only checked *before* scheduling the next wait, so a large backoff delay near the deadline could let one more poll fire after the configured budget had already elapsed (bounded by one extra interval, not unbounded). Classified **FRONTEND-SAFE TO FIX NOW** — pure polling-schedule logic, no backend dependency. Fixed via TDD: the scheduled delay is now capped to the remaining budget, and the timer callback re-checks elapsed time before calling `onPoll` — so no poll can ever fire after `maxDurationMs` has elapsed, confirmed by a new dedicated test using a backoff delay (10s) that alone exceeds the entire budget (5s). A second, non-defect observation from the same review — `PaymentResultView`'s `timeout`/`network-error` retry callbacks silently no-op when a caller omits them, rather than being required props — was left as-is, explicitly characterized by the review itself as low-severity and defensible for a presentational-only batch with no real integration yet.
+
 ---
 
 ## Global Constraints

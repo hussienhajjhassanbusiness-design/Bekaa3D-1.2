@@ -131,6 +131,26 @@ describe("usePaymentStatusPoller", () => {
     expect(onPoll).not.toHaveBeenCalled();
   });
 
+  it("never fires a poll past maxDurationMs, even when the backoff policy returns a delay that would overshoot it", () => {
+    // A real gap independent review found: checking elapsed only
+    // BEFORE scheduling the next wait lets one poll fire up to a
+    // full backoff interval after the configured maxDurationMs has
+    // already elapsed. Here the very first delay (10s) alone exceeds
+    // the entire 5s budget.
+    const onPoll = vi.fn();
+    const getDelayMs = () => 10_000;
+    const { result } = renderHook(() =>
+      usePaymentStatusPoller({ status: "pending", getDelayMs, maxDurationMs: 5000, onPoll })
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(5000);
+    });
+
+    expect(onPoll).not.toHaveBeenCalled();
+    expect(result.current.isTimedOut).toBe(true);
+  });
+
   it("cleans up its timer on unmount — no poll fires after unmount", () => {
     const onPoll = vi.fn();
     const { unmount } = renderHook(() =>
