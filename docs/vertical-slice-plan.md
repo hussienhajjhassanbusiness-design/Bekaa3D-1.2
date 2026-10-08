@@ -19,7 +19,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 | VS-013 | Admin product management | VS-010 | Done |
 | VS-014 | Product images with storage and malware scanning | VS-013 | Done |
 | VS-015 | Public catalogue: browse, filter, sort, detail | VS-013, VS-014 | Done |
-| VS-016 | Search and autocomplete | VS-015 | Not started |
+| VS-016 | Search and autocomplete | VS-015 | Done |
 | VS-017 | STL bundle upload and version publishing | — | Removed (ADR-019) |
 | VS-018 | Entitlements: admin grant and STL library | — | Removed (ADR-019) |
 | VS-019 | Protected STL download through nginx | — | Removed (ADR-019) |
@@ -380,7 +380,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - The product cursor is shared with the admin list (`app/catalog/api/product_cursor.py`). Visibility is one predicate used by both list and detail.
 
 ## VS-016 — Search and autocomplete
-**Status:** Not started
+**Status:** Done
 **Depends on:** VS-015
 **Goal:** A visitor finds products by name or description, even with a typo.
 - **Model / migration:** GIN index on `search_vector` and a GIN trigram index on `name`.
@@ -398,6 +398,11 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 - **Done when:**
   - A one-typo query finds the product.
   - Search p95 is under 800 ms (NFR-02).
+- **As built:**
+  - No migration: the GIN indexes came with VS-013. Contract in [`storefront-catalogue.md`](storefront-catalogue.md). Ordering, fallback and cursor decisions are in ADR-023.
+  - With `q`, the default sort is `-relevance` (full-text hits by `ts_rank`, then trigram-only hits by `word_similarity`). The fallback counts full-text hits with facets applied and is pinned in the cursor. The trigram threshold is 0.5, set per transaction.
+  - `q` is trimmed (blank means no search), up to 200 characters like the admin list; suggestions need 2 to 200, `limit` 1 to 10. Suggestion and `q` errors are 422 (api-endpoints.md §7.1 corrected from 400, and from "translated" text per ADR-016).
+  - Known limit: a transposed pair of letters (`dargon`) is not found; trigrams count it as two edits.
 
 ## VS-017 — STL bundle upload and version publishing
 **Status:** Removed by ADR-019 (STL files are emailed manually; the platform stores none).

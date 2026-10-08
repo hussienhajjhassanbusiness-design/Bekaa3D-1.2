@@ -222,10 +222,10 @@ These are intentionally outside `/api/v1`.
 
 | Method + Path | Auth / Authorization | Request | Success | Errors | Pagination / Filter / Sort | Side Effects / Notes |
 |---|---|---|---|---|---|---|
-| `GET /api/v1/products` | Public | query params | `200 ProductPage` | 422, 429 | Cursor; filters: `type`, `category_id`, `material_id`, `colour_id`, `price_min_cents`, `price_max_cents`, `min_rating`, `featured`, `q`; sorts: `price`, `-price`, `-average_rating`, `-created_at` | Only non-deleted, visible products in active categories; unavailable products remain visible |
+| `GET /api/v1/products` | Public | query params | `200 ProductPage` | 422, 429 | Cursor; filters: `type`, `category_id`, `material_id`, `colour_id`, `price_min_cents`, `price_max_cents`, `min_rating`, `featured`, `q`; sorts: `price`, `-price`, `-average_rating`, `-created_at`, and `-relevance` with `q` (its default; ADR-023) | Only non-deleted, visible products in active categories; unavailable products remain visible |
 | `GET /api/v1/products/{slug}` | Public | — | `200 ProductDetail` | 404, 429 | — | Response includes relevant commerce capabilities (ADR-022) and SEO fields |
 | `GET /api/v1/products/{slug}/reviews` | Public | query params | `200 ReviewPage` | 404, 429 | Cursor; optional `rating`, `verified_purchase`; sort `-created_at` default | Hidden/deleted reviews excluded |
-| `GET /api/v1/search/suggestions` | Public | `q`, `limit` | `200 SearchSuggestionList` | 400, 429 | Hard limit; V1 max 10 | Trigram typo tolerance |
+| `GET /api/v1/search/suggestions` | Public | `q`, `limit` | `200 SearchSuggestionList` | 422, 429 | Hard limit; V1 max 10 | Trigram typo tolerance (VS-016, see `docs/storefront-catalogue.md`) |
 | `GET /api/v1/categories` | Public | — | `200 CategoryList` | 429 | Hard-limited reference list | Active categories only |
 | `GET /api/v1/materials` | Public | — | `200 MaterialList` | 429 | Hard-limited reference list | Active material values |
 | `GET /api/v1/colours` | Public | — | `200 ColourList` | 429 | Hard-limited reference list | Active colour values |
@@ -234,7 +234,7 @@ These are intentionally outside `/api/v1`.
 ### Public Product List Rules
 
 - facets combine with logical AND;
-- `q` searches translated product name/description;
+- `q` searches product name/description in English (plain columns per ADR-016; VS-016 corrected "translated");
 - `material_id` and `colour_id` apply only where meaningful;
 - server may reject nonsensical sort/filter combinations with `422 VALIDATION_ERROR` (the §5.2 status; VS-015, see `docs/storefront-catalogue.md`);
 - `limit` is bounded by the global maximum.

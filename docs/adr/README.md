@@ -28,6 +28,7 @@ Only expensive-to-reverse decisions belong here. Folder names and small refactor
 - [ADR-020: Use an optimistic `version` column for administrator edits](ADR-020-optimistic-versioning-for-admin-edits.md)
 - [ADR-021: Scan the raw upload, then re-encode; store before the row commits](ADR-021-image-upload-pipeline.md)
 - [ADR-022: Derive storefront commerce capabilities from product state only](ADR-022-storefront-commerce-capabilities.md)
+- [ADR-023: Rank storefront search by relevance, fall back to trigram below five hits, and pin the mode in the cursor](ADR-023-storefront-search-order-and-fallback.md)
 
 ## Governance
 

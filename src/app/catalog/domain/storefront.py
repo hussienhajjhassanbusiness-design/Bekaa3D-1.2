@@ -3,19 +3,60 @@
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
+from enum import StrEnum
 from typing import Literal
 from uuid import UUID
 
 from app.catalog.domain.enums import ProductType, PurchaseMode
 from app.catalog.domain.exceptions import ProductValidationError
 from app.catalog.domain.product import Product
+from app.core.text import CONTROL_CHARACTER_MESSAGE, has_control_characters
 
-StorefrontSort = Literal["price", "-price", "-average_rating", "-created_at"]
+StorefrontSort = Literal["price", "-price", "-average_rating", "-created_at", "-relevance"]
 DEFAULT_SORT: StorefrontSort = "-created_at"
+RELEVANCE_SORT: StorefrontSort = "-relevance"
 MAX_RATING = Decimal(5)
 # `average_rating` is NUMERIC(3,2): a finer bound would be rounded by PostgreSQL.
 RATING_STEP = Decimal("0.01")
-CursorKey = int | Decimal | datetime
+CursorKey = int | Decimal | datetime | float
+
+# The admin list's bound (VS-013). Suggestions need two characters to be useful.
+MAX_SEARCH_LENGTH = 200
+MIN_SUGGESTION_LENGTH = 2
+MAX_SUGGESTIONS = 10
+# SRS 6.3: below this many full-text hits, trigram matches on the name join in.
+MIN_FULL_TEXT_HITS = 5
+
+
+class SearchMode(StrEnum):
+    FULL_TEXT = "full_text"
+    FUZZY = "fuzzy"
+
+
+def search_mode_for(full_text_hits: int) -> SearchMode:
+    return SearchMode.FULL_TEXT if full_text_hits >= MIN_FULL_TEXT_HITS else SearchMode.FUZZY
+
+
+def search_term(raw: str | None) -> str | None:
+    """Trimmed; a blank search box means no search at all."""
+    term = raw.strip() if raw is not None else ""
+    return term or None
+
+
+def search_term_errors(term: str, *, min_length: int = 1) -> str | None:
+    if has_control_characters(term):
+        return CONTROL_CHARACTER_MESSAGE
+    if not min_length <= len(term) <= MAX_SEARCH_LENGTH:
+        return f"must be {min_length} to {MAX_SEARCH_LENGTH} characters"
+    return None
+
+
+def resolve_sort(sort: StorefrontSort | None, q: str | None) -> StorefrontSort:
+    """Relevance is the default with a search and meaningless without one (ADR-023)."""
+    if sort == RELEVANCE_SORT and q is None:
+        raise ProductValidationError({"sort": "-relevance needs a search term (q)"})
+    return sort or (RELEVANCE_SORT if q is not None else DEFAULT_SORT)
+
 
 _ONLINE_MODES = frozenset({PurchaseMode.ONLINE_ONLY, PurchaseMode.BOTH})
 _WHATSAPP_MODES = frozenset({PurchaseMode.WHATSAPP_ONLY, PurchaseMode.BOTH})
@@ -23,7 +64,7 @@ _WHATSAPP_MODES = frozenset({PurchaseMode.WHATSAPP_ONLY, PurchaseMode.BOTH})
 
 @dataclass(frozen=True)
 class StorefrontFilter:
-    """The api-endpoints.md 31 allowlist, minus `q` (VS-016). Every facet ANDs."""
+    """The api-endpoints.md 31 allowlist; `q` is already trimmed. Every facet ANDs."""
 
     product_type: ProductType | None = None
     category_id: UUID | None = None
@@ -33,9 +74,14 @@ class StorefrontFilter:
     price_max_cents: int | None = None
     min_rating: Decimal | None = None
     featured: bool | None = None
+    q: str | None = None
 
     def __post_init__(self) -> None:
         errors: dict[str, str] = {}
+        if self.q is not None and (problem := search_term_errors(self.q)):
+            errors["q"] = problem
+        elif self.q is not None and self.q != self.q.strip():
+            errors["q"] = "must be trimmed"
         low, high = self.price_min_cents, self.price_max_cents
         if low is not None and high is not None and low > high:
             errors["price_min_cents"] = "must not exceed price_max_cents"
@@ -93,3 +139,11 @@ class StorefrontProduct:
     def capabilities(self) -> CommerceCapabilities:
         a = self.product.attributes
         return capabilities(self.product.type, a.purchase_mode, a.is_available)
+
+
+@dataclass(frozen=True)
+class SearchSuggestion:
+    id: UUID
+    name: str
+    slug: str
+    type: ProductType

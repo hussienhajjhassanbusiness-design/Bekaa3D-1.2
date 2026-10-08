@@ -1,6 +1,7 @@
 """Seeds for the storefront tests: each test owns a category, material pair and
 colour pair, retired afterwards by `tests.catalog_seed`."""
 
+import random
 import uuid
 from dataclasses import dataclass
 from typing import Any
@@ -60,3 +61,9 @@ async def seed_product(db: AsyncSession, refs: Refs, **over: Any) -> ProductMode
     db.add(row)
     await db.commit()
     return row
+
+
+def made_up_word() -> str:
+    """Ten letters no other test's product contains, so an unfaceted search is ours alone."""
+    rng = random.SystemRandom()
+    return "".join(rng.choice("bdfgklmnprtvz") + rng.choice("aeiou") for _ in range(5))

@@ -1,5 +1,5 @@
-"""NFR-01 / NFR-07 on 10,000 products: browse plans use the SRS 21.3 partial indexes,
-and browse stays under 500 ms at p95. The seed is this module's own and is removed."""
+"""NFR-01/02/07 on 10,000 products: browse and search plans use the SRS 21.3 indexes;
+browse p95 < 500 ms, search p95 < 800 ms. The seed is this module's own and is removed."""
 
 import json
 import statistics
@@ -16,30 +16,39 @@ from sqlalchemy import delete, insert, text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.catalog.domain.enums import ProductType
-from app.catalog.domain.storefront import StorefrontFilter, StorefrontSort
+from app.catalog.domain.storefront import SearchMode, StorefrontFilter, StorefrontSort
 from app.catalog.infrastructure.models import (
     CategoryModel,
     ColourModel,
     MaterialModel,
     ProductModel,
 )
-from app.catalog.infrastructure.storefront_query import page_statement
+from app.catalog.infrastructure.storefront_query import (
+    page_statement,
+    suggestions_statement,
+    trigram_threshold_statement,
+)
 from tests.integration.deep_support import asgi_client
 
 pytestmark = pytest.mark.integration
 
 PRODUCT_COUNT = 10_000
 P95_BUDGET_SECONDS = 0.5
+SEARCH_P95_BUDGET_SECONDS = 0.8
 
 _SEED = """
 INSERT INTO products (
-    type, category_id, name, slug, price_cents, is_visible, is_featured, average_rating,
+    type, category_id, name, description, slug, price_cents, is_visible, is_featured,
+    average_rating,
     review_count, created_at, purchase_mode, material_id, colour_id,
     production_lead_time_days, batch_size, max_quantity_per_line)
 SELECT
     CASE WHEN g % 2 = 0 THEN 'physical' ELSE 'stl' END::product_type,
     (CAST(:cats AS uuid[]))[1 + (g / 2) % 5],
-    'Scale product ' || g,
+    -- Eight common words, plus `gryphon` on one product in a thousand, for search shapes.
+    'Scale ' || (ARRAY['dragon', 'vase', 'lamp', 'planter', 'gear', 'chess', 'bracket',
+        'figurine'])[1 + g % 8] || CASE WHEN g % 1000 = 0 THEN ' gryphon' ELSE '' END || ' ' || g,
+    'Printed in ' || (ARRAY['PLA', 'PETG', 'resin'])[1 + g % 3] || ' with a matte finish',
     :prefix || g,
     100 + (g * 7919) % 50000,
     g % 7 <> 0,
@@ -94,7 +103,8 @@ async def seed(db_engine: AsyncEngine) -> AsyncGenerator[Seed]:
         )
     async with db_engine.connect() as conn:
         await conn.execution_options(isolation_level="AUTOCOMMIT")
-        await conn.execute(text("ANALYZE products, categories, materials, colours"))
+        # VACUUM, as autovacuum would: it flushes the GIN pending list the bulk insert filled.
+        await conn.execute(text("VACUUM ANALYZE products, categories, materials, colours"))
     yield s
     async with db_engine.begin() as conn:
         await conn.execute(delete(ProductModel).where(ProductModel.category_id.in_(s.categories)))
@@ -114,11 +124,9 @@ def _index_names(node: dict[str, Any]) -> set[str]:
     return names
 
 
-async def _plan(
-    engine: AsyncEngine, sort: StorefrontSort, filters: StorefrontFilter
-) -> dict[str, Any]:
-    stmt = page_statement(limit=21, sort=sort, filters=filters)
+async def _plan(engine: AsyncEngine, stmt: Any) -> dict[str, Any]:
     async with engine.connect() as conn:
+        await conn.execute(trigram_threshold_statement())
         compiled = stmt.compile(dialect=conn.dialect)
         params = tuple(compiled.params[name] for name in compiled.positiontup or ())
         result = await conn.exec_driver_sql(f"EXPLAIN (FORMAT JSON) {compiled}", params)
@@ -150,8 +158,70 @@ async def test_browse_plans_use_the_partial_indexes(
     db_engine: AsyncEngine, seed: Seed, shape: str
 ) -> None:
     sort, filters, index = SHAPES[shape]
-    plan = await _plan(db_engine, sort, filters(seed))
+    plan = await _plan(db_engine, page_statement(limit=21, sort=sort, filters=filters(seed)))
     assert index in _index_names(plan), json.dumps(plan, indent=1)
+
+
+SEARCH_SHAPES: dict[str, tuple[Any, str]] = {
+    "full_text": (
+        page_statement(limit=21, sort="-relevance", filters=StorefrontFilter(q="gryphon")),
+        "ix_products_search_vector",
+    ),
+    "fuzzy": (
+        page_statement(
+            limit=21,
+            sort="-relevance",
+            filters=StorefrontFilter(q="gryphn"),
+            mode=SearchMode.FUZZY,
+        ),
+        "ix_products_name_trgm",
+    ),
+    "suggestions": (suggestions_statement("gryph", 10), "ix_products_name_trgm"),
+}
+
+
+@pytest.mark.parametrize("shape", SEARCH_SHAPES)
+async def test_search_plans_use_the_gin_indexes(
+    db_engine: AsyncEngine, seed: Seed, shape: str
+) -> None:
+    stmt, index = SEARCH_SHAPES[shape]
+    plan = await _plan(db_engine, stmt)
+    assert index in _index_names(plan), json.dumps(plan, indent=1)
+
+
+@pytest.mark.usefixtures("configured_app")
+async def test_search_p95_is_under_800_ms_on_10k_products(
+    seed: Seed, make_app: Callable[[], FastAPI]
+) -> None:
+    searches: list[tuple[str, dict[str, Any]]] = [
+        ("/api/v1/products", {"q": "dragon"}),
+        ("/api/v1/products", {"q": "dragon", "sort": "price", "type": "physical"}),
+        ("/api/v1/products", {"q": "dragn", "limit": "100"}),
+        ("/api/v1/products", {"q": "gryphon"}),
+        ("/api/v1/products", {"q": "gryphn", "material_id": str(seed.materials[0])}),
+        ("/api/v1/products", {"q": "resin figurine", "sort": "-average_rating"}),
+        ("/api/v1/products", {"q": "zzqqxx"}),
+        ("/api/v1/products", {"q": "s"}),
+        ("/api/v1/search/suggestions", {"q": "sc"}),
+        ("/api/v1/search/suggestions", {"q": "drag"}),
+        ("/api/v1/search/suggestions", {"q": "plnter"}),
+    ]
+    timings: list[float] = []
+    async with asgi_client(make_app) as client:
+        await client.get("/api/v1/products", params={"q": "warm"})
+        for _ in range(6):
+            for path, params in searches:
+                start = time.perf_counter()
+                first = await client.get(path, params=params)
+                timings.append(time.perf_counter() - start)
+                assert first.status_code == 200, first.text
+                if cursor := first.json().get("next_cursor"):
+                    start = time.perf_counter()
+                    second = await client.get(path, params=params | {"cursor": cursor})
+                    timings.append(time.perf_counter() - start)
+                    assert second.status_code == 200, second.text
+    p95 = statistics.quantiles(timings, n=20)[-1]
+    assert p95 < SEARCH_P95_BUDGET_SECONDS, f"p95 {p95 * 1000:.0f} ms over {len(timings)}"
 
 
 @pytest.mark.usefixtures("configured_app")

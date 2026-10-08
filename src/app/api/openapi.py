@@ -64,6 +64,10 @@ _UNAUTHENTICATED_PATHS = frozenset(
         "/api/v1/categories",
         "/api/v1/materials",
         "/api/v1/colours",
+        # The storefront (VS-015, VS-016): anonymous visitors browse and search.
+        "/api/v1/products",
+        "/api/v1/products/{slug}",
+        "/api/v1/search/suggestions",
         "/health/live",
         "/health/ready",
     }
