@@ -16,10 +16,12 @@ from app.catalog.domain.storefront import (
     StorefrontSort,
     capabilities,
     fuzzy_eligible,
+    has_trigram_word,
     resolve_sort,
     search_mode_for,
     search_term,
     search_term_errors,
+    suggestion_term_errors,
 )
 
 PHYSICAL, STL = ProductType.PHYSICAL, ProductType.STL
@@ -113,6 +115,12 @@ def test_an_ineligible_term_never_falls_back(hits: int) -> None:
         ("spi", False, True),
         ("lamp", False, True),
         ("lamp -moon", True, False),
+        ("s s", False, False),
+        ("(s)", False, False),
+        ("s!!", False, False),
+        ("a b c d", False, False),
+        ("s sca", False, True),
+        ("x-ray", False, True),
     ],
 )
 def test_typo_matching_needs_three_characters_and_no_excluded_word(
@@ -172,3 +180,12 @@ def test_relevance_without_a_search_is_refused() -> None:
     with pytest.raises(ProductValidationError) as caught:
         resolve_sort("-relevance", None)
     assert set(caught.value.errors) == {"sort"}
+
+
+@pytest.mark.parametrize(
+    ("term", "ok"),
+    [("sca", True), ("Café", True), ("ab", False), ("s s", False), ("(s)", False), ("s!!", False)],
+)
+def test_a_suggestion_needs_a_word_of_three_letters_or_digits(term: str, ok: bool) -> None:
+    assert has_trigram_word(term) is ok
+    assert (suggestion_term_errors(term) is None) is ok

@@ -1,5 +1,6 @@
 """The public catalogue's read side (VS-015, docs/storefront-catalogue.md)."""
 
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -20,7 +21,7 @@ MAX_RATING = Decimal(5)
 RATING_STEP = Decimal("0.01")
 CursorKey = int | Decimal | datetime | float
 
-# The admin list's bound (VS-013). Trigrams need three characters to narrow anything.
+# The admin list's bound (VS-013). Trigrams need a three-letter word to narrow anything.
 MAX_SEARCH_LENGTH = 200
 MIN_FUZZY_LENGTH = 3
 MIN_SUGGESTION_LENGTH = MIN_FUZZY_LENGTH
@@ -29,14 +30,23 @@ MAX_SUGGESTIONS = 10
 MIN_FULL_TEXT_HITS = 5
 
 
+# pg_trgm reads only runs of letters and digits: `s s`, `(s)` and `s!!` are one letter to it.
+_TRIGRAM_WORD = re.compile(r"[^\W_]+")
+
+
 class SearchMode(StrEnum):
     FULL_TEXT = "full_text"
     FUZZY = "fuzzy"
 
 
+def has_trigram_word(term: str) -> bool:
+    """ADR-023: without a 3+ letter word, trigrams match every name sharing a first letter."""
+    return any(len(word) >= MIN_FUZZY_LENGTH for word in _TRIGRAM_WORD.findall(term))
+
+
 def fuzzy_eligible(term: str, *, excludes_words: bool) -> bool:
-    """ADR-023: shorter terms match every name, and trigrams ignore `-word`."""
-    return len(term) >= MIN_FUZZY_LENGTH and not excludes_words
+    """ADR-023: the fallback also skips `-word`, which trigrams would ignore."""
+    return has_trigram_word(term) and not excludes_words
 
 
 def search_mode_for(full_text_hits: int, *, eligible: bool) -> SearchMode:
@@ -55,6 +65,14 @@ def search_term_errors(term: str, *, min_length: int = 1) -> str | None:
         return CONTROL_CHARACTER_MESSAGE
     if not min_length <= len(term) <= MAX_SEARCH_LENGTH:
         return f"must be {min_length} to {MAX_SEARCH_LENGTH} characters"
+    return None
+
+
+def suggestion_term_errors(term: str) -> str | None:
+    if problem := search_term_errors(term, min_length=MIN_SUGGESTION_LENGTH):
+        return problem
+    if not has_trigram_word(term):
+        return f"must contain a word of at least {MIN_FUZZY_LENGTH} letters or digits"
     return None
 
 

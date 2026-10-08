@@ -93,13 +93,13 @@ def scale_url(postgres_container: PostgresContainer, db_engine: AsyncEngine) -> 
     name = f"scale_{uuid.uuid4().hex[:10]}"
     url = make_url(shared).set(database=name).render_as_string(hide_password=False)
     asyncio.run(_autocommit(shared, f'CREATE DATABASE "{name}"'))
+    previous = os.environ.get("DATABASE_URL")
     os.environ["DATABASE_URL"] = url
     get_settings.cache_clear()
     try:
         command.upgrade(Config("alembic.ini"), "head")
     finally:
-        os.environ["DATABASE_URL"] = shared
-        get_settings.cache_clear()
+        _restore_database_url(previous)
     yield url
     asyncio.run(_autocommit(shared, f'DROP DATABASE "{name}" WITH (FORCE)'))
 
@@ -111,15 +111,29 @@ async def scale_engine(scale_url: str) -> AsyncGenerator[AsyncEngine]:
     await engine.dispose()
 
 
+def _restore_database_url(previous: str | None) -> None:
+    if previous is None:
+        os.environ.pop("DATABASE_URL", None)
+    else:
+        os.environ["DATABASE_URL"] = previous
+    get_settings.cache_clear()
+
+
 @pytest.fixture
 def scale_app(configured_app: None, scale_url: str) -> Generator[None]:
     """The app under test reads the module's own database."""
-    shared = os.environ["DATABASE_URL"]
+    previous = os.environ.get("DATABASE_URL")
     os.environ["DATABASE_URL"] = scale_url
     get_settings.cache_clear()
     yield
-    os.environ["DATABASE_URL"] = shared
-    get_settings.cache_clear()
+    _restore_database_url(previous)
+
+
+async def _assert_on_the_seed(client: Any) -> None:
+    """Only the seed names products "Scale …": a failed database swap can't pass silently."""
+    response = await client.get("/api/v1/products", params={"q": "gryphon"})
+    names = [item["name"] for item in response.json()["items"]]
+    assert names and all(name.startswith("Scale ") for name in names), names
 
 
 @pytest_asyncio.fixture(scope="module", loop_scope="session")
@@ -242,12 +256,16 @@ async def test_search_p95_is_under_800_ms_on_10k_products(
         ("/api/v1/products", {"q": "resin figurine", "sort": "-average_rating"}),
         ("/api/v1/products", {"q": "zzqqxx"}),
         ("/api/v1/products", {"q": "s"}),
+        # The slowest shapes the fallback still allows, and a padded letter it refuses.
+        ("/api/v1/products", {"q": "sca", "limit": "100"}),
+        ("/api/v1/products", {"q": "s s", "limit": "100"}),
         ("/api/v1/search/suggestions", {"q": "sca"}),
         ("/api/v1/search/suggestions", {"q": "drag"}),
         ("/api/v1/search/suggestions", {"q": "plnter"}),
     ]
     timings: list[float] = []
     async with asgi_client(make_app) as client:
+        await _assert_on_the_seed(client)
         await client.get("/api/v1/products", params={"q": "warm"})
         for _ in range(6):
             for path, params in searches:
@@ -278,6 +296,7 @@ async def test_browse_p95_is_under_500_ms_on_10k_products(
     ]
     timings: list[float] = []
     async with asgi_client(make_app) as client:
+        await _assert_on_the_seed(client)
         await client.get("/api/v1/products")
         for _ in range(8):
             for params in queries:

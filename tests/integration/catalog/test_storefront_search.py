@@ -156,8 +156,11 @@ async def test_an_excluded_word_never_comes_back(db_session: AsyncSession, q: st
     assert set(found) == expected
 
 
-@pytest.mark.parametrize(("q", "found"), [("s", False), ("sp", False), ("spi", True)])
-async def test_typo_matching_needs_three_characters(
+@pytest.mark.parametrize(
+    ("q", "found"),
+    [("s", False), ("sp", False), ("s s", False), ("(s)", False), ("s!!", False), ("spi", True)],
+)
+async def test_typo_matching_needs_a_word_of_three_letters(
     db_session: AsyncSession, q: str, found: bool
 ) -> None:
     refs = await seed_refs(db_session)
@@ -294,7 +297,7 @@ async def test_injection_strings_are_inert(db_session: AsyncSession, q: str) -> 
     before = (await db_session.execute(select(func.count()).select_from(ProductModel))).scalar()
     with client_for(main_app) as client:
         found = _search(client, q, category_id=str(refs.category.id))
-        suggested = client.get(SUGGESTIONS, params={"q": q.ljust(3, "x")})
+        suggested = client.get(SUGGESTIONS, params={"q": f"{q} xqz"})
     assert found == [], "a quote or operator must never widen the match"
     assert suggested.status_code == 200, suggested.text
     after = (await db_session.execute(select(func.count()).select_from(ProductModel))).scalar()

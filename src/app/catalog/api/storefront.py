@@ -30,6 +30,7 @@ from app.catalog.domain.storefront import (
     StorefrontFilter,
     StorefrontSort,
     fuzzy_eligible,
+    has_trigram_word,
     resolve_sort,
     search_mode_for,
     search_term,
@@ -79,6 +80,8 @@ def _validated[T](build: Callable[..., T], *args: Any, **values: Any) -> T:
 
 
 async def _eligible(query: StorefrontProductQuery, term: str) -> bool:
+    if not has_trigram_word(term):  # Free to check, so most short searches skip the round trip.
+        return False
     return fuzzy_eligible(term, excludes_words=await query.excludes_words(term))
 
 
