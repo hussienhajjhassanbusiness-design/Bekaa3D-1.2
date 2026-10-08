@@ -1,19 +1,24 @@
 """NFR-01/02/07 on 10,000 products: browse and search plans use the SRS 21.3 indexes;
-browse p95 < 500 ms, search p95 < 800 ms. The seed is this module's own and is removed."""
+browse p95 < 500 ms, search p95 < 800 ms. The module seeds a database of its own."""
 
+import asyncio
 import json
+import os
 import statistics
 import time
 import uuid
-from collections.abc import AsyncGenerator, Callable
+from collections.abc import AsyncGenerator, Callable, Generator
 from dataclasses import dataclass
 from typing import Any
 
 import pytest
 import pytest_asyncio
+from alembic import command
+from alembic.config import Config
 from fastapi import FastAPI
-from sqlalchemy import delete, insert, text
-from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy import insert, make_url, text
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from testcontainers.postgres import PostgresContainer
 
 from app.catalog.domain.enums import ProductType
 from app.catalog.domain.storefront import SearchMode, StorefrontFilter, StorefrontSort
@@ -21,13 +26,13 @@ from app.catalog.infrastructure.models import (
     CategoryModel,
     ColourModel,
     MaterialModel,
-    ProductModel,
 )
 from app.catalog.infrastructure.storefront_query import (
     page_statement,
     suggestions_statement,
     trigram_threshold_statement,
 )
+from app.core.config import get_settings
 from tests.integration.deep_support import asgi_client
 
 pytestmark = pytest.mark.integration
@@ -73,11 +78,55 @@ class Seed:
     colours: list[uuid.UUID]
 
 
+async def _autocommit(url: str, statement: str) -> None:
+    engine = create_async_engine(url, isolation_level="AUTOCOMMIT")
+    async with engine.connect() as conn:
+        await conn.execute(text(statement))
+    await engine.dispose()
+
+
+@pytest.fixture(scope="module")
+def scale_url(postgres_container: PostgresContainer, db_engine: AsyncEngine) -> Generator[str]:
+    """A database of its own: rows other tests leave behind (retired categories) would
+    otherwise steer the planner, so the plan assertions depended on test order."""
+    shared = postgres_container.get_connection_url()
+    name = f"scale_{uuid.uuid4().hex[:10]}"
+    url = make_url(shared).set(database=name).render_as_string(hide_password=False)
+    asyncio.run(_autocommit(shared, f'CREATE DATABASE "{name}"'))
+    os.environ["DATABASE_URL"] = url
+    get_settings.cache_clear()
+    try:
+        command.upgrade(Config("alembic.ini"), "head")
+    finally:
+        os.environ["DATABASE_URL"] = shared
+        get_settings.cache_clear()
+    yield url
+    asyncio.run(_autocommit(shared, f'DROP DATABASE "{name}" WITH (FORCE)'))
+
+
 @pytest_asyncio.fixture(scope="module", loop_scope="session")
-async def seed(db_engine: AsyncEngine) -> AsyncGenerator[Seed]:
+async def scale_engine(scale_url: str) -> AsyncGenerator[AsyncEngine]:
+    engine = create_async_engine(scale_url)
+    yield engine
+    await engine.dispose()
+
+
+@pytest.fixture
+def scale_app(configured_app: None, scale_url: str) -> Generator[None]:
+    """The app under test reads the module's own database."""
+    shared = os.environ["DATABASE_URL"]
+    os.environ["DATABASE_URL"] = scale_url
+    get_settings.cache_clear()
+    yield
+    os.environ["DATABASE_URL"] = shared
+    get_settings.cache_clear()
+
+
+@pytest_asyncio.fixture(scope="module", loop_scope="session")
+async def seed(scale_engine: AsyncEngine) -> AsyncGenerator[Seed]:
     token = uuid.uuid4().hex[:10]
     s = Seed(*([uuid.uuid4() for _ in range(n)] for n in (5, 3, 3)))
-    async with db_engine.begin() as conn:
+    async with scale_engine.begin() as conn:
         for i, cid in enumerate(s.categories):
             await conn.execute(
                 insert(CategoryModel).values(
@@ -101,20 +150,11 @@ async def seed(db_engine: AsyncEngine) -> AsyncGenerator[Seed]:
                 "count": PRODUCT_COUNT,
             },
         )
-    async with db_engine.connect() as conn:
+    async with scale_engine.connect() as conn:
         await conn.execution_options(isolation_level="AUTOCOMMIT")
         # VACUUM, as autovacuum would: it flushes the GIN pending list the bulk insert filled.
         await conn.execute(text("VACUUM ANALYZE products, categories, materials, colours"))
     yield s
-    async with db_engine.begin() as conn:
-        await conn.execute(delete(ProductModel).where(ProductModel.category_id.in_(s.categories)))
-        refs: list[tuple[type[Any], list[uuid.UUID]]] = [
-            (CategoryModel, s.categories),
-            (MaterialModel, s.materials),
-            (ColourModel, s.colours),
-        ]
-        for model, ids in refs:
-            await conn.execute(delete(model).where(model.id.in_(ids)))
 
 
 def _index_names(node: dict[str, Any]) -> set[str]:
@@ -155,10 +195,10 @@ SHAPES: dict[str, tuple[StorefrontSort, Callable[[Seed], StorefrontFilter], str]
 
 @pytest.mark.parametrize("shape", SHAPES)
 async def test_browse_plans_use_the_partial_indexes(
-    db_engine: AsyncEngine, seed: Seed, shape: str
+    scale_engine: AsyncEngine, seed: Seed, shape: str
 ) -> None:
     sort, filters, index = SHAPES[shape]
-    plan = await _plan(db_engine, page_statement(limit=21, sort=sort, filters=filters(seed)))
+    plan = await _plan(scale_engine, page_statement(limit=21, sort=sort, filters=filters(seed)))
     assert index in _index_names(plan), json.dumps(plan, indent=1)
 
 
@@ -182,14 +222,14 @@ SEARCH_SHAPES: dict[str, tuple[Any, str]] = {
 
 @pytest.mark.parametrize("shape", SEARCH_SHAPES)
 async def test_search_plans_use_the_gin_indexes(
-    db_engine: AsyncEngine, seed: Seed, shape: str
+    scale_engine: AsyncEngine, seed: Seed, shape: str
 ) -> None:
     stmt, index = SEARCH_SHAPES[shape]
-    plan = await _plan(db_engine, stmt)
+    plan = await _plan(scale_engine, stmt)
     assert index in _index_names(plan), json.dumps(plan, indent=1)
 
 
-@pytest.mark.usefixtures("configured_app")
+@pytest.mark.usefixtures("scale_app")
 async def test_search_p95_is_under_800_ms_on_10k_products(
     seed: Seed, make_app: Callable[[], FastAPI]
 ) -> None:
@@ -202,7 +242,7 @@ async def test_search_p95_is_under_800_ms_on_10k_products(
         ("/api/v1/products", {"q": "resin figurine", "sort": "-average_rating"}),
         ("/api/v1/products", {"q": "zzqqxx"}),
         ("/api/v1/products", {"q": "s"}),
-        ("/api/v1/search/suggestions", {"q": "sc"}),
+        ("/api/v1/search/suggestions", {"q": "sca"}),
         ("/api/v1/search/suggestions", {"q": "drag"}),
         ("/api/v1/search/suggestions", {"q": "plnter"}),
     ]
@@ -224,7 +264,7 @@ async def test_search_p95_is_under_800_ms_on_10k_products(
     assert p95 < SEARCH_P95_BUDGET_SECONDS, f"p95 {p95 * 1000:.0f} ms over {len(timings)}"
 
 
-@pytest.mark.usefixtures("configured_app")
+@pytest.mark.usefixtures("scale_app")
 async def test_browse_p95_is_under_500_ms_on_10k_products(
     seed: Seed, make_app: Callable[[], FastAPI]
 ) -> None:

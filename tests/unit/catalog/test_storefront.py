@@ -9,10 +9,13 @@ from app.catalog.domain.exceptions import ProductValidationError
 from app.catalog.domain.storefront import (
     MAX_SEARCH_LENGTH,
     MIN_FULL_TEXT_HITS,
+    MIN_FUZZY_LENGTH,
+    MIN_SUGGESTION_LENGTH,
     SearchMode,
     StorefrontFilter,
     StorefrontSort,
     capabilities,
+    fuzzy_eligible,
     resolve_sort,
     search_mode_for,
     search_term,
@@ -94,7 +97,29 @@ def test_capabilities_follow_type_mode_and_availability(
 )
 def test_trigram_joins_in_only_below_five_full_text_hits(hits: int, mode: SearchMode) -> None:
     assert MIN_FULL_TEXT_HITS == 5
-    assert search_mode_for(hits) is mode
+    assert search_mode_for(hits, eligible=True) is mode
+
+
+@pytest.mark.parametrize("hits", [0, MIN_FULL_TEXT_HITS - 1, MIN_FULL_TEXT_HITS])
+def test_an_ineligible_term_never_falls_back(hits: int) -> None:
+    assert search_mode_for(hits, eligible=False) is SearchMode.FULL_TEXT
+
+
+@pytest.mark.parametrize(
+    ("term", "excludes", "eligible"),
+    [
+        ("s", False, False),
+        ("sp", False, False),
+        ("spi", False, True),
+        ("lamp", False, True),
+        ("lamp -moon", True, False),
+    ],
+)
+def test_typo_matching_needs_three_characters_and_no_excluded_word(
+    term: str, excludes: bool, eligible: bool
+) -> None:
+    assert MIN_FUZZY_LENGTH == MIN_SUGGESTION_LENGTH == 3
+    assert fuzzy_eligible(term, excludes_words=excludes) is eligible
 
 
 @pytest.mark.parametrize(

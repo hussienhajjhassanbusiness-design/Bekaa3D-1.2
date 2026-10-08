@@ -20,9 +20,10 @@ MAX_RATING = Decimal(5)
 RATING_STEP = Decimal("0.01")
 CursorKey = int | Decimal | datetime | float
 
-# The admin list's bound (VS-013). Suggestions need two characters to be useful.
+# The admin list's bound (VS-013). Trigrams need three characters to narrow anything.
 MAX_SEARCH_LENGTH = 200
-MIN_SUGGESTION_LENGTH = 2
+MIN_FUZZY_LENGTH = 3
+MIN_SUGGESTION_LENGTH = MIN_FUZZY_LENGTH
 MAX_SUGGESTIONS = 10
 # SRS 6.3: below this many full-text hits, trigram matches on the name join in.
 MIN_FULL_TEXT_HITS = 5
@@ -33,8 +34,14 @@ class SearchMode(StrEnum):
     FUZZY = "fuzzy"
 
 
-def search_mode_for(full_text_hits: int) -> SearchMode:
-    return SearchMode.FULL_TEXT if full_text_hits >= MIN_FULL_TEXT_HITS else SearchMode.FUZZY
+def fuzzy_eligible(term: str, *, excludes_words: bool) -> bool:
+    """ADR-023: shorter terms match every name, and trigrams ignore `-word`."""
+    return len(term) >= MIN_FUZZY_LENGTH and not excludes_words
+
+
+def search_mode_for(full_text_hits: int, *, eligible: bool) -> SearchMode:
+    fuzzy = eligible and full_text_hits < MIN_FULL_TEXT_HITS
+    return SearchMode.FUZZY if fuzzy else SearchMode.FULL_TEXT
 
 
 def search_term(raw: str | None) -> str | None:

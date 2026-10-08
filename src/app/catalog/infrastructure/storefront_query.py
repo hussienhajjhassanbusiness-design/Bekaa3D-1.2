@@ -1,3 +1,4 @@
+import re
 from typing import Any
 from uuid import UUID
 
@@ -51,6 +52,8 @@ SORT_COLUMNS: dict[StorefrontSort, Any] = {
 # Measured on PG16: 0.5 admits one deleted, substituted or inserted letter (ADR-023).
 WORD_SIMILARITY_THRESHOLD = 0.5
 _ENGLISH: ColumnElement[Any] = literal_column("'english'::regconfig")
+# A quoted lexeme in tsquery text, with '' as an escaped quote.
+_LEXEME = re.compile(r"'(?:[^']|'')*'")
 
 # SRS 6.5. Bare `is_visible`, not `IS TRUE`, so the planner matches the partial indexes.
 _VISIBLE: tuple[ColumnElement[bool], ...] = (
@@ -76,9 +79,12 @@ def _term(term: str) -> ColumnElement[str]:
     return literal(term, Text)
 
 
+def _tsquery(term: str) -> ColumnElement[Any]:
+    return func.websearch_to_tsquery(_ENGLISH, _term(term))
+
+
 def _full_text(term: str) -> ColumnElement[bool]:
-    query = func.websearch_to_tsquery(_ENGLISH, _term(term))
-    return ProductModel.search_vector.op("@@")(query)
+    return ProductModel.search_vector.op("@@")(_tsquery(term))
 
 
 def _fuzzy(term: str) -> ColumnElement[bool]:
@@ -89,9 +95,7 @@ def _fuzzy(term: str) -> ColumnElement[bool]:
 def relevance(term: str) -> ColumnElement[float]:
     """Full-text hits (2 + ts_rank, which may be 0) rank above trigram-only ones (at most 1);
     name (A) outweighs description (B)."""
-    rank = func.ts_rank(
-        ProductModel.search_vector, func.websearch_to_tsquery(_ENGLISH, _term(term))
-    )
+    rank = func.ts_rank(ProductModel.search_vector, _tsquery(term))
     score = case(
         (_full_text(term), 2 + rank), else_=func.word_similarity(_term(term), ProductModel.name)
     )
@@ -178,6 +182,15 @@ def full_text_hits_statement(filters: StorefrontFilter) -> Select[int]:
     return select(func.count()).select_from(hits.limit(MIN_FULL_TEXT_HITS).subquery())
 
 
+def excludes_words_statement(term: str) -> Select[str]:
+    return select(cast(_tsquery(term), Text))
+
+
+def tsquery_negates(tsquery_text: str) -> bool:
+    """PostgreSQL's own parse decides what `-word` means (`lamp - moon` negates too)."""
+    return "!" in _LEXEME.sub("", tsquery_text)
+
+
 def suggestions_statement(term: str, limit: int) -> Select[UUID, str, str, ProductType]:
     stmt = (
         select(ProductModel.id, ProductModel.name, ProductModel.slug, ProductModel.type)
@@ -202,6 +215,11 @@ class StorefrontProductQuery:
 
     async def full_text_hits(self, filters: StorefrontFilter) -> int:
         return int((await self._session.execute(full_text_hits_statement(filters))).scalar_one())
+
+    async def excludes_words(self, term: str) -> bool:
+        return tsquery_negates(
+            (await self._session.execute(excludes_words_statement(term))).scalar_one()
+        )
 
     async def list_page(
         self,

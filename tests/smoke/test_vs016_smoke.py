@@ -25,6 +25,7 @@ SMOKE_ELSEWHERE: dict[str, list[str]] = {
         f"{_SEARCH}::test_search_never_returns_invisible_products",
     ],
     "SQL-injection strings are harmless": [f"{_SEARCH}::test_injection_strings_are_inert"],
+    "an excluded word never comes back": [f"{_SEARCH}::test_an_excluded_word_never_comes_back"],
     "search combines with facets": [f"{_SEARCH}::test_search_combines_with_facets"],
     "suggestions are capped at ten": [f"{_SUGGEST}::test_suggestions_are_capped_at_ten"],
     "search p95 is under 800 ms on 10,000 products": [
@@ -48,3 +49,10 @@ def test_every_listed_vs016_smoke_test_still_exists() -> None:
         if name not in defined:
             missing.append(node_id)
     assert not missing, f"listed smoke tests no longer exist: {missing}"
+
+
+def test_the_vs016_smoke_list_is_wired_into_the_marker() -> None:
+    from tests.conftest import _SMOKE_NODE_IDS
+
+    listed = {node_id for ids in SMOKE_ELSEWHERE.values() for node_id in ids}
+    assert listed <= _SMOKE_NODE_IDS, f"not marked smoke: {sorted(listed - _SMOKE_NODE_IDS)}"

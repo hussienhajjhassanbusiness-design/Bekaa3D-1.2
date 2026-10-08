@@ -1,6 +1,7 @@
 """`GET /api/v1/search/suggestions` (VS-016): typo-tolerant name autocomplete, at most
 ten, visible products only, a fixed payload and 422 on bad input."""
 
+import uuid
 from typing import Any
 
 import pytest
@@ -59,7 +60,10 @@ async def test_a_suggestion_carries_exactly_its_link_fields(db_session: AsyncSes
 async def test_the_closest_name_is_suggested_first(db_session: AsyncSession) -> None:
     word = made_up_word()
     refs = await seed_refs(db_session)
-    far = await seed_product(db_session, refs, name=f"{word[:-1]}x stand")
+    # `far` sorts first by name (a digit precedes every letter in any collation) and by
+    # id, so only the similarity order can put `near` ahead of it.
+    top_id = uuid.UUID(f"ffffffff-ffff-4fff-bfff-{uuid.uuid4().hex[:12]}")
+    far = await seed_product(db_session, refs, name=f"{word[:-1]}0 stand", id=top_id)
     near = await seed_product(db_session, refs, name=f"{word} stand")
     with client_for(main_app) as client:
         assert [s["id"] for s in _suggest(client, word)] == [str(near.id), str(far.id)]
@@ -81,12 +85,22 @@ async def test_suggestions_are_capped_at_ten(db_session: AsyncSession) -> None:
         {},
         {"q": ""},
         {"q": " a "},
+        {"q": "ab"},
         {"q": "x" * (MAX_SEARCH_LENGTH + 1)},
         {"q": "lamp", "limit": 0},
         {"q": "lamp", "limit": MAX_SUGGESTIONS + 1},
         {"q": "lamp\x07"},
     ],
-    ids=["missing", "empty", "one-letter", "too-long", "limit-0", "limit-11", "control"],
+    ids=[
+        "missing",
+        "empty",
+        "one-letter",
+        "two-letter",
+        "too-long",
+        "limit-0",
+        "limit-11",
+        "control",
+    ],
 )
 def test_bad_suggestion_input_is_a_validation_error(params: dict[str, Any]) -> None:
     with client_for(main_app) as client:
