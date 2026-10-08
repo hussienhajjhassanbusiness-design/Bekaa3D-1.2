@@ -30,6 +30,9 @@ export function CartLineItem({ line, onQuantityChange, onRemove, unavailableNoti
   const adjustable = canAdjustQuantity(line);
   const priceChanged = hasPriceChanged(line);
   const atMax = line.maxQuantity !== undefined && line.quantity >= line.maxQuantity;
+  // Reaching 0 via the stepper is never valid — Remove is the
+  // explicit action for dropping a line entirely.
+  const atMin = line.quantity <= 1;
 
   return (
     <div className="flex flex-col gap-2 rounded-md border border-border-default p-4">
@@ -57,6 +60,7 @@ export function CartLineItem({ line, onQuantityChange, onRemove, unavailableNoti
           <Button
             type="button"
             onClick={() => onQuantityChange(line.id, line.quantity - 1)}
+            disabled={atMin}
             aria-label={`Decrease quantity of ${line.productDisplayName}`}
           >
             −

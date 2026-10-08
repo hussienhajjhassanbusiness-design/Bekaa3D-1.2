@@ -64,6 +64,18 @@ describe("CartLineItem (physical)", () => {
     render(<CartLineItem line={makePhysicalLine({ maxQuantity: undefined })} onQuantityChange={vi.fn()} onRemove={vi.fn()} />);
     expect(screen.getByRole("button", { name: /increase quantity/i })).toBeEnabled();
   });
+
+  it("disables the decrement button at quantity 1 — reaching 0 via the stepper is never valid; Remove is the explicit action for that", () => {
+    render(<CartLineItem line={makePhysicalLine({ quantity: 1 })} onQuantityChange={vi.fn()} onRemove={vi.fn()} />);
+    expect(screen.getByRole("button", { name: /decrease quantity/i })).toBeDisabled();
+  });
+
+  it("does not call onQuantityChange with 0 even if the disabled decrement button were somehow activated", () => {
+    const onQuantityChange = vi.fn();
+    render(<CartLineItem line={makePhysicalLine({ quantity: 1 })} onQuantityChange={onQuantityChange} onRemove={vi.fn()} />);
+    screen.getByRole("button", { name: /decrease quantity/i }).click();
+    expect(onQuantityChange).not.toHaveBeenCalled();
+  });
 });
 
 describe("CartLineItem (STL)", () => {
