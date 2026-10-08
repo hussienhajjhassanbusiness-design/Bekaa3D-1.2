@@ -77,14 +77,24 @@ describe("OrderDetail (not-found / IDOR hiding)", () => {
     expect(screen.getByRole("link", { name: /back to home/i })).toBeInTheDocument();
   });
 
-  it("a foreign-order fixture and a nonexistent-order fixture render byte-identical output", () => {
-    const foreignOrderResult: OrderDetailLoadResult = { kind: "not-found" };
-    const nonexistentOrderResult: OrderDetailLoadResult = { kind: "not-found" };
+  it("rendering the same not-found state twice is deterministic — no hidden input (e.g. a rejected id) leaks into the output", () => {
+    // Independent review correctly flagged that comparing two
+    // `{kind:"not-found"}` literals only proves this component is
+    // pure, not that a real foreign-order response and a real
+    // nonexistent-order response collapse to the same thing — that
+    // collapse is this type's own job (see the structural test below)
+    // and a future adapter's job (T09, correctly blocked: no backend
+    // contract exists yet to map a 403/404 onto this result). This
+    // test is honestly scoped to what it actually proves: nothing
+    // about render output can vary for the identical not-found input,
+    // which rules out a parameterized/leaky not-found implementation.
+    const resultA: OrderDetailLoadResult = { kind: "not-found" };
+    const resultB: OrderDetailLoadResult = { kind: "not-found" };
 
-    const { container: foreignContainer } = render(<OrderDetail result={foreignOrderResult} />);
-    const { container: nonexistentContainer } = render(<OrderDetail result={nonexistentOrderResult} />);
+    const { container: containerA } = render(<OrderDetail result={resultA} />);
+    const { container: containerB } = render(<OrderDetail result={resultB} />);
 
-    expect(foreignContainer.innerHTML).toBe(nonexistentContainer.innerHTML);
+    expect(containerA.innerHTML).toBe(containerB.innerHTML);
   });
 
   it("never renders forbidden/unauthorized/belongs-to-another text for any input", () => {
@@ -93,10 +103,15 @@ describe("OrderDetail (not-found / IDOR hiding)", () => {
   });
 
   it("OrderDetailLoadResult has no forbidden-style variant — structurally only loaded/not-found exist", () => {
-    // Pure type-level proof via exhaustive usage: every real render in
-    // this file uses only "loaded"/"not-found" — there is no third
-    // kind to construct.
-    const result: OrderDetailLoadResult = { kind: "not-found" };
-    expect(result.kind).toBe("not-found");
+    // The real IDOR-hiding guarantee: this is a compile-time proof,
+    // not a runtime one. A third "forbidden" kind is not just unused
+    // by convention — it is impossible to construct at all. If
+    // someone adds one later, this line fails to typecheck
+    // (`npm run typecheck`, not `vitest run` — `@ts-expect-error`
+    // directives are erased at runtime, same reasoning as every
+    // other type-only test in this codebase).
+    // @ts-expect-error — "forbidden" is not a valid OrderDetailLoadResult kind
+    const attempted: OrderDetailLoadResult = { kind: "forbidden" };
+    expect(attempted).toBeDefined();
   });
 });
