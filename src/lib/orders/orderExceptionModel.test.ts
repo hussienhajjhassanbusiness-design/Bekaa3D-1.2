@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { resolveCustomerCancelAction } from "./orderExceptionModel";
 import type { CancellableOrderLineModel } from "./orderExceptionModel";
+import type { OrderLineItemProps } from "@/components/account/OrderLineItem";
+import type { OrderDetailProps } from "@/components/account/OrderDetail";
 
 // FVS-031-IMPLEMENTATION-PLAN.md T01 — CancellableOrderLineModel
 // extends FVS-029's OrderLineModel via composition, never a forked
@@ -58,5 +60,19 @@ describe("CancellableOrderLineModel", () => {
       customerCancelAction: null,
     };
     expect(line.customerCancelAction).toBeNull();
+  });
+});
+
+describe("Customer/admin cancellation boundary regression (#SECURITY-SERVER-CANCELLATION-AUTHORITY)", () => {
+  it("FVS-029's OrderLineItemProps structurally cannot carry an admin-cancel or refund-obligation field", () => {
+    // @ts-expect-error — OrderLineItemProps has no adminCancelAction field
+    const attempted: OrderLineItemProps = { line: {} as never, adminCancelAction: { id: "x", label: "x", requiresConfirmation: true } };
+    expect(attempted).toBeDefined();
+  });
+
+  it("FVS-029's OrderDetailProps structurally cannot carry an admin-cancel or refund-obligation field", () => {
+    // @ts-expect-error — OrderDetailProps has no refundObligationMessage field
+    const attempted: OrderDetailProps = { result: { kind: "not-found" }, refundObligationMessage: "leaked" };
+    expect(attempted).toBeDefined();
   });
 });
