@@ -82,7 +82,7 @@ FVS-030) and `#ARCHITECTURE-ORDER-EXCEPTION-ACTIONS` (this slice's extension).
   casing.
 - **T06** — `CancellableOrderLine.tsx` (+test, customer composition, mirrors
   `AdminOrderLine`'s structure: `OrderLineItem` + `CancelOrderLineButton`);
-  `AdminOrderLine.tsx` edit (additive `onAdminCancel`/`isCancellingLineId`
+  `AdminOrderLine.tsx` edit (additive `onAdminCancel`/`isCancellingLine`
   props, owns its own `AdminCancelDialog` instance exactly as it already owns
   nothing extra — mirrors how `TransitionActions` owns its own
   `ConfirmDialog`). CAN IMPLEMENT NOW.
