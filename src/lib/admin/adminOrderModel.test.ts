@@ -49,6 +49,31 @@ describe("AdminOrderLineModel", () => {
     };
     expect(line.availableActions).toHaveLength(0);
   });
+
+  it("accepts an optional adminCancelAction and refundObligationMessage (FVS-031) without requiring them", () => {
+    const line: AdminOrderLineModel = {
+      id: "line-3",
+      productDisplayName: "Garden Gnome",
+      productType: "physical",
+      quantity: 1,
+      unitPriceCents: 1999,
+      lineTotalCents: 1999,
+      currency: "USD",
+      statusLabel: "In production",
+      availableActions: [],
+      adminCancelAction: { id: "admin-cancel", label: "Cancel order line", requiresConfirmation: true },
+      refundObligationMessage: "Cancelling after production may require a refund.",
+    };
+    expect(line.adminCancelAction?.id).toBe("admin-cancel");
+
+    const lineWithoutCancel: AdminOrderLineModel = {
+      ...line,
+      id: "line-4",
+      adminCancelAction: undefined,
+      refundObligationMessage: undefined,
+    };
+    expect(lineWithoutCancel.adminCancelAction).toBeUndefined();
+  });
 });
 
 describe("AdminOrderModel", () => {

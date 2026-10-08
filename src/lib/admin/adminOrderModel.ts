@@ -1,4 +1,5 @@
 import type { OrderLineModel, OrderSummaryModel } from "@/lib/orders/orderModel";
+import type { OrderActionAffordance } from "@/lib/orders/orderActionModel";
 
 // #SECURITY-SERVER-FULFILLMENT-STATE-MACHINE
 //
@@ -6,11 +7,12 @@ import type { OrderLineModel, OrderSummaryModel } from "@/lib/orders/orderModel"
 // from status locally. The frontend renders exactly the actions it
 // is given (FVS-030-IMPLEMENTATION-PLAN.md §0/T01); `id`/`label` are
 // not claimed backend field names.
-export interface TransitionAffordance {
-  id: string;
-  label: string;
-  requiresConfirmation: boolean;
-}
+//
+// Re-exported from the neutral `orderActionModel` module (FVS-031
+// §1) so customer-side code can consume the identical shape without
+// importing from `admin/` — this alias keeps every existing import
+// of `TransitionAffordance` from this module working unchanged.
+export type TransitionAffordance = OrderActionAffordance;
 
 // #ARCHITECTURE-ADMIN-ORDER-PROJECTION
 //
@@ -18,8 +20,19 @@ export interface TransitionAffordance {
 // forked copy. `availableActions` is the one admin-only layered
 // addition; an empty array is valid (a digital/STL line may
 // legitimately have no legal transitions).
+//
+// `adminCancelAction`/`refundObligationMessage` (FVS-031) are
+// additive and optional: admin cancellation is its own endpoint per
+// VS-025, distinct from the transition endpoint `availableActions`
+// models, so it is never folded into that array
+// (#SECURITY-SERVER-CANCELLATION-AUTHORITY). Neither field claims a
+// real backend name or computes a refund amount
+// (#ARCHITECTURE-REFUND-OBLIGATION-SERVER-OWNED) — both are only
+// ever caller-supplied.
 export interface AdminOrderLineModel extends OrderLineModel {
   availableActions: readonly TransitionAffordance[];
+  adminCancelAction?: OrderActionAffordance | null;
+  refundObligationMessage?: string;
 }
 
 // #SECURITY-INTERNAL-NOTE-BOUNDARY
