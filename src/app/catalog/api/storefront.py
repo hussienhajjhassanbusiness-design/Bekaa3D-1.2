@@ -1,6 +1,7 @@
-"""`GET /api/v1/products` and `GET /api/v1/products/{slug}` (VS-015,
-docs/storefront-catalogue.md). Public and rate limited; every read is visibility-filtered."""
+"""`GET /api/v1/products` with search (VS-015, VS-016) and `GET /api/v1/products/{slug}`
+(docs/storefront-catalogue.md). Public and rate limited; every read is visibility-filtered."""
 
+from collections.abc import Callable
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -10,7 +11,7 @@ from fastapi.exceptions import RequestValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_session
-from app.catalog.api.product_cursor import decode_cursor, encode_cursor
+from app.catalog.api.product_cursor import decode_cursor, decode_search_cursor, encode_cursor
 from app.catalog.api.product_schemas import PG_BIGINT_MAX
 from app.catalog.api.reference_data import PUBLIC_RATE_LIMIT, PUBLIC_RATE_WINDOW_SECONDS
 from app.catalog.api.storefront_schemas import ProductDetail, ProductListItem, ProductPage
@@ -18,12 +19,13 @@ from app.catalog.domain.enums import ProductType
 from app.catalog.domain.exceptions import ProductValidationError
 from app.catalog.domain.slug import is_canonical_slug
 from app.catalog.domain.storefront import (
-    DEFAULT_SORT,
     MAX_RATING,
-    CursorKey,
+    SearchMode,
     StorefrontFilter,
-    StorefrontProduct,
     StorefrontSort,
+    resolve_sort,
+    search_mode_for,
+    search_term,
 )
 from app.catalog.infrastructure.product_image_repository import ProductImageRepository
 from app.catalog.infrastructure.storefront_query import StorefrontProductQuery
@@ -49,7 +51,7 @@ _DETAIL_LIMIT = rate_limiter(
 )
 
 _LIST_RESPONSES: dict[int | str, dict[str, Any]] = {
-    422: {"description": "VALIDATION_ERROR: bad filter, sort, limit or cursor."},
+    422: {"description": "VALIDATION_ERROR: bad filter, search term, sort, limit or cursor."},
     429: {"description": "RATE_LIMITED."},
 }
 _DETAIL_RESPONSES: dict[int | str, dict[str, Any]] = {
@@ -58,17 +60,9 @@ _DETAIL_RESPONSES: dict[int | str, dict[str, Any]] = {
 }
 
 
-def _sort_key(sort: StorefrontSort, item: StorefrontProduct) -> CursorKey:
-    if sort == "-created_at":
-        return item.product.created_at
-    if sort == "-average_rating":
-        return item.product.average_rating
-    return item.product.attributes.price_cents
-
-
-def _filter(**values: Any) -> StorefrontFilter:
+def _validated[T](build: Callable[..., T], *args: Any, **values: Any) -> T:
     try:
-        return StorefrontFilter(**values)
+        return build(*args, **values)
     except ProductValidationError as exc:
         errors = [
             {"loc": ("query", field), "msg": reason, "type": "value_error"}
@@ -93,12 +87,19 @@ async def list_products(
     price_max_cents: int | None = Query(default=None, ge=0, le=PG_BIGINT_MAX),
     min_rating: Decimal | None = Query(default=None, ge=0, le=float(MAX_RATING)),
     featured: bool | None = Query(default=None),
-    sort: StorefrontSort = Query(default=DEFAULT_SORT),
+    q: str | None = Query(
+        default=None, description="Search names and descriptions; blank means no search."
+    ),
+    sort: StorefrontSort | None = Query(
+        default=None, description="`-created_at` by default; `-relevance` by default with `q`."
+    ),
     cursor: str | None = Query(default=None, description="Opaque cursor from a previous page."),
     limit: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
     session: AsyncSession = Depends(get_session),
 ) -> ProductPage:
-    filters = _filter(
+    term = search_term(q)
+    filters = _validated(
+        StorefrontFilter,
         product_type=type,
         category_id=category_id,
         material_id=material_id,
@@ -107,17 +108,35 @@ async def list_products(
         price_max_cents=price_max_cents,
         min_rating=min_rating,
         featured=featured,
+        q=term,
     )
-    rows = await StorefrontProductQuery(session).list_page(
-        limit=limit + 1, sort=sort, filters=filters, after=decode_cursor(cursor, sort)
+    order = _validated(resolve_sort, sort, term)
+    query = StorefrontProductQuery(session)
+    mode: SearchMode | None = None
+    after = None
+    if term is None:
+        after = decode_cursor(cursor, order)
+    elif searched := decode_search_cursor(cursor, order):
+        after, mode = searched
+    else:
+        mode = search_mode_for(await query.full_text_hits(filters))
+    rows = await query.list_page(
+        limit=limit + 1,
+        sort=order,
+        filters=filters,
+        mode=mode or SearchMode.FULL_TEXT,
+        after=after,
     )
-    page = rows[:limit]
+    page = [item for item, _ in rows[:limit]]
     images = await ProductImageRepository(session).live_for_products(r.product.id for r in page)
     media = get_settings().media_public_url
-    last = page[-1] if len(rows) > limit else None
+    next_cursor = None
+    if len(rows) > limit:
+        last, key = rows[limit - 1]
+        next_cursor = encode_cursor(order, key, last.product.id, mode)
     return ProductPage(
         items=[ProductListItem.from_storefront(r, images[r.product.id], media) for r in page],
-        next_cursor=encode_cursor(sort, _sort_key(sort, last), last.product.id) if last else None,
+        next_cursor=next_cursor,
     )
 
 

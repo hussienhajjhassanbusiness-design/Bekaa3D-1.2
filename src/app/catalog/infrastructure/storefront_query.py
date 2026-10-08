@@ -1,15 +1,32 @@
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, Row, Select, literal, select, tuple_
+from sqlalchemy import (
+    ColumnElement,
+    Double,
+    Select,
+    Text,
+    case,
+    cast,
+    func,
+    literal,
+    literal_column,
+    or_,
+    select,
+    tuple_,
+)
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
+from app.catalog.domain.enums import ProductType
 from app.catalog.domain.storefront import (
+    MIN_FULL_TEXT_HITS,
     CategoryRef,
     CursorKey,
     FacetRef,
+    SearchMode,
+    SearchSuggestion,
     StorefrontFilter,
     StorefrontProduct,
     StorefrontSort,
@@ -23,12 +40,17 @@ from app.catalog.infrastructure.models import (
 from app.catalog.infrastructure.product_repository import _to_domain
 
 _Page = Select[ProductModel, CategoryModel, MaterialModel, ColourModel]
+_KeyedPage = Select[ProductModel, CategoryModel, MaterialModel, ColourModel, Any]
 SORT_COLUMNS: dict[StorefrontSort, Any] = {
     "price": ProductModel.price_cents,
     "-price": ProductModel.price_cents,
     "-average_rating": ProductModel.average_rating,
     "-created_at": ProductModel.created_at,
 }
+
+# Measured on PG16: 0.5 admits one deleted, substituted or inserted letter (ADR-023).
+WORD_SIMILARITY_THRESHOLD = 0.5
+_ENGLISH: ColumnElement[Any] = literal_column("'english'::regconfig")
 
 # SRS 6.5. Bare `is_visible`, not `IS TRUE`, so the planner matches the partial indexes.
 _VISIBLE: tuple[ColumnElement[bool], ...] = (
@@ -50,7 +72,36 @@ def _base() -> _Page:
     )
 
 
-def _filtered(stmt: _Page, filters: StorefrontFilter) -> _Page:
+def _term(term: str) -> ColumnElement[str]:
+    return literal(term, Text)
+
+
+def _full_text(term: str) -> ColumnElement[bool]:
+    query = func.websearch_to_tsquery(_ENGLISH, _term(term))
+    return ProductModel.search_vector.op("@@")(query)
+
+
+def _fuzzy(term: str) -> ColumnElement[bool]:
+    """`word_similarity(term, name) >= the session threshold`, served by the trigram index."""
+    return _term(term).op("<%")(ProductModel.name)
+
+
+def relevance(term: str) -> ColumnElement[float]:
+    """Full-text hits rank above trigram-only ones; name (A) outweighs description (B)."""
+    rank = func.ts_rank(
+        ProductModel.search_vector, func.websearch_to_tsquery(_ENGLISH, _term(term))
+    )
+    score = case(
+        (_full_text(term), 1 + rank), else_=func.word_similarity(_term(term), ProductModel.name)
+    )
+    return cast(score, Double)
+
+
+def _matches(term: str, mode: SearchMode) -> ColumnElement[bool]:
+    return _full_text(term) if mode is SearchMode.FULL_TEXT else or_(_full_text(term), _fuzzy(term))
+
+
+def _conditions(filters: StorefrontFilter, mode: SearchMode) -> list[ColumnElement[bool]]:
     exact = {
         ProductModel.type: filters.product_type,
         ProductModel.category_id: filters.category_id,
@@ -58,20 +109,20 @@ def _filtered(stmt: _Page, filters: StorefrontFilter) -> _Page:
         ProductModel.colour_id: filters.colour_id,
         ProductModel.is_featured: filters.featured,
     }
-    for column, value in exact.items():
-        if value is not None:
-            stmt = stmt.where(column == value)
+    where = [column == value for column, value in exact.items() if value is not None]
     if filters.price_min_cents is not None:
-        stmt = stmt.where(ProductModel.price_cents >= filters.price_min_cents)
+        where.append(ProductModel.price_cents >= filters.price_min_cents)
     if filters.price_max_cents is not None:
-        stmt = stmt.where(ProductModel.price_cents <= filters.price_max_cents)
+        where.append(ProductModel.price_cents <= filters.price_max_cents)
     if filters.min_rating is not None:
-        stmt = stmt.where(ProductModel.average_rating >= filters.min_rating)
-    return stmt
+        where.append(ProductModel.average_rating >= filters.min_rating)
+    if filters.q is not None:
+        where.append(_matches(filters.q, mode))
+    return where
 
 
 def _to_storefront(
-    row: Row[ProductModel, CategoryModel, MaterialModel, ColourModel],
+    row: tuple[ProductModel, CategoryModel, MaterialModel, ColourModel],
 ) -> StorefrontProduct:
     product, category, material, colour = row
     return StorefrontProduct(
@@ -82,16 +133,26 @@ def _to_storefront(
     )
 
 
+def _sort_expression(sort: StorefrontSort, q: str | None) -> Any:
+    if sort == "-relevance":
+        if q is None:
+            raise ValueError("-relevance needs a search term")
+        return relevance(q)
+    return SORT_COLUMNS[sort]
+
+
 def page_statement(
     *,
     limit: int,
     sort: StorefrontSort,
     filters: StorefrontFilter,
+    mode: SearchMode = SearchMode.FULL_TEXT,
     after: tuple[CursorKey, UUID] | None = None,
-) -> _Page:
-    """Keyset page tie-broken by `id`, so inserts never duplicate or skip a row."""
-    stmt = _filtered(_base(), filters)
-    column = SORT_COLUMNS[sort]
+) -> _KeyedPage:
+    """Keyset page tie-broken by `id`, so inserts never duplicate or skip a row. Each row
+    carries its sort key last. `mode` only matters when `filters.q` is set."""
+    column = _sort_expression(sort, filters.q)
+    stmt = _base().where(*_conditions(filters, mode)).add_columns(column)
     descending = sort.startswith("-")
     if after is not None:
         key, after_id = after
@@ -106,11 +167,40 @@ def page_statement(
     return stmt.order_by(*order).limit(limit)
 
 
+def full_text_hits_statement(filters: StorefrontFilter) -> Select[int]:
+    """How many visible products match in full text, counted only up to the threshold."""
+    hits = (
+        select(ProductModel.id)
+        .join(CategoryModel, CategoryModel.id == ProductModel.category_id)
+        .where(*_VISIBLE, *_conditions(filters, SearchMode.FULL_TEXT))
+    )
+    return select(func.count()).select_from(hits.limit(MIN_FULL_TEXT_HITS).subquery())
+
+
+def suggestions_statement(term: str, limit: int) -> Select[UUID, str, str, ProductType]:
+    stmt = (
+        select(ProductModel.id, ProductModel.name, ProductModel.slug, ProductModel.type)
+        .join(CategoryModel, CategoryModel.id == ProductModel.category_id)
+        .where(*_VISIBLE, _fuzzy(term))
+    )
+    score = func.word_similarity(_term(term), ProductModel.name)
+    return stmt.order_by(score.desc(), ProductModel.name, ProductModel.id).limit(limit)
+
+
+def trigram_threshold_statement() -> Select[str]:
+    """Transaction-local, so it never leaks to another request on a pooled connection."""
+    setting = "pg_trgm.word_similarity_threshold"
+    return select(func.set_config(setting, str(WORD_SIMILARITY_THRESHOLD), True))
+
+
 class StorefrontProductQuery:
     """Read-only: the storefront never writes, so it takes no locks."""
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    async def full_text_hits(self, filters: StorefrontFilter) -> int:
+        return int((await self._session.execute(full_text_hits_statement(filters))).scalar_one())
 
     async def list_page(
         self,
@@ -118,12 +208,24 @@ class StorefrontProductQuery:
         limit: int,
         sort: StorefrontSort,
         filters: StorefrontFilter,
+        mode: SearchMode = SearchMode.FULL_TEXT,
         after: tuple[CursorKey, UUID] | None = None,
-    ) -> list[StorefrontProduct]:
-        stmt = page_statement(limit=limit, sort=sort, filters=filters, after=after)
-        return [_to_storefront(row) for row in (await self._session.execute(stmt)).all()]
+    ) -> list[tuple[StorefrontProduct, CursorKey]]:
+        if filters.q is not None and mode is SearchMode.FUZZY:
+            await self._session.execute(trigram_threshold_statement())
+        stmt = page_statement(limit=limit, sort=sort, filters=filters, mode=mode, after=after)
+        rows = (await self._session.execute(stmt)).all()
+        return [(_to_storefront((p, c, m, k)), key) for p, c, m, k, key in rows]
+
+    async def suggestions(self, term: str, limit: int) -> list[SearchSuggestion]:
+        await self._session.execute(trigram_threshold_statement())
+        rows = (await self._session.execute(suggestions_statement(term, limit))).all()
+        return [SearchSuggestion(r.id, r.name, r.slug, r.type) for r in rows]
 
     async def get_by_slug(self, slug: str) -> StorefrontProduct | None:
         stmt = _base().where(ProductModel.slug == slug)
         row = (await self._session.execute(stmt)).one_or_none()
-        return _to_storefront(row) if row else None
+        if row is None:
+            return None
+        product, category, material, colour = row
+        return _to_storefront((product, category, material, colour))

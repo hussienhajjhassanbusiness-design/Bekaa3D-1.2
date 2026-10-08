@@ -1,4 +1,4 @@
-"""Storefront filter validation and derived commerce capabilities (VS-015)."""
+"""Storefront filter validation, search rules (VS-016) and commerce capabilities (VS-015)."""
 
 from decimal import Decimal
 
@@ -6,7 +6,18 @@ import pytest
 
 from app.catalog.domain.enums import ProductType, PurchaseMode
 from app.catalog.domain.exceptions import ProductValidationError
-from app.catalog.domain.storefront import StorefrontFilter, capabilities
+from app.catalog.domain.storefront import (
+    MAX_SEARCH_LENGTH,
+    MIN_FULL_TEXT_HITS,
+    SearchMode,
+    StorefrontFilter,
+    StorefrontSort,
+    capabilities,
+    resolve_sort,
+    search_mode_for,
+    search_term,
+    search_term_errors,
+)
 
 PHYSICAL, STL = ProductType.PHYSICAL, ProductType.STL
 
@@ -67,3 +78,72 @@ def test_capabilities_follow_type_mode_and_availability(
         offer,
         whatsapp,
     )
+
+
+# ---------------------------------------------------------------- search (VS-016)
+
+
+@pytest.mark.parametrize(
+    ("hits", "mode"),
+    [
+        (0, SearchMode.FUZZY),
+        (MIN_FULL_TEXT_HITS - 1, SearchMode.FUZZY),
+        (MIN_FULL_TEXT_HITS, SearchMode.FULL_TEXT),
+        (MIN_FULL_TEXT_HITS + 1, SearchMode.FULL_TEXT),
+    ],
+)
+def test_trigram_joins_in_only_below_five_full_text_hits(hits: int, mode: SearchMode) -> None:
+    assert MIN_FULL_TEXT_HITS == 5
+    assert search_mode_for(hits) is mode
+
+
+@pytest.mark.parametrize(
+    ("raw", "term"), [(None, None), ("", None), ("   ", None), ("  lamp ", "lamp")]
+)
+def test_a_blank_search_box_is_no_search(raw: str | None, term: str | None) -> None:
+    assert search_term(raw) == term
+
+
+@pytest.mark.parametrize(
+    ("term", "min_length", "ok"),
+    [
+        ("a", 1, True),
+        ("a", 2, False),
+        ("ab", 2, True),
+        ("x" * MAX_SEARCH_LENGTH, 1, True),
+        ("x" * (MAX_SEARCH_LENGTH + 1), 1, False),
+        ("lamp\x00", 1, False),
+        ("lamp\x7f", 1, False),
+        ("'; DROP TABLE products; --", 1, True),
+    ],
+)
+def test_search_term_bounds(term: str, min_length: int, ok: bool) -> None:
+    assert (search_term_errors(term, min_length=min_length) is None) is ok
+
+
+@pytest.mark.parametrize("q", ["", " lamp", "x" * (MAX_SEARCH_LENGTH + 1), "a\x00b"])
+def test_the_filter_refuses_a_search_term_it_cannot_run(q: str) -> None:
+    with pytest.raises(ProductValidationError) as caught:
+        StorefrontFilter(q=q)
+    assert set(caught.value.errors) == {"q"}
+
+
+@pytest.mark.parametrize(
+    ("sort", "q", "resolved"),
+    [
+        (None, None, "-created_at"),
+        (None, "lamp", "-relevance"),
+        ("price", "lamp", "price"),
+        ("-relevance", "lamp", "-relevance"),
+    ],
+)
+def test_relevance_is_the_default_order_of_a_search(
+    sort: StorefrontSort | None, q: str | None, resolved: str
+) -> None:
+    assert resolve_sort(sort, q) == resolved
+
+
+def test_relevance_without_a_search_is_refused() -> None:
+    with pytest.raises(ProductValidationError) as caught:
+        resolve_sort("-relevance", None)
+    assert set(caught.value.errors) == {"sort"}
