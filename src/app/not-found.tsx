@@ -1,20 +1,13 @@
-import Link from "next/link";
+import { NotFoundContent } from "@/components/feedback/NotFoundContent";
 
 // Next.js App Router's global catch-all 404 — handles every unmatched URL.
-// Not extracted into a separate NotFoundPage component: there is no known
-// reuse case for this content yet (YAGNI). The AppLayout/Header/Footer
-// shell is owned by the root layout (FVS001-T14) — this file owns only its
-// own not-found content.
+// Content extracted into NotFoundContent (FVS-029-IMPLEMENTATION-PLAN.md
+// T06): a second real reuse case now exists — OrderDetail's foreign/
+// nonexistent-order case renders the exact same component, so there is
+// only one visible not-found experience, not two independently-
+// maintained copies. The AppLayout/Header/Footer shell is owned by the
+// root layout (FVS001-T14) — this file owns only its own not-found
+// content.
 export default function NotFound() {
-  return (
-    <>
-      <h1 className="text-h1 font-bold text-text-primary">404 — Page not found</h1>
-      <p className="text-body text-text-secondary">
-        The page you&rsquo;re looking for doesn&rsquo;t exist or may have been moved.
-      </p>
-      <Link href="/" className="text-text-link underline">
-        Back to home
-      </Link>
-    </>
-  );
+  return <NotFoundContent />;
 }
