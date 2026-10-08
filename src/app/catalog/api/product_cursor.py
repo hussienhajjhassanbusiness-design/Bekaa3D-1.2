@@ -54,7 +54,7 @@ def _parse_key(kind: str, key: Any) -> CursorKey:
             raise ValueError
         return rating
     if kind == "relevance":
-        # A double compared with a double: any finite value is safe to send.
+        # A double compared with a double: relevance is never negative or non-finite.
         if type(key) is not float or not math.isfinite(key) or key < 0:
             raise ValueError
         return key

@@ -14,7 +14,7 @@ pg_trgm's default `word_similarity` threshold is 0.6. Measured on PostgreSQL 16 
 ## Decision
 
 1. **A search orders by relevance by default.** With `q`, `sort` defaults to `-relevance`. Without `q`, `-relevance` is a 422. The explicit sorts still apply to a search.
-2. **Relevance** is one double: `1 + ts_rank(search_vector, websearch_to_tsquery('english', q))` for a full-text hit, otherwise `word_similarity(q, name)`. Full-text hits therefore always rank above trigram-only ones, and the stored A/B weights rank a name hit above a description hit. Ties break on `id`, like every other sort.
+2. **Relevance** is one double: `2 + ts_rank(search_vector, websearch_to_tsquery('english', q))` for a full-text hit, otherwise `word_similarity(q, name)` (at most 1). `ts_rank` is 0 for a negation-only query such as `-lamp`, so the offset is 2, not 1: full-text hits therefore always rank strictly above trigram-only ones, and the stored A/B weights rank a name hit above a description hit. Ties break on `id`, like every other sort.
 3. **Fallback.** The first page counts the full-text hits, with the facets applied, stopping at five. Below five, the result set is full-text hits **or** names with `word_similarity >= 0.5`. Trigram matches add to the full-text hits and never replace them.
 4. **The cursor pins the mode** (`full_text` or `fuzzy`) chosen by the first page. A search cursor is refused without `q`, and a browse cursor is refused with `q`.
 5. **Threshold 0.5,** set per transaction with `set_config('pg_trgm.word_similarity_threshold', '0.5', true)` so it never leaks to another request on a pooled connection. The `<%` operator, not the `word_similarity()` function, does the filtering, so the GIN trigram index serves it.
@@ -22,6 +22,7 @@ pg_trgm's default `word_similarity` threshold is 0.6. Measured on PostgreSQL 16 
 
 ## Consequences
 
+- Trigrams ignore `websearch` operators, so in fuzzy mode a word the visitor excluded (`-lamp`) can still come back as a near-miss name match. It always ranks below every real hit. This is accepted for V1.
 - One deleted, substituted or inserted letter is found. A transposition (`dargon`, 0.29) is not: trigrams treat it as two edits. This is accepted for V1.
 - Relevance is recomputed on every page. Because it is deterministic for the same row and query, the keyset stays exact. If an administrator edits a product's name or description mid-walk, its rank changes and it can cross the cursor. This is the same accepted limit as a price change under a price sort (docs/storefront-catalogue.md).
 - A cursor isn't bound to the `q` text. Reusing one with a different `q` only changes where the walk starts, and it can't leak a row the new query wouldn't match.

@@ -87,12 +87,13 @@ def _fuzzy(term: str) -> ColumnElement[bool]:
 
 
 def relevance(term: str) -> ColumnElement[float]:
-    """Full-text hits rank above trigram-only ones; name (A) outweighs description (B)."""
+    """Full-text hits (2 + ts_rank, which may be 0) rank above trigram-only ones (at most 1);
+    name (A) outweighs description (B)."""
     rank = func.ts_rank(
         ProductModel.search_vector, func.websearch_to_tsquery(_ENGLISH, _term(term))
     )
     score = case(
-        (_full_text(term), 1 + rank), else_=func.word_similarity(_term(term), ProductModel.name)
+        (_full_text(term), 2 + rank), else_=func.word_similarity(_term(term), ProductModel.name)
     )
     return cast(score, Double)
 

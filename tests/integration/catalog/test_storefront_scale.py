@@ -201,6 +201,8 @@ async def test_search_p95_is_under_800_ms_on_10k_products(
         ("/api/v1/products", {"q": "gryphn", "material_id": str(seed.materials[0])}),
         ("/api/v1/products", {"q": "resin figurine", "sort": "-average_rating"}),
         ("/api/v1/products", {"q": "zzqqxx"}),
+        ("/api/v1/products", {"q": "s"}),
+        ("/api/v1/search/suggestions", {"q": "sc"}),
         ("/api/v1/search/suggestions", {"q": "drag"}),
         ("/api/v1/search/suggestions", {"q": "plnter"}),
     ]

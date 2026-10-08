@@ -49,6 +49,30 @@ def test_the_public_and_challenge_authenticated_routes_require_no_session() -> N
     assert "security" not in paths["/api/v1/auth/register"]["post"]
 
 
+PUBLIC_READS = [
+    "/api/v1/settings/public",
+    "/api/v1/categories",
+    "/api/v1/materials",
+    "/api/v1/colours",
+    "/api/v1/products",
+    "/api/v1/products/{slug}",
+    "/api/v1/search/suggestions",
+]
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("configured_app")
+@pytest.mark.parametrize("path", PUBLIC_READS)
+def test_public_reads_need_no_session_and_never_answer_401(path: str) -> None:
+    from app.main import app
+
+    with TestClient(app) as client:
+        operation = client.get(SCHEMA_PATH).json()["paths"][path]["get"]
+
+    assert "security" not in operation
+    assert "401" not in operation["responses"]
+
+
 @pytest.mark.integration
 @pytest.mark.usefixtures("configured_app")
 def test_authenticated_unsafe_methods_require_both_the_cookie_and_csrf() -> None:

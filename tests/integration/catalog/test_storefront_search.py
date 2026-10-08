@@ -7,13 +7,17 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select, update
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import func, select, text, update
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.catalog.api.product_cursor import encode_cursor
 from app.catalog.domain.enums import ProductType
 from app.catalog.domain.storefront import MAX_SEARCH_LENGTH, SearchMode
 from app.catalog.infrastructure.models import ProductModel
+from app.catalog.infrastructure.storefront_query import (
+    WORD_SIMILARITY_THRESHOLD,
+    trigram_threshold_statement,
+)
 from app.main import app as main_app
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
 from tests.integration.catalog.storefront_support import made_up_word, seed_product, seed_refs
@@ -114,6 +118,42 @@ async def test_trigram_matches_join_in_only_below_five_full_text_hits(
     assert thin[-1] == str(shade.id), "full-text hits rank above the trigram-only one"
 
 
+async def test_the_fallback_counts_only_hits_inside_the_facets(db_session: AsyncSession) -> None:
+    here, elsewhere = await seed_refs(db_session), await seed_refs(db_session)
+    for _ in range(5):
+        await seed_product(db_session, elsewhere, name="Moon Lamp")
+    lamps = [await seed_product(db_session, here, name="Moon Lamp") for _ in range(2)]
+    shade = await seed_product(db_session, here, name="Lampshade")
+    with client_for(main_app) as client:
+        found = _search(client, "lamp", category_id=str(here.category.id))
+    assert set(found) == {str(p.id) for p in [*lamps, shade]}, "2 hits here, not 7 site-wide"
+
+
+async def test_a_full_text_hit_outranks_a_trigram_match_even_at_zero_rank(
+    db_session: AsyncSession,
+) -> None:
+    refs = await seed_refs(db_session)
+    vases = [await seed_product(db_session, refs, name="Spiral Vase") for _ in range(3)]
+    # The highest possible id: on a tied score, `id DESC` would list the lamp first.
+    top = uuid.UUID(f"ffffffff-ffff-4fff-bfff-{uuid.uuid4().hex[:12]}")
+    await seed_product(db_session, refs, name="Moon Lamp", id=top)
+    with client_for(main_app) as client:
+        found = _search(client, "-lamp", category_id=str(refs.category.id))
+    # `-lamp` ranks 0 in full text, and trigrams ignore the `-`: ADR-023's accepted limit.
+    assert set(found[:3]) == {str(p.id) for p in vases}
+
+
+async def test_the_trigram_threshold_ends_with_its_transaction(db_engine: AsyncEngine) -> None:
+    show = text("SELECT current_setting('pg_trgm.word_similarity_threshold')")
+    async with db_engine.connect() as conn:
+        before: str = (await conn.execute(show)).scalar_one()
+        await conn.commit()
+        await conn.execute(trigram_threshold_statement())
+        assert (await conn.execute(show)).scalar_one() == str(WORD_SIMILARITY_THRESHOLD)
+        await conn.commit()
+        assert (await conn.execute(show)).scalar_one() == before != "0.5"
+
+
 async def test_search_combines_with_facets(db_session: AsyncSession) -> None:
     refs = await seed_refs(db_session)
     wanted = await seed_product(db_session, refs, name="Dragon Lamp", price_cents=900)
@@ -140,14 +180,17 @@ async def test_search_never_returns_invisible_products(
     word = made_up_word()
     gone_refs, kept_refs = await seed_refs(db_session), await seed_refs(db_session)
     gone = await seed_product(db_session, gone_refs, name=f"{word} lamp")
-    kept = await seed_product(db_session, kept_refs, name=f"{word} vase")
+    # Five visible full-text hits keep the first case out of the fallback.
+    count = 5 if mode is SearchMode.FULL_TEXT else 1
+    kept = [await seed_product(db_session, kept_refs, name=f"{word} vase") for _ in range(count)]
     await _hide(db_session, gone_refs, gone, how)
     q = word if mode is SearchMode.FULL_TEXT else word[:4] + word[5:]
     with client_for(main_app) as client:
         found = _search(client, q)
         suggested = client.get(SUGGESTIONS, params={"q": q}).json()["items"]
-    assert found == [str(kept.id)], "the control product must show, or this proves nothing"
-    assert [s["id"] for s in suggested] == [str(kept.id)]
+    expected = {str(p.id) for p in kept}
+    assert set(found) == expected, "the control products must show, or this proves nothing"
+    assert {s["id"] for s in suggested} == expected
 
 
 async def test_search_pages_through_every_match_exactly_once(db_session: AsyncSession) -> None:
@@ -254,16 +297,20 @@ async def test_the_maximum_length_search_is_accepted(db_session: AsyncSession) -
         assert _search(client, "x" * MAX_SEARCH_LENGTH, category_id=str(refs.category.id)) == []
 
 
-async def test_a_hidden_products_name_is_never_suggested_after_hiding(
+async def test_hiding_a_product_drops_it_from_search_and_suggestions(
     db_session: AsyncSession,
 ) -> None:
     word = made_up_word()
     refs = await seed_refs(db_session)
     product = await seed_product(db_session, refs, name=f"{word} lamp")
+
+    def suggested(client: TestClient) -> list[str]:
+        return [s["id"] for s in client.get(SUGGESTIONS, params={"q": word}).json()["items"]]
+
     with client_for(main_app) as client:
-        assert _search(client, word) == [str(product.id)]
+        assert _search(client, word) == suggested(client) == [str(product.id)]
         await db_session.execute(
             update(ProductModel).where(ProductModel.id == product.id).values(is_visible=False)
         )
         await db_session.commit()
-        assert _search(client, word) == []
+        assert _search(client, word) == suggested(client) == []

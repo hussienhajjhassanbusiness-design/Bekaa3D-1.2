@@ -77,10 +77,12 @@ pinned in the cursor:
   one deleted, substituted or inserted letter (`dragn`, `dragom`, `plnter`). A
   transposition (`dargon`) is out of reach for trigrams.
 
-With `q`, the default order is `-relevance`: `1 + ts_rank` for a full-text hit
+With `q`, the default order is `-relevance`: `2 + ts_rank` for a full-text hit
 (name, weight A, above description, weight B), else the name's
 `word_similarity`. Every full-text hit therefore comes before every
-trigram-only one. Explicit sorts still work with `q`.
+trigram-only one, even when `ts_rank` is 0 (a negation-only query such as
+`-lamp`). Trigrams ignore operators, so in fuzzy mode an excluded word can still
+come back as a near-miss, ranked last. Explicit sorts still work with `q`.
 
 **Cursor.** A search cursor carries its mode, so a walk that started in fuzzy
 mode stays in fuzzy mode even if new products lift the full-text count past five
