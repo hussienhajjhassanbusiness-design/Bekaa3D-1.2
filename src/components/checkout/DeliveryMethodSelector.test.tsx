@@ -68,6 +68,50 @@ describe("DeliveryMethodSelector", () => {
     expect(onSelect).toHaveBeenCalledWith({ kind: "pickup" });
   });
 
+  it("invalidates a stale complete selection when the user switches to a different address before choosing its zone", async () => {
+    const onSelect = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <DeliveryMethodSelector
+        addresses={ADDRESSES}
+        zones={ZONES}
+        selection={{ kind: "address", addressId: "addr-1", zoneId: "zone-1" }}
+        onSelect={onSelect}
+      />
+    );
+
+    await user.click(screen.getByRole("radio", { name: /john doe/i }));
+
+    expect(onSelect).toHaveBeenCalledWith(null);
+  });
+
+  it("does not call onSelect at all when choosing an address from a blank (null) starting selection", async () => {
+    const onSelect = vi.fn();
+    const user = userEvent.setup();
+    render(<DeliveryMethodSelector addresses={ADDRESSES} zones={ZONES} selection={null} onSelect={onSelect} />);
+
+    await user.click(screen.getByRole("radio", { name: /jane doe/i }));
+
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("re-clicking the address that already matches the current complete selection does not invalidate it", async () => {
+    const onSelect = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <DeliveryMethodSelector
+        addresses={ADDRESSES}
+        zones={ZONES}
+        selection={{ kind: "address", addressId: "addr-1", zoneId: "zone-1" }}
+        onSelect={onSelect}
+      />
+    );
+
+    await user.click(screen.getByRole("radio", { name: /jane doe/i }));
+
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
   it("contains no governorate/address-parsing logic — the zone select is always a plain, explicit control", () => {
     const { container } = render(<DeliveryMethodSelector addresses={ADDRESSES} zones={ZONES} selection={null} onSelect={vi.fn()} />);
     expect(container.textContent).not.toMatch(/governorate/i);

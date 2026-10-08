@@ -9,7 +9,12 @@ export interface DeliveryMethodSelectorProps {
   addresses: readonly AddressModel[];
   zones: readonly ShippingZoneOption[];
   selection: DeliveryMethodSelection | null;
-  onSelect: (selection: DeliveryMethodSelection) => void;
+  // `null` is a real argument, not an absence of one: it invalidates
+  // a stale complete selection the instant the user starts choosing a
+  // different address, so the caller's authoritative state never
+  // disagrees with what the UI currently shows (a real gap found by
+  // independent review — plan §5 follow-up).
+  onSelect: (selection: DeliveryMethodSelection | null) => void;
   // Rendered only when explicitly true — pickup availability is
   // unconfirmed (FVS-026-IMPLEMENTATION-PLAN.md §0), so no caller
   // means no Pickup option, never an invented default.
@@ -33,8 +38,19 @@ export function DeliveryMethodSelector({ addresses, zones, selection, onSelect, 
 
   function handleChooseAddress(addressId: string) {
     setActiveAddressId(addressId);
-    // Intentionally does not call onSelect yet — a zone must still be
-    // chosen before a complete DeliveryMethodSelection exists.
+    // If a complete selection already existed for a DIFFERENT address
+    // (or for pickup), it is now stale the instant the user starts
+    // choosing this one — invalidate it immediately rather than
+    // leaving the caller's authoritative state out of sync with the
+    // visible UI. Choosing an address from a blank starting selection
+    // (or re-clicking the address that already matches the current
+    // complete selection) intentionally does not call onSelect at
+    // all — a zone must still be chosen before any complete
+    // DeliveryMethodSelection exists, and nothing was invalidated.
+    const isStale = selection !== null && (selection.kind !== "address" || selection.addressId !== addressId);
+    if (isStale) {
+      onSelect(null);
+    }
   }
 
   function handleChooseZone(addressId: string, zoneId: string) {

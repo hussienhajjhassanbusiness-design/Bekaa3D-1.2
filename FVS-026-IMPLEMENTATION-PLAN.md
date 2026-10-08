@@ -157,6 +157,8 @@ T01–T07. T08–T11 are each blocked for a distinct, documented reason.
 
 **Payment handoff:** Not built — FVS-027 owns the payment-result/redirect UX; no payment URL or result route is invented here.
 
+**Independent-review follow-up (FVS-026 Important finding, resolved):** `DeliveryMethodSelector` could leave the caller's `selection` stale relative to the visible UI: switching address radios after a complete selection already existed for a different address left the parent's authoritative state disagreeing with what was on screen until a new zone was chosen. Classified **FRONTEND-SAFE TO FIX NOW** — a pure presentational-component correctness gap, no backend dependency. Fixed via TDD: `onSelect` now accepts `DeliveryMethodSelection | null`, and choosing a different address immediately invalidates a stale complete selection with `onSelect(null)` (re-clicking the address that already matches the current selection, or choosing from a blank starting selection, still calls nothing — only an actual invalidation fires). One remaining minor nitpick (also from the same review) was left as-is, consistent with the task's own scope: `activeAddressId`'s local state only re-syncs from `selection` on mount, so an external reset of `selection` later (e.g. after a future reconfirmation flow) won't move the radio UI without a remount — flagged for the future T08 adapter work, not fixed now since nothing in this batch resets `selection` externally yet.
+
 ---
 
 ## Global Constraints
