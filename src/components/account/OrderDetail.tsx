@@ -1,6 +1,6 @@
-import { PriceDisplay } from "@/components/catalog/PriceDisplay";
 import { NotFoundContent } from "@/components/feedback/NotFoundContent";
 import { OrderLineItem } from "./OrderLineItem";
+import { OrderSummaryDisplay } from "./OrderSummaryDisplay";
 import type { OrderDetailModel } from "@/lib/orders/orderModel";
 
 export type { OrderDetailModel };
@@ -36,44 +36,9 @@ export function OrderDetail({ result }: OrderDetailProps) {
       <div className="tablet:w-64 tablet:shrink-0">
         <h2 className="text-h3 font-bold text-text-primary">Order {order.id}</h2>
         <p className="text-caption text-text-secondary">{order.displayDate}</p>
-        <dl className="mt-4 flex flex-col gap-2">
-          {order.summary.paymentStatusLabel && (
-            <div className="flex items-center justify-between gap-2">
-              <dt className="text-body text-text-secondary">Payment</dt>
-              <dd className="text-body text-text-primary">{order.summary.paymentStatusLabel}</dd>
-            </div>
-          )}
-          {order.summary.refundStatusLabel && (
-            <div className="flex items-center justify-between gap-2">
-              <dt className="text-body text-text-secondary">Refund</dt>
-              <dd className="text-body text-text-primary">{order.summary.refundStatusLabel}</dd>
-            </div>
-          )}
-          {order.summary.subtotalCents !== undefined && (
-            <div className="flex items-center justify-between gap-2">
-              <dt className="text-body text-text-secondary">Subtotal</dt>
-              <dd>
-                <PriceDisplay amountCents={order.summary.subtotalCents} currency={order.summary.currency} />
-              </dd>
-            </div>
-          )}
-          {order.summary.shippingCents !== undefined && (
-            <div className="flex items-center justify-between gap-2">
-              <dt className="text-body text-text-secondary">Shipping</dt>
-              <dd>
-                <PriceDisplay amountCents={order.summary.shippingCents} currency={order.summary.currency} />
-              </dd>
-            </div>
-          )}
-          {order.summary.totalCents !== undefined && (
-            <div className="flex items-center justify-between gap-2">
-              <dt className="text-body font-semibold text-text-primary">Total</dt>
-              <dd className="font-semibold">
-                <PriceDisplay amountCents={order.summary.totalCents} currency={order.summary.currency} />
-              </dd>
-            </div>
-          )}
-        </dl>
+        <div className="mt-4">
+          <OrderSummaryDisplay summary={order.summary} />
+        </div>
       </div>
 
       <ul className="flex-1">
