@@ -1,13 +1,14 @@
 # Public catalogue (storefront)
 
-The visitor-facing product list and product page, introduced by VS-015. Public,
-unauthenticated and read-only. Search (`q`) and autocomplete come in VS-016 on
-the same query. Admin product management is in [products.md](products.md), and
-images in [product-images.md](product-images.md).
+The visitor-facing product list, search, autocomplete and product page,
+introduced by VS-015 and VS-016. Public, unauthenticated and read-only. Admin
+product management is in [products.md](products.md), and images in
+[product-images.md](product-images.md).
 
 ```
-GET /api/v1/products          ProductPage     422 VALIDATION_ERROR, 429 RATE_LIMITED
-GET /api/v1/products/{slug}   ProductDetail   404 NOT_FOUND, 429 RATE_LIMITED
+GET /api/v1/products              ProductPage           422 VALIDATION_ERROR, 429 RATE_LIMITED
+GET /api/v1/products/{slug}       ProductDetail         404 NOT_FOUND, 429 RATE_LIMITED
+GET /api/v1/search/suggestions    SearchSuggestionList  422 VALIDATION_ERROR, 429 RATE_LIMITED
 ```
 
 ## Visibility
@@ -35,11 +36,12 @@ be on a live product (VS-013 in-use guard).
 | `price_min_cents`, `price_max_cents` | inclusive, integer cents, 0 to 2⁶³−1; min > max is a 422 |
 | `min_rating` | decimal 0 to 5 with at most 2 decimal places (the column's precision), `average_rating >= min_rating` |
 | `featured` | `true` only featured, `false` only non-featured |
-| `sort` | `-created_at` (default), `price`, `-price`, `-average_rating`; anything else is a 422 |
+| `q` | search names and descriptions (see [Search](#search)); trimmed, blank means no search, at most 200 characters |
+| `sort` | `-created_at` (default), `price`, `-price`, `-average_rating`; with `q`, also `-relevance` (the default then); anything else is a 422 |
 | `cursor`, `limit` | opaque cursor from `next_cursor`; `limit` 1 to 100, default 20 |
 
-Facets combine with AND. Unknown query parameters are ignored (the house
-convention), so `q` has no effect until VS-016. A bad value is
+Facets combine with AND, and with `q`. Unknown query parameters are ignored
+(the house convention). A bad value is
 `422 VALIDATION_ERROR` with the parameter in `errors[].loc`, for example
 `["query", "cursor"]`. api-endpoints.md §7.1 used to say 400. The project-wide
 convention, and that document's own error table, is 422.
@@ -60,6 +62,48 @@ pages only if it sorts after the cursor
 browsing (an administrator edits its price, or a review moves its rating), it
 can cross the cursor and be seen twice or not at all. Avoiding that would need
 snapshot reads across requests, which keyset cursors don't give.
+
+## Search
+
+ADR-023 has the rationale. `q` runs in two modes, chosen on the first page and
+pinned in the cursor:
+
+- **Full text** (the normal case): `search_vector @@ websearch_to_tsquery('english', q)`.
+  Snowball stemming means `dragons` and `Dragon` both find "Articulated Dragon".
+  `websearch_to_tsquery` never raises on syntax, so quotes, `-` and operators
+  are just text to it.
+- **Fuzzy** (when fewer than **5** full-text hits match the facets): full-text
+  hits **or** names with `word_similarity(q, name) >= 0.5`. That threshold finds
+  one deleted, substituted or inserted letter (`dragn`, `dragom`, `plnter`). A
+  transposition (`dargon`) is out of reach for trigrams.
+
+With `q`, the default order is `-relevance`: `1 + ts_rank` for a full-text hit
+(name, weight A, above description, weight B), else the name's
+`word_similarity`. Every full-text hit therefore comes before every
+trigram-only one. Explicit sorts still work with `q`.
+
+**Cursor.** A search cursor carries its mode, so a walk that started in fuzzy
+mode stays in fuzzy mode even if new products lift the full-text count past five
+(`tests/concurrency/test_storefront_search_cursor.py`). A search cursor without
+`q`, or a browse cursor with `q`, is a 422. The cursor isn't bound to the `q`
+text itself.
+
+**Safety (SEC-24).** The term is always a bound parameter. The `<%` threshold is
+set with `set_config(..., true)`, which is transaction-local, so it never leaks
+to the next request on a pooled connection. Control characters are refused by
+the request middleware with 422.
+
+## Autocomplete: `GET /api/v1/search/suggestions`
+
+| Parameter | Meaning |
+| --- | --- |
+| `q` | required; trimmed; 2 to 200 characters |
+| `limit` | 1 to 10, default 10 |
+
+It returns `{"items": [{"id", "name", "slug", "type"}]}`, visible products only,
+whose name passes the same trigram test as fuzzy search, closest first (then
+name, then `id`). It suits type-ahead: `drag` already suggests "Articulated
+Dragon".
 
 ## Payloads
 
@@ -100,8 +144,8 @@ middleware, with 422.
 
 ## Rate limits
 
-600 requests per hour per client IP, with a separate counter for the list and
-the detail route. This is the VS-010 public allowance. Behind the future
+600 requests per hour per client IP, with a separate counter for the list, the
+detail and the suggestions route. This is the VS-010 public allowance. Behind the future
 reverse proxy every client would share one IP, and VS-020 owns that fix.
 
 ## Performance (NFR-01, NFR-07)
@@ -113,4 +157,8 @@ planner can match those partial indexes. After a cursor, it adds a redundant
 single-column bound (`price_cents >= key`) that an index can seek on.
 `tests/integration/catalog/test_storefront_scale.py` seeds 10,000 products. It
 asserts that each browse shape's plan uses its index, and that p95 latency
-through the HTTP stack stays under 500 ms.
+through the HTTP stack stays under 500 ms. For search (NFR-02), it asserts that
+full-text plans use `ix_products_search_vector`, that fuzzy search and
+suggestions use `ix_products_name_trgm`, and that p95 stays under 800 ms. The
+seed is `VACUUM`ed, as autovacuum would be, because a bulk insert leaves rows in
+the GIN pending list, and the planner then won't use the index.
