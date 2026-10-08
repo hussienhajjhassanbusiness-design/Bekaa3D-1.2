@@ -99,6 +99,16 @@ describe("ManualConfirmDialog", () => {
     expect(onConfirm).toHaveBeenCalledWith("pay-42", "Verified with provider dashboard.");
   });
 
+  it("trims leading/trailing whitespace from the reason before calling onConfirm", async () => {
+    const user = userEvent.setup();
+    const { onConfirm } = renderDialog();
+    await user.type(screen.getByRole("textbox", { name: /reason/i }), "  Verified.  ");
+    await user.click(screen.getByRole("checkbox", { name: ACK_LABEL }));
+    await user.click(screen.getByRole("button", { name: /^confirm$/i }));
+
+    expect(onConfirm).toHaveBeenCalledWith("pay-1", "Verified.");
+  });
+
   it("11. never makes a network/fetch call", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     const user = userEvent.setup();

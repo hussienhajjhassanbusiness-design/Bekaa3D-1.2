@@ -83,7 +83,7 @@ export function ManualConfirmDialog({
         <Button type="button" onClick={onClose} disabled={isConfirming}>
           Cancel
         </Button>
-        <Button type="button" onClick={() => onConfirm(paymentId, reason)} disabled={!canSubmit} isLoading={isConfirming}>
+        <Button type="button" onClick={() => onConfirm(paymentId, reason.trim())} disabled={!canSubmit} isLoading={isConfirming}>
           Confirm
         </Button>
       </div>
