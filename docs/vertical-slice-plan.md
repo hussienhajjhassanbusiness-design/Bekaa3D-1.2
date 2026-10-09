@@ -432,17 +432,25 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - Production Compose: nginx with TLS and automatic renewal, HSTS/CSP/security headers, body-size limits, and an allowlisted webhook location.
   - Containers run as non-root with CPU and memory limits.
   - Secrets live outside the repository.
+  - **Required: shared-IP rate limiting** (found in the VS-016 audit, PR #6). The SRS rules out a plain client-side storefront, so catalogue pages are server-rendered. Without this, every visitor's API calls arrive from the frontend server's IP and share one 600/hour bucket. Carrier-grade NAT also puts many Lebanese mobile customers behind one IP. Record the design in an ADR.
+    - **Forwarded visitor IP.** The frontend server sends the visitor's IP in a dedicated header, together with a shared secret. The API trusts that header only when the secret matches (constant-time comparison) and the request comes from the frontend; otherwise it uses the connection IP. nginx strips both headers from outside traffic. The secret lives outside the repository and can be rotated.
+    - **Caching.** The public reference lists (`GET /categories`, `/materials`, `/colours`, `/settings/public`) send `Cache-Control` headers, so browsers and the frontend stop refetching them on every page load. The `max-age` stays short for `/settings/public` because it carries the accepting-orders state.
+    - **Recheck auth limits.** Recheck the login and registration limits (20 and 5 per hour per IP today) under the same rule. They must key on the real visitor IP, and the numbers must be reviewed for carrier-grade NAT.
   - **After every deploy to the live site, run `scripts/smoke/vs012_post_deploy.sh <site URL>`** with `READONLY_DATABASE_URL` (a read-only database role), `API_LOG_CMD`, `WORKER_LOG_CMD`, and `EXPECTED_MIN_AUDIT_ROWS` set to the `audit_logs` count taken just before the deploy. It is read-only and exits non-zero on any failure. Wire it in as a deploy step, beside the `/health/ready` gate.
 - **Tests:**
   - A broken build is rolled back automatically.
   - A header check against staging.
   - `id -u` is non-zero in every container.
   - Two client IPs get separate rate-limit buckets through nginx.
+  - Through the frontend server, two visitors' forwarded IPs get separate buckets. A forwarded-IP header with a wrong or missing secret, or sent from outside the frontend, is ignored.
+  - The four public reference lists send `Cache-Control`.
+  - Login and registration limits key on the forwarded visitor IP.
 - **Done when:**
   - A push to `main` reaches staging without manual steps.
   - Rollback is one command.
   - HTTPS and security headers are present.
-  - Rate limits apply per real client IP.
+  - Rate limits apply per real client IP, including for requests the frontend server makes on a visitor's behalf.
+  - The public reference lists are cacheable, and the login and registration limits have been rechecked and recorded.
 
 ## VS-021 — Production email delivery
 **Status:** Not started
