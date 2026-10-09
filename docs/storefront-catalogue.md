@@ -75,20 +75,24 @@ pinned in the cursor:
 - **Fuzzy** (when fewer than **5** full-text hits match the facets): full-text
   hits **or** names with `word_similarity(q, name) >= 0.5`. That threshold finds
   one deleted, substituted or inserted letter (`dragn`, `dragom`, `plnter`). A
-  transposition (`dargon`) is out of reach for trigrams.
+  transposition (`dargon`) is out of reach for trigrams. Fuzzy mode needs a term
+  with **a word of at least 3 letters or digits** that **excludes no word**: `s`,
+  `sp`, `s s` and `(s)` stay full text (a short term would match every name with a
+  word starting with it), and so
+  does `lamp -moon` (trigrams ignore the `-`, so falling back would return "Moon
+  Lamp"). PostgreSQL's parse of the term decides what counts as an exclusion.
 
 With `q`, the default order is `-relevance`: `2 + ts_rank` for a full-text hit
 (name, weight A, above description, weight B), else the name's
 `word_similarity`. Every full-text hit therefore comes before every
-trigram-only one, even when `ts_rank` is 0 (a negation-only query such as
-`-lamp`). Trigrams ignore operators, so in fuzzy mode an excluded word can still
-come back as a near-miss, ranked last. Explicit sorts still work with `q`.
+trigram-only one. Explicit sorts still work with `q`.
 
 **Cursor.** A search cursor carries its mode, so a walk that started in fuzzy
 mode stays in fuzzy mode even if new products lift the full-text count past five
 (`tests/concurrency/test_storefront_search_cursor.py`). A search cursor without
-`q`, or a browse cursor with `q`, is a 422. The cursor isn't bound to the `q`
-text itself.
+`q`, or a browse cursor with `q`, is a 422, and so is a fuzzy cursor whose `q`
+couldn't fall back (too short, or excluding a word). The cursor isn't bound to
+the `q` text itself.
 
 **Safety (SEC-24).** The term is always a bound parameter. The `<%` threshold is
 set with `set_config(..., true)`, which is transaction-local, so it never leaks
@@ -99,7 +103,7 @@ the request middleware with 422.
 
 | Parameter | Meaning |
 | --- | --- |
-| `q` | required; trimmed; 2 to 200 characters |
+| `q` | required; trimmed; 3 to 200 characters, with a word of 3+ letters or digits |
 | `limit` | 1 to 10, default 10 |
 
 It returns `{"items": [{"id", "name", "slug", "type"}]}`, visible products only,
@@ -157,7 +161,8 @@ The SRS §21.3 partial indexes (`ix_products_browse_*`, all
 writes the visibility predicate as bare `is_visible`, not `IS TRUE`, so the
 planner can match those partial indexes. After a cursor, it adds a redundant
 single-column bound (`price_cents >= key`) that an index can seek on.
-`tests/integration/catalog/test_storefront_scale.py` seeds 10,000 products. It
+`tests/integration/catalog/test_storefront_scale.py` seeds 10,000 products into
+a database of its own, so rows other tests leave behind can't change the plans. It
 asserts that each browse shape's plan uses its index, and that p95 latency
 through the HTTP stack stays under 500 ms. For search (NFR-02), it asserts that
 full-text plans use `ix_products_search_vector`, that fuzzy search and
