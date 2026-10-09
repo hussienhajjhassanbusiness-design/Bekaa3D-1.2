@@ -36,6 +36,16 @@ def _search(client: TestClient, q: str, **params: Any) -> list[str]:
     return [item["id"] for item in response.json()["items"]]
 
 
+def _top_id() -> uuid.UUID:
+    """Higher than any random id, so a tie under `id DESC` lists this row first."""
+    return uuid.UUID(f"ffffffff-ffff-4fff-bfff-{uuid.uuid4().hex[:12]}")
+
+
+async def _similarity(db: AsyncSession, q: str, name: str) -> float:
+    query = select(func.word_similarity(q, name))
+    return float((await db.execute(query)).scalar_one())
+
+
 def _walk(client: TestClient, limit: int, **params: Any) -> list[str]:
     seen: list[str] = []
     cursor = None
@@ -93,8 +103,13 @@ async def test_a_name_match_ranks_above_a_description_match_above_a_near_miss(
 ) -> None:
     refs = await seed_refs(db_session)
     near = await seed_product(db_session, refs, name="Dragonfly Earrings")
+    # The top id: if the A/B weights stopped counting, the tie would list this one first.
     described = await seed_product(
-        db_session, refs, name="Table Lamp", description="A dragon coils round the base"
+        db_session,
+        refs,
+        name="Table Lamp",
+        description="A dragon coils round the base",
+        id=_top_id(),
     )
     named = await seed_product(db_session, refs, name="Dragon Lamp")
     with client_for(main_app) as client:
@@ -129,18 +144,57 @@ async def test_the_fallback_counts_only_hits_inside_the_facets(db_session: Async
     assert set(found) == {str(p.id) for p in [*lamps, shade]}, "2 hits here, not 7 site-wide"
 
 
-async def test_a_full_text_hit_outranks_a_trigram_match_even_at_zero_rank(
-    db_session: AsyncSession,
+@pytest.mark.parametrize("q", ["lamp -moon", "lamp - moon", "-moon lamp", "-moon"])
+async def test_an_excluded_word_never_comes_back(db_session: AsyncSession, q: str) -> None:
+    refs = await seed_refs(db_session)
+    await seed_product(db_session, refs, name="Moon Lamp")
+    vases = [await seed_product(db_session, refs, name="Spiral Vase") for _ in range(2)]
+    with client_for(main_app) as client:
+        found = _search(client, q, category_id=str(refs.category.id))
+    # Under five hits, yet no trigram fallback: it would match "Moon Lamp" on both words.
+    expected = {str(p.id) for p in vases} if q == "-moon" else set()
+    assert set(found) == expected
+
+
+@pytest.mark.parametrize(
+    ("q", "found"),
+    [("s", False), ("sp", False), ("s s", False), ("(s)", False), ("s!!", False), ("spi", True)],
+)
+async def test_typo_matching_needs_a_word_of_three_letters(
+    db_session: AsyncSession, q: str, found: bool
 ) -> None:
     refs = await seed_refs(db_session)
-    vases = [await seed_product(db_session, refs, name="Spiral Vase") for _ in range(3)]
-    # The highest possible id: on a tied score, `id DESC` would list the lamp first.
-    top = uuid.UUID(f"ffffffff-ffff-4fff-bfff-{uuid.uuid4().hex[:12]}")
-    await seed_product(db_session, refs, name="Moon Lamp", id=top)
+    vase = await seed_product(db_session, refs, name="Spiral Vase")
     with client_for(main_app) as client:
-        found = _search(client, "-lamp", category_id=str(refs.category.id))
-    # `-lamp` ranks 0 in full text, and trigrams ignore the `-`: ADR-023's accepted limit.
-    assert set(found[:3]) == {str(p.id) for p in vases}
+        result = _search(client, q, category_id=str(refs.category.id))
+    assert result == ([str(vase.id)] if found else [])
+
+
+async def test_trigram_only_hits_are_ordered_by_similarity(db_session: AsyncSession) -> None:
+    word = made_up_word()
+    refs = await seed_refs(db_session)
+    # Typos in the middle, so no stem matches `word`: both rows are trigram-only.
+    near_name, far_name = word[:8] + "x" + word[9:], word[:4] + "x" + word[5:]
+    near = await seed_product(db_session, refs, name=near_name)
+    far = await seed_product(db_session, refs, name=far_name, id=_top_id())
+    near_score = await _similarity(db_session, word, near_name)
+    far_score = await _similarity(db_session, word, far_name)
+    assert near_score > far_score >= WORD_SIMILARITY_THRESHOLD
+    with client_for(main_app) as client:
+        assert _search(client, word, category_id=str(refs.category.id)) == [
+            str(near.id),
+            str(far.id),
+        ]
+
+
+async def test_a_name_below_the_threshold_is_not_a_typo_match(db_session: AsyncSession) -> None:
+    refs = await seed_refs(db_session)
+    vase = await seed_product(db_session, refs, name="Spiral Vase")
+    await seed_product(db_session, refs, name="Base Plate")
+    # 0.40: a looser threshold such as 0.3 would let it in.
+    assert 0.3 <= await _similarity(db_session, "vase", "Base Plate") < WORD_SIMILARITY_THRESHOLD
+    with client_for(main_app) as client:
+        assert _search(client, "vase", category_id=str(refs.category.id)) == [str(vase.id)]
 
 
 async def test_the_trigram_threshold_ends_with_its_transaction(db_engine: AsyncEngine) -> None:
@@ -243,7 +297,7 @@ async def test_injection_strings_are_inert(db_session: AsyncSession, q: str) -> 
     before = (await db_session.execute(select(func.count()).select_from(ProductModel))).scalar()
     with client_for(main_app) as client:
         found = _search(client, q, category_id=str(refs.category.id))
-        suggested = client.get(SUGGESTIONS, params={"q": q.ljust(2, "x")})
+        suggested = client.get(SUGGESTIONS, params={"q": f"{q} xqz"})
     assert found == [], "a quote or operator must never widen the match"
     assert suggested.status_code == 200, suggested.text
     after = (await db_session.execute(select(func.count()).select_from(ProductModel))).scalar()
@@ -279,6 +333,17 @@ async def test_injection_strings_are_inert(db_session: AsyncSession, q: str) -> 
                 "cursor": encode_cursor("-relevance", float("nan"), uuid.uuid4(), SearchMode.FUZZY),
             },
             "cursor",
+        ),
+        # A forged fuzzy cursor cannot reopen the fallback the first page refuses.
+        *(
+            (
+                {
+                    "q": q,
+                    "cursor": encode_cursor("-relevance", 0.5, uuid.uuid4(), SearchMode.FUZZY),
+                },
+                "cursor",
+            )
+            for q in ("sp", "lamp -moon")
         ),
     ],
 )

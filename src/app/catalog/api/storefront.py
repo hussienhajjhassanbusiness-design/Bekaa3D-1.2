@@ -11,7 +11,12 @@ from fastapi.exceptions import RequestValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_session
-from app.catalog.api.product_cursor import decode_cursor, decode_search_cursor, encode_cursor
+from app.catalog.api.product_cursor import (
+    bad_query,
+    decode_cursor,
+    decode_search_cursor,
+    encode_cursor,
+)
 from app.catalog.api.product_schemas import PG_BIGINT_MAX
 from app.catalog.api.reference_data import PUBLIC_RATE_LIMIT, PUBLIC_RATE_WINDOW_SECONDS
 from app.catalog.api.storefront_schemas import ProductDetail, ProductListItem, ProductPage
@@ -20,9 +25,12 @@ from app.catalog.domain.exceptions import ProductValidationError
 from app.catalog.domain.slug import is_canonical_slug
 from app.catalog.domain.storefront import (
     MAX_RATING,
+    MIN_FULL_TEXT_HITS,
     SearchMode,
     StorefrontFilter,
     StorefrontSort,
+    fuzzy_eligible,
+    has_trigram_word,
     resolve_sort,
     search_mode_for,
     search_term,
@@ -69,6 +77,20 @@ def _validated[T](build: Callable[..., T], *args: Any, **values: Any) -> T:
             for field, reason in exc.errors.items()
         ]
         raise RequestValidationError(errors) from exc
+
+
+async def _eligible(query: StorefrontProductQuery, term: str) -> bool:
+    if not has_trigram_word(term):  # Free to check, so most short searches skip the round trip.
+        return False
+    return fuzzy_eligible(term, excludes_words=await query.excludes_words(term))
+
+
+async def _first_search_mode(
+    query: StorefrontProductQuery, filters: StorefrontFilter, term: str
+) -> SearchMode:
+    hits = await query.full_text_hits(filters)
+    thin = hits < MIN_FULL_TEXT_HITS
+    return search_mode_for(hits, eligible=thin and await _eligible(query, term))
 
 
 @public_router.get(
@@ -118,8 +140,11 @@ async def list_products(
         after = decode_cursor(cursor, order)
     elif searched := decode_search_cursor(cursor, order):
         after, mode = searched
+        # A forged fuzzy cursor must not reopen a path the first page would refuse.
+        if mode is SearchMode.FUZZY and not await _eligible(query, term):
+            raise bad_query("cursor", "cursor is not a valid pagination cursor")
     else:
-        mode = search_mode_for(await query.full_text_hits(filters))
+        mode = await _first_search_mode(query, filters, term)
     rows = await query.list_page(
         limit=limit + 1,
         sort=order,

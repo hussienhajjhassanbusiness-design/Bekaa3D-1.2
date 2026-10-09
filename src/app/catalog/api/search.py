@@ -12,9 +12,8 @@ from app.catalog.api.reference_data import PUBLIC_RATE_LIMIT, PUBLIC_RATE_WINDOW
 from app.catalog.api.search_schemas import SearchSuggestionList, SearchSuggestionRead
 from app.catalog.domain.storefront import (
     MAX_SUGGESTIONS,
-    MIN_SUGGESTION_LENGTH,
     search_term,
-    search_term_errors,
+    suggestion_term_errors,
 )
 from app.catalog.infrastructure.storefront_query import StorefrontProductQuery
 from app.core.rate_limit import rate_limiter
@@ -29,7 +28,7 @@ _SUGGESTIONS_LIMIT = rate_limiter(
 )
 
 _RESPONSES: dict[int | str, dict[str, Any]] = {
-    422: {"description": "VALIDATION_ERROR: `q` missing, too short or too long; bad `limit`."},
+    422: {"description": "VALIDATION_ERROR: bad `q` (needs a 3-letter word) or `limit`."},
     429: {"description": "RATE_LIMITED."},
 }
 
@@ -47,7 +46,7 @@ async def search_suggestions(
     session: AsyncSession = Depends(get_session),
 ) -> SearchSuggestionList:
     term = search_term(q) or ""
-    if problem := search_term_errors(term, min_length=MIN_SUGGESTION_LENGTH):
+    if problem := suggestion_term_errors(term):
         raise bad_query("q", problem)
     found = await StorefrontProductQuery(session).suggestions(term, limit)
     return SearchSuggestionList(items=[SearchSuggestionRead.from_domain(s) for s in found])
