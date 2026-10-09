@@ -68,7 +68,7 @@ Sources: the slice section of `vertical-slice-plan.md`; SRS §6.3, §6.4, §6.5,
 | `GET /search/suggestions`: public, at most 10, `q` 2–200, 422 on bad input (F-010) | DONE | `search.py:37-53`; `suggestions_statement` `.limit` | `test_suggestions_are_capped_at_ten`, `test_bad_suggestion_input_is_a_validation_error`, `test_suggestions_need_no_account` (M19, M20, M21 red) |
 | Suggestions are typo tolerant (F-010) | DONE | `_fuzzy` + threshold | `test_a_partial_or_one_typo_name_is_suggested` (M02 red) |
 | Suggestions closest first | PARTIAL | `storefront_query.py:187-188` | `test_the_closest_name_is_suggested_first` passes even without the similarity order (M22 survives, A-03) |
-| Suggestions have their own rate-limit counter (600/h/IP) | DONE | `search.py:25-29,40` | `test_each_route_refuses_past_its_limit_and_leaves_the_other_open[suggestions]` (M23, M24 red) |
+| Suggestions have their own rate-limit counter (600/h/IP; now 3,000, see §9) | DONE | `search.py:25-29,40` | `test_each_route_refuses_past_its_limit_and_leaves_the_other_open[suggestions]` (M23, M24 red) |
 | **Done when: search p95 < 800 ms on 10,000 products (NFR-02)** | **FAILED in CI** | `q=s` takes 420–690 ms locally (A-01) | `test_search_p95_is_under_800_ms_on_10k_products` (passes locally at 482–526 ms; **failed on `main` CI at 1004 ms**) |
 | FR-01 failure: a DB outage returns a structured service error | Inherited (VS-001) | global handler | Not VS-016 scope |
 
