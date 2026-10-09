@@ -404,6 +404,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - `q` is trimmed (blank means no search), up to 200 characters like the admin list; suggestions need 3 to 200 with a word of 3+ letters or digits, `limit` 1 to 10. Suggestion and `q` errors are 422 (api-endpoints.md §7.1 corrected from 400, and from "translated" text per ADR-016).
   - Known limit: a transposed pair of letters (`dargon`) is not found; trigrams count it as two edits.
   - Audit fixes ([`VS-016-audit.md`](audits/VS-016-audit.md)): the trigram fallback needs a word of 3+ letters or digits and no excluded word (a one-letter search had failed NFR-02 in CI), and suggestions need the same word (ADR-023 amended).
+  - Audit Q-2 and Q-4: suggestions allow 3,000 requests/hour/IP (carrier-grade NAT; the frontend debounces about 300 ms), and typo tolerance stays on names only for V1 (ADR-023 decision 7 and consequences).
 
 ## VS-017 — STL bundle upload and version publishing
 **Status:** Removed by ADR-019 (STL files are emailed manually; the platform stores none).

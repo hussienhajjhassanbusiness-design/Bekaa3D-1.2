@@ -1,6 +1,6 @@
 # ADR-023: Rank storefront search by relevance, fall back to trigram below five hits, and pin the mode in the cursor
 
-**Status:** Accepted (amended 2026-10-08 after the VS-016 audit: decisions 2, 3, 4 and 6, and the consequences)
+**Status:** Accepted (amended 2026-10-08 after the VS-016 audit: decisions 2, 3, 4 and 6, and the consequences; 2026-10-09: decision 7 and the name-only limit, audit Q-2 and Q-4)
 **Date:** 2026-10-08
 **Source basis:** SRS §6.3, §6.4, §21.3, §21.5, FR-01 (failure behaviour, concurrent access), NFR-02, SEC-24; database-design.md §18; vertical-slice-plan VS-016
 **Applies first to:** `GET /api/v1/products?q=` and `GET /api/v1/search/suggestions` (VS-016)
@@ -19,11 +19,13 @@ pg_trgm's default `word_similarity` threshold is 0.6. Measured on PostgreSQL 16 
 4. **The cursor pins the mode** (`full_text` or `fuzzy`) chosen by the first page. A search cursor is refused without `q`, and a browse cursor is refused with `q`. A `fuzzy` cursor whose `q` is not eligible for the fallback (decision 3) is refused too, so a forged cursor can't reopen it.
 5. **Threshold 0.5,** set per transaction with `set_config('pg_trgm.word_similarity_threshold', '0.5', true)` so it never leaks to another request on a pooled connection. The `<%` operator, not the `word_similarity()` function, does the filtering, so the GIN trigram index serves it.
 6. Autocomplete uses the same trigram predicate, ordered by `word_similarity` descending, then name, then `id`, at most ten. It needs a word of at least 3 letters or digits, like the fallback.
+7. **Autocomplete allows 3,000 requests per hour per client IP**, on its own counter: five times the 600 of the other public routes. Suggestions are requested per keystroke, and carrier-grade NAT puts many Lebanese mobile customers behind one public IP, so 600 would refuse real customers. The frontend waits about 300 ms after the last keystroke before asking (docs/storefront-catalogue.md), so a typed word costs one or two requests, not one per letter.
 
 ## Consequences
 
 - A search without a word of three letters or digits gets full text only, so `sp` finds nothing until a third letter is typed, and autocomplete waits for three letters too.
 - A search that excludes a word gets no typo tolerance: `lmap -moon` finds nothing, rather than risk returning what was excluded.
+- Typo tolerance covers product **names only**. The trigram index is on `name` (SRS §21.3), so a typo in a word that appears only in a description finds nothing: `paintd` doesn't find a product described as "Hand-painted". Correctly spelled description words are still found by full text. This is accepted for V1.
 - One deleted, substituted or inserted letter is found. A transposition (`dargon`, 0.29) is not: trigrams treat it as two edits. This is accepted for V1.
 - Relevance is recomputed on every page. Because it is deterministic for the same row and query, the keyset stays exact. If an administrator edits a product's name or description mid-walk, its rank changes and it can cross the cursor. This is the same accepted limit as a price change under a price sort (docs/storefront-catalogue.md).
 - A cursor isn't bound to the `q` text. Reusing one with a different `q` only changes where the walk starts, and it can't leak a row the new query wouldn't match.

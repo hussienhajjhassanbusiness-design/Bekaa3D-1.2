@@ -111,6 +111,12 @@ whose name passes the same trigram test as fuzzy search, closest first (then
 name, then `id`). It suits type-ahead: `drag` already suggests "Articulated
 Dragon".
 
+**Frontend: debounce.** Wait about **300 ms after the last keystroke** before
+requesting suggestions, and drop a response that arrives after a newer request was
+sent. Typing "dragon" then costs one or two requests instead of six, which keeps a
+whole carrier-NAT IP well inside the 3,000-an-hour limit. Don't request anything
+until the term has a word of 3 letters or digits; shorter terms are a 422.
+
 ## Payloads
 
 `ProductListItem` (api-endpoints.md §30): `id`, `type`, `name`, `slug`,
@@ -150,9 +156,11 @@ middleware, with 422.
 
 ## Rate limits
 
-600 requests per hour per client IP, with a separate counter for the list, the
-detail and the suggestions route. This is the VS-010 public allowance. Behind the future
-reverse proxy every client would share one IP, and VS-020 owns that fix.
+Each route has its own counter per client IP. The list and the detail route allow
+600 requests per hour, the VS-010 public allowance. Suggestions allow **3,000 per
+hour** (ADR-023 decision 7): they fire per keystroke, and carrier-grade NAT puts many
+mobile customers behind one IP. Behind the future reverse proxy every client would
+share one IP, and VS-020 owns that fix.
 
 ## Performance (NFR-01, NFR-07)
 

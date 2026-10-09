@@ -168,7 +168,7 @@ Also checked, no issue found:
 
 ## 9. Resolution (branch `fix/vs-016-audit`)
 
-Owner decisions: **Q-3**, the trigram fallback and suggestions need at least 3 characters. The `srs-reviewer` pass on this branch showed that counting raw characters let `s s`, `(s)` and `s!!` through to the same slow path (456–851 ms on 10k). The rule is therefore implemented as **a word of 3+ letters or digits**, which is what pg_trgm reads. **Q-1**, a query that excludes a word never falls back. Both are recorded in amended ADR-023 decisions 3, 4 and 6. Q-2 (autocomplete allowance) and Q-4 (name-only typo tolerance) stay open.
+Owner decisions: **Q-3**, the trigram fallback and suggestions need at least 3 characters. The `srs-reviewer` pass on this branch showed that counting raw characters let `s s`, `(s)` and `s!!` through to the same slow path (456–851 ms on 10k). The rule is therefore implemented as **a word of 3+ letters or digits**, which is what pg_trgm reads. **Q-1**, a query that excludes a word never falls back. Both are recorded in amended ADR-023 decisions 3, 4 and 6. Q-2 and Q-4 were decided on 2026-10-09 (branch `fix/search-rate-limits`). **Q-2**: suggestions allow 3,000 requests/hour/IP (ADR-023 decision 7), and the frontend debounces about 300 ms. **Q-4**: typo tolerance stays on names only for V1 (an accepted limit in ADR-023).
 
 | ID | Fix | Proof |
 |---|---|---|

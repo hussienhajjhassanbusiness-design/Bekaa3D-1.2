@@ -19,6 +19,7 @@ from app.catalog.api.reference_data import (
     PUBLIC_RATE_LIMIT,
     PUBLIC_RATE_WINDOW_SECONDS,
 )
+from app.catalog.api.search import SUGGESTIONS_RATE_LIMIT
 
 
 def test_the_public_rate_limit_is_600_per_hour() -> None:
@@ -26,6 +27,11 @@ def test_the_public_rate_limit_is_600_per_hour() -> None:
     enough that no human browsing reaches it, tight enough to bite a scraper."""
     assert PUBLIC_RATE_LIMIT == 600
     assert PUBLIC_RATE_WINDOW_SECONDS == 3600
+
+
+def test_the_suggestion_rate_limit_is_3000_per_hour() -> None:
+    """Autocomplete fires per keystroke behind carrier-grade NAT (ADR-023, VS-016 Q-2)."""
+    assert SUGGESTIONS_RATE_LIMIT == 3000
 
 
 def test_the_public_reference_hard_cap_is_100() -> None:
