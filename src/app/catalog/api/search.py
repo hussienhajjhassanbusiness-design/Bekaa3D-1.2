@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_session
 from app.catalog.api.product_cursor import bad_query
-from app.catalog.api.reference_data import PUBLIC_RATE_LIMIT, PUBLIC_RATE_WINDOW_SECONDS
+from app.catalog.api.reference_data import PUBLIC_RATE_WINDOW_SECONDS
 from app.catalog.api.search_schemas import SearchSuggestionList, SearchSuggestionRead
 from app.catalog.domain.storefront import (
     MAX_SUGGESTIONS,
@@ -20,10 +20,12 @@ from app.core.rate_limit import rate_limiter
 
 public_router = APIRouter(tags=["catalogue"])
 
-# Its own counter: autocomplete fires per keystroke and must not starve browsing.
+# 5x the public allowance: requests are per keystroke, and carrier-grade NAT puts many
+# Lebanese mobile customers behind one IP (ADR-023). Its own counter spares browsing.
+SUGGESTIONS_RATE_LIMIT = 3000
 _SUGGESTIONS_LIMIT = rate_limiter(
     key_prefix="catalogue:suggestions",
-    limit=PUBLIC_RATE_LIMIT,
+    limit=SUGGESTIONS_RATE_LIMIT,
     window_seconds=PUBLIC_RATE_WINDOW_SECONDS,
 )
 

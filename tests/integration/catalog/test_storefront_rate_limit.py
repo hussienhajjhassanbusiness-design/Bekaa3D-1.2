@@ -1,10 +1,11 @@
 """The public product and suggestion routes are rate limited per IP, each with its own
-counter (VS-015, VS-016)."""
+counter (VS-015, VS-016). Suggestions get 3000 an hour, the product routes 600."""
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalog.api.reference_data import PUBLIC_RATE_LIMIT
+from app.catalog.api.search import SUGGESTIONS_RATE_LIMIT
 from app.main import app as main_app
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
 from tests.integration.catalog.storefront_support import seed_product, seed_refs
@@ -24,12 +25,14 @@ async def test_each_route_refuses_past_its_limit_and_leaves_the_other_open(
         "detail": f"/api/v1/products/{product.slug}",
         "suggestions": "/api/v1/search/suggestions?q=lamp",
     }
+    limit = SUGGESTIONS_RATE_LIMIT if route == "suggestions" else PUBLIC_RATE_LIMIT
     others = [path for name, path in paths.items() if name != route]
     with client_for(main_app, ip=fresh_ip()) as client:
-        allowed = [client.get(paths[route]) for _ in range(PUBLIC_RATE_LIMIT)]
+        allowed = [client.get(paths[route]) for _ in range(limit)]
         refused = client.get(paths[route])
         still_open = [client.get(path) for path in others]
     assert {r.status_code for r in allowed} == {200}
+    assert allowed[0].headers["RateLimit-Limit"] == str(limit)
     assert allowed[-1].headers["RateLimit-Remaining"] == "0"
     assert_problem(refused, 429, "RATE_LIMITED")
     assert int(refused.headers["Retry-After"]) > 0
