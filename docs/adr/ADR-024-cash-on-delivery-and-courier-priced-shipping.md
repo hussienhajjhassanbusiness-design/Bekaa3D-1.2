@@ -82,3 +82,59 @@ An emailed STL file cannot be taken back, so STL purchases must still be paid an
 ## Revisit when
 
 Refusal rates make COD unprofitable, a courier offers an API with fee quotes or tracking, or the business wants to charge delivery itself. Charging shipping again would need a new ADR.
+
+## Appendix — open items to resolve in the named slice
+
+The final review of PR #8 (money and SRS reviewers, 2026-10-10) found no Blocker. Its refund and payment-recovery Majors are recorded as "Must resolve before build" in VS-024 and VS-030 of the slice plan. The items below are the remaining Major and the Minors, grouped by the slice that should resolve them. They are open, not decided.
+
+**Major — VS-031**
+- The cash-block rule ignores the `shipped → cancelled` edge for an unpaid $0 line (decision 17). It counts only lines cancelled from `ready_to_ship`, `returned` or `ready_for_pickup` (BR-144; SRS §9.8; database-design §3.4b and the `cancel_reason` column rule; glossary). So a delivery cash order whose $10 line is refused (`returned → cancelled`, `refused`) and whose accepted $0 line goes `shipped → cancelled` (`other`) is blocked, although only part of it was refused, and VS-031's $0 test fails. Add `shipped` (the $0 edge) to the counted states, the `cancel_reason` rule, the glossary and the request-schema notes.
+
+**VS-023**
+- `webhook_events` has no payment or order link (database-design §9.2), so the hold release cannot ask whether an order has an unprocessed webhook event.
+- VS-023's list of cash CHECKs omits three that database-design §9.1 requires: `verified_at IS NOT NULL` for cash, the `late_captured_at` CHECK, and `provider <> 'cash' → recorded_by IS NULL`. Its tests don't cover them either.
+
+**VS-024**
+- Store the captured amount of a late capture (for example `payments.captured_amount_cents`). An overpayment's `late_capture` refund exceeds `payments.amount_cents`, and a payment-balance cap would block it.
+- SRS §9.4 and §23 still say the release job "provides" a retry; it now cancels the order, and reconciliation is what frees a retry. The test "hold expiring while a payment verifies: the payment wins" cannot hold if the release commits first; that outcome is now a late capture.
+- Some VS-024 tests need state from later slices (physical lines from VS-028, a `refunded` payment from VS-030, a self-cancel from VS-031). VS-028 has the same problem with block rows from VS-031. Say they seed rows directly, as VS-029 does.
+- SRS §20.1's diagram has no `refunded → partially_refunded` edge for a recomputation after a refund fails, and its late-capture sentence omits the amount-mismatch case that §9.2 includes. The entities digital diagram, its lifecycle table and the glossary lack `pending → cancelled` (the hold release).
+
+**VS-029b / VS-033**
+- Is receipt confirmation physical-only? Database-design and the glossary say physical only, but the API row, the plan and FR-21 say "delivered / picked-up lines", which includes delivered STL lines. Also say which lines get `problem_reported_at`.
+- `contact_messages.order_id` belongs to neither VS-033 nor VS-029b explicitly; assign it to one.
+
+**VS-030**
+- Payment status has no path back after a refund fails: the payment state machines lack `refunded → partially_refunded` and `partially_refunded → paid`. The entities doc says settlement recalculates payment status, but SRS §20.2 and decision 12 say settlement changes nothing.
+- Owed refunds are missing from some obligations-queue definitions: api-endpoints maps F-074 to `?status=pending`, and SRS §21.3 indexes "pending refunds" only.
+- Order of steps for a manual refund: FR-10 has the administrator pay before the record exists, so a 422 after paying leaves money out with no obligation. The order should be create → pay → settle. The settle endpoint and its schema still mention "provider-confirmed completion".
+- FR-10 caps a line at "line total minus non-failed refunds" and omits the amount reserved for failed refunds not yet reissued.
+- SRS §10.3–§10.4 and BR-064 still say "a refunded STL line" and "paid, unrefunded" without the partial-refund nuance of §9.6 and §20.3.
+- SRS §9.6, decision 11 and the `REFUND_REQUIRES_CANCELLATION` text say a `shipped` line is "cancelled after it comes back". A paid line cannot be cancelled from `returned`; it is refunded (`returned → refunded`). Fix the wording.
+
+**VS-031**
+- A customer who adds a $0 item to every cash order escapes the block: a refusal leaves only the $0 line, which is cancelled with `other`, and `other` prevents the block. This needs $0 catalogue products to exist.
+- Database-design §17.4 indents `-> refunded # paid only` under the $0 `-> cancelled`, which reads as `cancelled → refunded`.
+- The entities delivery diagram lacks `SHIPPED → CANCELLED` for a $0 unpaid cash line, and the pickup diagram labels its cancel "(no-show)" although `refused` and `other` also apply.
+
+**VS-032**
+- No `UNIQUE(provider, provider_payment_id)` on `payments`. If a provider reuses a transaction id across a retry, one capture could be applied to the retry and also late-captured on the old attempt. A genuine second capture on one attempt also collapses into one refund.
+
+**VS-043**
+- Revenue ("paid line amounts minus refunds") must exclude `late_capture` refunds. A line cancelled after a chargeback is not a paid line, yet its chargeback would still be subtracted, so it would be counted twice.
+
+**VS-045**
+- BR-126's "refunds unsettled" must mean the obligations queue (pending, or failed and not reissued) plus pending `late_capture` refunds. Read literally, a reissued failed refund stays `failed` forever and blocks deletion permanently, while an owed refund might not block it at all.
+
+**Tests to add** (money paths the final review found untested)
+- VS-024: manual confirm racing webhook verification; manual confirm or reconcile with a `cash` payment id gives 409; release for a no-status-API provider with no webhook; release for an order whose only attempt is a mismatched-amount late capture.
+- VS-029: a handover whose live lines total 0 is refused; a handover while the kill switch is on succeeds (BR-040).
+- VS-030:
+  - refund failures: a single-line full refund that then fails (order status); an all-cancelled paid order whose cancellation refund fails;
+  - races: concurrent refund creates with one `Idempotency-Key`; two concurrent reissues; settle racing fail;
+  - late capture: an overpayment refund above `payments.amount_cents`;
+  - mixed orders: both lines fully refunded and one refund then fails; status after a reissue restores coverage; re-buying a refunded STL while its refund is owed; a late capture beside a paid retry with partial refunds.
+- VS-031: a pickup mixed order (`ready_for_pickup → cancelled` with refund, plus an STL line).
+- VS-032: chargeback beside a pending refund and beside an owed refund; on a fully refunded payment; on a late-captured attempt; duplicate submission and the same key in parallel; a forward transition after a full chargeback; partial STL refund + physical delivered + chargeback of the rest.
+- VS-043: `late_capture` refunds excluded from revenue; a chargeback-cancelled line counted once.
+- VS-045: deletion blocked by an owed refund and by a pending `late_capture` refund.
