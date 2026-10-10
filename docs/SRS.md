@@ -335,11 +335,13 @@ Every rule is numbered for traceability. `BR-` prefix.
 | BR-140 | The customer chooses the payment method at checkout: online, or cash (on delivery, or at pickup). It is snapshotted on the order and never changes. |
 | BR-141 | Cash is allowed only when every line of the order is physical. STL-only and mixed orders are paid online first, because an emailed file cannot be taken back. |
 | BR-142 | A cash order is placed without payment and has no checkout hold; its physical lines may enter production once it is placed.                  |
-| BR-143 | The administrator records the cash once per order, at handover, in the same action and transaction that marks every live line delivered or picked up. The amount must equal the sum of live line totals. |
-| BR-144 | A refused or unreachable cash delivery goes shipped → returned → cancelled, and a pickup no-show goes ready for pickup → cancelled, with no refund because nothing was paid. Either blocks cash for that customer until an administrator clears it. |
-| BR-145 | Cash checkout is limited by admin-editable settings: on/off switch (`cash_payment_enabled`, default on), open unpaid cash orders per customer (`cash_max_open_orders`, default 1), and maximum cash order total (`cash_max_order_total`, default 10 000 cents = 100 USD). |
+| BR-143 | The administrator records the cash once per order, at handover, in the same action and transaction that marks every live line delivered or picked up. The order must have at least one live line, and the amount must equal the sum of live line totals and be above zero. A courier who later remits less is settled outside the platform. |
+| BR-144 | A refused or unreachable cash delivery goes shipped → returned → cancelled, and a pickup no-show goes ready for pickup → cancelled, with no refund because nothing was paid. These cancels record a reason: `refused`, `no_show` or `other`. A `refused` or `no_show` cancel that leaves the cash order with no live line blocks cash for that customer and that contact phone until an administrator clears it; refusing only some lines, or `other`, never blocks. |
+| BR-145 | Cash checkout is limited by admin-editable settings: on/off switch (`cash_payment_enabled`, default on), open unpaid cash orders per customer (`cash_max_open_orders`, default 1), and maximum cash order total (`cash_max_order_total`, default 10 000 cents = 100 USD). The open-order limit and the block match the customer or the normalised contact phone, and the total is checked after it is recomputed. |
 | BR-146 | The platform never charges, zones or refunds shipping. Checkout and emails say "delivery fee paid to the courier on delivery".               |
 | BR-147 | After delivery or pickup the customer may confirm receipt or report a problem. Both are optional; the order completes without them.          |
+| BR-148 | No physical work on an unpaid online order: every physical line transition requires a cash order or a paid online payment. Unpaid online orders never appear in the fulfilment queue. |
+| BR-149 | A paid line is a line of an order whose payment reached paid, unless it was cancelled without a refund obligation. A cancelled line of a cash order was never paid: nothing is refundable on it, and it earns no revenue and no Verified Purchase badge. |
 
 ---
 
@@ -412,8 +414,8 @@ Complete inventory. `F-` prefix. Phase indicates build order (§28).
 | F-060 | Order queue with status filters and search                          | 2     |
 | F-061 | Per-line fulfillment status transitions                             | 2     |
 | F-062 | Internal admin notes on orders                                      | 2     |
-| F-063 | Delivery workflow: received → printing (internal) → ready → shipped → delivered | 2 |
-| F-064 | Pickup workflow: received → printing (internal) → ready for pickup → picked up  | 2 |
+| F-063 | Delivery workflow: `pending` → `in_production` (internal) → `ready_to_ship` → `shipped` → `delivered` | 2 |
+| F-064 | Pickup workflow: `pending` → `in_production` (internal) → `ready_for_pickup` → `picked_up` | 2 |
 | F-065 | Return handling with re-ship, reprint, refund, or cancellation of an unpaid cash line | 2 |
 | F-066 | Order cancellation by admin                                         | 2     |
 | F-067 | Estimated dispatch (ready) date calculation                         | 2     |
@@ -579,10 +581,10 @@ F-080 to F-082 and F-084 to F-088 (STL upload, bundles, versions, downloads, dow
 
 1. A verified customer's cart holds only physical products.
 2. At checkout they choose delivery or pickup and pay in cash; the cash limits apply (BR-145).
-3. The order is placed unpaid, with no checkout hold; confirmation email says the order total is paid in cash on delivery (or at pickup) and the delivery fee is paid to the courier.
+3. The order is placed unpaid, with no checkout hold; confirmation email states the amount due in cash on delivery (or at pickup) and that the delivery fee is paid to the courier.
 4. The administrator may call the contact phone, then marks start printing → ready → shipped (or ready for pickup), notifying the customer as in 5.2.
 5. The courier delivers and collects the cash; the administrator records the cash and marks every line delivered in one action. The payment becomes paid and the order completes.
-6. If the customer refuses or cannot be reached, the line goes shipped → returned → cancelled with no refund, and the customer can no longer choose cash until an administrator allows it again.
+6. If the customer refuses the whole order or cannot be reached, its lines go shipped → returned → cancelled (reason `refused`) with no refund, and the customer and that phone number can no longer choose cash until an administrator clears the block. Refusing only some lines blocks nothing.
 
 ---
 
@@ -656,9 +658,9 @@ Executed inside a single transaction:
 5. Re-verify STL ownership (a paid, unrefunded STL line); silently drop anything acquired since adding.
 6. Validate quantities against current caps.
 7. Determine fulfillment method; require an address for delivery and a contact phone for pickup (BR-078).
-8. Validate the payment method: cash only if every line is physical, cash is enabled, the customer is not blocked from cash, has fewer than `cash_max_open_orders` unpaid, uncancelled cash orders, and the total is within `cash_max_order_total` (BR-141, BR-145).
-9. **Recompute all totals server-side.** There is no shipping component.
-10. Create order and order items with snapshots; for an online order also create a pending payment. A cash order gets no payment until the cash is recorded.
+8. **Recompute all totals server-side.** There is no shipping component.
+9. Validate the payment method against the recomputed total: cash only if every line is physical, cash is enabled, neither the customer nor the normalised contact phone is blocked from cash, fewer than `cash_max_open_orders` unpaid, uncancelled cash orders exist for that customer or phone, and the total is within `cash_max_order_total` (BR-141, BR-145). An online order names its provider when more than one is configured (§30.4).
+10. Create order and order items with snapshots; for an online order also create a pending payment with the chosen provider. A cash order gets no payment until the cash is recorded.
 11. Compute the estimated dispatch date.
 12. Clear the cart.
 13. Record terms consent with timestamp, including the cash terms for a cash order.
@@ -711,7 +713,7 @@ An online order was paid before production. A cash order is paid at the counter:
 
 "Start printing" (`pending → in_production`) is the boundary. Before it, the customer may self-cancel the order's physical lines. After it, cancellation requires admin action because material and machine time have been committed. The administrator marks it when work begins.
 
-This transition and a customer self-cancellation contend for the same row lock, so exactly one wins — the race cannot leave the order in an ambiguous state.
+Both lock the `orders` row first and then the lines (§20.8), so exactly one wins — the race cannot leave the order in an ambiguous state, even when printing starts on a different line from the one the cancel checks last.
 
 ### 8.6 Dispatch Estimation
 
@@ -721,11 +723,15 @@ Batch size matters: if one print takes six hours and four fit on the bed, ten un
 
 ### 8.7 Admin Capabilities
 
-View and filter the queue, including a "cash due" filter for unpaid cash orders; inspect customer and order detail; transition line statuses; record cash at handover (§9.8); add internal notes (never customer-visible); cancel lines or orders; issue refunds; view the pending-refund obligations queue; work the STL delivery queue (§10.2); clear a customer's cash block.
+View and filter the queue, including a "cash due" filter for unpaid cash orders (unpaid online orders never appear: BR-148); inspect customer and order detail; transition line statuses of cash orders and paid online orders; record cash at handover (§9.8); add internal notes (never customer-visible); cancel lines or orders; issue refunds; view the pending-refund obligations queue; work the STL delivery queue (§10.2); list and clear cash payment blocks.
 
 ### 8.8 Receipt Confirmation and Problem Reports
 
 The delivered and picked-up emails have "I got it" and "Report a problem" buttons. They only open the order page; the action itself is a signed-in request there, never a link that changes state, because email scanners follow links. "I got it" records `receipt_confirmed_at` on the delivered lines. "Report a problem" records `problem_reported_at` and creates a contact message linked to the order for the administrator. Neither changes a line's state, and the order completes without them.
+
+### 8.9 What the Customer Sees
+
+The customer sees `in_production` as `pending` ("Received"), and their status history omits `in_production` entries. Because the cutoff is invisible, the order exposes a derived `can_cancel` flag: true while every physical line is `pending` and the order is not otherwise closed.
 
 ---
 
@@ -744,7 +750,7 @@ The webhook endpoint is public. If it were trusted, a forged callback would get 
 1. **Receive and persist** the webhook event immediately. A unique constraint on (provider, event id) makes duplicate delivery harmless — this is the idempotency mechanism.
 2. **Return 200 quickly.** Providers retry on timeout; slow processing multiplies deliveries.
 3. **Verify the signature** if the provider offers one. Failure rejects and alerts.
-4. **Independently query** the provider for transaction status, holding no database locks.
+4. **Independently query** the provider for transaction status, holding no database locks. The adapter is the one named on the payment row (`payments.provider`), never the URL; an event whose provider differs from its payment's provider is stored, ignored and alerted.
 5. **Confirm the amount matches** the order total exactly. A lesser amount is never treated as paid.
 6. **Apply the result** in a second transaction: mark paid, move STL lines to `awaiting_delivery`, leave physical lines `pending` and eligible for production, close any live offer, recompute the order projection, write audit and history, enqueue emails.
 
@@ -756,7 +762,7 @@ A scheduled reconciliation job queries the provider for any online payment stuck
 
 ### 9.4 One Live Payment Per Order
 
-A database constraint permits only one payment in pending, processing, or paid state per order. A retry requires the prior attempt to have failed or expired, which is what the checkout-release job provides. A cash order has no payment until its single cash payment is recorded, so it never has a second.
+A database constraint permits only one payment per order in any state other than failed or expired, so a paid or refunded order never gets a second. A retry requires the prior attempt to have failed or expired, which is what the checkout-release job provides. A cash order has no payment until its single cash payment is recorded, so it never has a second.
 
 ### 9.5 Refund Policy
 
@@ -767,7 +773,7 @@ A database constraint permits only one payment in pending, processing, or paid s
 
 ### 9.6 Refund Execution
 
-Refunds may cover any subset of lines; there is no shipping component. Each creates a refund record with amount, currency, reason, requester, approver, method, and settlement state. Digital lines in a refund become `refunded`; one not yet sent leaves the delivery queue.
+Refunds may cover any subset of paid lines (BR-149); there is no shipping component. A line's refundable amount is its line total minus what has already been refunded on it; a cancelled cash line has 0. Each creates a refund record with amount, currency, reason, requester, approver, method, and settlement state. Digital lines in a refund become `refunded`; one not yet sent leaves the delivery queue.
 
 The record remains a **tracked pending obligation** until settled. If the provider has no refund API, settlement is a manual transfer — exactly the kind of task that gets forgotten without a queue driving it. A cash payment is always refunded with method `manual`, up to the cash recorded.
 
@@ -779,13 +785,14 @@ A confirmed reversal marks the affected STL lines refunded (removing any not yet
 
 Decided in ADR-024.
 
-1. **Eligibility.** Cash is offered only when every line is physical, `cash_payment_enabled` is on, the customer is not blocked from cash, has no other unpaid, uncancelled cash order (`cash_max_open_orders`, default 1), and the total is at most `cash_max_order_total` (default 10 000 cents). Checked at checkout under the cart lock, which serialises one customer's checkouts.
-2. **Placement.** The order is created without a payment row and without a checkout hold. Stale-checkout release, reconciliation and payment retry never apply to it.
-3. **Handover — one action, one transaction, once per order.** Every live (non-cancelled) line must be `shipped` (delivery) or `ready_for_pickup` (pickup). The administrator enters the cash collected, which must equal the sum of live line totals. The action locks the order and its lines, marks them all `delivered` or `picked_up`, creates one `payments` row (provider `cash`, status `paid`, amount, recording administrator, `verified_at`), recomputes the order status, and writes history, audit, the in-app notification and the delivered / picked-up email with the cash receipt.
-4. **When to record.** When the courier reports the order delivered and paid. Settling up with the courier afterwards is outside the platform.
-5. **Partial acceptance.** A line the customer refused is cancelled first (`returned → cancelled`); the amount due drops and the handover covers the rest.
-6. **Refusal.** A refused or unreachable delivery goes `shipped → returned → cancelled`; a pickup no-show goes `ready_for_pickup → cancelled`. No refund obligation is created, and `users.cash_payment_blocked_at` is set so the customer is offered only online payment until an administrator clears it.
+1. **Eligibility.** Cash is offered only when every line is physical, `cash_payment_enabled` is on, no uncleared cash payment block matches the customer or the normalised contact phone, fewer than `cash_max_open_orders` unpaid, uncancelled cash orders exist for that customer or that phone, and the **recomputed** total is at most `cash_max_order_total`. Checked at checkout under the cart lock, which serialises one customer's checkouts, plus a transaction-scoped advisory lock on the normalised phone, which serialises checkouts from different accounts with the same phone.
+2. **Placement.** The order is created without a payment row and without a checkout hold. Stale-checkout release, reconciliation and payment retry never apply to it. Its physical lines may enter production at once.
+3. **Handover — one action, one transaction, once per order.** The order must have at least one live (non-cancelled) line, and every live line must be `shipped` (delivery) or `ready_for_pickup` (pickup). The administrator enters the cash collected, which must equal the sum of live line totals and be above zero. Under the lock order of §20.8, the action marks the lines `delivered` or `picked_up`, creates one `payments` row (provider `cash`, status `paid`, amount, recording administrator, `verified_at`), recomputes the order status, and writes history, audit, the in-app notification and the delivered / picked-up email with the cash receipt. A unique index allows one cash payment per order.
+4. **When to record.** When the courier reports the order delivered and paid, for the full amount the customer paid. A courier who remits less to the business is settled outside the platform.
+5. **Partial acceptance.** A line the customer refused is cancelled first (`returned → cancelled`, reason `refused`); the amount due drops and the handover covers the rest. A partial refusal never blocks cash.
+6. **Refusal and no-show.** A refused or unreachable delivery goes `shipped → returned → cancelled`; a pickup no-show goes `ready_for_pickup → cancelled`. Each cancel records `refused`, `no_show` or `other`. No refund obligation is created. If a `refused` or `no_show` cancel leaves the order with no live line, a cash payment block is inserted for the customer and the order's normalised contact phone, in the same transaction; an `other` cancel never blocks. An administrator lists and clears blocks.
 7. **Proof.** No external input can create a cash payment; recording it is the documented manual admin confirmation of BR-054.
+8. **Paid lines.** After the handover, the delivered lines are paid lines. A cancelled line of the same order is not (BR-149): it has nothing refundable and counts toward neither revenue nor the badge.
 
 ---
 
@@ -861,7 +868,7 @@ Any verified user may review any product without purchasing. This is a deliberat
 
 **Guardrails:** one review per user per product (editable), Verified Purchase badge where a real paid, unrefunded purchase exists, admin hide/restore, rate limiting, link and profanity filtering.
 
-The badge is **recomputed** when a purchase is paid or refunded — a cached flag written once would leave a refunded buyer displaying credibility they no longer hold. A cash purchase is paid when its cash is recorded at handover; an unpaid or refused cash order never earns the badge.
+The badge is **recomputed** when a purchase is paid or refunded — a cached flag written once would leave a refunded buyer displaying credibility they no longer hold. A cash purchase is paid when its cash is recorded at handover; an unpaid or refused cash line never earns the badge, even in an order whose other lines were paid (BR-149).
 
 WhatsApp-only products can never earn the badge, since no purchase record exists. This is a known and accepted bias.
 
@@ -961,7 +968,7 @@ These are settings rather than constants specifically so operational changes nev
 
 ### 15.5 Analytics
 
-**Revenue must be attributed per line item**, not per order — a mixed order would otherwise corrupt the STL revenue figure the business relies on. Revenue is paid line amounts minus refunds; there is no shipping revenue. Cash revenue counts from the moment the cash is recorded; an unpaid cash order is not revenue.
+**Revenue must be attributed per line item**, not per order — a mixed order would otherwise corrupt the STL revenue figure the business relies on. Revenue is paid line amounts minus refunds; there is no shipping revenue. Cash revenue counts from the moment the cash is recorded; an unpaid cash order, and a cancelled line of a paid cash order, is not revenue (BR-149).
 
 Reports: revenue by stream, recent purchases, customer statistics, top rated products, most wishlisted, best-selling STL, STL lines awaiting delivery, pending offers, Bring Your Idea funnel conversion.
 
@@ -985,7 +992,7 @@ There is no inventory dashboard, as products are made on demand.
 | Order shipped               | Customer  |
 | Ready for pickup            | Customer  |
 | Order delivered / picked up, with the cash receipt for a cash order and "I got it" / "Report a problem" buttons | Customer |
-| Order cancelled             | Customer  |
+| Order cancelled (for a cash order with lines left, restating the new amount due) | Customer |
 | Refund issued               | Customer  |
 | Offer countered             | Customer  |
 | Offer accepted              | Customer  |
@@ -1049,7 +1056,7 @@ Dependencies point inward only. Domain has no framework or database imports.
 | -------------- | ------------------------------------------------------------------- |
 | Identity       | Users, addresses, sessions, tokens                                  |
 | Catalog        | Products, categories, materials, colours, images                    |
-| Ordering       | Cart, orders, order items, status history                           |
+| Ordering       | Cart, orders, order items, status history, cash payment blocks      |
 | Payments       | Payment attempts (online and recorded cash), webhook events, refunds |
 | Fulfillment    | Fulfillment transitions, cash handover, STL delivery — no tables of its own since ADR-024; line state lives on order items |
 | Negotiation    | Offers, offer rounds                                                |
@@ -1078,7 +1085,7 @@ Cross-context access goes through service interfaces. Direct joins into another 
 
 **Catalog:** Product, ProductImage, Category, Material, Colour
 
-**Ordering:** Cart, CartItem, Order, OrderItem, OrderStatusHistory
+**Ordering:** Cart, CartItem, Order, OrderItem, OrderStatusHistory, CashPaymentBlock
 
 **Payments:** Payment, WebhookEvent, Refund, RefundItem
 
@@ -1134,8 +1141,10 @@ Numbered for traceability. `INV-` prefix.
 
 **Cash payment**
 
-* INV-21 — A cash order has only physical lines.
-* INV-22 — A cash payment is created only by the handover action, in the same transaction that marks every live line delivered or picked up, for exactly the sum of live line totals; at most one per order.
+* INV-21 — A cash order has only physical lines (enforced by the database through `payment_method` copied onto order items under a composite foreign key).
+* INV-22 — A cash payment is created only by the handover action, in the same transaction that marks every live line delivered or picked up, for exactly the sum of live line totals and above zero; at most one per order (unique index).
+* INV-23 — No physical line of an unpaid online order changes state.
+* INV-24 — Every write that changes an order's lines, payment or refunds locks the `orders` row before any line (§20.8).
 
 ---
 
@@ -1163,13 +1172,14 @@ cash order, no payment yet:
     otherwise                        → in_progress
 payment paid (online or cash):
     all lines cancelled              → cancelled
+    refunds cover all paid money     → refunded
     all lines refunded               → refunded
     any refund present               → partially_refunded
     all lines terminal               → completed
     otherwise                        → in_progress
 ```
 
-Recomputed within the same transaction as any payment or line change. An unpaid cash order is `in_progress`; the API exposes a derived `payment_due` flag so the customer and the "cash due" admin filter can tell it apart.
+Recomputed within the same transaction as any payment, line or refund change, under the lock order of §20.8. "Refunds cover all paid money" counts refund records, pending or settled, so the status does not change again on settlement; a mixed order whose physical line was cancelled with a refund and whose STL line was refunded is `refunded`. An unpaid cash order is `in_progress`; the API exposes derived `payment_due` and `can_cancel` flags so the customer and the "cash due" admin filter can tell it apart.
 
 ### 20.3 Order Line — Digital
 
@@ -1195,7 +1205,7 @@ pending ──> in_production ──> ready_to_ship ──> shipped ──> deli
         or admin)
 ```
 
-`returned` is deliberately not terminal. `in_production` ("start printing") is internal and shown to the customer as "Received". Cancelling a paid line creates a refund obligation; cancelling an unpaid cash line does not. For a cash order, `shipped → delivered` happens only through the handover action (§9.8), for all live lines at once.
+`returned` is deliberately not terminal. `in_production` ("start printing") is internal and shown to the customer as "Received". Every edge requires a cash order or a paid online payment (BR-148). Cancelling a paid line creates a refund obligation; cancelling an unpaid cash line does not. `returned → cancelled` is legal only for an unpaid cash line and records a cancel reason. For a cash order, `shipped → delivered` happens only through the handover action (§9.8), for all live lines at once.
 
 ### 20.5 Order Line — Physical (Pickup)
 
@@ -1205,7 +1215,7 @@ pending ──> in_production ──> ready_for_pickup ──> picked_up ──>
    └─> cancelled └─> cancelled       └─> cancelled (admin; no-show)
 ```
 
-For a cash order, `ready_for_pickup → picked_up` happens only through the handover action. A cash no-show (`ready_for_pickup → cancelled`) and a cash refusal (`returned → cancelled`) set the customer's cash block (BR-144).
+For a cash order, `ready_for_pickup → picked_up` happens only through the handover action. `ready_for_pickup → cancelled` records a cancel reason; on an online order it creates a refund obligation and never blocks. A cash `no_show` or `refused` cancel that leaves the order with no live line blocks cash for the customer and phone (BR-144).
 
 ### 20.6 Offer
 
@@ -1227,6 +1237,10 @@ Once accepted, only the checkout window applies.
 new ──> contacted ──> quoted ──> in_progress ──> completed ──> closed
             └──> lost   └──> lost
 ```
+
+### 20.8 Lock Order
+
+Every write that changes an order's lines, payment or refunds locks the `orders` row first, then the lines it reads or changes in `id` order, then the payment row, and recomputes the order status under those locks: line transitions, customer self-cancel, admin cancel, cash handover, payment apply, refund creation and `release_stale_checkouts`. Locking a line before its order would deadlock against the handover, and two parallel line changes could each derive the order status from a stale view of the other (ADR-024).
 
 ---
 
@@ -1265,6 +1279,8 @@ Application checks provide good error messages; **database constraints provide t
 | Delivery requires address                         | Fulfillability           |
 | Physical order requires contact phone             | BR-078                   |
 | Cash payment requires recording administrator     | INV-22                   |
+| One cash payment per order                        | INV-22                   |
+| Cash order has only physical lines; cash payment only on a cash order | INV-21 |
 | Rating between 1 and 5                            | BR-105                   |
 | Non-negative money on every monetary column       | INV-01                   |
 
@@ -1283,6 +1299,7 @@ Catalogue indexes are **partial**, filtered on non-deleted and visible rows — 
 | (user, placed) on orders                        | Customer order history       |
 | (status, placed) on orders                      | Admin queue                  |
 | (placed) partial on unpaid cash orders          | Cash-due filter              |
+| (user), (contact phone) partial on uncleared cash payment blocks | Cash eligibility |
 | (fulfillment status, order) partial physical    | Fulfillment queue            |
 | (placed) partial STL lines awaiting delivery    | STL delivery queue           |
 | (status, responds_by) on offers                 | Expiry job                   |
@@ -1340,7 +1357,7 @@ Every error carries a **stable machine-readable code**. The client renders its o
 | Quantity over cap                          | 422    | QUANTITY_EXCEEDS_LIMIT                                         |
 | Offer below floor                          | 422    | OFFER_BELOW_MINIMUM                                            |
 | Product not purchasable                    | 422    | PRODUCT_NOT_PURCHASABLE                                        |
-| Cash chosen for an order with an STL line, or cash disabled or blocked | 422 | PAYMENT_METHOD_NOT_ALLOWED                  |
+| Cash chosen for an order with an STL line, or cash disabled or blocked; an unconfigured online provider chosen | 422 | PAYMENT_METHOD_NOT_ALLOWED |
 | Open cash orders or cash total over limit  | 422    | CASH_PAYMENT_LIMIT_REACHED                                     |
 | Cash entered differs from the amount due   | 422    | CASH_AMOUNT_MISMATCH                                           |
 | Cooldown active                            | 422    | OFFER_COOLDOWN_ACTIVE                                          |
@@ -1355,9 +1372,9 @@ Every error carries a **stable machine-readable code**. The client renders its o
 
 **Customer:** profile, addresses, orders (including STL delivery status and payment due), order cancellation, receipt confirmation and problem report, cart operations, checkout, offers (create, counter, accept, withdraw, checkout), wishlist, reviews, notifications, data export, account deletion.
 
-**Admin:** product CRUD, image management, STL delivery queue, categories, materials, colours, order queue and transitions, cash handover, customer cash block, refunds, offer management, custom request pipeline, contact messages, review moderation, settings, analytics, payment reconciliation.
+**Admin:** product CRUD, image management, STL delivery queue, categories, materials, colours, order queue and transitions, cash handover, cash payment blocks, refunds, offer management, custom request pipeline, contact messages, review moderation, settings, analytics, payment reconciliation.
 
-**Webhook:** online payment provider callback (`/api/v1/webhooks/payments/{provider}`) — public, IP-allowlisted, signature-verified where available.
+**Webhook:** online payment provider callback (`/api/v1/webhooks/payments/{provider}`) — public, IP-allowlisted, signature-verified where available. Only configured online providers are routable: `cash` never, `mock` never in production; anything else is 404.
 
 Admin routes are mounted on a separate router with separate authentication and rate limits. Sharing a namespace with public routes is how authorization mistakes happen.
 
@@ -1488,9 +1505,9 @@ Lint, type check, test, migration reversibility check, image build, deployment w
 | **Unit**         | State machine transitions including illegal edges, money arithmetic, dispatch estimation                                                                                 |
 | **Integration**  | Real PostgreSQL. **Every constraint asserted by attempting to violate it.** A mock or SQLite asserts nothing, because the invariants live in partial indexes and checks |
 | **Contract**     | Payment adapter against a mock implementing every verification branch, including the no-status-API worst case                                                           |
-| **End-to-end**   | Cart checkout through payment and STL delivery queue to delivered; offer through acceptance, one-time checkout, and payment; mixed order through partial refund; cash order through handover to completed; cash order refused (returned → cancelled, no refund, cash blocked) |
-| **Concurrency**  | Parallel double-checkout (including the same STL twice, and two cash checkouts against the one-open-cash-order limit), duplicate webhooks, self-cancel racing start printing, refund racing mark-delivered, two admins recording the same cash handover, cash handover racing an admin cancel, concurrent offer submission |
-| **Security**     | IDOR sweep across every identified route, unverified-email write attempts, marking another customer's line delivered, confirming receipt on another customer's order, price tampering, cash chosen for an order with an STL line |
+| **End-to-end**   | Cart checkout through payment and STL delivery queue to delivered; offer through acceptance, one-time checkout, and payment; mixed order through partial refund; cash order through handover to completed; cash order refused (returned → cancelled, no refund, cash blocked for customer and phone); partly refused cash order (no block; refused line earns no revenue or badge) |
+| **Concurrency**  | Parallel double-checkout (including the same STL twice, and two accounts sharing a phone against the open-cash-order limit), duplicate webhooks, self-cancel racing start printing on another line of the order, refund racing mark-delivered, two admins recording the same cash handover, cash handover racing an admin cancel or a line transition (no deadlock), two line changes on one order leaving the status correct, concurrent partial refunds, concurrent offer submission |
+| **Security**     | IDOR sweep across every identified route, unverified-email write attempts, marking another customer's line delivered, confirming receipt on another customer's order, price tampering, cash chosen for an order with an STL line, webhooks to an unconfigured, `cash` or (in production) `mock` provider, a webhook whose provider differs from its payment's |
 
 **Mandatory coverage:** the mixed-order partial-refund path, identified in audit as the most bug-prone area in the system.
 
@@ -1519,8 +1536,8 @@ Phases 0–3 and 5 are fully unblocked. Only Phase 4 requires the provider decis
 | 2  | **Critical** | Webhook authenticity unresolved — a forged callback would yield free goods              | Always re-query the provider server-side; never trust callback payload; idempotency by event ID |
 | 3  | **High**     | Refund mechanism unknown; manual refunds get forgotten                                  | Confirm during onboarding; system tracks obligations until settled                              |
 | 4  | **High**     | Online prepaid plus made-on-demand — money held for goods that do not yet exist         | Lead times, quantity caps, availability toggle, kill switch, fast refund path                   |
-| 19 | **High**     | Cash on delivery (ADR-024): goods are printed before payment, so fake or refused orders waste material and machine time | Cash switch, one open cash order per customer, 100 USD cash cap, contact phone to call before printing, refusal blocks cash for the customer, admin may cancel an unpaid line at any time |
-| 20 | **Medium**   | The courier holds collected cash between delivery and remittance; the platform records the cash when the courier reports it, not when it reaches the business | Settle with the courier regularly outside the platform; the cash-due filter and handover records show what each delivery should have collected |
+| 19 | **High**     | Cash on delivery (ADR-024): goods are printed before payment, so fake or refused orders waste material and machine time | Cash switch, one open cash order per customer, 100 USD cash cap, contact phone to call before printing, a whole-order refusal blocks cash for the customer and phone, admin may cancel an unpaid line before it ships or after it is returned |
+| 20 | **Medium**   | The courier holds collected cash between delivery and remittance; the platform records the cash when the courier reports it, not when it reaches the business | Record the full amount the customer paid; settle any shortfall with the courier regularly outside the platform; the cash-due filter and handover records show what each delivery should have collected |
 | 5  | **High**     | Single host is a single point of failure for application and database                   | Tested off-server backups; storage abstraction enables rapid migration                          |
 | 6  | **High**     | Email is critical-path — it gates every user action                                     | Reputable provider, SPF/DKIM, outbox with retry, monitoring, resend                             |
 | 7  | **Medium**   | Mixed-order partial refunds are the most bug-prone path                                 | Per-line modelling from the start; mandatory heavy test coverage                                |
@@ -1588,7 +1605,7 @@ These questions apply to whichever provider §30.4 chooses; the Whish answers so
 
 | Item                                         | Impact                                                                                                                                                                  | Due          |
 | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| Whish, a card gateway, or both               | Which adapters VS-032 builds, the credentials and webhook allowlist, refund and status-query capabilities (§30.1). A card gateway should use a hosted or redirect payment page so card data never reaches the platform | Before VS-032 |
+| Whish, a card gateway, or both               | Which adapters VS-032 builds, the credentials and webhook allowlist, refund and status-query capabilities (§30.1). A card gateway should use a hosted or redirect payment page so card data never reaches the platform. If both are chosen, the customer picks one at checkout and it is snapshotted on the payment row | Before VS-032 |
 
 ---
 
@@ -1611,13 +1628,14 @@ These questions apply to whichever provider §30.4 chooses; the Whish answers so
 | **Bounded Context**       | A module owning its own tables and accessed only through service interfaces                  |
 | **Bring Your Idea (BYI)** | The custom-printing lead workflow                                                            |
 | **Cash Handover**         | The single admin action that records the cash collected for a cash order and marks its live lines delivered or picked up |
-| **Cash on Delivery (COD)** | Payment method `cash` with delivery: the courier collects the order total in cash at the door; at pickup it is paid at the counter |
+| **Cash on Delivery (COD)** | Payment method `cash` with delivery: the courier collects the amount due in cash at the door; at pickup it is paid at the counter |
 | **Courier Delivery Fee**  | The fee the courier sets and collects from the customer on delivery; never part of the order total |
 | **Idempotency Key**       | Client-supplied header preventing duplicate order or refund creation                         |
-| **Kill Switch**           | Global setting pausing all new online checkouts                                              |
+| **Kill Switch**           | Global setting pausing all new checkouts, online and cash                                    |
 | **Lead Time**             | Days required to produce one batch of a physical product                                     |
 | **Mixed Order**           | An order containing both digital and physical lines                                          |
 | **Outbox**                | Table holding emails written inside a business transaction, delivered afterwards by a worker |
+| **Paid Line**             | A line of an order whose payment reached paid, unless cancelled without a refund obligation (BR-149) |
 | **Payment Method**        | Per-order choice at checkout: `online` or `cash`; distinct from Purchase Mode and Fulfillment Method |
 | **Projection**            | A derived value maintained from other state; order status is one                             |
 | **Purchase Mode**         | Per-product setting: Online Only, WhatsApp Only, or Both                                     |

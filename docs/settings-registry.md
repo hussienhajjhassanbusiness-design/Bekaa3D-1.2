@@ -46,7 +46,8 @@ to apply now.
 ### Notes on individual settings
 
 **`accepting_orders` defaults to `false`.** A freshly deployed system has no
-catalogue, no shipping zones and no verified payment provider. Defaulting to
+catalogue and no verified payment provider (it had no shipping zones either,
+before ADR-024 removed them). Defaulting to
 open would mean the one window in which checkout is unconfigured is also the one
 in which customers can reach it. An administrator opens the shop deliberately.
 
@@ -76,12 +77,12 @@ Not seeded yet. VS-028 adds these with the cash-on-delivery checkout and deletes
 | Key | Type | Unit | Default | Range | Public |
 |---|---|---|---|---|:-:|
 | `cash_payment_enabled` | boolean | — | `true` | — | ✅ |
-| `cash_max_open_orders` | integer | unpaid, uncancelled cash orders / customer | `1` | 1 – 10 | ❌ |
+| `cash_max_open_orders` | integer | unpaid, uncancelled cash orders / customer or contact phone | `1` | 1 – 10 | ❌ |
 | `cash_max_order_total` | money | cents (USD) | `10000` (100 USD) | 0 – 1 000 000 cents | ✅ |
 
 `cash_payment_enabled` switches cash off without touching online orders or
 existing cash orders. The two limits bound how much printing a fake or refused
-cash order can waste (SRS §9.8). The maximum total is public because checkout
+cash order can waste (SRS §9.8); the total is checked after checkout recomputes it. The maximum total is public because checkout
 must tell the customer why cash is unavailable; the open-order limit is private,
 like other abuse limits.
 
@@ -99,7 +100,7 @@ The model sets `JSONB(none_as_null=False)` so Python `None` is written as JSON
 
 ## Public settings
 
-`GET /api/v1/settings/public` is unauthenticated and returns exactly five keys:
+`GET /api/v1/settings/public` is unauthenticated and today returns exactly five keys:
 
 ```
 accepting_orders, free_shipping_threshold, pickup_address, pickup_hours, whatsapp_number
@@ -117,7 +118,15 @@ Adding a row to the `settings` table therefore cannot make it public. Making a
 setting public is an edit to the registry *and* to the response schema, in a
 reviewed change.
 
-`free_shipping_threshold` leaves the allowlist when VS-028 deletes it (ADR-024).
+VS-028 changes the allowlist (ADR-024): `free_shipping_threshold` leaves it, and
+`cash_payment_enabled` and `cash_max_order_total` join it, giving six keys:
+
+```
+accepting_orders, cash_payment_enabled, cash_max_order_total, pickup_address, pickup_hours, whatsapp_number
+```
+
+Both changes go through the registry and `PublicSettingsRead` together, as
+described above.
 
 The other seven are internal. `daily_download_cap` was deliberately private
 (publishing an abuse limit tells an abuser how to pace themselves); it is now
@@ -149,7 +158,7 @@ not just the first.
 | `GET /api/v1/admin/settings` | Admin + MFA | Cursor page, ordered by key; `limit` (default 20, max 100), `prefix`, `type` |
 | `GET /api/v1/admin/settings/{key}` | Admin + MFA | `404` for an unknown key |
 | `PATCH /api/v1/admin/settings/{key}` | Admin + MFA + CSRF | `422 SETTING_INVALID` on a bad value; audited |
-| `GET /api/v1/settings/public` | Public | The five allowlisted keys; rate limited |
+| `GET /api/v1/settings/public` | Public | The allowlisted keys (five today, six after VS-028); rate limited |
 
 Keys cannot be created through the API. A new setting arrives as a registry
 entry plus a migration that seeds its row.

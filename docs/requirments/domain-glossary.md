@@ -23,7 +23,7 @@ A synonym must not be introduced when a canonical term already exists.
 | **System**                      | Automated application behavior such as scheduled jobs, projections, expiration, reconciliation, and notifications.                                                             | Administrator or external service                                       |
 | **Payment Provider**            | An external service that processes money and exposes payment creation, callback, status-query, and possibly refund capabilities.                                               | Payment record, Order, Webhook Event                                    |
 | **Whish** | A Lebanese payment provider; a candidate online provider for V1, undecided (SRS §30.4, ADR-024). | A Payment, wallet balance, internal Bekaa3D service, or the chosen provider |
-| **Courier** | An external party that transports an order to a customer, sets and collects the Courier Delivery Fee, and collects the order total for a Cash on Delivery order. | System user, Fulfillment Method, Payment Provider |
+| **Courier** | An external party that transports an order to a customer, sets and collects the Courier Delivery Fee, and collects the amount due for a Cash on Delivery order. | System user, Fulfillment Method, Payment Provider |
 | **Catalogue**                   | The searchable public collection of physical and STL products.                                                                                                                 | Inventory, Cart, Admin product editor                                   |
 | **Product**                     | A sellable catalogue item shared by both physical and STL product types.                                                                                                       | Order Item, Cart Item                                                   |
 | **Physical Product**            | A made-to-order product that requires production and may be delivered or collected from the workshop.                                                                          | Stocked inventory item, STL Product                                     |
@@ -55,6 +55,8 @@ A synonym must not be introduced when a canonical term already exists.
 | **Mixed Order**                 | An order containing at least one physical order item and at least one digital order item.                                                                                      | A product with both purchase modes                                      |
 | **Order Status** | A derived projection calculated from the payment method, payment state and order-item states. | A value directly selected by an administrator |
 | **Order-Item Status**           | The individual fulfillment or digital-delivery state of one order item.                                                                                                        | Order Status, Payment Status                                            |
+| **Customer Status Label** | The text a customer sees for a physical line: "Received" for `pending` and `in_production` (start printing is internal), "Finished" for `ready_to_ship`, then "Shipped", "Ready for pickup", "Delivered", "Picked up". Labels are presentation only; code and APIs use the state names. | A separate state or enum |
+| **Lock Order** | The rule that every write changing an order's lines, payment or refunds locks the `orders` row first, then lines in `id` order, then the payment (ADR-024). | Optimistic version check |
 | **Projection**                  | A value derived and maintained from authoritative underlying records. Order Status is a projection.                                                                            | Independent source of truth                                             |
 | **Snapshot**                    | An immutable copy of business data captured at a specific moment, especially order placement.                                                                                  | Live reference that changes with catalogue edits                        |
 | **Customer Note**               | Information submitted by the customer for the order.                                                                                                                           | Internal Admin Note                                                     |
@@ -80,9 +82,11 @@ A synonym must not be introduced when a canonical term already exists.
 | **Payment Attempt** | One attempt to collect an online order's total through the payment provider. Only one live attempt may exist per order; cash orders have none. | Customer retry request after an active attempt, Cash Handover |
 | **Payment Status**              | The lifecycle state of a payment, such as pending, processing, paid, failed, expired, partially refunded, or refunded.                                                         | Order Status                                                            |
 | **Payment Method** | The per-order choice at checkout: `online` or `cash`. Cash is allowed only when every order item is physical (ADR-024). | Purchase Mode, Fulfillment Method, Payment Provider |
-| **Cash on Delivery (COD)** | Payment method `cash` with delivery: the courier collects the order total in cash at the door. With pickup it is "cash at pickup", paid at the counter. | Pickup, Courier Delivery Fee, an online payment |
+| **Cash on Delivery (COD)** | Payment method `cash` with delivery: the courier collects the amount due (the sum of live line totals) in cash at the door. With pickup it is "cash at pickup", paid at the counter. | Pickup, Courier Delivery Fee, an online payment |
 | **Cash Handover** | The single administrator action that records the cash collected for a cash order and, in the same transaction, marks every live order item delivered or picked up. It creates the order's one `cash` Payment and is the documented manual confirmation for cash. | Payment Verification, Manual Payment Confirmation of an online payment |
-| **Cash Block** | `users.cash_payment_blocked_at`: set when a cash order is refused or not collected; the customer is offered only online payment until an administrator clears it. | Account deactivation, Rate Limit |
+| **Cash Payment Block** | A `cash_payment_blocks` row created when a `refused` or `no_show` cancel leaves a cash order with no live line. While uncleared it removes cash from checkout for that customer and for any account using the same normalised contact phone. Cleared, never deleted, by an administrator. | Account deactivation, Rate Limit, a partial refusal |
+| **Cancel Reason** | `refused`, `no_show` or `other`, recorded when an administrator cancels a line from `returned` or `ready_for_pickup`. Only `refused` and `no_show` can create a Cash Payment Block. | Customer note, refund reason |
+| **Paid Line** | A line of an order whose payment reached `paid`, unless it was cancelled without a refund obligation. Only paid lines are refundable and count toward revenue and the Verified Purchase badge; a cancelled cash line never is one (BR-149). | A line of a paid order regardless of its state |
 | **Payment Due** | A derived flag on an unpaid cash order; the admin "cash due" view lists these orders. | Pending Payment, Order Status |
 | **Pending Payment**             | A payment created but not yet completed or independently confirmed.                                                                                                            | Unpaid cart                                                             |
 | **Paid** | A payment state reached only after independent server-side confirmation of provider status and amount, or, for cash, by the Cash Handover. | Callback received |
@@ -92,7 +96,7 @@ A synonym must not be introduced when a canonical term already exists.
 | **Payment Verification**        | The server-side process of querying or otherwise independently confirming provider status, currency, and amount.                                                               | Trusting callback contents                                              |
 | **Manual Payment Confirmation** | An administrator-confirmed online payment based on checking the provider dashboard when automated status verification is unavailable. | Arbitrary administrator override, Cash Handover |
 | **Payment Reconciliation**      | A scheduled process that checks payments stuck in processing and resolves missed callbacks.                                                                                    | Accounting reconciliation of all business revenue                       |
-| **Live Payment**                | A payment in pending, processing, or paid state that prevents another active attempt for the same order.                                                                       | Any historical failed or expired payment                                |
+| **Live Payment** | A payment in any state other than failed or expired; it prevents another attempt for the same order. A paid, partly refunded or refunded payment stays live. | Any historical failed or expired payment |
 | **Refund** | A record representing money that must be returned for specified order items. | Cancellation, Chargeback, store credit |
 | **Refund Item** | The portion of a refund allocated to a specific order item. | Order Item |
 | **Refund Obligation**           | A tracked duty to return money that remains open until settlement is confirmed.                                                                                                | Completed refund transfer                                               |
@@ -135,7 +139,7 @@ A synonym must not be introduced when a canonical term already exists.
 | **Lead**                        | A potential custom-printing customer represented by a Custom Request.                                                                                                          | Verified Customer or completed Order                                    |
 | **Pipeline**                    | The ordered business states through which a Custom Request or operational record moves.                                                                                        | Background-job queue                                                    |
 | **Setting**                     | A typed, administrator-editable business parameter that can change without deployment.                                                                                         | Source-code constant or environment secret                              |
-| **Kill Switch**                 | The global Setting that blocks new online checkouts while allowing payments already in progress to continue.                                                                   | Application shutdown or maintenance mode                                |
+| **Kill Switch** | The global Setting that blocks new checkouts, online and cash, while allowing payments already in progress and cash handovers of existing orders to complete. | Product availability, purchase mode |
 | **Audit Log**                   | An append-only record of significant administrator, authentication, payment, STL delivery, and state-transition actions.                                                        | Application log or Order Status History                                 |
 | **Status History**              | The ordered history of state changes for a particular business entity.                                                                                                         | Current status or general Audit Log                                     |
 | **Application Log**             | Operational diagnostic output used to understand application behavior and failures.                                                                                            | Audit Log                                                               |
@@ -236,7 +240,7 @@ class PaymentMethod(StrEnum):
     CASH = "cash"
 ```
 
-These four concepts must never share one enum or database column.
+These four concepts must never share one enum or database column. `cash` is also a `payment_provider` value, naming who recorded a payment; that does not merge Payment Method into Payment Provider, because the order's `payment_method` stays its own column.
 
 ### 4. Distinguish current data from snapshots
 
@@ -344,6 +348,7 @@ notifications
 custom_requests
 custom_request_attachments
 contact_messages
+cash_payment_blocks
 
 settings
 audit_logs
@@ -374,6 +379,7 @@ Recommended route nouns:
 /notifications
 /custom-requests
 /contact-messages
+/cash-blocks
 /settings
 /audit-logs
 ```

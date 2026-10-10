@@ -176,6 +176,16 @@ cash
 
 Chosen at checkout and immutable (ADR-024). `cash` requires every line to be physical. Distinct from `purchase_mode` and `fulfillment_method`.
 
+## 3.4b `cancel_reason`
+
+```text
+refused
+no_show
+other
+```
+
+Recorded on an administrator cancel from `returned` (`refused` or `other`) or `ready_for_pickup` (`no_show` or `other`). Only `refused` and `no_show` can create a cash payment block (ADR-024).
+
 ## 3.5 `order_source`
 
 ```text
@@ -366,7 +376,7 @@ mock
 cash
 ```
 
-`cash` has no adapter: only the administrator's cash handover creates a `cash` payment (ADR-024). The online provider is undecided (SRS §30.4); VS-032 adds its value(s) with an additive enum migration before its adapter is enabled.
+`cash` has no adapter: only the administrator's cash handover creates a `cash` payment (ADR-024). It is a value here, rather than a separate column, so one live-payment index and one refund path cover both kinds; the glossary's Payment Method (`online`/`cash`) is still a separate concept on the order. The online provider is undecided (SRS §30.4); VS-032 adds its value(s) with an additive enum migration before its adapter is enabled. Each attempt's provider is stored on its row: chosen by the customer at checkout or retry when more than one is configured. `mock` is never configured in production.
 
 ---
 
@@ -403,6 +413,7 @@ cash
 20. `orders`
 21. `order_items`
 22. `order_status_history`
+22a. `cash_payment_blocks` (ADR-024)
 
 ## Payments
 
@@ -452,7 +463,6 @@ cash
 | `role` | `user_role` | No |  | Default `customer` |
 | `email_verified_at` | TIMESTAMPTZ | Yes |  | `NULL` = unverified |
 | `is_active` | BOOLEAN | No |  | Default `TRUE` |
-| `cash_payment_blocked_at` | TIMESTAMPTZ | Yes |  | Set by a refused cash delivery or pickup no-show; cleared by an administrator; non-null = online payment only (ADR-024) |
 | `anonymized_at` | TIMESTAMPTZ | Yes |  | Account deletion/anonymisation |
 | `deleted_at` | TIMESTAMPTZ | Yes |  | Soft-delete marker where applicable |
 | `created_at` | TIMESTAMPTZ | No |  | UTC |
@@ -949,7 +959,7 @@ but determining whether the referenced product is STL is cross-table. The transa
 | `total_cents` | BIGINT | No | CHECK ≥ 0 |
 | `currency` | CHAR(3) | No | CHECK = `USD` |
 | `recipient_name` | TEXT | Yes | delivery snapshot |
-| `contact_phone_snapshot` | TEXT | Yes | required when `fulfillment_method` is not NULL: the address phone for delivery, entered at checkout for pickup (BR-078) |
+| `contact_phone_snapshot` | TEXT | Yes | required when `fulfillment_method` is not NULL: the address phone for delivery, entered at checkout for pickup (BR-078); stored normalised to E.164 |
 | `governorate` | TEXT | Yes | delivery snapshot |
 | `city` | TEXT | Yes | delivery snapshot |
 | `area` | TEXT | Yes | delivery snapshot |
@@ -994,9 +1004,10 @@ Digital-only:
 fulfillment_method IS NOT NULL → contact_phone_snapshot IS NOT NULL
 fulfillment_method IS NULL     → payment_method = 'online'
 payment_method = 'cash'        → cash_terms_accepted_at IS NOT NULL
+UNIQUE(id, payment_method)     -- target of the composite FKs below
 ```
 
-The fact that an order actually contains physical/digital lines is cross-row and must be validated transactionally; in particular a `cash` order must have only physical lines. Lines are inserted once with the order and never added later, so the checkout transaction is the only place this can be broken.
+The fact that an order actually contains physical/digital lines is cross-row and must be validated transactionally; a `cash` order having only physical lines is enforced by the database through the copied `order_items.payment_method` (§8.4).
 
 ### Rules
 
@@ -1016,7 +1027,7 @@ The fact that an order actually contains physical/digital lines is cross-row and
 (status, placed_at DESC)
 ```
 
-The "cash due" admin filter (unpaid cash orders) gets a partial index in VS-029 once `EXPLAIN` shows its shape.
+The fulfilment queue excludes `pending_payment` orders (BR-148). The open-cash-order count matches `user_id` or `contact_phone_snapshot`; add `(contact_phone_snapshot) WHERE payment_method = 'cash'` if `EXPLAIN` shows the need. The "cash due" admin filter (unpaid cash orders) gets a partial index in VS-029 once `EXPLAIN` shows its shape.
 
 ---
 
@@ -1044,6 +1055,8 @@ The "cash due" admin filter (unpaid cash orders) gets a partial index in VS-029 
 | `cancelled_at` | TIMESTAMPTZ | Yes |  |
 | `fulfilled_at` | TIMESTAMPTZ | Yes | for STL: when marked delivered |
 | `delivered_by` | UUID | Yes | FK → `users.id`; STL only: administrator who marked it delivered |
+| `payment_method` | `payment_method` | No | copy of the order's; composite FK `(order_id, payment_method)` → `orders(id, payment_method)` |
+| `cancel_reason` | `cancel_reason` | Yes | set only with `fulfillment_status = 'cancelled'` from `returned` or `ready_for_pickup` |
 | `receipt_confirmed_at` | TIMESTAMPTZ | Yes | physical only: customer pressed "I got it" (ADR-024) |
 | `problem_reported_at` | TIMESTAMPTZ | Yes | physical only: customer reported a problem (ADR-024) |
 | `created_at` | TIMESTAMPTZ | No |  |
@@ -1076,6 +1089,13 @@ For STL snapshots:
 product_type = stl → quantity = 1
 ```
 
+Cash integrity (INV-21):
+
+```text
+payment_method = 'cash' → product_type = 'physical'
+cancel_reason IS NOT NULL → fulfillment_status = 'cancelled'
+```
+
 For physical snapshots:
 
 ```text
@@ -1099,6 +1119,8 @@ batch_size_snapshot IS NULL
 - an STL line is marked `delivered` only from `awaiting_delivery`, by an administrator, after emailing the file (ADR-019);
 - physical lines may be self-cancelled only while every physical line of the order is `pending` (before start printing);
 - on a cash order, `delivered` / `picked_up` are reached only through the cash handover;
+- no physical line of an unpaid online order changes state (BR-148);
+- customers see `in_production` as `pending`, and their status history omits it;
 - receipt confirmation and problem reports never change `fulfillment_status`;
 - STL lines are never self-cancellable.
 
@@ -1135,6 +1157,36 @@ batch_size_snapshot IS NULL
 
 ---
 
+## 8.6 `cash_payment_blocks`
+
+**Purpose:** Removes cash from checkout for a customer, and for any account using the same phone, after a whole cash order was refused or not collected (ADR-024). Owned by Ordering.
+
+| Column | Type | Null | Constraint |
+|---|---|---:|---|
+| `id` | UUID | No | PK |
+| `user_id` | UUID | No | FK → `users.id` |
+| `contact_phone` | TEXT | No | E.164, copied from the order |
+| `order_id` | UUID | No | FK → `orders.id`; UNIQUE |
+| `reason` | `cancel_reason` | No | CHECK `reason IN ('refused', 'no_show')` |
+| `created_at` | TIMESTAMPTZ | No |  |
+| `cleared_at` | TIMESTAMPTZ | Yes | set by an administrator |
+| `cleared_by` | UUID | Yes | FK → `users.id`; required with `cleared_at` |
+
+### Rules
+
+- inserted in the transaction of the `refused` / `no_show` cancel that leaves a cash order with no live line; never for a partial refusal, an `other` cancel or an online order;
+- cash is unavailable while any uncleared row matches the customer **or** the normalised contact phone;
+- cleared, never deleted.
+
+### Indexes
+
+```text
+(user_id) WHERE cleared_at IS NULL
+(contact_phone) WHERE cleared_at IS NULL
+```
+
+---
+
 # 9. Payment and Refund Tables
 
 ## 9.1 `payments`
@@ -1143,7 +1195,8 @@ batch_size_snapshot IS NULL
 |---|---|---:|---|
 | `id` | UUID | No | PK |
 | `order_id` | UUID | No | FK → `orders.id` |
-| `provider` | `payment_provider` | No | `mock` in development; `cash` for a recorded cash payment; the online provider per SRS §30.4 |
+| `provider` | `payment_provider` | No | `mock` in development; `cash` for a recorded cash payment; the online provider per SRS §30.4, chosen at checkout or retry |
+| `order_payment_method` | `payment_method` | No | copy of the order's; composite FK `(order_id, order_payment_method)` → `orders(id, payment_method)` |
 | `provider_payment_id` | TEXT | Yes | provider reference |
 | `status` | `payment_status` | No |  |
 | `amount_cents` | BIGINT | No | CHECK ≥ 0 |
@@ -1163,13 +1216,17 @@ Only one live payment per order:
 
 ```text
 UNIQUE(order_id)
-WHERE status IN ('pending', 'processing', 'paid')
+WHERE status NOT IN ('failed', 'expired')
 ```
 
-If `partially_refunded` should still block a new payment attempt, include it in the live-state predicate during implementation. The business meaning is that an already-paid order cannot receive a second payment attempt.
+`partially_refunded` and `refunded` count as live: an already-paid order can never receive a second payment attempt.
+
+At most one cash payment per order (INV-22), and cash only on a cash order (INV-21):
 
 ```text
-provider = 'cash' → status <> 'pending' AND status <> 'processing' AND recorded_by IS NOT NULL AND verified_at IS NOT NULL
+UNIQUE(order_id) WHERE provider = 'cash'
+(provider = 'cash') = (order_payment_method = 'cash')
+provider = 'cash' → status <> 'pending' AND status <> 'processing' AND recorded_by IS NOT NULL AND verified_at IS NOT NULL AND amount_cents > 0
 provider <> 'cash' → recorded_by IS NULL
 ```
 
@@ -1178,7 +1235,8 @@ provider <> 'cash' → recorded_by IS NULL
 - callback/webhook is not proof;
 - independent provider verification confirms an online payment;
 - an online payment's confirmed amount must equal the order total;
-- a cash payment is created only by the cash handover, directly as `paid`, for exactly the sum of live line totals (ADR-024);
+- a cash payment is created only by the cash handover, directly as `paid`, for exactly the sum of live line totals, with at least one live line (ADR-024);
+- verification uses the adapter named in `provider`, never the callback URL; an event whose provider differs is stored and ignored;
 - no STL delivery before verified online payment; physical production of an online order waits for payment, of a cash order starts at placement;
 - reconciliation job handles missed callbacks for online payments only.
 
@@ -1262,6 +1320,7 @@ Exact values require confirmation from the payment/refund implementation.
 - partial refund supported;
 - refund may cover selected lines; there is no shipping component (ADR-024);
 - a refund of a `cash` payment always uses method `manual`, up to the cash recorded;
+- only paid lines are refundable (BR-149); a line's refundable amount is `line_total_cents` minus its earlier refund items, and a cancelled cash line has 0;
 - refund remains a tracked obligation until settled;
 - a refunded STL line becomes `refunded` and leaves the delivery queue if not yet sent;
 - an unsettled refund blocks account deletion.
@@ -1775,6 +1834,11 @@ for cleanup.
 | custom_requests | custom_request_attachments | 1:N | `custom_request_attachments.custom_request_id` | CASCADE |
 | users | contact_messages | 1:N optional | `contact_messages.user_id` | SET NULL preferable |
 | orders | contact_messages | 1:N optional | `contact_messages.order_id` | RESTRICT |
+| orders | order_items | 1:N | `(order_items.order_id, order_items.payment_method)` → `orders(id, payment_method)` | RESTRICT; cash integrity |
+| orders | payments | 1:N | `(payments.order_id, payments.order_payment_method)` → `orders(id, payment_method)` | RESTRICT; cash integrity |
+| users | cash_payment_blocks | 1:N | `cash_payment_blocks.user_id` | RESTRICT |
+| orders | cash_payment_blocks | 1:0..1 | `cash_payment_blocks.order_id` | RESTRICT |
+| users | cash_payment_blocks | 1:N optional | `cash_payment_blocks.cleared_by` | RESTRICT |
 | users | audit_logs | 1:N optional | `audit_logs.actor_user_id` | SET NULL if physical purge is ever allowed |
 | users | email_outbox | 1:N optional | `email_outbox.user_id` | SET NULL |
 | users | idempotency_records | 1:N optional | `idempotency_records.user_id` | CASCADE after expiration/safe purge |
@@ -1821,7 +1885,10 @@ These are the most important constraints to express directly in PostgreSQL.
 - STL order-item quantity = 1;
 - physical snapshot has lead-time and batch-size;
 - delivery requires the address snapshot fields; every physical order requires a contact phone;
-- a digital-only order is `online`; a cash order records cash-terms consent.
+- a digital-only order is `online`; a cash order records cash-terms consent;
+- a cash order has only physical lines (copied `payment_method` + CHECK);
+- a cancel reason only on a cancelled line;
+- one cash payment block per order.
 
 ## 15.5 Digital Access
 
@@ -1831,7 +1898,9 @@ These are the most important constraints to express directly in PostgreSQL.
 ## 15.6 Payments
 
 - one live payment per order;
-- a `cash` payment is never `pending` or `processing` and records who recorded it;
+- a `cash` payment is never `pending` or `processing`, is above zero and records who recorded it;
+- at most one `cash` payment per order;
+- `provider = 'cash'` exactly on cash orders.
 - unique webhook provider event;
 - payment/refund money non-negative;
 - refund-item amount > 0.
@@ -1863,7 +1932,7 @@ Not every business rule can be expressed as a local SQL CHECK. These must be imp
 7. Only an administrator marks an STL line delivered, and only from `awaiting_delivery`.
 8. STL lines enter `awaiting_delivery` only after independently verified payment.
 9. Order status projection matches payment + line states.
-10. Cancellation cutoff races against start printing (`pending → in_production`); lock the same order-item row.
+10. Cancellation cutoff races against start printing (`pending → in_production`); both lock the order row first, then the lines (ADR-024 lock order).
 11. Refund-item totals do not exceed paid/refundable amounts.
 12. A refunded STL line leaves the delivery queue in the same transaction.
 13. Acquiring an STL through another route auto-closes the live offer.
@@ -1874,9 +1943,12 @@ Not every business rule can be expressed as a local SQL CHECK. These must be imp
 18. Dispatch estimate is calculated from physical order-line snapshots.
 19. Kill switch blocks new checkout but not an in-flight payment.
 20. Category cannot be archived/deleted while live products remain assigned.
-21. Cash checkout respects `cash_payment_enabled`, the customer's cash block, `cash_max_open_orders` and `cash_max_order_total`, checked under the cart lock.
-22. The cash handover marks every live line delivered / picked up and creates the single cash payment for exactly their total, in one transaction under the order lock.
-23. A cash refusal (`returned → cancelled`) or pickup no-show (`ready_for_pickup → cancelled`) creates no refund and sets the customer's cash block in the same transaction.
+21. Cash checkout respects `cash_payment_enabled`, uncleared blocks for the customer or phone, `cash_max_open_orders` for the customer or phone, and `cash_max_order_total` against the **recomputed** total; checked after the recompute, under the cart lock and an advisory lock on the normalised phone.
+22. The cash handover requires at least one live line, marks every live line delivered / picked up and creates the single cash payment for exactly their total (above zero), in one transaction under the ADR-024 lock order.
+23. A cash refusal (`returned → cancelled`) or pickup no-show (`ready_for_pickup → cancelled`) creates no refund; a `refused` / `no_show` cancel that leaves the order with no live line inserts a `cash_payment_blocks` row in the same transaction.
+24. No physical line of an unpaid online order changes state (BR-148).
+25. Refundable amounts, revenue and the badge count only paid lines (BR-149).
+26. Every write that changes an order's lines, payment or refunds locks `orders` first, then lines by `id`, then `payments` (ADR-024).
 
 ---
 
@@ -1906,15 +1978,15 @@ cash, no payment yet:
   otherwise                -> in_progress
 
 payment paid (online or cash):
-  all lines cancelled      -> cancelled
-  all lines refunded       -> refunded
-  any refund present       -> partially_refunded
-  no physical lines        -> completed
-  all physical terminal    -> completed
-  otherwise                -> in_progress
+  all lines cancelled             -> cancelled
+  refunds cover all paid money    -> refunded
+  all lines refunded              -> refunded
+  any refund present              -> partially_refunded
+  all lines terminal              -> completed
+  otherwise                       -> in_progress
 ```
 
-Projection is recomputed in the same transaction as payment/line changes.
+Projection is recomputed in the same transaction as payment/line/refund changes, under the ADR-024 lock order. "Refunds cover all paid money" counts refund records, pending or settled.
 
 ## 17.3 Digital Order Line
 
@@ -1936,7 +2008,7 @@ pending                          # received
                   -> shipped
                   -> in_production
                   -> refunded    # paid only
-                  -> cancelled   # unpaid cash only; no refund; sets the cash block
+                  -> cancelled   # unpaid cash only; reason refused/other; no refund; may block (§8.6)
 
 pending -> cancelled                         # customer or admin
 in_production | ready_to_ship -> cancelled   # admin decision
@@ -1950,7 +2022,7 @@ in_production | ready_to_ship -> cancelled   # admin decision
 pending -> in_production -> ready_for_pickup -> picked_up -> refunded (paid only)
 pending -> cancelled                          # customer or admin
 in_production -> cancelled                    # admin
-ready_for_pickup -> cancelled                 # admin; no-show; unpaid cash sets the cash block
+ready_for_pickup -> cancelled                 # admin; reason no_show/other; cash may block (§8.6)
 ```
 
 On a cash order `ready_for_pickup -> picked_up` happens only via the cash handover.
@@ -2095,6 +2167,13 @@ WHERE status IN ('pending', 'processing')
 ```text
 (user_id, created_at DESC)
 (user_id, created_at DESC) WHERE read_at IS NULL
+```
+
+## 19.10a Cash Payment Blocks
+
+```text
+cash_payment_blocks(user_id) WHERE cleared_at IS NULL
+cash_payment_blocks(contact_phone) WHERE cleared_at IS NULL
 ```
 
 ## 19.11 Retention Jobs
@@ -2242,6 +2321,7 @@ Later catalogue changes must never alter historical order values.
 | audit_logs | partition + archive after 24 months hot |
 | email_outbox | retain through operational/audit retention; exact period not specified |
 | idempotency_records | purge after expiry |
+| cash_payment_blocks | retain; cleared, never deleted |
 
 ### Wishlist Decision
 
@@ -2266,7 +2346,8 @@ USER
  │    │    └── REFUND_ITEM
  │    ├── PAYMENT
  │    │    └── REFUND
- │    └── ORDER_STATUS_HISTORY
+ │    ├── ORDER_STATUS_HISTORY
+ │    └── CASH_PAYMENT_BLOCK
  ├── OFFER ───────────────── PRODUCT
  │    └── OFFER_ROUND
  ├── REVIEW ──────────────── PRODUCT
@@ -2306,9 +2387,9 @@ These transactions require explicit locking/atomic constraints.
 5. recheck STL ownership;
 6. validate current quantities/caps;
 7. resolve fulfillment, address and contact phone;
-8. validate the payment method and the cash limits;
-9. recompute totals;
-10. create order + lines, and a pending payment for an online order only;
+8. recompute totals;
+9. validate the payment method and the cash limits against the recomputed total (advisory lock on the normalised phone for cash);
+10. create order + lines, and a pending payment (with its chosen provider) for an online order only;
 11. calculate dispatch snapshot;
 12. clear cart;
 13. persist consent;
@@ -2329,7 +2410,7 @@ External operation:
 
 Transaction B:
 
-- lock payment/order;
+- lock the order, then its lines by `id`, then the payment (ADR-024 lock order);
 - apply verified state;
 - move STL lines to `awaiting_delivery`;
 - leave physical lines `pending` (eligible for production);
@@ -2339,17 +2420,21 @@ Transaction B:
 - insert email outbox rows;
 - commit.
 
+## Lock Order (ADR-024)
+
+Every write that changes an order's lines, payment or refunds takes its locks in one order: the `orders` row (`FOR UPDATE`), then the lines it reads or changes in `id` order, then the payment row, then recomputes the status. This covers line transitions, self-cancel, admin cancel, the cash handover, payment apply, refund creation and `release_stale_checkouts`. Locking a line before its order would deadlock against the handover, and two parallel line changes could each derive the order status from a stale view of the other.
+
 ## Cancellation vs Start Printing
 
-Both self-cancel and admin `pending → in_production` transition lock the same `order_items` row. Exactly one operation wins.
+Self-cancel locks the order, then every physical line, then checks they are all `pending`. Start printing locks the same order row first. Exactly one wins, even when printing starts on a different line from the one the cancel checks last.
 
 ## Cash Handover
 
-The handover locks the order row and its lines, checks every live line is `shipped` / `ready_for_pickup` and the amount equals their total, then marks them delivered / picked up and inserts the single `cash` payment. Two concurrent handovers, or a handover racing an admin cancel, serialise on the order lock; the one-live-payment index is the final guarantee against a second cash payment.
+The handover locks the order row, then all its lines, checks at least one live line, every live line `shipped` / `ready_for_pickup` and the amount equals their total, then marks them delivered / picked up and inserts the single `cash` payment. Two concurrent handovers, or a handover racing a transition or cancel on any line, serialise on the order lock; the unique cash-payment index is the final guarantee against a second cash payment.
 
 ## Cash Checkout Limits
 
-The open-cash-order count and the cash block are read under the cart lock; one cart per user means one customer's checkouts run one at a time.
+The open-cash-order count and the blocks are read under the cart lock, which serialises one customer's checkouts, and a transaction-scoped advisory lock on the normalised contact phone (`pg_advisory_xact_lock` on its hash), which serialises cash checkouts from different accounts sharing a phone.
 
 ## Offer Submission
 
@@ -2361,11 +2446,11 @@ The partial unique STL-ownership index on `order_items` is the final race-safe g
 
 ## Mark Delivered vs Refund
 
-Marking an STL line delivered and refunding it lock the same `order_items` row. Exactly one wins, so a refunded line is never marked sent.
+Marking an STL line delivered and refunding it both lock the order row, then that line. Exactly one wins, so a refunded line is never marked sent.
 
 ## Payment Creation
 
-The partial unique live-payment index is the final race-safe guarantee.
+The partial unique live-payment index is the final race-safe guarantee; for cash, the unique cash-payment index as well.
 
 ---
 

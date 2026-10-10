@@ -2,8 +2,8 @@
 
 **Status:** Accepted
 **Date:** 2026-10-10
-**Source basis:** Business decision by the owner, 2026-10-08; SRS §1, §3, §5, §7, §8, §9, §15, §16, §19, §20, §22, §23, §27, §29, §30
-**Supersedes:** nothing in full. Reopens the provider choice in [ADR-012](ADR-012-payment-provider-abstraction.md) ("Whish is V1's provider"); ADR-012's abstraction decision stands.
+**Source basis:** Business decision by the owner, 2026-10-08, and follow-up answers of 2026-10-10; SRS §1, §3, §5, §7, §8, §9, §15, §16, §19, §20, §22, §23, §27, §29, §30
+**Supersedes:** nothing in full. Amends [ADR-012](ADR-012-payment-provider-abstraction.md) in two places: its provider choice ("Whish is V1's provider") is reopened, and its rule "verify before granting/producing anything" applies to online orders only — a cash order is produced before it is paid. ADR-012's abstraction and verification decisions otherwise stand.
 
 ## Context
 
@@ -16,28 +16,44 @@ An emailed STL file cannot be taken back, so STL purchases must still be paid an
 ## Decision
 
 1. **The platform never charges shipping.** No shipping line in the order total, no shipping zones, no free-shipping threshold, no shipping refunds. Checkout and emails say "delivery fee paid to the courier on delivery". `total = subtotal + tax` (tax is 0 in V1).
-2. **Payment method is chosen at checkout: `online` or `cash`.** It is snapshotted on the order (`orders.payment_method`) and never changes. Cash is allowed only when every line is physical; an order with any STL line is paid online. Pickup orders follow the same rule ("cash at pickup").
+2. **Payment method is chosen at checkout: `online` or `cash`.** It is snapshotted on the order (`orders.payment_method`) and never changes. Cash is allowed only when every line is physical; an order with any STL line is paid online. Pickup orders follow the same rule ("cash at pickup"). The database enforces it: `payment_method` is copied onto `order_items` and `payments` under a composite foreign key to `orders(id, payment_method)`, with CHECKs that a cash order has no STL line and that `provider = 'cash'` exactly when the order is cash.
 3. **A cash order is placed unpaid and has no `payments` row while unpaid.** It has no checkout hold, so stale-checkout release, reconciliation and payment retry never touch it. Its physical lines are eligible for production as soon as it is placed.
-4. **Cash is recorded once per order, at handover.** One admin action, "record delivery and cash", requires every live line to be `shipped` (delivery) or `ready_for_pickup` (pickup). In one transaction it marks them `delivered` / `picked_up` and creates one `payments` row (`provider = 'cash'`, `status = 'paid'`, amount = sum of live line totals, recorded by the admin). The cash entered must equal that amount exactly. This is the documented manual admin confirmation, so a callback is still never proof: no external input can create a cash payment.
-5. **Refusal costs nothing but the work.** A refused or unreachable delivery goes `shipped → returned → cancelled`; a pickup no-show goes `ready_for_pickup → cancelled`. An unpaid cash line creates no refund obligation. Either path sets `users.cash_payment_blocked_at`, which removes cash from that customer's checkout until an administrator clears it.
-6. **COD abuse limits** are admin-editable settings: `cash_payment_enabled` (default `true`), `cash_max_open_orders` (default 1 unpaid, uncancelled cash order per customer, checked under the cart lock), `cash_max_order_total` (default 10 000 cents, USD). Every physical order snapshots a contact phone (the address's phone for delivery, a phone entered at checkout for pickup) so the administrator can call before printing.
-7. **Physical line states.** Delivery: `pending → in_production → ready_to_ship → shipped → delivered`. Pickup: `pending → in_production → ready_for_pickup → picked_up`. `in_production` ("start printing") is internal: no email or notification, and customers see it as "Received". Customers are emailed and notified at `ready_to_ship` ("your order is finished"), `shipped`, `ready_for_pickup` and `delivered` / `picked_up`. Self-cancel is allowed only while every physical line is `pending`.
-8. **Receipt confirmation is optional.** The delivered / picked-up email links to the order page, where a signed-in customer can press "I got it" (sets `receipt_confirmed_at`) or "Report a problem" (creates a contact message linked to the order and sets `problem_reported_at`). The order completes without either.
-9. **Online refunds and cash refunds.** A cash order can be refunded only after its cash is recorded, always with method `manual`, up to the cash recorded.
-10. **The online provider is an open decision** (SRS §30), due before VS-032. The provider port and mock adapter stay; the webhook route becomes provider-neutral (`/api/v1/webhooks/payments/{provider}`).
-11. **The address book stays** (recipient, Lebanese phone, address); the phone is the courier's contact.
+4. **No physical work on an unpaid online order.** Every physical line transition requires the order to be a cash order or to have a `paid` online payment; otherwise 409 `INVALID_STATE_TRANSITION`. `pending_payment` orders never appear in the fulfilment queue.
+5. **Cash is recorded once per order, at handover.** One admin action, the cash handover, requires at least one live line and every live line `shipped` (delivery) or `ready_for_pickup` (pickup). In one transaction it marks them `delivered` / `picked_up` and creates one `payments` row (`provider = 'cash'`, `status = 'paid'`, amount = sum of live line totals and above zero, recorded by the admin). The cash entered must equal that amount exactly. A unique index allows one cash payment per order. This is the documented manual admin confirmation, so a callback is still never proof: no external input can create a cash payment. If the courier later remits less than it collected, that is settled with the courier outside the platform; the handover records what the customer paid.
+6. **Refusal costs nothing but the work.** A refused or unreachable delivery goes `shipped → returned → cancelled`; a pickup no-show goes `ready_for_pickup → cancelled`. These cancels carry a reason: `refused`, `no_show` or `other`. An unpaid cash line creates no refund obligation. A `refused` or `no_show` cancel that leaves a cash order with no live line — the whole order refused or not collected — inserts a **cash payment block** for the customer and the order's normalised contact phone. A refusal of only some lines (the rest handed over) and any `other` cancel never block. An administrator clears a block.
+7. **COD abuse limits** are admin-editable settings: `cash_payment_enabled` (default `true`), `cash_max_open_orders` (default 1), `cash_max_order_total` (default 10 000 cents, USD). Eligibility is checked **after** totals are recomputed, against the recomputed total. The open-order count and the block both match on the customer **or** the normalised contact phone, so a second account with the same phone is limited too. Every physical order snapshots a contact phone (the address's phone for delivery, a phone entered at checkout for pickup), normalised to E.164, so the administrator can call before printing.
+8. **Physical line states.** Delivery: `pending → in_production → ready_to_ship → shipped → delivered`. Pickup: `pending → in_production → ready_for_pickup → picked_up`. `in_production` ("start printing") is internal: no email or notification, customers see it as "Received", and it is hidden from the customer's status history; the order exposes a derived `can_cancel` instead. Customers are emailed and notified at `ready_to_ship` ("your order is finished"), `shipped`, `ready_for_pickup` and `delivered` / `picked_up`. Self-cancel is allowed only while every physical line is `pending`.
+9. **Lock order: `orders` before `order_items`, everywhere.** Every write that changes an order's lines, payment or refunds locks the `orders` row first (`FOR UPDATE`), then the lines it reads or changes in `id` order, then the payment row, and recomputes the order status under those locks:
+
+   | Operation | Order |
+   |---|---|
+   | Line transition (STL or physical) | `orders` → that line → recompute |
+   | Customer self-cancel, admin cancel | `orders` → all physical lines by `id` → refund rows → recompute |
+   | Cash handover | `orders` → all lines by `id` → INSERT cash payment → recompute |
+   | Payment apply (webhook, reconciliation, manual confirm) | `orders` → lines by `id` → `payments` → recompute |
+   | Refund create | `orders` → refunded lines by `id` → `payments` → recompute |
+   | `release_stale_checkouts` | `orders` → lines by `id` → `payments` → recompute |
+
+   Locking a line first and the order second, as a line-only lock would, closes a cycle against the handover and PostgreSQL reports `DeadlockDetectedError` — the same class of bug ADR-018 fixed with "`users` before `sessions`". Locking the order also stops two parallel line changes from each deriving the order status from a stale view of the other line.
+10. **Receipt confirmation is optional.** The delivered / picked-up email links to the order page, where a signed-in customer can press "I got it" (sets `receipt_confirmed_at`) or "Report a problem" (creates a contact message linked to the order and sets `problem_reported_at`). The order completes without either.
+11. **A paid line** is a line of an order whose payment reached `paid`, unless it was cancelled without a refund obligation. A cancelled line of a cash order was never paid: its refundable amount is 0, and it earns no revenue and no Verified Purchase badge. A cash payment is refunded only with method `manual`, up to the cash recorded.
+12. **An order whose paid money has all been refunded derives `refunded`**, not `partially_refunded` — for example a mixed order whose physical line was cancelled with a refund and whose STL line was refunded.
+13. **The online provider is an open decision** (SRS §30.4), due before VS-032. The provider port and mock adapter stay. The webhook route is provider-neutral (`/api/v1/webhooks/payments/{provider}`) and routes only the configured online providers: `cash` never, `mock` never in production. Verification always uses the adapter named on the payment row, never the URL; an event whose provider differs from its payment's provider is stored and ignored. If §30.4 chooses both Whish and a card gateway, the customer picks the provider at checkout and it is snapshotted on the payment row.
+14. **The address book stays** (recipient, Lebanese phone, address); the phone is the courier's contact.
 
 ## Consequences
 
 + No zone table, zone admin, threshold or shipping-refund arithmetic: VS-027 leaves the plan, and the mixed-order partial-refund path loses its shipping component.
 + Customers without a card or wallet balance can buy physical goods on the platform instead of only through WhatsApp.
 + Cash orders never enter the online payment recovery machinery, so it needs no special cases.
-- **Goods are made before they are paid for.** A refused COD order wastes material and printer time. Mitigated by the limits in decision 6, the refusal block, the contact phone, and the admin's right to cancel an unpaid line at any time. Recorded in the risk register.
-- **The courier holds the business's cash** between delivery and remittance. Settling up with the courier is outside the platform.
++ One lock order for every order-changing write, so the documented races resolve to a 409 instead of a deadlock.
+- **Goods are made before they are paid for.** A refused COD order wastes material and printer time. Mitigated by the limits in decision 7, the refusal block, the contact phone, and the admin's right to cancel an unpaid line before it ships and after it comes back. Recorded in the risk register.
+- **The courier holds the business's cash** between delivery and remittance. A short remittance is settled with the courier outside the platform.
 - **"Start printing" is now the only production cutoff and the customer never sees it.** Self-cancel closes when the administrator marks it, so started work is protected only if it is marked promptly.
 - **One cash handover per order,** so a cash order's lines are delivered together; a partly refused order is resolved by cancelling the refused line first.
-- The order projection gains a branch: an unpaid cash order is `in_progress` (or `cancelled` once every line is), and the API exposes `payment_due`.
-- `free_shipping_threshold` is already seeded by VS-007 (migration `de1d8a23512f`); VS-028 deletes the row and its registry entry. No order, payment or zone table exists yet, so nothing else in code changes.
+- The order projection gains a branch: an unpaid cash order is `in_progress` (or `cancelled` once every line is), and the API exposes `payment_due` and `can_cancel`.
+- A new Ordering table, `cash_payment_blocks`, replaces the earlier idea of a `users` column, because a block must match a phone as well as an account.
+- **Code that must change in later slices:** `free_shipping_threshold` is already seeded by VS-007 (migration `de1d8a23512f`); VS-028 deletes the row and its registry entry. The Whish-specific settings in `src/app/core/config.py` (`whish_*`, `whish_webhook_ips`) and `.env.example`, and the single `payment_provider` setting, become provider-neutral (a list of configured online providers) in VS-032. No order, payment or zone table exists yet.
 
 ## Alternatives rejected
 
@@ -45,6 +61,8 @@ An emailed STL file cannot be taken back, so STL purchases must still be paid an
 - **Recording cash per line** — several paid payments per order would break one-live-payment (INV-19) and the exact-amount check.
 - **COD for mixed or STL orders** — an emailed file cannot be recovered from a customer who then refuses to pay.
 - **Keep zones as an informational fee estimate** — the courier sets the fee; a platform estimate would be wrong and still read as a promise.
+- **A shortfall path at handover** — the customer paid the courier in full; recording less would understate revenue and invite disputes the customer is not party to.
+- **Block cash on any refused line** — would punish a customer who accepted most of an order.
 
 ## Revisit when
 

@@ -292,7 +292,7 @@ The customer has a non-empty cart
 An idempotency key is supplied
 The platform is accepting orders
 Required delivery or pickup information is present, including a contact phone for pickup
-A payment method is chosen: online, or cash for an order whose every line is physical
+A payment method is chosen: online (naming the provider when more than one is configured), or cash for an order whose every line is physical
 
 When:
 
@@ -305,8 +305,9 @@ Every product and quantity is revalidated
 Current prices are compared with cart snapshots
 Price changes require customer confirmation
 Totals are recomputed server-side; no shipping amount is charged, because the courier collects the delivery fee
+The payment method is validated against the recomputed total, never against a cart snapshot or client value
 Order and order-line snapshots are created, including the payment method and contact phone
-For an online order, a pending payment attempt is created; a cash order gets no payment until its cash handover
+For an online order, a pending payment attempt is created with the chosen provider on the payment row; a cash order gets no payment until its cash handover
 Terms consent is recorded, including the cash terms for a cash order
 Estimated dispatch is calculated for physical lines
 The cart is cleared
@@ -316,8 +317,9 @@ Negative cases:
 
 WhatsApp-only, unavailable, hidden, or deleted products are rejected
 Delivery without a valid address, or pickup without a contact phone, is rejected
-Cash is rejected for an order with any STL line, when cash is switched off, or when the customer is blocked from cash
-Cash is rejected when the customer already has the maximum number of unpaid cash orders or the total exceeds the cash maximum
+Cash is rejected for an order with any STL line, when cash is switched off, or when the customer or the normalised contact phone is blocked from cash
+Cash is rejected when the customer or the contact phone already has the maximum number of unpaid cash orders, or the recomputed total exceeds the cash maximum
+An unconfigured online provider is rejected
 An already-owned STL is removed or rejected according to the checkout rule
 A reused idempotency key with a different body returns a conflict
 New checkout is rejected while the global accepting-orders switch is disabled
@@ -334,7 +336,7 @@ Concurrent access:
 Repeated checkout with the same key and body returns the original result
 Two different keys submitted against the same cart must not create two valid orders
 Cart locking and database constraints ensure only one checkout consumes the cart
-The cart lock serialises one customer's checkouts, so two parallel cash checkouts cannot both pass the open-cash-order limit
+The cart lock serialises one customer's checkouts, and a transaction-scoped advisory lock on the normalised contact phone serialises cash checkouts from different accounts sharing a phone, so parallel cash checkouts cannot both pass the open-cash-order limit
 
 Failure behaviour:
 
@@ -356,8 +358,8 @@ A valid pending order and live payment attempt exist
 
 When:
 
-The customer is redirected to the payment provider
-The provider sends a callback
+The customer is redirected to the payment provider chosen at checkout
+The provider sends a callback to its own route
 The system reconciles a payment
 An administrator performs permitted manual confirmation
 
@@ -365,7 +367,7 @@ Then:
 
 The callback event is stored
 Signature verification occurs where supported
-The server independently queries the payment provider
+The server independently queries the payment provider named on the payment row, never the one named in the URL
 The confirmed currency and amount must equal the order total
 The payment becomes paid only after independent verification
 STL lines enter awaiting_delivery atomically
@@ -378,6 +380,8 @@ Negative cases:
 
 A callback alone is never proof of payment
 Invalid signatures are rejected and alerted
+Only configured online providers are routable; cash never, and the mock provider never in production
+An event whose provider differs from its payment's provider is stored and ignored
 Underpayment is not accepted
 Duplicate provider events do not apply a payment twice
 A second live payment for the same order is prohibited
@@ -395,6 +399,7 @@ Concurrent access:
 Duplicate callbacks are deduplicated by provider event identifier
 At most one live payment exists per order
 Simultaneous callback and reconciliation processing must result in one payment application
+Applying a result locks the order row, then its lines, then the payment (ADR-024 lock order)
 STL ownership uniqueness prevents paying twice for the same STL
 
 Failure behaviour:
@@ -424,6 +429,7 @@ The order contains one or more physical lines
 
 When:
 
+The administrator opens the fulfilment queue, which never lists unpaid online orders
 The administrator marks start printing
 Marks an item ready, shipped, delivered, ready for pickup, picked up, or returned
 
@@ -443,6 +449,8 @@ A delivery line cannot use pickup-only transitions
 A pickup line cannot use shipping-only transitions
 A returned item is not automatically treated as terminal
 On a cash order, delivered and picked up are reached only through the cash handover (FR-20)
+Any physical transition on an unpaid online order is rejected with an invalid-state conflict
+Customers never see start printing: the line shows as received and the history omits it
 
 State transitions touched:
 
@@ -460,11 +468,12 @@ returned → shipped | in_production | refunded (paid line) | cancelled (unpaid 
 
 Pickup no-show:
 
-ready_for_pickup → cancelled (administrator)
+ready_for_pickup → cancelled (administrator, with reason no_show or other)
 
 Concurrent access:
 
-A customer cancellation racing start printing must lock the same order line
+Every transition locks the order row first, then the line (ADR-024 lock order)
+A customer cancellation racing start printing serialises on the order row, whichever line each touches
 Exactly one operation succeeds according to the committed state
 Concurrent administrator transitions from the same original state must not both succeed
 
@@ -498,6 +507,7 @@ Then:
 
 The line becomes cancelled
 A refund obligation is created when money must be returned; an unpaid cash order creates none
+The order's can_cancel flag reflects whether this request can succeed
 Order status is recomputed
 Audit and notification records are created
 
@@ -512,10 +522,13 @@ State transitions touched:
 
 Physical pending → cancelled
 Paid order → cancelled or partially refunded, depending on remaining lines
+Unpaid cash order → cancelled
+
+Administrator cancellations from returned or ready_for_pickup record a reason (refused, no_show, other); see FR-20 for the cash block.
 
 Concurrent access:
 
-Cancellation and start-printing operations lock the same line
+Cancellation locks the order row, then every physical line in id order, before checking them; start printing locks the same order row first
 Only one transition may commit
 The losing request receives an invalid-state conflict
 
@@ -535,6 +548,7 @@ so that customer obligations are recorded and settled correctly.
 Given:
 
 The order has a confirmed payment
+The refunded lines are paid lines: a cancelled line of a cash order was never paid and has nothing refundable
 The refundable amount is greater than zero
 The requested amount does not exceed the remaining refundable balance
 
@@ -550,11 +564,13 @@ The obligation remains pending until confirmed settled
 Relevant line and order statuses are recomputed
 Refunded STL lines become refunded; one not yet sent leaves the delivery queue
 A cash payment is refunded with method manual, up to the cash recorded
+When refunds cover all paid money, the order becomes refunded
 Audit and customer-notification records are created
 
 Negative cases:
 
-The total refunded amount cannot exceed the paid amount
+The total refunded amount cannot exceed the paid amount, and no line's refund can exceed its line total minus what was already refunded on it
+A refund item on a cancelled cash line is rejected
 The same amount cannot be refunded twice
 Unpaid orders cannot be refunded, including cash orders whose cash has not been recorded
 Unauthorized users cannot issue refunds
@@ -571,7 +587,7 @@ Refund pending → settled or failed
 Concurrent access:
 
 Refund requests use idempotency protection
-Concurrent partial refunds lock or recheck the remaining refundable balance
+Concurrent partial refunds lock the order row, then the refunded lines, then the payment, and recheck the remaining balance
 Only amounts within the remaining balance may commit
 
 Failure behaviour:
@@ -627,7 +643,7 @@ Awaiting_delivery or delivered → refunded
 
 Concurrent access:
 
-Marking delivered and refunding the same line lock the same row; exactly one succeeds
+Marking delivered and refunding the same line both lock the order row, then that line; exactly one succeeds
 Two administrators marking the same line delivered produce one delivery record and one notification
 Two parallel checkouts for the same STL by one customer: the ownership constraint lets only one hold a live line
 
@@ -727,7 +743,7 @@ Links, prohibited content, or excessive submissions may be rejected
 Hidden reviews do not contribute to public aggregates
 Unverified users cannot review or modify a wishlist
 Customers cannot edit other customers’ reviews
-An unpaid or refused cash purchase never earns the badge
+An unpaid or refused cash purchase never earns the badge, even when the rest of its order was paid
 
 State transitions touched:
 
@@ -914,7 +930,7 @@ Inspects audit history
 Then:
 
 Orders (including cash orders awaiting handover), offers, refunds, payments, reviews, custom requests, and messages can be filtered and processed
-Cash limits (switch, open cash orders per customer, maximum cash total) are typed settings, and a customer's cash block can be cleared
+Cash limits (switch, open cash orders per customer or phone, maximum cash total) are typed settings, and cash payment blocks can be listed and cleared
 Typed settings are validated before saving
 Every setting change records previous value, new value, actor, and timestamp
 Revenue is attributed by order line and product stream
@@ -1008,7 +1024,7 @@ so that the payment is confirmed by a documented manual check and the order comp
 Given:
 
 The order's payment method is cash and no cash has been recorded
-Every live (non-cancelled) line is shipped (delivery) or ready for pickup (pickup)
+The order has at least one live (non-cancelled) line, and every live line is shipped (delivery) or ready for pickup (pickup)
 The courier has reported the order delivered and paid, or the customer paid at the counter
 
 When:
@@ -1017,7 +1033,7 @@ The administrator records the cash handover with the amount collected
 
 Then:
 
-The amount equals the sum of live line totals
+The amount equals the sum of live line totals and is above zero; it is the full amount the customer paid, even if the courier later remits less
 Every live line becomes delivered or picked up
 One payment is created with provider cash, status paid, the amount, and the recording administrator
 Order status and the Verified Purchase badge are recomputed
@@ -1027,6 +1043,8 @@ Negative cases:
 
 A different amount is rejected and nothing changes
 A line not yet shipped or ready for pickup rejects the handover
+An order with no live line rejects the handover
+A second cash payment on the same order is refused by a unique index
 An online order cannot use the cash handover
 The transition endpoint cannot mark a cash order's line delivered or picked up
 Customers cannot record cash
@@ -1040,12 +1058,14 @@ Order in progress → completed
 
 Refusal:
 
-shipped → returned → cancelled, or ready_for_pickup → cancelled, with no refund obligation
-The customer's cash block is set in the same transaction
+shipped → returned → cancelled (reason refused or other), or ready_for_pickup → cancelled (reason no_show or other), with no refund obligation
+A refused or no_show cancel that leaves the order with no live line inserts a cash payment block for the customer and the order's contact phone, in the same transaction
+Refusing only some lines, or an other cancel, never blocks
+An administrator lists and clears blocks
 
 Concurrent access:
 
-The handover locks the order and its lines
+The handover locks the order row, then every line in id order (ADR-024 lock order), so it cannot deadlock against a line transition or cancellation
 Two administrators recording the same handover: one succeeds, one gets a conflict; one payment, one audit row, one email
 A handover racing an administrator cancellation on the same order has exactly one winner
 
