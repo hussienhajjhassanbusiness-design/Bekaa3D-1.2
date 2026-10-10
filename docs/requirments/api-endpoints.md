@@ -16,7 +16,7 @@
 2. Admin APIs live under the separate `/api/v1/admin` router.
 3. Payment-provider callbacks live under `/api/v1/webhooks`.
 4. Operational health endpoints live outside the versioned business API.
-5. The client never supplies trusted prices, totals, shipping rates, verified-purchase flags, STL ownership or delivery state, order status projections, or payment-confirmed state.
+5. The client never supplies trusted prices, totals, cash amounts due, verified-purchase flags, STL ownership or delivery state, order status projections, or payment-confirmed state.
 6. Every authenticated resource fetch by ID performs object-level authorization.
 7. A caller who is authenticated but not allowed to know that a resource exists receives `404 NOT_FOUND`, not an existence-revealing `403`.
 8. Every write by a normal account requires a verified email, except identity flows and explicitly public guest forms.
@@ -25,7 +25,7 @@
 11. All externally visible errors use stable machine-readable codes.
 12. State-machine mutations use explicit action/transition endpoints rather than unrestricted status-field PATCHes.
 13. Side effects such as email delivery are committed via the transactional outbox and executed after commit.
-14. Whish callbacks are notifications only; they never directly prove payment.
+14. Payment-provider callbacks are notifications only; they never directly prove payment. A cash payment is created only by the administrator's cash handover (ADR-024).
 15. STL bytes are never streamed through FastAPI; the API authorizes and nginx serves via internal redirect.
 
 ---
@@ -191,7 +191,11 @@ These codes are implementation additions needed to give the frontend determinist
 | 410 | `RESOURCE_EXPIRED` | Single-use/time-limited resource expired |
 | 416 | `RANGE_NOT_SATISFIABLE` | Invalid byte range on an admin attachment download |
 | 422 | `REFUND_EXCEEDS_AVAILABLE` | Requested refund exceeds refundable amount |
-| 422 | `INVALID_FULFILLMENT` | Address/zone/method does not match cart contents |
+| 422 | `REFUND_REQUIRES_CANCELLATION` | The refund would empty an unfinished physical line; cancel the line instead (ADR-024) |
+| 422 | `INVALID_FULFILLMENT` | Address, contact phone or method does not match cart contents |
+| 422 | `PAYMENT_METHOD_NOT_ALLOWED` | Cash chosen for an order with an STL line or a zero total, while cash is switched off, or by a customer or phone blocked from cash; or an unconfigured online provider chosen (ADR-024) |
+| 422 | `CASH_PAYMENT_LIMIT_REACHED` | The customer or the contact phone already has the maximum open unpaid cash orders, or the recomputed total exceeds the cash maximum (ADR-024) |
+| 422 | `CASH_AMOUNT_MISMATCH` | Cash entered at handover differs from the amount due (ADR-024) |
 | 422 | `UPLOAD_REJECTED` | Type/size/count/content validation failed |
 | 422 | `MALWARE_DETECTED` | Uploaded content failed malware scan |
 | 422 | `SETTING_INVALID` | Setting value does not match its declared type/range |
@@ -229,7 +233,7 @@ These are intentionally outside `/api/v1`.
 | `GET /api/v1/categories` | Public | — | `200 CategoryList` | 429 | Hard-limited reference list | Active categories only |
 | `GET /api/v1/materials` | Public | — | `200 MaterialList` | 429 | Hard-limited reference list | Active material values |
 | `GET /api/v1/colours` | Public | — | `200 ColourList` | 429 | Hard-limited reference list | Active colour values |
-| `GET /api/v1/settings/public` | Public | — | `200 PublicSettingsRead` | 429 | — | Strict allowlist only; e.g. WhatsApp number, pickup address/hours, accepting-orders state, free-shipping threshold |
+| `GET /api/v1/settings/public` | Public | — | `200 PublicSettingsRead` | 429 | — | Strict allowlist only; e.g. WhatsApp number, pickup address/hours, accepting-orders state, cash payment switch and maximum cash total |
 
 ### Public Product List Rules
 
@@ -318,7 +322,7 @@ There is no normal “disable MFA” endpoint in V1 because the SRS treats admin
 
 ---
 
-# 10. Cart, Shipping and Checkout
+# 10. Cart and Checkout
 
 ## 10.1 Cart
 
@@ -331,17 +335,13 @@ There is no normal “disable MFA” endpoint in V1 because the SRS treats admin
 
 ## 10.2 Shipping Zones
 
-| Method + Path | Auth / Authorization | Request | Success | Errors | Pagination | Side Effects / Notes |
-|---|---|---|---|---|---|---|
-| `GET /api/v1/shipping-zones` | Verified Customer | — | `200 ShippingZoneList` | 401, 403 | Hard-limited | Active Lebanese zones/rates only; server remains rate authority |
-
-V1 uses explicit zone selection. No automatic governorate→zone mapping endpoint exists.
+Removed by ADR-024. The courier prices and collects the delivery fee; there is no shipping-zone endpoint, and no order carries a shipping amount.
 
 ## 10.3 Checkout
 
 | Method + Path | Auth / Authorization | Request | Success | Errors | Side Effects / Notes |
 |---|---|---|---|---|---|
-| `POST /api/v1/checkout` | Verified Customer | `CheckoutRequest` + required `Idempotency-Key` | `201 CheckoutRead` | 401, 403, 409 `CART_EMPTY` / `CART_PRICE_CHANGED` / `IDEMPOTENCY_KEY_CONFLICT` / `PAYMENT_ALREADY_ACTIVE`, 422 `INVALID_FULFILLMENT` / `PRODUCT_NOT_PURCHASABLE` / `QUANTITY_EXCEEDS_LIMIT`, 429, 503 `ORDERS_PAUSED`, 502 | Single transaction validates cart, recomputes amounts, snapshots order/lines/address/shipping/terms, creates pending payment, clears cart; returns provider redirect information |
+| `POST /api/v1/checkout` | Verified Customer | `CheckoutRequest` + required `Idempotency-Key` | `201 CheckoutRead` | 401, 403, 409 `CART_EMPTY` / `CART_PRICE_CHANGED` / `IDEMPOTENCY_KEY_CONFLICT` / `PAYMENT_ALREADY_ACTIVE`, 422 `INVALID_FULFILLMENT` / `PRODUCT_NOT_PURCHASABLE` / `QUANTITY_EXCEEDS_LIMIT` / `PAYMENT_METHOD_NOT_ALLOWED` / `CASH_PAYMENT_LIMIT_REACHED`, 429, 503 `ORDERS_PAUSED`, 502 | Single transaction validates cart, recomputes amounts, then validates the payment method against the recomputed total, snapshots order/lines/address/contact phone/payment method/terms, clears cart. Online: creates a pending payment with the chosen provider and returns provider redirect information. Cash: creates no payment and returns the order with `payment_due` |
 
 ### Price-Change Confirmation Contract
 
@@ -381,8 +381,12 @@ A materially changed retry uses a **new** idempotency key.
 | Method + Path | Auth / Authorization | Request | Success | Errors | Pagination / Filter / Sort | Side Effects / Notes |
 |---|---|---|---|---|---|---|
 | `GET /api/v1/me/orders` | Authenticated | query params | `200 OrderPage` | 401 | Cursor; optional `status`, `placed_after`, `placed_before`; default `-placed_at` | Own orders only |
-| `GET /api/v1/me/orders/{order_id}` | Authenticated; owner | — | `200 OrderDetail` | 401, 404 | — | Includes lines, payment projection, refund summary and status history needed by customer |
-| `POST /api/v1/me/orders/{order_id}/cancel` | Verified Customer; owner | `CustomerOrderCancelRequest` | `200 OrderDetail` | 401, 403, 404, 409 `ORDER_NOT_CANCELLABLE` / `INVALID_STATE_TRANSITION` | — | V1 decision: cancels all still-self-cancellable physical lines atomically; digital lines are never cancelled; if cancellation is no longer legally possible, no partial silent cancellation occurs |
+| `GET /api/v1/me/orders/{order_id}` | Authenticated; owner | — | `200 OrderDetail` | 401, 404 | — | Includes lines, payment method, `payment_due`, `can_cancel`, payment projection, refund summary and status history needed by customer; `in_production` is shown as `pending` and omitted from the history |
+| `POST /api/v1/me/orders/{order_id}/cancel` | Verified Customer; owner | `CustomerOrderCancelRequest` | `200 OrderDetail` | 401, 403, 404, 409 `ORDER_NOT_CANCELLABLE` / `INVALID_STATE_TRANSITION` | — | V1 decision: cancels all still-self-cancellable physical lines atomically; digital lines are never cancelled; allowed only when `can_cancel` is true (a physical line, a cash order or a payment that reached `paid`, every physical line `pending`); if cancellation is no longer legally possible, no partial silent cancellation occurs |
+| `POST /api/v1/me/orders/{order_id}/confirm-receipt` | Verified Customer; owner; CSRF | — | `200 OrderDetail` | 401, 403, 404, 409 `INVALID_STATE_TRANSITION` | — | Sets `receipt_confirmed_at` on delivered / picked-up lines; idempotent; no state change (ADR-024, VS-029b) |
+| `POST /api/v1/me/orders/{order_id}/report-problem` | Verified Customer; owner; CSRF | `ProblemReportCreate` | `201 OrderDetail` | 401, 403, 404, 409 `INVALID_STATE_TRANSITION`, 422, 429 | — | Sets `problem_reported_at` and creates a contact message linked to the order; no state change (ADR-024, VS-029b) |
+
+The delivered / picked-up email links only to the order page; it never carries a link that changes state, because email scanners follow links.
 
 ---
 
@@ -500,13 +504,7 @@ All use Admin + MFA and audit logging.
 
 ## 16.4 Shipping Zones
 
-| Method + Path | Request | Success | Errors | Pagination / Notes |
-|---|---|---|---|---|
-| `GET /api/v1/admin/shipping-zones` | query params | `200 AdminShippingZonePage` | 401/404 | Cursor; active/deleted |
-| `POST /api/v1/admin/shipping-zones` | `ShippingZoneCreate` | `201 ShippingZoneRead` | 401/404, 409, 422 | V1 Lebanese flat-rate zone |
-| `GET /api/v1/admin/shipping-zones/{zone_id}` | — | `200 ShippingZoneRead` | 401/404 | — |
-| `PATCH /api/v1/admin/shipping-zones/{zone_id}` | `ShippingZoneUpdate` | `200 ShippingZoneRead` | 401/404, 422 | Old orders keep snapshots |
-| `DELETE /api/v1/admin/shipping-zones/{zone_id}` | — | `204` | 401/404 | Soft delete/archive; new checkouts cannot choose it |
+Removed by ADR-024: there are no shipping zones to manage.
 
 ---
 
@@ -516,7 +514,7 @@ All use Admin + MFA and audit logging.
 |---|---|---|---|---|---|---|
 | `GET /api/v1/admin/users` | Admin + MFA | query params | `200 AdminUserPage` | 401/404 | Cursor; filters verified/active; search email; `-created_at` | PII access audited/redacted from logs |
 | `GET /api/v1/admin/users/{user_id}` | Admin + MFA | — | `200 AdminUserDetail` | 401/404 | — | Shows account status and admin-safe customer summary |
-| `PATCH /api/v1/admin/users/{user_id}` | Admin + MFA | `AdminUserUpdate` | `200 AdminUserDetail` | 401/404, 409, 422 | — | V1 allows account activation/deactivation controls; no arbitrary password editing |
+| `PATCH /api/v1/admin/users/{user_id}` | Admin + MFA | `AdminUserUpdate` | `200 AdminUserDetail` | 401/404, 409, 422 | — | V1 allows account activation/deactivation controls; no arbitrary password editing; detail shows any uncleared cash payment blocks |
 
 The admin entitlement-grant endpoint is removed by ADR-019. To give an STL away, the administrator simply emails it; the platform records nothing.
 
@@ -526,14 +524,19 @@ The admin entitlement-grant endpoint is removed by ADR-019. To give an STL away,
 
 | Method + Path | Request | Success | Errors | Pagination / Filter / Sort | Side Effects / Notes |
 |---|---|---|---|---|---|
-| `GET /api/v1/admin/orders` | query params | `200 AdminOrderPage` | 401/404, 400 | Cursor; filters `status`, `fulfillment_method`, customer, order number, dates; default `-placed_at` | Admin fulfillment queue |
-| `GET /api/v1/admin/orders/{order_id}` | — | `200 AdminOrderDetail` | 401/404 | — | Customer/order data, lines, status history, payments/refunds, internal note |
+| `GET /api/v1/admin/orders` | query params | `200 AdminOrderPage` | 401/404, 400 | Cursor; filters `status`, `fulfillment_method`, `payment_method`, `payment_due`, customer, order number, dates; default `-placed_at` | Admin fulfillment queue; never lists `pending_payment` orders (BR-148); `payment_due=true` is the "cash due" view |
+| `GET /api/v1/admin/orders/{order_id}` | — | `200 AdminOrderDetail` | 401/404 | — | Customer/order data, contact phone, payment method and amount due, lines, status history, payments/refunds, internal note |
 | `PATCH /api/v1/admin/orders/{order_id}` | `AdminOrderUpdate` | `200 AdminOrderDetail` | 401/404, 422 | — | V1 restricted to mutable admin fields such as internal note; order status is not directly patchable |
 | `GET /api/v1/admin/stl-deliveries` | query params | `200 StlDeliveryPage` | 401/404, 400 | Cursor; optional `product_id`, customer; default oldest first (`placed_at`) | STL delivery queue (ADR-019): every STL line in `awaiting_delivery`, with order number, product, customer and `customer_email_snapshot` to send to |
-| `POST /api/v1/admin/orders/{order_id}/items/{item_id}/transition` | `OrderItemTransitionRequest` | `200 AdminOrderDetail` | 401/404, 409 `INVALID_STATE_TRANSITION`, 422 | — | Locks line; validates the delivery/pickup/STL state machine; recomputes order projection; history + audit + notifications. For an STL line, `awaiting_delivery → delivered` records `delivered_at` and `delivered_by` and notifies the customer that the file was emailed |
-| `POST /api/v1/admin/orders/{order_id}/cancel` | `AdminOrderCancelRequest` | `200 AdminOrderDetail` | 401/404, 409 `INVALID_STATE_TRANSITION` | — | Cancels eligible lines according to state; creates refund obligation when required; digital rules preserved |
+| `POST /api/v1/admin/orders/{order_id}/items/{item_id}/transition` | `OrderItemTransitionRequest` | `200 AdminOrderDetail` | 401/404, 409 `INVALID_STATE_TRANSITION`, 422 | — | Locks the order, then the line (ADR-024 lock order); a physical edge requires a cash order or an online payment that reached `paid` — `paid`, `partially_refunded` or `refunded` (BR-148); validates the delivery/pickup/STL state machine; `→ cancelled` from `ready_to_ship`, `returned` or `ready_for_pickup` requires `cancel_reason` and may insert a cash payment block (BR-144; it then also locks the customer's cart and takes the phone advisory lock); an unpaid cash line totalling 0 may go `shipped → cancelled` (`other`); recomputes order projection; history + audit + notifications. For an STL line, `awaiting_delivery → delivered` records `delivered_at` and `delivered_by` and notifies the customer that the file was emailed. `→ in_production` sends no customer notification. On a cash order, `→ delivered` and `→ picked_up` are refused; use the cash handover |
+| `POST /api/v1/admin/orders/{order_id}/cash-handover` | `CashHandoverRequest` | `200 AdminOrderDetail` | 401/404, 409 `INVALID_STATE_TRANSITION`, 422 `CASH_AMOUNT_MISMATCH` | — | Cash orders only. Locks the order, then all lines by `id`; at least one live line, and every live line `shipped` / `ready_for_pickup`; amount must equal the sum of live line totals and be above zero (the full amount the customer paid); marks them delivered / picked up, creates the single `cash` payment (`paid`, `recorded_by`), recomputes status; history + audit + notification + email with the cash receipt (ADR-024) |
+| `POST /api/v1/admin/orders/{order_id}/cancel` | `AdminOrderCancelRequest` | `200 AdminOrderDetail` | 401/404, 409 `INVALID_STATE_TRANSITION` | — | Locks the order, then all physical lines by `id`. 409 on an unpaid online (`pending_payment`) order (BR-148; only the hold release cancels those). Cancels eligible lines according to state (`pending`, `in_production`, `ready_to_ship`, `ready_for_pickup`); `cancel_reason` required for `ready_to_ship` and `ready_for_pickup` lines; a paid line's `cancellation` refund is its remaining balance (none when 0); on a cash order the BR-144 block rule applies (then also the customer's cart lock and the phone advisory lock); digital rules preserved |
 
-The line-transition endpoint is the only normal API path for fulfillment status changes.
+| `GET /api/v1/admin/cash-blocks` | query params | `200 CashPaymentBlockPage` | 401/404 | Cursor; filters customer, `active`; default `-created_at` | Cash payment blocks (ADR-024) |
+| `POST /api/v1/admin/cash-blocks/search` | `CashBlockSearchRequest` (`phone`) | `200 CashPaymentBlockPage` | 401/404, 422 | Cursor | Finds blocks by phone; the number travels in the body, so it never reaches request logs, and is hashed before matching |
+| `POST /api/v1/admin/cash-blocks/{block_id}/clear` | — | `200 CashPaymentBlockRead` | 401/404 | — | Sets `cleared_at`/`cleared_by`; audited; idempotent |
+
+The line-transition endpoint and, for cash orders, the cash-handover endpoint are the only normal API paths for fulfillment status changes.
 
 ---
 
@@ -541,10 +544,12 @@ The line-transition endpoint is the only normal API path for fulfillment status 
 
 | Method + Path | Request | Success | Errors | Pagination / Filter / Sort | Side Effects / Notes |
 |---|---|---|---|---|---|
-| `POST /api/v1/admin/orders/{order_id}/refunds` | `RefundCreate` + required `Idempotency-Key` | `201 RefundDetail` | 401/404, 409 `IDEMPOTENCY_KEY_CONFLICT`, 422 `REFUND_EXCEEDS_AVAILABLE`, 429, 502 | — | Supports selected line amounts + shipping; validates against refundable amount; a refunded STL line leaves the delivery queue; records obligation; audit/outbox |
-| `GET /api/v1/admin/refunds` | query params | `200 RefundPage` | 401/404 | Cursor; `status`, order/customer/date; default oldest pending first when queueing | Pending-refund obligations queue |
+| `POST /api/v1/admin/orders/{order_id}/refunds` | `RefundCreate` + required `Idempotency-Key` | `201 RefundDetail` | 401/404, 409 `IDEMPOTENCY_KEY_CONFLICT`, 422 `REFUND_EXCEEDS_AVAILABLE` / `REFUND_REQUIRES_CANCELLATION`, 429 | — | Records a `kind = admin` refund the administrator pays by hand (provider dashboard or cash); the platform calls no provider. Locks the order, then the refunded lines, then the payment. Supports selected paid-line amounts (BR-149; no shipping, ADR-024); validates each line against `line_total` minus its items in non-failed refunds and in failed refunds not yet reissued (0 for a cancelled cash line) and the payment's balance; refuses to empty an unfinished physical line; a cash payment is refunded up to the cash recorded; a line becomes `refunded` only when fully refunded, and a fully refunded STL line leaves the delivery queue; records obligation; audit/outbox |
+| `GET /api/v1/admin/refunds` | query params | `200 RefundPage` | 401/404 | Cursor; `status`, `kind`, order/customer/date; default oldest first when queueing | Obligations queue: pending refunds and owed refunds (failed, not reissued); chargebacks never appear as obligations |
 | `GET /api/v1/admin/refunds/{refund_id}` | — | `200 RefundDetail` | 401/404 | — | Full settlement/audit view |
-| `POST /api/v1/admin/refunds/{refund_id}/settle` | `RefundSettlementRequest` | `200 RefundDetail` | 401/404, 409 `INVALID_STATE_TRANSITION`, 422 | — | Used for manual-transfer settlement or provider-confirmed completion; append audit; notification/outbox |
+| `POST /api/v1/admin/refunds/{refund_id}/settle` | `RefundSettlementRequest` | `200 RefundDetail` | 401/404, 409 `INVALID_STATE_TRANSITION`, 422 | — | Used for manual-transfer settlement or provider-confirmed completion; locks order, lines, payment, refund (ADR-024); the order status does not change; append audit; notification/outbox |
+| `POST /api/v1/admin/refunds/{refund_id}/fail` | `RefundFailureRequest` | `200 RefundDetail` | 401/404, 409 `INVALID_STATE_TRANSITION` | — | Marks a pending refund `failed` when the money did not reach the customer (ADR-024): no line state changes; the refund stays owed in the obligations queue; recomputes payment and order status; audited. Not allowed on a chargeback |
+| `POST /api/v1/admin/refunds/{refund_id}/reissue` | — | `201 RefundDetail` | 401/404, 409 `INVALID_STATE_TRANSITION` | — | Only for a `failed` refund not yet reissued: creates a new pending refund of the same kind, items and amount, sets `reissued_at` on the failed one; audited |
 
 Refund settlement is explicit because the SRS requires obligations to remain tracked until actually settled.
 
@@ -554,10 +559,10 @@ Refund settlement is explicit because the SRS requires obligations to remain tra
 
 | Method + Path | Request | Success | Errors | Pagination / Filter / Sort | Side Effects / Notes |
 |---|---|---|---|---|---|
-| `GET /api/v1/admin/payments` | query params | `200 PaymentPage` | 401/404 | Cursor; filters status/provider/order/date; processing oldest first | Includes payments needing manual confirmation |
+| `GET /api/v1/admin/payments` | query params | `200 PaymentPage` | 401/404 | Cursor; filters status/provider/order/date; processing oldest first | Includes payments needing manual confirmation and recorded `cash` payments |
 | `GET /api/v1/admin/payments/{payment_id}` | — | `200 PaymentDetail` | 401/404 | — | Provider references/verification history; sensitive provider secrets never returned |
 | `POST /api/v1/admin/payments/{payment_id}/reconcile` | — | `200 PaymentDetail` | 401/404, 409, 502, 503 `PAYMENT_VERIFICATION_UNAVAILABLE` | — | Queries provider outside DB lock, then applies verified result transactionally |
-| `POST /api/v1/admin/payments/{payment_id}/confirm` | `ManualPaymentConfirmRequest` | `200 PaymentDetail` | 401/404, 409, 422 | — | Only manual fallback when automatic provider status verification is unavailable; verified amount must equal order total; STL delivery queue/production/status/audit/outbox side effects |
+| `POST /api/v1/admin/payments/{payment_id}/confirm` | `ManualPaymentConfirmRequest` | `200 PaymentDetail` | 401/404, 409, 422 | — | Online payments only. On a live attempt of an uncancelled order it applies the payment; on an attempt no longer live, or on a cancelled order, it records a late capture (automatic refund, alert) instead. Manual fallback when automatic provider status verification is unavailable; verified amount must equal order total; STL delivery queue/status/audit/outbox side effects. Cash is recorded by the cash handover instead |
 
 A callback alone never authorizes these state changes.
 
@@ -654,9 +659,9 @@ Exact analytics default ranges/export formats remain tunable design-time setting
 
 | Method + Path | Auth / Authorization | Request | Success | Errors | Side Effects / Notes |
 |---|---|---|---|---|---|
-| `POST /api/v1/webhooks/payments/whish` | Provider; IP allowlist + signature if supported | raw provider event | `200 WebhookReceipt` | 400, 401/403 signature/IP failure, 429 | Persist unique `(provider,event_id)` first and return quickly; duplicate event is safe; callback never marks order paid by itself; verification/reconciliation follows independently |
+| `POST /api/v1/webhooks/payments/{provider}` | Provider; IP allowlist + signature if supported | raw provider event | `200 WebhookReceipt` | 400, 401/403 signature/IP failure, 429 | Persist unique `(provider,event_id)` first and return quickly; duplicate event is safe; callback never marks order paid by itself; verification/reconciliation follows independently |
 
-Whish signature mechanics and status-query capabilities remain provider-dependent external details. The endpoint contract does not trust them as proof.
+The online provider is undecided (SRS §30.4); `{provider}` is its `payment_provider` value. Only configured online providers are routable: any other value, `cash` always, and `mock` in production give 404 and store nothing. Verification uses the adapter named on the payment row, never the URL; an event whose provider differs from its payment's provider is stored, ignored and alerted. Signature mechanics and status-query capabilities remain provider-dependent external details. The endpoint contract does not trust them as proof.
 
 ---
 
@@ -791,10 +796,13 @@ quantity: int
 ```text
 fulfillment_method?: "delivery" | "pickup"
 address_id?: UUID
-shipping_zone_id?: UUID
+contact_phone?: str
+payment_method: "online" | "cash"
+payment_provider?: payment_provider   # online only; required when more than one is configured
 customer_note?: str
 accept_terms: true
 accept_digital_final_sale?: true
+accept_cash_terms?: true
 accepted_price_changes?: [
   {
     product_id: UUID,
@@ -806,12 +814,15 @@ accepted_price_changes?: [
 
 Rules:
 
-- digital-only → fulfillment/address/zone are null;
-- physical delivery → fulfillment=`delivery`, address + zone required;
-- physical pickup → fulfillment=`pickup`, no address/zone needed;
-- mixed order follows physical fulfillment rules;
+- digital-only → fulfillment/address/contact phone are null; `payment_method=online`;
+- physical delivery → fulfillment=`delivery`, address required; the contact phone is the address's phone;
+- physical pickup → fulfillment=`pickup`, no address; `contact_phone` (Lebanese number) required;
+- mixed order follows physical fulfillment rules and must be `online`;
+- `payment_method=cash` requires every line physical, cash enabled, no uncleared block for the customer or the normalised contact phone, fewer than `cash_max_open_orders` open unpaid cash orders for the customer or that phone, the **recomputed** total above 0 and ≤ `cash_max_order_total`, and `accept_cash_terms=true`;
+- `payment_provider` must be a configured online provider; it is stored on the payment row;
+- the contact phone is stored normalised to E.164;
 - `accept_digital_final_sale=true` is required when any digital line exists;
-- client never submits subtotal/shipping/total.
+- client never submits subtotal/total; there is no shipping amount (ADR-024).
 
 ### `OfferCheckoutRequest`
 
@@ -845,14 +856,32 @@ admin_note?: str
 ```text
 target_status: order_item_status
 reason?: str
+cancel_reason?: "refused" | "no_show" | "other"   # required for → cancelled from ready_to_ship, returned or ready_for_pickup
 ```
 
-The server validates legal transition and actor.
+The server validates legal transition, actor, payment state (BR-148) and cancel reason (`refused` or `other` from `ready_to_ship`, `returned` or `ready_for_pickup`; `no_show` only from `ready_for_pickup`).
 
 ### `AdminOrderCancelRequest`
 
 ```text
 reason: str
+cancel_reason?: "refused" | "no_show" | "other"   # required when a ready_to_ship or ready_for_pickup line is cancelled; no_show only for ready_for_pickup
+```
+
+### `CashHandoverRequest`
+
+```text
+amount_cents: int
+currency: "USD"
+note?: str
+```
+
+The amount must equal the sum of live line totals; the server never derives it from this field.
+
+### `ProblemReportCreate`
+
+```text
+message: str
 ```
 
 ---
@@ -1044,18 +1073,6 @@ name: str
 is_active?: bool
 ```
 
-### `ShippingZoneCreate`
-
-```text
-name: str
-rate: {amount_cents, currency="USD"}
-is_active?: bool
-```
-
-### `ShippingZoneUpdate`
-
-Same fields optional.
-
 ---
 
 ## 29.13 Refund
@@ -1069,9 +1086,7 @@ items: [
     amount_cents: int
   }
 ]
-shipping_refund_cents?: int
 reason: str
-method?: "provider" | "manual"
 ```
 
 Rules:
@@ -1079,8 +1094,21 @@ Rules:
 - server derives currency;
 - every amount is validated against remaining refundable value;
 - overall refund total is derived server-side;
-- a refunded STL line becomes `refunded` and leaves the delivery queue;
-- provider capability may force manual method.
+- a fully refunded STL line becomes `refunded` and leaves the delivery queue; a partial refund leaves the line in its state;
+- every V1 refund is manual (ADR-024): the administrator pays it outside the platform and settles it here; the refund is recorded with `kind = admin`;
+- a request that would empty an unfinished physical line gives 422 `REFUND_REQUIRES_CANCELLATION`.
+
+### `CashBlockSearchRequest`
+
+```text
+phone: str   # normalised and hashed server-side; never logged
+```
+
+### `RefundFailureRequest`
+
+```text
+reason: str
+```
 
 ### `RefundSettlementRequest`
 
@@ -1219,15 +1247,19 @@ order_number
 source
 derived status
 fulfillment_method
-monetary breakdown
-address/shipping snapshots where applicable
-estimated_dispatch_at
+payment_method
+payment_due
+can_cancel
+monetary breakdown (subtotal, tax, total; no shipping)
+address and contact-phone snapshots where applicable
+delivery_fee_note ("delivery fee paid to the courier on delivery") for delivery orders
+estimated_dispatch_at (shown as the estimated ready date)
 placed/completed/cancelled timestamps
 lines[]
 customer-visible notes
 payment summary
 refund summary
-customer-visible status history
+customer-visible status history (omits in_production)
 ```
 
 `admin_note` is never returned by customer endpoints.
@@ -1258,7 +1290,7 @@ customer_email_snapshot
 paid_at
 ```
 
-Order lines in `OrderDetail` carry `fulfillment_status` and, for STL lines, `delivered_at`.
+Order lines in `OrderDetail` carry `fulfillment_status` (with `in_production` shown as `pending`) and, for STL lines, `delivered_at`; physical lines carry `receipt_confirmed_at` and `problem_reported_at`.
 
 ## `PublicSettingsRead`
 
@@ -1266,7 +1298,8 @@ Strict allowlist, e.g.:
 
 ```text
 accepting_orders
-free_shipping_threshold
+cash_payment_enabled
+cash_max_order_total
 pickup_address
 pickup_hours
 whatsapp_number
@@ -1326,6 +1359,8 @@ Filters:
 ```text
 status
 fulfillment_method
+payment_method
+payment_due
 customer
 order_number
 placed_after
@@ -1385,15 +1420,21 @@ Unknown filter/sort fields produce `400 VALIDATION_ERROR`; they are never interp
 |---|---|
 | Registration | verification token + email outbox + audit |
 | Password reset confirm | password change + revoke sessions + audit |
-| Checkout | order + immutable line snapshots + payment + consent + cart clear + idempotency record |
-| Payment verification | payment state + STL lines to `awaiting_delivery` + physical line transitions + close live offer + order projection + history + audit + outbox/notifications |
-| Customer/admin cancellation | line transitions + order projection + possible refund obligation + history + audit + outbox |
-| Refund | refund obligation + refund items + STL line refunded (leaves delivery queue) + order projection + audit + outbox |
+| Checkout | order + immutable line snapshots + payment (online only) + consent + cart clear + idempotency record |
+| Payment verification | payment state + STL lines to `awaiting_delivery` + physical lines stay `pending` + close live offer + order projection + history + audit + outbox/notifications |
+| Customer/admin cancellation | line transitions + order projection + refund obligation for paid lines + cash payment block on a whole-order cash refusal or no-show + history + audit + outbox |
+| Cash handover | live lines to delivered / picked up + `cash` payment + order projection + badge recompute + history + audit + outbox/notification with cash receipt |
+| Receipt confirmation / problem report | line timestamps (+ contact message for a report) |
+| Refund | refund obligation + refund items + fully refunded lines to `refunded` (STL leaves delivery queue) + order projection + audit + outbox |
+| Refund failure | refund `failed` (stays owed in the obligations queue; no line state change) + payment and order projection + audit |
+| Refund reissue | new pending refund of the same kind, items and amount + `reissued_at` on the failed one + audit |
+| Chargeback | settled `chargeback` refund split per line + fully covered lines `refunded` + order projection + audit; excess recorded and alerted |
+| Late capture | `late_captured_at` on the attempt + automatic `late_capture` refund obligation + alert; order and lines untouched |
 | Offer create/counter/accept/reject/withdraw | append offer round + state/deadline + audit + outbox/notification |
 | Review create/update/delete/moderate | review mutation + rating/review-count aggregate |
 | Wishlist add/remove | active wishlist state + wishlist-count aggregate |
 | Setting change | typed setting mutation + audit |
-| Fulfillment transition | line state + derived order status + history + audit + appropriate email/notification (STL `delivered`: "file sent" email + notification) |
+| Fulfillment transition | line state + derived order status + history + audit + appropriate email/notification (none for `in_production`; STL `delivered`: "file sent" email + notification) |
 
 No external email send occurs before the database transaction commits.
 
@@ -1413,7 +1454,7 @@ These SRS features do not require separate backend CRUD APIs:
 | Product comments | Explicitly out of V1 |
 | Product variants | Explicitly out of V1 |
 | Courier tracking API | Explicitly out of V1 |
-| Cash on delivery | Explicitly out of V1 |
+| Shipping zones / shipping fees | Removed by ADR-024; the courier prices and collects delivery |
 | Guest checkout | Explicitly out of V1 |
 | Tax/VAT engine | Explicitly out of V1 |
 | STL licensing | Explicitly out of V1 |
@@ -1494,16 +1535,18 @@ This section verifies that every V1 feature in the SRS has an API or an intentio
 | F-040 Mixed cart | `/cart*` |
 | F-041 Quantity caps | cart add/update + checkout revalidation |
 | F-042 Price change confirmation | `GET /cart` + `POST /checkout` conflict/retry contract |
-| F-043 Shipping zone/rate | `GET /shipping-zones` + checkout |
+| F-043 Removed (ADR-024) | — |
 | F-044 Pickup | `CheckoutRequest.fulfillment_method=pickup` |
-| F-045 Free shipping | server-side checkout using setting |
+| F-045 Removed (ADR-024) | — |
 | F-046 Idempotent checkout | `POST /checkout` + `Idempotency-Key` |
-| F-047 Whish redirect/return | checkout returns redirect; order detail used after return |
-| F-048 Webhook | `POST /webhooks/payments/whish` |
+| F-047 Online payment redirect/return | checkout returns redirect; order detail used after return |
+| F-048 Webhook | `POST /webhooks/payments/{provider}` |
 | F-049 Server verification | internal provider adapter + admin reconcile route |
 | F-050 Reconciliation | scheduled job + `POST /admin/payments/{id}/reconcile` |
 | F-051 Manual confirmation | `POST /admin/payments/{id}/confirm` |
 | F-052 Terms consent | checkout request + immutable order timestamps |
+| F-053 Payment method choice | `CheckoutRequest.payment_method` + cash limits |
+| F-054 Cash handover | `POST /admin/orders/{id}/cash-handover` |
 
 ## 35.4 Fulfillment
 
@@ -1514,17 +1557,18 @@ This section verifies that every V1 feature in the SRS has an API or an intentio
 | F-062 Internal note | `PATCH /admin/orders/{id}` |
 | F-063 Delivery workflow | line transition endpoint |
 | F-064 Pickup workflow | line transition endpoint |
-| F-065 Return handling | line transition + refund endpoint |
+| F-065 Return handling | line transition + refund endpoint (cash refusal: line transition to `cancelled`) |
 | F-066 Admin cancel | `POST /admin/orders/{id}/cancel` / line transition |
 | F-067 Dispatch estimate | derived during checkout/order response |
 | F-068 Kill switch | admin setting + checkout 503 |
+| F-069 Receipt confirmation / problem report | `POST /me/orders/{id}/confirm-receipt`, `POST /me/orders/{id}/report-problem` |
 
 ## 35.5 Refunds
 
 | Feature | Endpoint |
 |---|---|
 | F-070 Per-line refund | `POST /admin/orders/{id}/refunds` |
-| F-071 Shipping refund | same refund request |
+| F-071 Removed (ADR-024) | — |
 | F-072 Obligation tracking | `/admin/refunds*` |
 | F-073 STL line leaves delivery queue on refund | refund transaction side effect |
 | F-074 Pending queue | `GET /admin/refunds?status=pending` |
@@ -1572,7 +1616,7 @@ This section verifies that every V1 feature in the SRS has an API or an intentio
 | F-110 Product CRUD | admin product endpoints |
 | F-111 Images | admin image endpoints |
 | F-112 Category/material/colour | admin reference-data endpoints |
-| F-113 Shipping zones | admin shipping-zone endpoints |
+| F-113 Removed (ADR-024) | — |
 | F-114 Settings editor | admin settings |
 | F-116 User management | admin users |
 | F-117 Audit viewer | admin audit logs |
@@ -1638,7 +1682,7 @@ This section verifies that every V1 feature in the SRS has an API or an intentio
 
 - no STL file is stored or served (ADR-019);
 - only an administrator marks an STL line delivered, from `awaiting_delivery` only;
-- marking delivered and refunding lock the same line.
+- marking delivered and refunding lock the order row, then the same line (ADR-024 lock order), so exactly one wins.
 
 ## Admin
 
@@ -1651,23 +1695,26 @@ This section verifies that every V1 feature in the SRS has an API or an intentio
 ## Payment Webhook
 
 - IP allowlist when possible;
+- only configured online providers routable (`cash` never, `mock` never in production);
+- verification through the payment row's provider, never the URL;
 - signature verification when provider supports it;
 - unique provider event ID;
 - immediate persistence;
-- independent server-side verification before anything is delivered or produced.
+- independent server-side verification before an STL is sent or an online order's goods are produced; cash orders never pass through the webhook.
 
 ---
 
 # 37. Open External Details That Do Not Change Route Structure
 
-The approved SRS still waits on Whish/client/operations details. These do not block the endpoint structure:
+The approved SRS still waits on payment-provider/client/operations details. These do not block the endpoint structure:
 
-- Whish signature mechanism;
-- Whish status-query capability;
-- provider refund API vs manual transfer;
+- which online provider: Whish, a card gateway, or both (SRS §30.4);
+- provider signature mechanism;
+- provider status-query capability;
 - sandbox availability;
 - exact transaction settlement/fees;
-- actual courier partner/rates;
+- actual courier partner;
+- cash terms wording;
 - pickup identity policy;
 - terms/privacy/refund wording;
 - exact session/token lifetimes;
@@ -1702,11 +1749,12 @@ When these values become known, update provider adapters, settings, validation, 
 - [x] Profile/addresses/data rights.
 - [x] Mixed cart.
 - [x] Price-change confirmation.
-- [x] Shipping/pickup.
+- [x] Delivery/pickup and payment method, including cash on delivery (ADR-024).
 - [x] Normal checkout.
 - [x] Order history/detail/cancellation.
-- [x] Whish webhook/verification/reconciliation/manual fallback.
-- [x] Full/partial refund + shipping refund + obligations.
+- [x] Provider-neutral webhook/verification/reconciliation/manual fallback.
+- [x] Cash handover, receipt confirmation and problem report (ADR-024).
+- [x] Full/partial refund + obligations (no shipping, ADR-024).
 - [x] STL delivery queue and delivery status (ADR-019).
 - [x] Offer negotiation + checkout.
 - [x] Reviews + moderation + verified badge.
@@ -1716,7 +1764,6 @@ When these values become known, update provider adapters, settings, validation, 
 - [x] Contact queue.
 - [x] Product/image admin.
 - [x] Category/material/colour admin.
-- [x] Shipping-zone admin.
 - [x] User management.
 - [x] Settings.
 - [x] Audit viewer.

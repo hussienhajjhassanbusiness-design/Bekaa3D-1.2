@@ -14,7 +14,8 @@ The V1 relational design is now complete. Where the approved SRS was silent on a
 
 Final Step-12 decisions include:
 
-- explicit shipping-zone selection; no automatic geographic mapping table in V1;
+- no shipping amounts, zones or threshold: the courier prices and collects delivery (ADR-024, superseding the earlier explicit zone-selection decision);
+- cash on delivery as an order `payment_method`, recorded as a `cash` payment at handover (ADR-024);
 - conservative 1-year capacity envelopes for schema/index review;
 - frozen implementation enum values;
 - soft-deleted wishlist rows;
@@ -97,7 +98,6 @@ Every monetary amount uses integer cents:
 
 ```text
 price_cents BIGINT
-shipping_cents BIGINT
 total_cents BIGINT
 amount_cents BIGINT
 ```
@@ -167,6 +167,25 @@ pickup
 
 `NULL` means no physical fulfillment, as in a digital-only order.
 
+## 3.4a `payment_method`
+
+```text
+online
+cash
+```
+
+Chosen at checkout and immutable (ADR-024). `cash` requires every line to be physical. Distinct from `purchase_mode` and `fulfillment_method`.
+
+## 3.4b `cancel_reason`
+
+```text
+refused
+no_show
+other
+```
+
+Recorded on an administrator cancel from `ready_to_ship` or `returned` (`refused` or `other`) or `ready_for_pickup` (`refused`, `no_show` or `other`). Only `refused` and `no_show` can create a cash payment block (ADR-024).
+
 ## 3.5 `order_source`
 
 ```text
@@ -189,7 +208,7 @@ in_progress
 
 ## 3.7 `order_item_status`
 
-Combined storage enum for line state. Legal transitions depend on product type and fulfillment method. STL lines use `pending → awaiting_delivery → delivered`, and `refunded` (ADR-019).
+Combined storage enum for line state. Legal transitions depend on product type, fulfillment method and payment method. STL lines use `pending → awaiting_delivery → delivered`, and `refunded` (ADR-019). Physical `in_production` is internal and shown to customers as `pending` (ADR-024).
 
 ```text
 pending
@@ -276,17 +295,22 @@ failed
 
 ```text
 pending
-processing
 settled
 failed
 ```
 
-### `refund_method`
+`failed` refunds stay owed until reissued (ADR-024).
+
+### `refund_kind`
 
 ```text
-provider
-manual
+admin
+cancellation
+late_capture
+chargeback
 ```
+
+Every V1 refund is manual, so there is no `refund_method` (ADR-024).
 
 ### `offer_actor`
 
@@ -353,10 +377,11 @@ lost
 ### `payment_provider`
 
 ```text
-whish
+mock
+cash
 ```
 
-A new payment provider requires an additive enum migration before its adapter is enabled.
+`cash` has no adapter: only the administrator's cash handover creates a `cash` payment (ADR-024). It is a value here, rather than a separate column, so one live-payment index and one refund path cover both kinds; the glossary's Payment Method (`online`/`cash`) is still a separate concept on the order. The online provider is undecided (SRS §30.4); VS-032 adds its value(s) with an additive enum migration before its adapter is enabled. Each attempt's provider is stored on its row: chosen by the customer at checkout or retry when more than one is configured. `mock` is never configured in production.
 
 ---
 
@@ -393,6 +418,7 @@ A new payment provider requires an additive enum migration before its adapter is
 20. `orders`
 21. `order_items`
 22. `order_status_history`
+22a. `cash_payment_blocks` (ADR-024)
 
 ## Payments
 
@@ -403,7 +429,7 @@ A new payment provider requires an additive enum migration before its adapter is
 
 ## Fulfillment
 
-27. `shipping_zones`
+27. ~~`shipping_zones`~~ — removed by ADR-024; Fulfillment owns no tables of its own.
 
 ## Negotiation
 
@@ -481,7 +507,7 @@ Because `CITEXT` is used, the implementation may use a direct unique partial ind
 | `user_id` | UUID | No | FK → `users.id` |
 | `label` | TEXT | No |  |
 | `recipient_name` | TEXT | No |  |
-| `phone` | TEXT | No |  |
+| `phone` | TEXT | No | Lebanese number; the courier's contact |
 | `governorate` | TEXT | No |  |
 | `city` | TEXT | No |  |
 | `area` | TEXT | Yes |  |
@@ -932,26 +958,25 @@ but determining whether the referenced product is STL is cross-table. The transa
 | `source` | `order_source` | No |  |
 | `status` | `order_status` | No | derived projection |
 | `fulfillment_method` | `fulfillment_method` | Yes | NULL for digital-only |
-| `shipping_zone_id` | UUID | Yes | FK → `shipping_zones.id` |
+| `payment_method` | `payment_method` | No | `online` or `cash`; immutable (ADR-024) |
 | `subtotal_cents` | BIGINT | No | CHECK ≥ 0 |
-| `shipping_cents` | BIGINT | No | Default 0; CHECK ≥ 0 |
 | `tax_cents` | BIGINT | No | Default 0; V1 CHECK = 0 |
 | `total_cents` | BIGINT | No | CHECK ≥ 0 |
 | `currency` | CHAR(3) | No | CHECK = `USD` |
 | `recipient_name` | TEXT | Yes | delivery snapshot |
-| `phone` | TEXT | Yes | delivery snapshot |
+| `contact_phone_snapshot` | TEXT | Yes | required when `fulfillment_method` is not NULL: the address phone for delivery, entered at checkout for pickup (BR-078); stored normalised to E.164 |
+| `contact_phone_hash` | TEXT | Yes | keyed `HMAC-SHA256` of the normalised phone (secret `PHONE_HASH_SALT`, never rotated); set with `contact_phone_snapshot`; used for cash matching |
 | `governorate` | TEXT | Yes | delivery snapshot |
 | `city` | TEXT | Yes | delivery snapshot |
 | `area` | TEXT | Yes | delivery snapshot |
 | `street` | TEXT | Yes | delivery snapshot |
 | `landmark_notes` | TEXT | Yes | delivery snapshot |
-| `shipping_zone_name_snapshot` | TEXT | Yes | historical snapshot |
-| `shipping_rate_cents_snapshot` | BIGINT | Yes | CHECK ≥ 0 when present |
 | `customer_note` | TEXT | Yes | customer-visible origin |
 | `admin_note` | TEXT | Yes | never customer-visible |
 | `estimated_dispatch_at` | TIMESTAMPTZ | Yes | physical orders |
 | `terms_accepted_at` | TIMESTAMPTZ | No | consent |
 | `digital_terms_accepted_at` | TIMESTAMPTZ | Yes | required when digital lines exist |
+| `cash_terms_accepted_at` | TIMESTAMPTZ | Yes | required when `payment_method = cash` |
 | `placed_at` | TIMESTAMPTZ | No |  |
 | `completed_at` | TIMESTAMPTZ | Yes |  |
 | `cancelled_at` | TIMESTAMPTZ | Yes |  |
@@ -961,25 +986,34 @@ but determining whether the referenced product is STL is cross-table. The transa
 ### Arithmetic Constraint
 
 ```text
-total_cents = subtotal_cents + shipping_cents + tax_cents
+total_cents = subtotal_cents + tax_cents
 ```
+
+There is no shipping column: the courier prices and collects the delivery fee (ADR-024).
 
 ### Delivery Conditional Constraint
 
-When `fulfillment_method = delivery`, at minimum the required address snapshot and shipping snapshot fields must be present.
+When `fulfillment_method = delivery`, the required address snapshot fields and `contact_phone_snapshot` must be present.
 
 Pickup:
 
-- no shipping address required;
-- shipping charge = 0.
+- no address required;
+- `contact_phone_snapshot` required.
 
 Digital-only:
 
 - `fulfillment_method IS NULL`;
-- address not required;
-- shipping = 0.
+- address and contact phone not required;
+- `payment_method = online`.
 
-The fact that an order actually contains physical/digital lines is cross-row and must be validated transactionally.
+```text
+fulfillment_method IS NOT NULL → contact_phone_snapshot IS NOT NULL
+fulfillment_method IS NULL     → payment_method = 'online'
+payment_method = 'cash'        → cash_terms_accepted_at IS NOT NULL
+UNIQUE(id, payment_method)     -- target of the composite FKs below
+```
+
+The fact that an order actually contains physical/digital lines is cross-row and must be validated transactionally; a `cash` order having only physical lines is enforced by the database through the copied `order_items.payment_method` (§8.4).
 
 ### Rules
 
@@ -988,8 +1022,8 @@ The fact that an order actually contains physical/digital lines is cross-row and
 - order number is human-readable;
 - status is derived, never independently assigned as business input;
 - dispatch estimate uses lead time × `ceil(quantity / batch_size)` across physical lines;
-- kill switch stops new checkout only;
-- unpaid checkout expires according to settings;
+- kill switch stops new checkout only, cash included;
+- unpaid online checkout expires according to settings; a cash order has no hold and no payment until its handover;
 - order snapshots do not change when the catalogue changes.
 
 ### Indexes
@@ -998,6 +1032,8 @@ The fact that an order actually contains physical/digital lines is cross-row and
 (user_id, placed_at DESC)
 (status, placed_at DESC)
 ```
+
+The fulfillment queue excludes `pending_payment` orders (BR-148). The open-cash-order count matches `user_id` or `contact_phone_hash`; add `(contact_phone_hash) WHERE payment_method = 'cash'` if `EXPLAIN` shows the need. The "cash due" admin filter (unpaid cash orders) gets a partial index in VS-029 once `EXPLAIN` shows its shape.
 
 ---
 
@@ -1025,6 +1061,10 @@ The fact that an order actually contains physical/digital lines is cross-row and
 | `cancelled_at` | TIMESTAMPTZ | Yes |  |
 | `fulfilled_at` | TIMESTAMPTZ | Yes | for STL: when marked delivered |
 | `delivered_by` | UUID | Yes | FK → `users.id`; STL only: administrator who marked it delivered |
+| `payment_method` | `payment_method` | No | copy of the order's; composite FK `(order_id, payment_method)` → `orders(id, payment_method)` |
+| `cancel_reason` | `cancel_reason` | Yes | set only with `fulfillment_status = 'cancelled'` from `ready_to_ship`, `returned` or `ready_for_pickup` |
+| `receipt_confirmed_at` | TIMESTAMPTZ | Yes | physical only: customer pressed "I got it" (ADR-024) |
+| `problem_reported_at` | TIMESTAMPTZ | Yes | physical only: customer reported a problem (ADR-024) |
 | `created_at` | TIMESTAMPTZ | No |  |
 | `updated_at` | TIMESTAMPTZ | No |  |
 
@@ -1055,6 +1095,13 @@ For STL snapshots:
 product_type = stl → quantity = 1
 ```
 
+Cash integrity (INV-21):
+
+```text
+payment_method = 'cash' → product_type = 'physical'
+cancel_reason IS NOT NULL → fulfillment_status = 'cancelled'
+```
+
 For physical snapshots:
 
 ```text
@@ -1076,7 +1123,11 @@ batch_size_snapshot IS NULL
 - per-line status is mandatory because mixed orders can resolve differently;
 - digital fulfillment is independent of physical fulfillment;
 - an STL line is marked `delivered` only from `awaiting_delivery`, by an administrator, after emailing the file (ADR-019);
-- only pre-production physical lines may be self-cancelled;
+- physical lines may be self-cancelled only while every physical line of the order is `pending` (before start printing);
+- on a cash order, `delivered` / `picked_up` are reached only through the cash handover;
+- no physical line of an unpaid online order changes state (BR-148);
+- customers see `in_production` as `pending`, and their status history omits it;
+- receipt confirmation and problem reports never change `fulfillment_status`;
 - STL lines are never self-cancellable.
 
 ### Index
@@ -1112,6 +1163,37 @@ batch_size_snapshot IS NULL
 
 ---
 
+## 8.6 `cash_payment_blocks`
+
+**Purpose:** Removes cash from checkout for a customer, and for any account using the same phone, after a whole cash order was refused or not collected (ADR-024). Owned by Ordering.
+
+| Column | Type | Null | Constraint |
+|---|---|---:|---|
+| `id` | UUID | No | PK |
+| `user_id` | UUID | No | FK → `users.id` |
+| `contact_phone_hash` | TEXT | No | copied from `orders.contact_phone_hash`; the plaintext number is never stored here |
+| `order_id` | UUID | No | FK → `orders.id`; UNIQUE |
+| `reason` | `cancel_reason` | No | CHECK `reason IN ('refused', 'no_show')` |
+| `created_at` | TIMESTAMPTZ | No |  |
+| `cleared_at` | TIMESTAMPTZ | Yes | set by an administrator |
+| `cleared_by` | UUID | Yes | FK → `users.id`; required with `cleared_at` |
+
+### Rules
+
+- inserted, under the phone advisory lock, in the transaction of the cancel that leaves a cash order with no live line, when every line cancelled from `ready_to_ship`, `returned` or `ready_for_pickup` carries `refused` or `no_show` (at least one); never for a partial refusal, an order with any `other` such cancel, or an online order;
+- survives account anonymisation without readable personal data, because it holds only the hash;
+- cash is unavailable while any uncleared row matches the customer **or** the phone hash;
+- cleared, never deleted.
+
+### Indexes
+
+```text
+(user_id) WHERE cleared_at IS NULL
+(contact_phone_hash) WHERE cleared_at IS NULL
+```
+
+---
+
 # 9. Payment and Refund Tables
 
 ## 9.1 `payments`
@@ -1120,16 +1202,19 @@ batch_size_snapshot IS NULL
 |---|---|---:|---|
 | `id` | UUID | No | PK |
 | `order_id` | UUID | No | FK → `orders.id` |
-| `provider` | TEXT / enum | No | V1 = Whish |
+| `provider` | `payment_provider` | No | `mock` in development; `cash` for a recorded cash payment; the online provider per SRS §30.4, chosen at checkout or retry |
+| `order_payment_method` | `payment_method` | No | copy of the order's; composite FK `(order_id, order_payment_method)` → `orders(id, payment_method)` |
 | `provider_payment_id` | TEXT | Yes | provider reference |
 | `status` | `payment_status` | No |  |
 | `amount_cents` | BIGINT | No | CHECK ≥ 0 |
 | `currency` | CHAR(3) | No | CHECK = `USD` |
 | `initiated_at` | TIMESTAMPTZ | No |  |
 | `verified_at` | TIMESTAMPTZ | Yes |  |
+| `late_captured_at` | TIMESTAMPTZ | Yes | set when money was captured but cannot be applied: an attempt no longer live, a cancelled order, or an amount that does not match (the attempt is then `failed`); the row stays `failed` / `expired` and is refunded automatically (ADR-024) |
 | `failed_at` | TIMESTAMPTZ | Yes |  |
 | `expired_at` | TIMESTAMPTZ | Yes |  |
 | `provider_metadata` | JSONB | Yes | provider-specific metadata only |
+| `recorded_by` | UUID | Yes | FK → `users.id`; the administrator who recorded a cash payment |
 | `created_at` | TIMESTAMPTZ | No |  |
 | `updated_at` | TIMESTAMPTZ | No |  |
 
@@ -1139,18 +1224,30 @@ Only one live payment per order:
 
 ```text
 UNIQUE(order_id)
-WHERE status IN ('pending', 'processing', 'paid')
+WHERE status NOT IN ('failed', 'expired')
 ```
 
-If `partially_refunded` should still block a new payment attempt, include it in the live-state predicate during implementation. The business meaning is that an already-paid order cannot receive a second payment attempt.
+`partially_refunded` and `refunded` count as live: an already-paid order can never receive a second payment attempt.
+
+At most one cash payment per order (INV-22), and cash only on a cash order (INV-21):
+
+```text
+UNIQUE(order_id) WHERE provider = 'cash'
+(provider = 'cash') = (order_payment_method = 'cash')
+provider = 'cash' → status IN ('paid', 'partially_refunded', 'refunded') AND recorded_by IS NOT NULL AND verified_at IS NOT NULL AND amount_cents > 0
+late_captured_at IS NOT NULL → status IN ('failed', 'expired') AND provider <> 'cash'
+provider <> 'cash' → recorded_by IS NULL
+```
 
 ### Rules
 
 - callback/webhook is not proof;
-- independent provider verification confirms payment;
-- confirmed amount must equal order total;
-- no production and no STL delivery before payment verification;
-- reconciliation job handles missed callbacks.
+- independent provider verification confirms an online payment;
+- an online payment's confirmed amount must equal the order total;
+- a cash payment is created only by the cash handover, directly as `paid`, for exactly the sum of live line totals, with at least one live line (ADR-024);
+- verification uses the adapter named in `provider`, never the callback URL; an event whose provider differs is stored and ignored;
+- no STL delivery before verified online payment; physical production of an online order waits for payment, of a cash order starts at placement;
+- reconciliation job handles missed callbacks for online payments only.
 
 ### Index
 
@@ -1198,49 +1295,50 @@ Duplicate webhook delivery must not apply a payment twice or repeat state transi
 | `payment_id` | UUID | No | FK → `payments.id` |
 | `amount_cents` | BIGINT | No | CHECK > 0 |
 | `currency` | CHAR(3) | No | CHECK = `USD` |
-| `shipping_refund_cents` | BIGINT | No | Default 0; CHECK ≥ 0 |
-| `reason` | TEXT | No |  |
-| `requested_by` | UUID | No | FK → `users.id` |
+| `kind` | `refund_kind` | No | `admin`, `cancellation`, `late_capture` or `chargeback` |
+| `reason` | TEXT | No | free text for people; never used to classify a refund |
+| `requested_by` | UUID | Yes | FK → `users.id`; NULL only for `kind = late_capture` (created by the system) |
 | `approved_by` | UUID | Yes | FK → `users.id` |
-| `method` | enum | No | provider/manual |
-| `status` | enum | No | settlement state |
-| `provider_refund_id` | TEXT | Yes |  |
+| `status` | `refund_status` | No | `pending`, `settled` or `failed` |
+| `reissued_at` | TIMESTAMPTZ | Yes | set on a `failed` refund when it is reissued |
+| `reissue_of_refund_id` | UUID | Yes | FK → `refunds.id`; the failed refund this one reissues; UNIQUE |
+| `excess_cents` | BIGINT | Yes | chargebacks only: amount the bank took beyond the remaining balance; CHECK ≥ 0 |
 | `initiated_at` | TIMESTAMPTZ | No |  |
 | `settled_at` | TIMESTAMPTZ | Yes |  |
 | `created_at` | TIMESTAMPTZ | No |  |
 | `updated_at` | TIMESTAMPTZ | No |  |
 
-### Proposed `refund_status`
+### Constraints
 
 ```text
-pending
-processing
-settled
-failed
+requested_by IS NULL → kind = 'late_capture'
+reissued_at IS NOT NULL → status = 'failed'
+kind = 'chargeback' → status = 'settled'
+excess_cents IS NOT NULL → kind = 'chargeback'
+UNIQUE(payment_id) WHERE kind = 'late_capture' AND status <> 'failed'
 ```
-
-### Proposed `refund_method`
-
-```text
-provider
-manual
-```
-
-Exact values require confirmation from the payment/refund implementation.
 
 ### Rules
 
 - partial refund supported;
-- refund may cover selected lines plus shipping;
-- refund remains a tracked obligation until settled;
-- a refunded STL line becomes `refunded` and leaves the delivery queue if not yet sent;
+- refund may cover selected lines; there is no shipping component (ADR-024);
+- every V1 refund is manual: the administrator pays it in the provider dashboard or in cash and settles it here; the platform never calls a provider refund API;
+- a refund of a `cash` payment is capped at the cash recorded;
+- only paid lines are refundable (BR-149); a line's refundable amount is `line_total_cents` minus its items in non-failed refunds and in failed refunds not yet reissued, and a cancelled cash line has 0;
+- a line becomes `refunded` only when its refund items cover its whole total; a partial refund leaves it in its state; a refund that would empty an unfinished physical line (`pending`, `in_production`, `ready_to_ship`, `shipped`, `ready_for_pickup`) is refused (cancel instead);
+- a cancellation refund is the line's remaining balance, and none is created when that is 0;
+- a `failed` refund changes no line state and stays owed (in the obligations queue) until reissued; it never counts toward `refunded` status, but an owed one counts as a refund present;
+- a `late_capture` refund has no items and no requester, is created automatically, never counts toward the order status, and is exempt from the item-sum check;
+- a `chargeback` refund is created already `settled`, split per line, and never enters the obligations queue;
+- refund remains a tracked obligation until settled, or until reissued if it failed;
+- a fully refunded STL line becomes `refunded` and leaves the delivery queue if not yet sent;
 - an unsettled refund blocks account deletion.
 
 ### Index
 
 ```text
 (created_at)
-WHERE status IN ('pending', 'processing')
+WHERE status = 'pending' OR (status = 'failed' AND reissued_at IS NULL)   -- obligations queue: pending and owed
 ```
 
 ---
@@ -1263,53 +1361,15 @@ A line should appear at most once in the same refund:
 UNIQUE(refund_id, order_item_id)
 ```
 
-The sum of refund-item amounts plus shipping refund must be validated transactionally against `refunds.amount_cents` and against the amount originally paid/refundable. This is a cross-row invariant and is not a simple CHECK.
+Except for `kind = late_capture` (no items), the sum of refund-item amounts must be validated transactionally against `refunds.amount_cents` and against the amount originally paid/refundable. This is a cross-row invariant and is not a simple CHECK.
 
 ---
 
 # 10. Fulfillment
 
-## 10.1 `shipping_zones`
+## 10.1 `shipping_zones` — removed
 
-**Purpose:** Admin-managed Lebanese delivery zones with flat rates.
-
-| Column | Type | Null | Constraint |
-|---|---|---:|---|
-| `id` | UUID | No | PK |
-| `name` | TEXT | No | unique among live zones |
-| `rate_cents` | BIGINT | No | CHECK ≥ 0 |
-| `currency` | CHAR(3) | No | CHECK = `USD` |
-| `is_active` | BOOLEAN | No | Default `TRUE` |
-| `deleted_at` | TIMESTAMPTZ | Yes |  |
-| `created_at` | TIMESTAMPTZ | No |  |
-| `updated_at` | TIMESTAMPTZ | No |  |
-
-```text
-UNIQUE(name) WHERE deleted_at IS NULL
-```
-
-### Rules
-
-- V1 supports Lebanese zones only;
-- international requests are redirected to WhatsApp;
-- pickup is free and does not use a zone;
-- selected zone name/rate are snapshotted onto the order;
-- optional free-shipping threshold comes from `settings`.
-
-### Zone Resolution — Final V1 Decision
-
-V1 uses **explicit shipping-zone selection at checkout**.
-
-- Admin manages `shipping_zones` and their flat rates.
-- The customer selects an active zone when choosing Delivery.
-- The client sends only `shipping_zone_id`; it never sends the trusted shipping amount.
-- The server loads the active zone, reads `rate_cents` from PostgreSQL, applies any configured free-shipping rule, and snapshots the zone name/rate onto the order.
-- The delivery address remains a separate immutable snapshot.
-- No `shipping_zone_areas` / governorate-to-zone mapping table is added in V1.
-- Pickup does not use a shipping zone.
-- If the business later requires automatic address-to-zone validation, that is a new requirement and schema change.
-
-This matches the SRS treatment of courier/per-zone rates as **data entry, not a schema blocker**.
+Removed by ADR-024. The courier sets and collects the delivery fee, so the platform stores no zones, rates, threshold or shipping snapshot, and there is no governorate-to-zone mapping. Fulfillment owns no tables of its own: line state lives on `order_items`.
 
 ---
 
@@ -1422,7 +1482,7 @@ WHERE deleted_at IS NULL
 - verified user may review without purchase;
 - one review per user/product;
 - verified-purchase badge depends on a paid, unrefunded order line for the product;
-- badge is recomputed when a purchase is paid or refunded;
+- badge is recomputed when a purchase is paid (online verification or cash handover) or refunded; an unpaid cash line never counts;
 - admin may hide/restore;
 - rating aggregate on product is recalculated on create/edit/delete/moderation.
 
@@ -1558,6 +1618,7 @@ OR (quoted_amount_cents >= 0 AND currency = 'USD')
 |---|---|---:|---|
 | `id` | UUID | No | PK |
 | `user_id` | UUID | Yes | FK → `users.id`; guest allowed |
+| `order_id` | UUID | Yes | FK → `orders.id`; set for a customer's problem report (ADR-024) |
 | `name` | TEXT | No |  |
 | `email` | CITEXT | No |  |
 | `phone` | TEXT | Yes |  |
@@ -1603,7 +1664,7 @@ To align with the global UUID primary-key convention, this final design uses a U
 - minimum offer percentage;
 - checkout hold period;
 - unverified-account purge period;
-- free-shipping threshold;
+- cash payment switch, maximum open cash orders per customer, maximum cash order total (ADR-024);
 - pickup address;
 - pickup hours;
 - WhatsApp number.
@@ -1757,7 +1818,6 @@ for cleanup.
 | colours | products | 1:N | `products.colour_id` | RESTRICT |
 | products | product_images | 1:N | `product_images.product_id` | CASCADE on true purge |
 | users | orders | 1:N | `orders.user_id` | RESTRICT; user anonymised instead |
-| shipping_zones | orders | 1:N | `orders.shipping_zone_id` | RESTRICT; snapshot preserves history |
 | orders | order_items | 1:N | `order_items.order_id` | RESTRICT |
 | products | order_items | 1:N | `order_items.product_id` | RESTRICT |
 | offers | order_items | 1:N/optional | `order_items.offer_id` | RESTRICT |
@@ -1770,6 +1830,7 @@ for cleanup.
 | order_items | refund_items | 1:N | `refund_items.order_item_id` | RESTRICT |
 | users | order_items | 1:N | `order_items.user_id` (ownership copy) | RESTRICT; user anonymised instead |
 | users | order_items | 1:N optional | `order_items.delivered_by` | RESTRICT |
+| users | payments | 1:N optional | `payments.recorded_by` | RESTRICT |
 | users | offers | 1:N | `offers.user_id` | RESTRICT/anonymise |
 | products | offers | 1:N | `offers.product_id` | RESTRICT |
 | offers | offer_rounds | 1:N | `offer_rounds.offer_id` | RESTRICT |
@@ -1781,6 +1842,12 @@ for cleanup.
 | users | custom_requests | 1:N optional | `custom_requests.user_id` | SET NULL preferable for guest-like lead preservation |
 | custom_requests | custom_request_attachments | 1:N | `custom_request_attachments.custom_request_id` | CASCADE |
 | users | contact_messages | 1:N optional | `contact_messages.user_id` | SET NULL preferable |
+| orders | contact_messages | 1:N optional | `contact_messages.order_id` | RESTRICT |
+| orders | order_items | 1:N | `(order_items.order_id, order_items.payment_method)` → `orders(id, payment_method)` | RESTRICT; cash integrity |
+| orders | payments | 1:N | `(payments.order_id, payments.order_payment_method)` → `orders(id, payment_method)` | RESTRICT; cash integrity |
+| users | cash_payment_blocks | 1:N | `cash_payment_blocks.user_id` | RESTRICT |
+| orders | cash_payment_blocks | 1:0..1 | `cash_payment_blocks.order_id` | RESTRICT |
+| users | cash_payment_blocks | 1:N optional | `cash_payment_blocks.cleared_by` | RESTRICT |
 | users | audit_logs | 1:N optional | `audit_logs.actor_user_id` | SET NULL if physical purge is ever allowed |
 | users | email_outbox | 1:N optional | `email_outbox.user_id` | SET NULL |
 | users | idempotency_records | 1:N optional | `idempotency_records.user_id` | CASCADE after expiration/safe purge |
@@ -1826,7 +1893,11 @@ These are the most important constraints to express directly in PostgreSQL.
 - tax = 0 in V1;
 - STL order-item quantity = 1;
 - physical snapshot has lead-time and batch-size;
-- delivery requires required address/shipping snapshot fields.
+- delivery requires the address snapshot fields; every physical order requires a contact phone;
+- a digital-only order is `online`; a cash order records cash-terms consent;
+- a cash order has only physical lines (copied `payment_method` + CHECK);
+- a cancel reason only on a cancelled line;
+- one cash payment block per order.
 
 ## 15.5 Digital Access
 
@@ -1836,6 +1907,9 @@ These are the most important constraints to express directly in PostgreSQL.
 ## 15.6 Payments
 
 - one live payment per order;
+- a `cash` payment is never `pending` or `processing`, is above zero and records who recorded it;
+- at most one `cash` payment per order;
+- `provider = 'cash'` exactly on cash orders.
 - unique webhook provider event;
 - payment/refund money non-negative;
 - refund-item amount > 0.
@@ -1867,17 +1941,26 @@ Not every business rule can be expressed as a local SQL CHECK. These must be imp
 7. Only an administrator marks an STL line delivered, and only from `awaiting_delivery`.
 8. STL lines enter `awaiting_delivery` only after independently verified payment.
 9. Order status projection matches payment + line states.
-10. Cancellation cutoff races against entering production; lock the same order-item row.
+10. Cancellation cutoff races against start printing (`pending → in_production`); both lock the order row first, then the lines (ADR-024 lock order).
 11. Refund-item totals do not exceed paid/refundable amounts.
 12. A refunded STL line leaves the delivery queue in the same transaction.
 13. Acquiring an STL through another route auto-closes the live offer.
 14. Verified-purchase badge is recomputed when qualifying purchase evidence changes.
 15. Product rating/review/wishlist aggregates remain consistent with source rows.
 16. Checkout idempotency record, order, lines, and initial payment are coordinated atomically.
-17. Address/shipping requirement matches actual physical-line composition.
+17. Address and contact-phone requirements match actual physical-line composition; a `cash` order has only physical lines.
 18. Dispatch estimate is calculated from physical order-line snapshots.
 19. Kill switch blocks new checkout but not an in-flight payment.
 20. Category cannot be archived/deleted while live products remain assigned.
+21. Cash checkout respects `cash_payment_enabled`, uncleared blocks for the customer or phone hash, `cash_max_open_orders` for the customer or phone hash, and a **recomputed** total above 0 and within `cash_max_order_total`; checked after the recompute, under the cart lock and an advisory lock on the phone hash.
+22. The cash handover requires at least one live line, marks every live line delivered / picked up and creates the single cash payment for exactly their total (above zero), in one transaction under the ADR-024 lock order.
+23. A cash refusal or no-show (`ready_to_ship`, `returned` or `ready_for_pickup` → `cancelled`) creates no refund; when a cancel leaves the order with no live line and every such cancelled line carries `refused` or `no_show` (at least one), a `cash_payment_blocks` row is inserted in the same transaction, under the phone advisory lock, independent of cancel order.
+24. No physical line of an unpaid online order changes state (BR-148), except the hold release cancelling its `pending` lines; a payment that reached `paid` (`paid`, `partially_refunded`, `refunded`) allows transitions.
+24a. A capture on a non-live attempt, a cancelled order, or for a mismatched amount is a late capture: `late_captured_at`, one automatic refund, an alert, no change to the order or lines; a duplicate success for a `paid` attempt is a no-op.
+24b. A line is `refunded` only when fully refunded; an unfinished physical line is never refunded in full; a failed refund changes no line state and stays owed until reissued.
+24c. The hold release cancels an order only when the provider confirms it unpaid; it skips orders whose check fails or that have an unprocessed webhook event.
+25. Refundable amounts, revenue and the badge count only paid lines (BR-149).
+26. Every write that changes an order's lines, payment or refunds locks `orders` first, then lines by `id`, then `payments` (ADR-024).
 
 ---
 
@@ -1894,48 +1977,57 @@ pending -> processing -> paid -> partially_refunded -> refunded
 paid ---------------------------------------> refunded
 ```
 
-`paid` requires independent server-side payment verification.
+`paid` requires independent server-side payment verification for an online payment. A `cash` payment is inserted directly as `paid` by the cash handover (ADR-024).
 
 ## 17.2 Order Projection
 
 ```text
-payment pending/processing -> pending_payment
-payment failed/expired     -> cancelled
+online, no payment reached paid:
+  cancelled by the hold release   -> cancelled
+  otherwise                       -> pending_payment
 
-payment paid:
+cash, no payment yet:
   all lines cancelled      -> cancelled
-  all lines refunded       -> refunded
-  any refund present       -> partially_refunded
-  no physical lines        -> completed
-  all physical terminal    -> completed
   otherwise                -> in_progress
+
+payment reached paid (paid, partially_refunded, refunded; online or cash):
+  all lines cancelled             -> cancelled
+  refunds cover all paid money    -> refunded
+  all lines refunded              -> refunded
+  any refund present              -> partially_refunded
+  all lines terminal              -> completed
+  otherwise                       -> in_progress
 ```
 
-Projection is recomputed in the same transaction as payment/line changes.
+Projection is recomputed in the same transaction as payment/line/refund changes, under the ADR-024 lock order. It takes `orders.cancelled_at` as an input. "Refunds cover all paid money" counts non-failed refund records, pending or settled, never `late_capture` refunds; "all lines refunded" means every line fully refunded.
 
 ## 17.3 Digital Order Line
 
 ```text
 pending -> awaiting_delivery -> delivered
 awaiting_delivery | delivered -> refunded
+pending -> cancelled            # hold release only; frees the ownership index
 ```
 
 ## 17.4 Physical Delivery Line
 
 ```text
-pending
-  -> in_production
-      -> ready_to_ship
+pending                          # received
+  -> in_production               # start printing; internal, no customer notification
+      -> ready_to_ship           # finished
           -> shipped
-              -> delivered
-                  -> refunded
+              -> delivered       # cash order: only via the cash handover
+              -> cancelled       # unpaid cash line totalling 0 only; reason other
+                  -> refunded    # paid only
               -> returned
-                  -> ready_to_ship
+                  -> shipped
                   -> in_production
-                  -> refunded
+                  -> refunded    # paid only
+                  -> cancelled   # unpaid cash only; reason refused/other; no refund; may block (§8.6)
 
-pending -> cancelled
-in_production -> cancelled   # admin decision
+pending -> cancelled                         # customer or admin
+in_production -> cancelled                   # admin decision
+ready_to_ship -> cancelled                   # admin; reason refused/other; cash may block (§8.6)
 ```
 
 `returned` is not terminal.
@@ -1943,8 +2035,13 @@ in_production -> cancelled   # admin decision
 ## 17.5 Physical Pickup Line
 
 ```text
-pending -> in_production -> ready_for_pickup -> picked_up -> refunded
+pending -> in_production -> ready_for_pickup -> picked_up -> refunded (paid only)
+pending -> cancelled                          # customer or admin
+in_production -> cancelled                    # admin
+ready_for_pickup -> cancelled                 # admin; reason refused/no_show/other; cash may block (§8.6)
 ```
+
+On a cash order `ready_for_pickup -> picked_up` happens only via the cash handover.
 
 ## 17.6 Offer
 
@@ -2078,7 +2175,7 @@ WHERE status = 'processing'
 
 ```text
 (created_at)
-WHERE status IN ('pending', 'processing')
+WHERE status = 'pending' OR (status = 'failed' AND reissued_at IS NULL)
 ```
 
 ## 19.10 Notifications
@@ -2086,6 +2183,13 @@ WHERE status IN ('pending', 'processing')
 ```text
 (user_id, created_at DESC)
 (user_id, created_at DESC) WHERE read_at IS NULL
+```
+
+## 19.10a Cash Payment Blocks
+
+```text
+cash_payment_blocks(user_id) WHERE cleared_at IS NULL
+cash_payment_blocks(contact_phone_hash) WHERE cleared_at IS NULL
 ```
 
 ## 19.11 Retention Jobs
@@ -2113,9 +2217,9 @@ The schema/indexes must serve these expected high-value paths.
 7. Load customer's persistent cart and lines.
 8. Check STL ownership for `(user, product)` via the ownership index.
 9. List customer's orders newest first.
-10. Admin order queue by status/date/customer/fulfillment.
+10. Admin order queue by status/date/customer/fulfillment/payment method, and unpaid cash orders ("cash due").
 11. Load order + lines + payment/refund state.
-12. Find processing payments for reconciliation.
+12. Find processing online payments for reconciliation.
 13. Find pending refund obligations.
 14. Find offers whose response deadline has expired.
 15. Find pending email-outbox rows due for delivery.
@@ -2169,10 +2273,10 @@ These values must be copied at transaction time.
 ## Order Header Snapshots
 
 - fulfillment method;
+- payment method;
 - recipient/address fields;
-- shipping-zone name;
-- shipping rate;
-- subtotal/shipping/tax/total;
+- contact phone;
+- subtotal/tax/total;
 - currency;
 - terms-consent timestamps;
 - estimated dispatch timestamp.
@@ -2221,7 +2325,6 @@ Later catalogue changes must never alter historical order values.
 | webhook_events | retention policy may archive/prune after audit period; not specified numerically |
 | refunds | retain |
 | refund_items | retain |
-| shipping_zones | soft delete/archive |
 | offers | retain |
 | offer_rounds | retain permanently |
 | reviews | soft delete/hide |
@@ -2234,6 +2337,7 @@ Later catalogue changes must never alter historical order values.
 | audit_logs | partition + archive after 24 months hot |
 | email_outbox | retain through operational/audit retention; exact period not specified |
 | idempotency_records | purge after expiry |
+| cash_payment_blocks | retain; cleared, never deleted |
 
 ### Wishlist Decision
 
@@ -2258,7 +2362,8 @@ USER
  │    │    └── REFUND_ITEM
  │    ├── PAYMENT
  │    │    └── REFUND
- │    └── ORDER_STATUS_HISTORY
+ │    ├── ORDER_STATUS_HISTORY
+ │    └── CASH_PAYMENT_BLOCK
  ├── OFFER ───────────────── PRODUCT
  │    └── OFFER_ROUND
  ├── REVIEW ──────────────── PRODUCT
@@ -2274,8 +2379,6 @@ COLOUR ─────────── PRODUCT
 
 PRODUCT
  └── PRODUCT_IMAGE
-
-SHIPPING_ZONE ─── ORDER
 
 PLATFORM:
 SETTING
@@ -2299,13 +2402,14 @@ These transactions require explicit locking/atomic constraints.
 4. validate every product;
 5. recheck STL ownership;
 6. validate current quantities/caps;
-7. resolve fulfillment and shipping;
+7. resolve fulfillment, address and contact phone;
 8. recompute totals;
-9. create order + lines + pending payment;
-10. calculate dispatch snapshot;
-11. clear cart;
-12. persist consent;
-13. commit.
+9. validate the payment method and the cash limits against the recomputed total (advisory lock on the normalised phone for cash);
+10. create order + lines, and a pending payment (with its chosen provider) for an online order only;
+11. calculate dispatch snapshot;
+12. clear cart;
+13. persist consent;
+14. commit.
 
 ## Payment Verification
 
@@ -2322,19 +2426,35 @@ External operation:
 
 Transaction B:
 
-- lock payment/order;
+- lock the order, then its lines by `id`, then the payment (ADR-024 lock order);
 - apply verified state;
 - move STL lines to `awaiting_delivery`;
-- transition physical lines;
+- leave physical lines `pending` (eligible for production);
 - close live offer;
 - recompute order status;
 - write history/audit;
 - insert email outbox rows;
 - commit.
 
-## Cancellation vs Production
+## Lock Order (ADR-024)
 
-Both self-cancel and admin `pending → in_production` transition lock the same `order_items` row. Exactly one operation wins.
+Every write that changes an order's lines, payment or refunds takes its locks in one order: the `orders` row (`FOR UPDATE`), then the lines it reads or changes in `id` order, then the payment row, then recomputes the status. This covers line transitions, self-cancel, admin cancel, the cash handover, payment apply (including late captures), payment retry, reconciliation marking an attempt failed or expired, manual confirmation, refund creation, settlement and failure, chargeback recording, receipt confirmation and problem reports, and `release_stale_checkouts`. **Nothing locks `payments` before `orders`, including batch selection:** a job selects candidate ids without locking (no `FOR UPDATE SKIP LOCKED` on `payments`), then locks each order and re-reads. Locking a line before its order would deadlock against the handover, and two parallel line changes could each derive the order status from a stale view of the other.
+
+## Cancellation vs Start Printing
+
+Self-cancel locks the order, then every physical line, then checks they are all `pending`. Start printing locks the same order row first. Exactly one wins, even when printing starts on a different line from the one the cancel checks last.
+
+## Cash Handover
+
+The handover locks the order row, then all its lines, checks at least one live line, every live line `shipped` / `ready_for_pickup` and the amount equals their total, then marks them delivered / picked up and inserts the single `cash` payment. Two concurrent handovers, or a handover racing a transition or cancel on any line, serialise on the order lock; the unique cash-payment index is the final guarantee against a second cash payment.
+
+## Cash Checkout Limits
+
+The open-cash-order count and the blocks are read under the cart lock, which serialises one customer's checkouts, and a transaction-scoped advisory lock on the phone hash (`pg_advisory_xact_lock`), which serialises cash checkouts from different accounts sharing a phone. A cancel that may insert a block also locks the customer's cart and then takes the advisory lock, after the order and line locks; checkout never locks an existing `orders` row, so this cannot cycle.
+
+## Payment Retry vs Hold Release
+
+Retry locks the order row and re-checks `pending_payment` and `cancelled_at IS NULL` before inserting; the hold release locks the same row. Exactly one wins: a retry never adds a payment to a cancelled order. The hold release cancels only when the provider confirms the attempt unpaid; it skips orders whose provider check fails or times out, or that have an unprocessed webhook event.
 
 ## Offer Submission
 
@@ -2346,11 +2466,11 @@ The partial unique STL-ownership index on `order_items` is the final race-safe g
 
 ## Mark Delivered vs Refund
 
-Marking an STL line delivered and refunding it lock the same `order_items` row. Exactly one wins, so a refunded line is never marked sent.
+Marking an STL line delivered and refunding it both lock the order row, then that line. Exactly one wins, so a refunded line is never marked sent.
 
 ## Payment Creation
 
-The partial unique live-payment index is the final race-safe guarantee.
+The partial unique live-payment index is the final race-safe guarantee; for cash, the unique cash-payment index as well.
 
 ---
 
@@ -2446,7 +2566,8 @@ Re-run capacity/index review if any table reaches **50% of its 1-year envelope e
 - [x] Product/category slug uniqueness is defined.
 - [x] Webhook idempotency uniqueness is defined.
 - [x] Product physical/STL type integrity is defined.
-- [x] Order total arithmetic is defined.
+- [x] Order total arithmetic is defined (no shipping, ADR-024).
+- [x] Cash payment and payment-method checks are defined (ADR-024).
 - [x] V1 tax = 0 and currency = USD are defined.
 
 ## Time and Money
@@ -2488,7 +2609,7 @@ Re-run capacity/index review if any table reaches **50% of its 1-year envelope e
 
 ## Schema-Freeze Decisions — Resolved
 
-1. **Shipping zones:** explicit active-zone selection at checkout; server resolves trusted rate; no geographic mapping table in V1.
+1. **Shipping zones:** superseded by ADR-024 — no zones or shipping amounts; the courier prices and collects delivery.
 2. **Capacity:** 1-year planning envelopes recorded; largest planned table is `audit_logs` (~5M).
 3. **Implementation enums:** exact V1 values frozen in §3.14.
 4. **Wishlist removal:** soft delete with partial unique active-row constraint.
@@ -2508,8 +2629,8 @@ The following are deliberately absent:
 - subcategories;
 - multi-vendor ownership;
 - international shipping model;
+- shipping zones, rates or shipping amounts (ADR-024);
 - courier tracking;
-- cash-on-delivery model;
 - guest checkout/order customer snapshots for anonymous users;
 - product comments;
 - STL licensing management;
@@ -2539,7 +2660,7 @@ If one of these is introduced later, update requirements/ERD/database design fir
 - [x] Audit partitioning is defined.
 - [x] Order/address/product snapshots are defined.
 - [x] Concurrency boundaries are identified.
-- [x] Shipping-zone resolution is frozen for V1.
+- [x] Shipping removed from the platform; cash on delivery modelled (ADR-024).
 - [x] 1-year capacity planning envelope is recorded.
 - [x] Implementation enums are frozen.
 - [x] Wishlist deletion behavior is frozen.
@@ -2549,7 +2670,7 @@ If one of these is introduced later, update requirements/ERD/database design fir
 
 ## What may still change later
 
-Normal future changes such as Whish provider details, real courier prices, token lifetimes, or actual production-volume estimates are **configuration/integration tuning**, not blockers to the V1 database schema. If a future requirement changes the data model, update this document/ERD first and then create an Alembic migration.
+Normal future changes such as online payment provider details, token lifetimes, or actual production-volume estimates are **configuration/integration tuning**, not blockers to the V1 database schema. If a future requirement changes the data model, update this document/ERD first and then create an Alembic migration.
 
 ## Next Step
 

@@ -31,23 +31,24 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 | VS-024 | Payment recovery: reconciliation, stale checkouts, manual confirm | VS-023 | Not started |
 | VS-025 | Customer order history | VS-023 | Not started |
 | VS-026 | Address book | VS-008 | Not started |
-| VS-027 | Shipping zones | VS-005 | Not started |
-| VS-028 | Physical checkout: delivery, pickup, dispatch estimate | VS-023, VS-026, VS-027 | Not started |
-| VS-029 | Admin order queue and fulfillment | VS-028, VS-023b | Not started |
-| VS-030 | Refunds and settlement | VS-029 | Not started |
+| VS-027 | Shipping zones | — | Removed (ADR-024) |
+| VS-028 | Physical checkout: delivery, pickup, payment method, dispatch estimate | VS-023, VS-024, VS-026 | Not started |
+| VS-029 | Admin order queue, fulfillment and cash handover | VS-028, VS-023b, VS-024, VS-025 | Not started |
+| VS-030 | Refunds and settlement | VS-029, VS-024 | Not started |
 | VS-031 | Cancellation and returns | VS-030 | Not started |
-| VS-032 | Live Whish adapter | VS-020, VS-024, VS-030 | Not started |
+| VS-032 | Live online payment provider | VS-020, VS-024, VS-030 | Not started |
 | VS-033 | Contact form and captcha | VS-005 | Not started |
+| VS-029b | Receipt confirmation and problem report | VS-029, VS-033 | Not started |
 | VS-034 | Bring Your Idea submission | VS-014, VS-033 | Not started |
 | VS-035 | Bring Your Idea pipeline and funnel | VS-034, VS-020 | Not started |
-| VS-036 | Reviews and Verified Purchase badge | VS-015, VS-028, VS-030 | Not started |
+| VS-036 | Reviews and Verified Purchase badge | VS-015, VS-028, VS-030, VS-031 | Not started |
 | VS-037 | Review moderation | VS-036 | Not started |
 | VS-038 | Wishlist and wishlist analytics | VS-013 | Not started |
 | VS-039 | Offer submission and inactivity expiry | VS-023, VS-007 | Not started |
 | VS-040 | Offer counter, accept, reject, withdraw | VS-039 | Not started |
 | VS-041 | Accepted-offer checkout and auto-close | VS-040, VS-023, VS-024 | Not started |
 | VS-042 | Download statistics rollup | — | Removed (ADR-019) |
-| VS-043 | Business analytics | VS-029, VS-030, VS-036, VS-039 | Not started |
+| VS-043 | Business analytics | VS-029, VS-030, VS-031, VS-036, VS-039 | Not started |
 | VS-044 | Customer data export | VS-023b, VS-025, VS-026, VS-036, VS-039 | Not started |
 | VS-045 | Account deletion by anonymisation | VS-026, VS-031, VS-036, VS-038, VS-039 | Not started |
 | VS-046 | Security data retention and IP-salt rotation | VS-004 | Not started |
@@ -160,7 +161,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 **Status:** Done
 **Depends on:** VS-005
 **Goal:** The administrator changes business parameters without a deploy. The public site reads five safe values.
-- **Model / migration:** `de1d8a23512f` creates `settings`, seeded with twelve keys, among them `accepting_orders` (default `false`), the offer windows, cooldown and floor, `checkout_hold_period`, `daily_download_cap`, `free_shipping_threshold`, pickup address and hours, and `whatsapp_number`. See [`settings-registry.md`](settings-registry.md).
+- **Model / migration:** `de1d8a23512f` creates `settings`, seeded with twelve keys, among them `accepting_orders` (default `false`), the offer windows, cooldown and floor, `checkout_hold_period`, `daily_download_cap`, `free_shipping_threshold` (obsolete since ADR-024; removed by VS-028), pickup address and hours, and `whatsapp_number`. See [`settings-registry.md`](settings-registry.md).
 - **Endpoints / jobs:** `GET /api/v1/admin/settings`, `GET/PATCH /api/v1/admin/settings/{key}`, `GET /api/v1/settings/public`.
 - **Logic:**
   - A code-side registry defines each key's type, range and visibility.
@@ -493,12 +494,13 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 **Depends on:** VS-022, VS-008, VS-007
 **Goal:** A customer buys an STL end to end on the mock provider, and the line enters the STL delivery queue (`awaiting_delivery`) only after independent server-side verification.
 - **Model / migration:**
-  - `orders`, `order_items`, `order_status_history`, `payments`, `webhook_events`, `idempotency_records`, created with their full frozen columns, including the physical/delivery columns VS-028 will use.
-  - Constraints: one live payment per order; unique `(provider, event_id)`; `UNIQUE NULLS NOT DISTINCT (scope, user_id, key)`.
-  - Adds `mock` to `payment_provider`.
+  - `orders`, `order_items`, `order_status_history`, `payments`, `webhook_events`, `idempotency_records`, created with their full frozen columns, including the physical/delivery columns VS-028 and VS-029 will use: `orders.payment_method` (new `payment_method` enum `online`/`cash`), `orders.contact_phone_snapshot` (E.164) and `orders.contact_phone_hash`, `orders.cash_terms_accepted_at`, `order_items.payment_method`, `order_items.cancel_reason` (new enum `refused`/`no_show`/`other`), `order_items.receipt_confirmed_at` and `problem_reported_at`, `payments.order_payment_method`, `payments.recorded_by`, `payments.late_captured_at`. No shipping, zone or shipping-refund columns (ADR-024).
+  - Cash integrity in the database (INV-21, INV-22): `UNIQUE (orders.id, payment_method)`; composite foreign keys `order_items (order_id, payment_method)` and `payments (order_id, order_payment_method)` to it; CHECKs that a cash line is physical and that `provider = 'cash'` exactly when `order_payment_method = 'cash'`; a partial unique index `payments(order_id) WHERE provider = 'cash'`; a cash payment's status is `paid`, `partially_refunded` or `refunded`, above zero and has `recorded_by`.
+  - Constraints: one live payment per order (`UNIQUE(order_id) WHERE status NOT IN ('failed', 'expired')`, so a paid or refunded order never gets a second); unique `(provider, event_id)`; `UNIQUE NULLS NOT DISTINCT (scope, user_id, key)`.
+  - `payment_provider` is created with `mock` and `cash`; real provider values are added by VS-032 once §30.4 is decided. The provider of each attempt is stored on its payment row.
   - STL ownership (ADR-019, database-design §8.4): `order_items.user_id` and the partial unique index `(user_id, product_id) WHERE product_type = 'stl' AND fulfillment_status IN ('pending', 'awaiting_delivery', 'delivered')`; `orders.customer_email_snapshot`.
 - **Endpoints / jobs:**
-  - `POST /api/v1/checkout` (requires an `Idempotency-Key` header) and `POST /api/v1/webhooks/payments/whish`.
+  - `POST /api/v1/checkout` (requires an `Idempotency-Key` header; optional `payment_provider`, required when more than one online provider is configured) and `POST /api/v1/webhooks/payments/{provider}` (provider-neutral, ADR-024).
   - A verification arq job.
   - New `purge_expired_idempotency_records` job (daily).
 - **Logic:**
@@ -515,12 +517,13 @@ Slices are ordered by **dependency first** (a slice never relies on something th
     7. Record terms and digital-final-sale consent.
     8. Clear the cart.
   - The provider is called **after** the transaction commits.
-  - The webhook stores the event and returns 200.
-  - The verification job queries the provider outside any lock. It applies the result only if the amount matches exactly: mark paid, move STL lines to `awaiting_delivery`, write history, audit, emails and notifications. The confirmation email says the file will be emailed by the administrator.
-  - `derive_order_status()` is the only writer of `order.status`.
-  - A failed or expired attempt leaves the order `pending_payment`, so it can be retried (BR-058, VS-024). The order becomes `cancelled` only once its checkout hold is released (`orders.cancelled_at` set by `release_stale_checkouts`). This narrows SRS §20.2's "payment failed or expired → cancelled".
+  - The webhook routes only configured online providers (404 otherwise; `cash` never; `mock` never in production), stores the event and returns 200.
+  - The verification job queries the provider outside any lock, through the adapter named on the payment row (`payments.provider`), never the URL. An event whose provider differs from its payment's provider is stored, ignored and alerted. It applies the result only if the amount matches exactly, under the ADR-024 lock order (`orders`, then lines by `id`, then `payments`): mark paid, move STL lines to `awaiting_delivery`, write history, audit, emails and notifications. The confirmation email says the file will be emailed by the administrator.
+  - `derive_order_status()` is the only writer of `order.status`. It implements the full SRS §20.2 projection, including the cash-order branch (no payment: all lines cancelled → `cancelled`, otherwise `in_progress`), so later slices never change it. It is a pure function, and this slice unit-tests every branch, including cash, "refunds cover all paid money → refunded" and the all-cancelled case.
+  - Every order in this slice is `payment_method = online`; cash is added by VS-028.
+  - A failed or expired attempt leaves the order `pending_payment`, so it can be retried (BR-058, VS-024). The order becomes `cancelled` only once its checkout hold is released (`orders.cancelled_at` set by `release_stale_checkouts`), as SRS §20.2 states; `derive_order_status` takes `cancelled_at` as an input.
   - Carts with physical lines return 422 `INVALID_FULFILLMENT` until VS-028.
-  - Settings validation refuses to start the API and the worker when `ENVIRONMENT=production` and `PAYMENT_PROVIDER=mock`.
+  - Settings validation refuses to start the API and the worker when `ENVIRONMENT=production` and `mock` is the configured payment provider. (The single `payment_provider` setting becomes a list of configured online providers in VS-032; until then "configured providers" means that one value.)
 - **Tests:**
   - Parallel double checkout.
   - Same key with a different body gives 409.
@@ -531,7 +534,11 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - An owned STL cannot be added to the cart (409).
   - A failure leaves the cart intact.
   - A provider-reported failure leaves the order `pending_payment`.
-  - Startup fails with `ENVIRONMENT=production` and `PAYMENT_PROVIDER=mock`.
+  - Startup fails with `ENVIRONMENT=production` and `mock` configured.
+  - A webhook to `/payments/cash`, to an unconfigured provider, or to `/payments/mock` in production gives 404 and stores nothing. The production case runs with `ENVIRONMENT=production` and a test-only stub online provider configured, so startup validation passes.
+  - A webhook event whose provider differs from its payment's provider changes nothing.
+  - The database refuses an STL line on a cash order, a cash payment on an online order, an online payment on a cash order, and a second cash payment on one order.
+  - Every branch of `derive_order_status` (unit).
   - Full end-to-end: register → buy → line `awaiting_delivery`.
 - **Done when:**
   - `paid` is reachable only through verification.
@@ -549,7 +556,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 - **Endpoints / jobs:** `GET /api/v1/admin/stl-deliveries`; `POST /api/v1/admin/orders/{order_id}/items/{item_id}/transition` for STL lines only (`awaiting_delivery → delivered`). VS-029 adds the physical edges to the same endpoint.
 - **Logic:**
   - Reuses the admin boundary, `AuditWriter`, `create_notification` (category `download`, `payload.event = "stl.delivered"`), the outbox, and `derive_order_status`.
-  - Marking delivered locks the line, sets `fulfilled_at` and `delivered_by`, recomputes the order status, and writes history, audit, an in-app notification and a "your STL file has been sent" email in one transaction.
+  - Marking delivered locks the order and then the line (ADR-024 lock order), sets `fulfilled_at` and `delivered_by`, recomputes the order status, and writes history, audit, an in-app notification and a "your STL file has been sent" email in one transaction.
   - The queue shows order number, product, customer and `customer_email_snapshot`, oldest first.
   - Removes the empty `src/app/digital_assets` package and its test folders, and the stale VS-019 references (`jobs/partitions.py`, `identity/api/admin_users.py`, `test_deep_architecture.py`'s context list).
 - **Tests:**
@@ -584,10 +591,12 @@ Slices are ordered by **dependency first** (a slice never relies on something th
     - no attempt is `pending` or `processing` (otherwise 409 `PAYMENT_ALREADY_ACTIVE`, backed by the unique index);
     - no STL line has become owned since checkout (otherwise 409 `PRODUCT_ALREADY_OWNED`; the ownership index makes this rare, because the order's own `pending` line holds the STL).
 
-    The provider is called after commit. The kill switch does not block a retry, because the order already exists.
-  - Reconciliation queries the provider, outside any lock, for attempts stuck in `pending` or `processing`. A `failed` or `expired` result marks that attempt so, which frees the order for a retry.
-  - `release_stale_checkouts` finds `pending_payment` orders whose `placed_at + checkout_hold_period` has passed. It queries the provider first; a paid result is applied instead. Otherwise, under a lock, it expires any live attempt, sets `orders.cancelled_at`, moves the order's lines to `cancelled` (which frees the STL ownership index), and recomputes the status to `cancelled`.
-  - Manual confirm is allowed only when the provider has no status API, and the amount must equal the total.
+    The retry locks the `orders` row first and re-checks these conditions under the lock, so it cannot insert a payment on an order the hold release has just cancelled. It may name a configured `payment_provider` (default: the previous attempt's); it is stored on the new payment row. The provider is called after commit. The kill switch does not block a retry, because the order already exists.
+  - Retry, reconciliation and stale-checkout release apply to online orders only. A cash order (VS-028) has no payment row until its handover, so none of them can select it; retry on a cash order gives 409 `INVALID_STATE_TRANSITION` (ADR-024).
+  - Reconciliation selects candidate attempts without locking, queries the provider outside any lock, then locks the order before the payment to apply the result (ADR-024: never `payments` before `orders`, including batch selection). It covers attempts stuck in `pending` or `processing`. A `failed` or `expired` result marks that attempt so, which frees the order for a retry.
+  - `release_stale_checkouts` finds `pending_payment` orders whose `placed_at + checkout_hold_period` has passed. It queries the provider first; a paid result is applied instead. It **skips** (and alerts on) an order whose provider query fails or times out, whose provider has no status API, or that has an unprocessed webhook event: such an attempt stays live for reconciliation or manual confirmation. Only when the provider confirms the attempt unpaid does it, under the ADR-024 lock order (`orders`, then lines by `id`, then `payments`), expire any live attempt, set `orders.cancelled_at`, move the order's lines to `cancelled` (which frees the STL ownership index; an unpaid online order's physical lines can only be `pending`, because BR-148 blocks every transition until payment), and recompute the status to `cancelled`.
+  - Manual confirm applies a live online attempt on an uncancelled order when the provider has no status API, and the amount must equal the total. On an attempt that is no longer live, or on a cancelled order, it records a late capture instead of refusing. Cash is recorded by VS-029's handover, never here.
+  - **Late capture (SRS §9.2):** if verification or manual confirmation finds money captured for an attempt that is `failed` or `expired`, for a cancelled order, or for an amount that does not match the order total (the attempt is then marked `failed`), it sets `late_captured_at` on that row (which stays not live), raises an alert, and never touches the order's lines; VS-030 adds the automatic `late_capture` refund obligation. A duplicate success for an attempt already `paid` is a no-op, even if the order was cancelled since.
 - **Tests:**
   - A failed attempt, then a retry: a second attempt on the same order with the same order number, and it pays through.
   - Two concurrent retries: one 201 and one 409.
@@ -597,10 +606,23 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - Reconciliation racing a webhook applies once.
   - A hold expiring while a payment verifies: the payment wins.
   - A manual confirm with the wrong amount gives 422.
+  - A retry naming an unconfigured provider gives 422 `PAYMENT_METHOD_NOT_ALLOWED`.
+  - `release_stale_checkouts` on a `pending_payment` order with physical lines finds them all `pending` and cancels them; no other line state is reachable before payment (BR-148).
+  - A retry on a paid or refunded order gives 409 (the live-payment index counts them).
+  - A retry racing `release_stale_checkouts` (`meet_or_fail`): either the retry commits first and the release then finds a live attempt, or the release commits first and the retry gets 409; never a pending payment on a cancelled order.
+  - Late success: a provider success for an `expired` attempt on an order cancelled by the release, for a `failed` attempt while a retry attempt is live, and for a second capture after the retry is paid — each records `late_captured_at` and an alert, and leaves the order and lines unchanged. (The automatic refund obligation is tested in VS-030.)
+  - Manual confirm on an expired attempt, or on a cancelled order, records a late capture and an alert; it never applies the payment.
+  - Provider without a status API: the hold release runs while a payment waits for manual confirmation (unprocessed webhook) — the order is skipped and stays `pending_payment`; the later manual confirm applies it.
+  - The hold release's provider query errors or times out — the order is skipped, alerted, and still payable.
+  - An underpayment and an overpayment on a live attempt are never applied: the attempt is `failed` and the capture recorded as a late capture.
+  - A duplicate success for a `paid` attempt on an order the customer has since self-cancelled changes nothing.
 - **Done when:**
   - A customer retries a failed or expired attempt on the same order, and never has two live attempts on it.
   - An order is cancelled only when its checkout hold ends unpaid.
   - No payment stays stuck without an alert.
+- **Must resolve before build** (final PR #8 review, both reviewers; recorded per the owner's stop rule, not yet decided):
+  1. **No-status-API providers dead-end the hold release.** The release cancels only "when the provider confirms the attempt unpaid", and this section and the entities doc skip any order "whose provider has no status API". Admin cancel of a `pending_payment` order is 409, and manual confirm only applies or records a late capture. So an abandoned checkout stays `pending_payment` forever: the attempt stays live (retry gets `PAYMENT_ALREADY_ACTIVE`), its `pending` STL line holds the ownership index (the customer can never buy that STL again), and an alert repeats every run. The same trap catches a provider that keeps answering "pending", an order whose only attempt is a mismatched-amount late capture, and a provider-mismatch event that was "stored and ignored" if that leaves it unprocessed. This contradicts BR-039 and this slice's "Done when". Suggested fix: because a later success becomes a late capture anyway, release after the hold plus a grace period when the provider cannot answer and no webhook event exists, with an alert; or add an admin "expire attempt / release order" action. Define "unpaid" per provider state, and say that ignored or failed events set `processed_at`.
+  2. **Manual confirm with a wrong amount: 422 or late capture?** This section ("A manual confirm with the wrong amount gives 422") and `api-endpoints.md` ("Server requires exact order-total match") refuse it. ADR-024 decision 15, SRS §9.2 and the late-capture rule above say a mismatched amount found by verification **or manual confirmation** is a late capture with an automatic refund. Scenario: a no-status-API provider, and the customer transfers $45 on a $50 order. The admin enters 4500 and gets 422, so no refund obligation exists, the attempt stays live, and with item 1 the order hangs. Suggested fix: separate an admin typo from a provider showing a different captured amount (for example a `captured_amount_cents` that must match the dashboard, plus an explicit "record mismatch as late capture" path), and align the API row and this slice's test.
 
 ## VS-025 — Customer order history
 **Status:** Not started
@@ -612,6 +634,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - Ownership is enforced in the SQL predicate.
   - Fixed customer-facing schemas that cannot carry `internal_note` or provider references.
   - STL lines show `awaiting_delivery` or `delivered` with `delivered_at`; this is the customer's STL purchase list (F-027).
+  - Each order shows its payment method and the derived `payment_due` and `can_cancel` flags (`can_cancel`: at least one physical line, cash or a payment that reached `paid`, status `in_progress` or `partially_refunded`, every physical line `pending`); a physical line in `in_production` is shown as `pending` ("Received"), and the customer's status history omits `in_production` entries, because "start printing" is internal (ADR-024). VS-029 tests the masking once physical lines can move.
 - **Tests:**
   - Another user's order gives 404.
   - Snapshots survive product edits.
@@ -628,7 +651,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 - **Logic:**
   - Reuses `current_verified_user` (VS-008).
   - Switching the default happens in one transaction under a lock.
-  - Validates a Lebanese phone number and required location fields.
+  - Validates a Lebanese phone number and required location fields. The phone is the courier's contact and is snapshotted onto delivery orders (BR-078).
 - **Tests:**
   - Concurrent default switches leave one default.
   - Another user's address gives 404.
@@ -636,123 +659,228 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 - **Done when:** A customer always has at most one default address.
 
 ## VS-027 — Shipping zones
-**Status:** Not started
-**Depends on:** VS-005
-**Goal:** The administrator maintains flat-rate Lebanese delivery zones, and customers can pick from the active ones.
-- **Model / migration:** `shipping_zones` (name, `rate_cents`, currency, `is_active`, `deleted_at`).
-- **Endpoints / jobs:** `GET /api/v1/shipping-zones` (verified customers) and admin CRUD under `/api/v1/admin/shipping-zones`.
-- **Logic:** Reuses the VS-010 lifecycle pattern and `AuditWriter`. The customer picks a zone explicitly; there is no automatic governorate-to-zone mapping.
-- **Tests:**
-  - An archived zone is hidden from customers.
-  - A negative or float rate gives 422.
-  - The admin routes are admin-only.
-- **Done when:** Only active zones are selectable, and each rate is integer cents.
+**Status:** Removed by ADR-024 (the courier prices and collects the delivery fee; the platform charges no shipping).
+**Was:** admin-managed flat-rate Lebanese delivery zones and the customer zone list. Nothing replaces it: no order carries a shipping amount.
 
-## VS-028 — Physical checkout: delivery, pickup, dispatch estimate
+## VS-028 — Physical checkout: delivery, pickup, payment method, dispatch estimate
 **Status:** Not started
-**Depends on:** VS-023, VS-026, VS-027
-**Goal:** A customer checks out physical and mixed carts with delivery or free workshop pickup, and sees an honest estimated dispatch date.
-- **Model / migration:** None (the columns come from VS-023).
-- **Endpoints / jobs:** `POST /api/v1/checkout` accepts `fulfillment_method`, `address_id`, `shipping_zone_id` and a note.
+**Depends on:** VS-023, VS-024, VS-026
+**Goal:** A customer checks out physical and mixed carts with courier delivery or free workshop pickup, pays online or (physical-only orders) in cash on delivery or at pickup, and sees an honest estimated ready date.
+- **Model / migration:**
+  - No order columns (they come from VS-023).
+  - Seeds three settings (ADR-024): `cash_payment_enabled` (boolean, `true`, public), `cash_max_open_orders` (integer, `1`, range 1–10), `cash_max_order_total` (money, `10000` cents USD, range 1 – 1 000 000, public).
+  - Deletes the obsolete seeded `free_shipping_threshold` setting (VS-007) with its registry entry and public-allowlist slot, as VS-023b does for `daily_download_cap`.
+  - `cash_payment_blocks` (Ordering): `user_id`, `contact_phone_hash`, `order_id`, `reason` (`refused`/`no_show`), `created_at`, `cleared_at`, `cleared_by`; partial indexes on `user_id` and on `contact_phone_hash` `WHERE cleared_at IS NULL`. VS-031 inserts blocks; VS-029 lists and clears them.
+  - New secret `PHONE_HASH_SALT` in settings and `.env.example`: the key of the phone hash (`HMAC-SHA256` of the E.164 number). Unlike `IP_HASH_SALT` it is never rotated, because every block and open-order match depends on it.
+  - The open-cash-order count reads `orders` by `user_id` and by `contact_phone_hash`; add an index for the hash lookup on unpaid cash orders if `EXPLAIN` shows the need.
+- **Endpoints / jobs:** `POST /api/v1/checkout` accepts `fulfillment_method`, `address_id`, `contact_phone` (pickup only), `payment_method`, `payment_provider` (online, when more than one is configured) and a note.
 - **Logic:**
-  - Reuses the checkout transaction from VS-023, addresses from VS-026, zones from VS-027 and `free_shipping_threshold` from VS-007.
+  - Reuses the checkout transaction from VS-023, addresses from VS-026, and `SettingsReader` (VS-007).
   - Enforces the SRS §7.4 matrix; a mismatch gives 422 `INVALID_FULFILLMENT`.
-  - Snapshots the address, zone, rate, lead time and batch size.
-  - Dispatch days = max over lines of (lead time × ceil(quantity ÷ batch size)).
-  - The free-shipping threshold is compared with the physical subtotal only.
-  - After payment, physical lines stay `pending` (eligible for production), and the order becomes `in_progress`.
+  - Snapshots the address, the contact phone normalised to E.164 and its hash (the address's phone for delivery, the entered Lebanese phone for pickup), the payment method, lead time and batch size.
+  - Totals are recomputed first (`subtotal + tax`; no shipping). Cash rules are then checked against the **recomputed** total, under the cart lock (which serialises one customer's checkouts) and a transaction-scoped advisory lock on the phone hash (which serialises checkouts from different accounts sharing it):
+    - every line physical, `cash_payment_enabled` on, a total above 0, and no uncleared `cash_payment_blocks` row for the customer or the phone hash, otherwise 422 `PAYMENT_METHOD_NOT_ALLOWED`;
+    - fewer than `cash_max_open_orders` unpaid, uncancelled cash orders for the customer or the phone hash, and a total of at most `cash_max_order_total`, otherwise 422 `CASH_PAYMENT_LIMIT_REACHED`.
+  - An online order with an unconfigured `payment_provider` gives 422 `PAYMENT_METHOD_NOT_ALLOWED`; the chosen provider is stored on the pending payment row.
+  - A cash order is created with **no payment row** and no provider call; its status derives to `in_progress`; consent records the cash terms; the confirmation email states the amount due in cash on delivery (or at pickup).
+  - Every delivery-order response and email says "delivery fee paid to the courier on delivery".
+  - Dispatch days = max over lines of (lead time × ceil(quantity ÷ batch size)), counted from placement for both payment methods.
+  - After an online payment, or at placement of a cash order, physical lines stay `pending` (eligible for production).
 - **Tests:**
-  - Table test over all five §7.4 rows.
+  - Table test over all five §7.4 rows, crossed with both payment methods (cash refused for STL-only and mixed carts).
   - 10 units with lead time 2 and batch size 4 gives 6 days.
-  - Threshold boundary cases.
-  - Snapshots survive later edits.
+  - Cash limits: switch off, blocked customer, blocked phone on another account, a second open cash order for the same customer, a second open cash order on another account with the same phone, a total one cent over the cap — each refused with nothing created.
+  - The same phone written in different formats (`+961 3 123 456`, `03123456`, `9613123456`) normalises to one number and one hash, and matches the same block and the same open-order count.
+  - A cash order whose recomputed total is 0 (free products) is refused; the setting rejects a `cash_max_order_total` of 0.
+  - A cart whose snapshot total is under the cap but whose recomputed total is one cent over is refused for cash.
+  - Two accounts sharing a normalised phone check out cash in parallel with `cash_max_open_orders = 1`: one order, one 422.
+  - The same `Idempotency-Key` with only `payment_method` changed gives 409 `IDEMPOTENCY_KEY_CONFLICT`.
+  - A cash order is never selected by `release_stale_checkouts`, reconciliation or retry.
+  - Snapshots survive later edits; the phone is stored normalised; no block row contains a readable phone.
   - In a mixed order the STL line is `awaiting_delivery` and the physical lines stay pending.
+  - `free_shipping_threshold` is gone from the settings table, the registry and `GET /settings/public`.
 - **Done when:**
-  - Every cart type checks out with correct totals.
-  - Snapshots are immutable.
+  - Every cart type checks out with correct totals and the right payment methods.
+  - No order carries a shipping amount, and snapshots are immutable.
+  - The cash limits hold across accounts that share a phone.
 
-## VS-029 — Admin order queue and fulfillment
+## VS-029 — Admin order queue, fulfillment and cash handover
 **Status:** Not started
-**Depends on:** VS-028, VS-023b
-**Goal:** The administrator moves each paid physical line through production to delivery or pickup, and the customer is notified at each step.
-- **Model / migration:** None (add queue indexes only if `EXPLAIN` shows the need).
-- **Endpoints / jobs:** `GET /api/v1/admin/orders`, `GET/PATCH /api/v1/admin/orders/{id}` (`PATCH` edits the internal note only), `POST …/items/{item_id}/transition` (created by VS-023b for STL lines; this slice adds the physical edges).
+**Depends on:** VS-028, VS-023b, VS-024, VS-025
+**Goal:** The administrator moves each physical line of a cash order or a paid online order from received to delivered or picked up, records the cash for a cash order at handover, and the customer is told at each visible step.
+- **Model / migration:** A partial index for the cash-due filter on unpaid cash orders, shaped by `EXPLAIN`; other queue indexes only if `EXPLAIN` shows the need.
+- **Endpoints / jobs:**
+  - `GET /api/v1/admin/orders` (filters include `payment_method` and `payment_due`), `GET/PATCH /api/v1/admin/orders/{id}` (`PATCH` edits the internal note only). The fulfillment queue never lists `pending_payment` orders.
+  - `POST …/items/{item_id}/transition` (created by VS-023b for STL lines; this slice adds the physical edges).
+  - `POST /api/v1/admin/orders/{id}/cash-handover` (body: `amount_cents`).
+  - `GET /api/v1/admin/cash-blocks` (filters: customer, active), `POST /api/v1/admin/cash-blocks/search` (phone in the body, so it never reaches request logs; hashed before matching) and `POST /api/v1/admin/cash-blocks/{block_id}/clear` (audited).
 - **Logic:**
-  - Reuses `derive_order_status`, the outbox, `create_notification` and `AuditWriter`.
-  - Pure transition tables:
+  - Reuses `derive_order_status`, the outbox, `create_notification`, `AuditWriter`, and VS-025's `OrderDetail`.
+  - Pure transition tables (ADR-024):
     - delivery: `pending → in_production → ready_to_ship → shipped → delivered`;
-    - pickup: `… → ready_for_pickup → picked_up`.
-  - Each transition locks the line, then writes history, audit, email and notification in one transaction.
-  - Emails: in production, shipped, ready for pickup (with the pickup address and hours), delivered or picked up.
+    - pickup: `pending → in_production → ready_for_pickup → picked_up`.
+  - **No physical work on an unpaid online order (BR-148):** every physical transition requires the order to be a cash order or to have an online payment that reached `paid` (`paid`, `partially_refunded` or `refunded`), otherwise 409 `INVALID_STATE_TRANSITION`. The hold release's `pending → cancelled` (VS-024) is the only exception, and it does not use this endpoint.
+  - **Lock order (ADR-024):** every transition locks the `orders` row first, then the line, then recomputes the status, and writes history, audit, email and notification in the same transaction.
+  - `in_production` ("start printing") sends no email or notification, and is hidden from the customer's status history. `OrderDetail.can_cancel` is true only when the order has a physical line, is cash or has a payment that reached `paid`, has status `in_progress` or `partially_refunded`, and every physical line is `pending`. Emails and notifications: finished (`ready_to_ship`), shipped, ready for pickup (with the pickup address and hours), delivered or picked up. Delivery emails say "delivery fee paid to the courier on delivery".
+  - On a cash order the transition endpoint refuses `→ delivered` and `→ picked_up` with 409 `INVALID_STATE_TRANSITION`; only the handover reaches them.
+  - **Cash handover** (SRS §9.8), in one transaction:
+    - locks the `orders` row, then all its lines by `id`;
+    - requires at least one live line, and every live line `shipped` (delivery) or `ready_for_pickup` (pickup), otherwise 409 `INVALID_STATE_TRANSITION`;
+    - requires `amount_cents` to equal the sum of live line totals and to be above zero, otherwise 422 `CASH_AMOUNT_MISMATCH`;
+    - marks them all delivered / picked up and inserts one `payments` row (`provider = 'cash'`, `status = 'paid'`, `recorded_by`, `verified_at`); the unique cash-payment index is the final guard;
+    - recomputes the status and writes history, audit, notification and the email with the cash receipt.
+  - The delivered / picked-up email's "I got it" and "Report a problem" buttons link to the order page; VS-029b adds the actions.
+  - Clearing a cash block sets `cleared_at` and `cleared_by`; clearing an already-cleared block is a no-op 200.
 - **Tests:**
-  - Every legal and illegal edge, per fulfillment method.
+  - Every legal and illegal edge, per fulfillment method and payment method.
+  - "Start printing" (or any physical transition) on a `pending_payment` online order gives 409, and the order never appears in the fulfillment queue.
+  - `in_production` produces no email and no notification, appears as `pending` to the customer, and is absent from the customer's status history; `can_cancel` turns false when printing starts, and is false for an STL-only order and for an unpaid online order.
   - Two admins acting on the same state: one wins.
+  - Cash handover: a wrong amount gives 422 with nothing changed; a line not yet shipped gives 409; two admins recording one handover give one payment, one audit row and one email; a handover racing a transition on another line of the same order ends with one winner and no deadlock.
+  - A `reconcile_payments` run (VS-024) running at the same time as a handover or a line transition on the same order: no deadlock, both outcomes correct.
+  - A cash order reaches `completed` through the handover, and its payment is `paid` for exactly the live line total.
+  - Cash blocks (rows seeded directly, since VS-031 creates them): a customer gets 404 on both routes; clearing writes an audit row; a second clear is idempotent; after clearing, checkout offers cash again for that customer and phone.
   - An email-provider outage does not block a transition.
   - The internal note is never visible to the customer.
 - **Done when:**
-  - No route sets `order.status` directly.
-  - A physical order reaches `completed`.
+  - No route sets `order.status` directly, and no route but the handover creates a cash payment.
+  - No physical line of an unpaid online order ever moves, except the hold release cancelling it.
+  - A physical order reaches `completed` with either payment method.
 
 ## VS-030 — Refunds and settlement
 **Status:** Not started
-**Depends on:** VS-029
-**Goal:** The administrator refunds any subset of lines plus shipping, and each refund stays in a queue until actually settled.
-- **Model / migration:** `refunds` and `refund_items`, with non-negative money checks and a pending-obligation index.
-- **Endpoints / jobs:** `POST /api/v1/admin/orders/{id}/refunds` (requires an `Idempotency-Key` header), `GET /api/v1/admin/refunds`, `GET /api/v1/admin/refunds/{id}`, `POST …/{id}/settle`.
+**Depends on:** VS-029, VS-024
+**Goal:** The administrator refunds any part of any paid line by hand, records each refund here, and every refund stays in a queue until settled — or, if it fails, until it is reissued.
+- **Model / migration:** `refunds` and `refund_items`, with non-negative money checks.
+  - `refunds.kind` (new enum `refund_kind`: `admin`, `cancellation`, `late_capture`, `chargeback`); `reason` stays free text for people. No `method` column and no provider refund id: every V1 refund is manual (ADR-024).
+  - `refunds.status`: `pending`, `settled`, `failed`. `refunds.reissued_at` and `reissue_of_refund_id` link a failed refund to its reissue. `refunds.excess_cents` (chargebacks only).
+  - `requested_by` is nullable only for `kind = late_capture` (created by the system).
+  - `UNIQUE(payment_id) WHERE kind = 'late_capture' AND status <> 'failed'`: one live late-capture refund per payment.
+  - Obligations index: `(created_at) WHERE status = 'pending' OR (status = 'failed' AND reissued_at IS NULL)`.
+  - No shipping component (ADR-024).
+- **Endpoints / jobs:** `POST /api/v1/admin/orders/{id}/refunds` (requires an `Idempotency-Key` header), `GET /api/v1/admin/refunds`, `GET /api/v1/admin/refunds/{id}`, `POST …/{id}/settle`, `POST …/{id}/fail`, `POST …/{id}/reissue`.
 - **Logic:**
-  - Reuses the idempotency service from VS-023 and the line lock from VS-023b.
-  - Refundable balances are derived under a payment lock; 422 `REFUND_EXCEEDS_AVAILABLE` when a request exceeds them.
-  - A refunded STL line becomes `refunded`: one still `awaiting_delivery` leaves the delivery queue; one already delivered cannot be recalled (ADR-019). A refunded physical terminal line becomes `refunded`.
-  - The payment and order statuses are recomputed.
-  - The method is `provider` when the adapter supports refunds, otherwise `manual`.
+  - Reuses the idempotency service from VS-023.
+  - Adds the automatic `late_capture` refund to VS-024's late-capture path: no items, no requester, the captured amount; the item-sum check is waived for this kind.
+  - **Every refund is manual:** the administrator pays it in the provider dashboard or in cash, then settles it here. The platform never calls a provider refund API.
+  - **Lock order (ADR-024):** the `orders` row, then the affected lines by `id`, then the payment, then the refund; balances are derived under those locks. Settle, fail and reissue take the same order.
+  - **Paid lines only (BR-149):** a line is refundable only if it is a paid line. Its refundable balance is `line_total` minus its items in non-failed refunds and in failed refunds not yet reissued; a cancelled line of a cash order has 0. A request over any line's balance or the payment's balance gives 422 `REFUND_EXCEEDS_AVAILABLE`.
+  - **Unfinished physical lines:** a refund that would bring a `pending`, `in_production`, `ready_to_ship`, `shipped` or `ready_for_pickup` line to 0 gives 422 `REFUND_REQUIRES_CANCELLATION`; the administrator cancels it instead (VS-031).
+  - **Partial refunds per line:** a refund of less than a line's balance leaves the line in its state. A line becomes `refunded` when its refunds cover its whole total: a fully refunded STL line still `awaiting_delivery` leaves the delivery queue and frees ownership; a partially refunded one stays. A fully refunded physical terminal line becomes `refunded`.
+  - **Failed refunds stay owed:** `fail` marks a pending refund `failed` (a bounced transfer or a rejected dashboard refund). Lines keep their state. The refund stays in the obligations queue as owed until `reissue`, which creates a new pending refund of the same kind, items and amount, and sets `reissued_at` on the failed one; a failed `late_capture` refund is reissued the same way.
+  - The payment and order statuses are recomputed from refund records at creation: non-failed refunds covering all paid money make the order `refunded` (unless every line is cancelled); any non-failed or owed refund makes it at least `partially_refunded`; `late_capture` refunds never count; settlement never changes either status.
+  - A cash payment is refunded up to the cash recorded.
   - Sends a "refund issued" email.
 - **Tests:**
-  - Concurrent partial refunds never exceed the paid amount.
+  - Concurrent partial refunds never exceed the paid amount, on an online and on a cash payment.
+  - Two concurrent partial refunds that together equal the full paid amount both succeed, and the order becomes `refunded`.
   - Idempotent replay.
+  - Partial-amount refunds on one line, then a refund of the rest: the line stays in its state after the first and becomes `refunded` after the second; the order goes `partially_refunded` then `refunded`. Run it on a delivered physical line and on an STL line still `awaiting_delivery` (it stays in the queue and owned after the first refund, and leaves both after the second).
+  - Marking delivered on an STL line that has been partly refunded still works; a fully refunded line gives 409 (moved from VS-023b).
+  - A full-amount refund of a `pending`, `in_production`, `ready_to_ship`, `shipped` or `ready_for_pickup` physical line gives 422 `REFUND_REQUIRES_CANCELLATION`; a partial one succeeds.
   - A refunded STL line awaiting delivery disappears from the delivery queue.
   - A refund racing mark-delivered on one STL line: exactly one wins.
-  - A customer whose STL line was refunded can buy it again.
-  - An unpaid order gives 409.
+  - A customer whose STL line was refunded in full can buy it again.
+  - An unpaid order gives 409, including an unpaid cash order.
+  - A refund racing a cash handover on the same order: before the handover it gives 409 (unpaid), after it succeeds; never both a refund and an unpaid order.
+  - A refund on a cash order after handover is capped at the cash recorded.
+  - A late capture (VS-024) creates exactly one `late_capture` refund obligation for the captured amount, with no items and no requester, and the order status ignores it. Two distinct provider events for one late capture still create one refund.
+  - A failed `late_capture` refund stays owed and is reissued as a new `late_capture` refund.
+  - Settling a refund leaves the order and payment status unchanged.
+  - A failed refund stays in the obligations queue as owed, changes no line state, keeps the order `partially_refunded`, and its amount can only be refunded again by reissuing it; after the reissue it leaves the queue.
+  - Two partial refunds complete a line's coverage; the earlier one then fails: the line stays `refunded`, the failed amount is owed, and reissuing restores full coverage.
+  - Mixed: the STL line is refunded first (payment `partially_refunded`), then the physical line is started, made ready, shipped and delivered — none refused by BR-148.
+  - Mixed orders (SRS mandatory coverage), each asserting line states, refundable balances and the order status:
+    - STL line refunded while the physical line is delivered → `partially_refunded`;
+    - physical line refunded after delivery while the STL line is `awaiting_delivery` → `partially_refunded`, STL still in the queue;
+    - both lines refunded across two separate refunds → `refunded`;
+    - a failed refund in a mixed order → owed, order `partially_refunded`.
 - **Done when:**
-  - A refund cannot exceed its balance.
-  - A pending refund stays in the queue until settled.
+  - A refund cannot exceed any line's or the payment's balance, never touches an unpaid line, and never empties an unfinished physical line.
+  - A line is `refunded` only when fully refunded.
+  - No refund obligation, pending or failed, leaves the queue until it is settled or reissued.
+- **Must resolve before build** (final PR #8 review; recorded per the owner's stop rule, not yet decided):
+  1. **Order status after a refund fails (both reviewers).** SRS §20.2 checks "all lines refunded → refunded" before "any non-failed or owed refund → partially_refunded", and database-design §17.2 and the entities projection do the same. But a failed refund reverts no line, so on a single-line order (or one where every line is fully refunded) a full refund that later fails leaves the line `refunded`. The order then reads `refunded` while money is still owed, which breaks ADR-024 decision 11 ("an owed one keeps the order `partially_refunded`") and this slice's tests. Read by coverage instead of line state, the rule is redundant with "refunds cover all paid money". Separately, "all lines cancelled → cancelled" is checked first, so an all-cancelled order whose cancellation refund failed reads `cancelled`, not `partially_refunded`. Suggested fix: drop "all lines refunded" or define it by non-failed coverage; evaluate "an owed refund exists" before both refunded rules; state where an all-cancelled order with an owed refund lands; add order-status assertions to the failed-refund tests (resolve with VS-023's `derive_order_status`).
+  2. **A chargeback leaves pending and owed refunds payable, and no obligation can be closed without paying it (money reviewer).** The remaining balance subtracts pending and owed refunds, and anything beyond it becomes `excess_cents`. Refund states are only pending, settled and failed, and a `cancelled` refund state is forbidden. Scenario: $50 paid → $10 goodwill refund pending → the bank charges back $50 → the chargeback records $40 + $10 excess → the admin, following the queue, still pays the $10: $60 out on a $50 payment. The same happens with an owed refund reissued after a chargeback. A refund created by mistake can only be falsely settled or left owed forever, which keeps the order `partially_refunded` and blocks account deletion. A chargeback on a late-captured attempt with a pending `late_capture` refund is undefined. Suggested fix: a terminal `voided` refund outcome (audited, admin-only, reason required); chargeback recording voids or absorbs pending and owed refunds on the payment before computing excess; define chargebacks on late-captured payments.
+  3. **A chargeback on a payment with zero remaining balance cannot be recorded (money reviewer).** `refunds.amount_cents` has `CHECK > 0`, but a chargeback after a full settled refund would be `amount_cents = 0, excess_cents = 5000`. The CHECK rejects it, so the double-dip leaves no record, alert or audit. Suggested fix: allow `amount_cents >= 0` when `kind = 'chargeback'` and `excess_cents > 0`, or keep chargebacks in their own table.
+  4. **After a full chargeback, an unfinished physical line can still be shipped (both reviewers).** ADR-024 decision 16 and SRS §9.7 say lines covered in full "become `refunded` (an unfinished physical line … is then cancelled)". Read literally that is an illegal `in_production → refunded` edge, and VS-032 has the admin cancel the line later. In between, the transition gate is only "payment reached paid" (`refunded` counts), so `ready_to_ship → shipped → delivered` stays allowed on a line whose money the bank took back. A fully charged-back `shipped` or `returned` paid line has no exit at all: it can't be cancelled, `returned → cancelled` is cash-only, and `returned → refunded` needs a balance above 0. Suggested fix: cancel zero-balance unfinished lines inside the chargeback transaction with no refund, or refuse forward transitions on a physical line whose refundable balance is 0; let `returned → refunded` go through when coverage is already full; fix the ADR and SRS wording.
+  5. **Chargeback recording has no endpoint, schema or idempotency (both reviewers).** api-endpoints §19 has no chargeback route, `RefundCreate` always records `kind = admin`, the idempotency list covers refund creation only, and VS-032 says "Endpoints / jobs: None new" while requiring chargebacks to be recorded. Nothing says the `REFUND_REQUIRES_CANCELLATION` check is waived for chargebacks. A double-submitted partial chargeback is recorded twice, marking lines `refunded`, removing an unsent STL from the queue (paid access lost) and understating revenue. VS-032's test cancels a line after a chargeback, which needs VS-031, but VS-032 doesn't depend on it. Suggested fix: `POST /api/v1/admin/orders/{id}/chargebacks` with a required `Idempotency-Key`, a unique provider dispute reference, per-line items and the target `payment_id` (online only, never cash); add VS-031 to VS-032's dependencies.
 
 ## VS-031 — Cancellation and returns
 **Status:** Not started
 **Depends on:** VS-030
-**Goal:** A customer cancels before production, the administrator cancels at any legal point, and a returned item is re-shipped, reprinted or refunded.
-- **Model / migration:** None.
-- **Endpoints / jobs:** `POST /api/v1/me/orders/{id}/cancel`, `POST /api/v1/admin/orders/{id}/cancel`; the transition endpoint gains the `returned` edges.
+**Goal:** A customer cancels before printing starts, the administrator cancels at any legal point, a returned item is re-shipped, reprinted, refunded or (unpaid cash) cancelled, and a whole-order cash refusal blocks cash for that customer and phone.
+- **Model / migration:** None (`order_items.cancel_reason` comes from VS-023, `cash_payment_blocks` from VS-028).
+- **Endpoints / jobs:** `POST /api/v1/me/orders/{id}/cancel`, `POST /api/v1/admin/orders/{id}/cancel`; the transition endpoint gains the `returned` and no-show edges. Admin cancels from `ready_to_ship`, `returned` or `ready_for_pickup` require `cancel_reason`: `refused` (any of the three), `no_show` (`ready_for_pickup` only) or `other`.
 - **Logic:**
   - Reuses the transitions from VS-029 and refund creation from VS-030.
-  - Customer cancel requires every physical line to be `pending`, otherwise 409 `ORDER_NOT_CANCELLABLE` with no partial change.
-  - Admin cancel covers `pending` and `in_production` lines.
-  - Every cancellation of a paid line creates a pending refund in the same transaction.
+  - **Lock order (ADR-024):** every cancel locks the `orders` row, then all physical lines by `id`, then checks and changes them, creates any refund, and recomputes the status. A cancel that may insert a block then also locks the customer's cart and takes the phone advisory lock, so it serialises against that customer's checkouts with any phone and against other accounts' checkouts with the same phone.
+  - Customer cancel requires at least one physical line, a cash order or a payment that reached `paid`, and every physical line `pending`, otherwise 409 `ORDER_NOT_CANCELLABLE` with no partial change. It works for paid online orders and unpaid cash orders; it matches `can_cancel`.
+  - Admin cancel covers `pending`, `in_production`, `ready_to_ship` and `ready_for_pickup` lines.
+  - Every cancellation of a paid line creates a pending `cancellation` refund for the line's **remaining balance** in the same transaction (none when that is 0, e.g. after a full chargeback); cancelling an unpaid cash line creates none.
+  - Admin cancel restates BR-148: on an unpaid online order (`pending_payment`) it gives 409; only the hold release cancels those.
+  - An unpaid cash line with a total of 0 may also go `shipped → cancelled` (reason `other`), so an accepted $0 line is not recorded as a return.
   - STL lines are never cancelled.
-  - `returned → shipped | in_production | refunded`.
+  - `returned → shipped | in_production | refunded` (paid line) `| cancelled` (unpaid cash line only; `refused` or `other`).
+  - **Cash block (BR-144):** when a cancel leaves a cash order with no live line, and every line cancelled from `ready_to_ship`, `returned` or `ready_for_pickup` carries `refused` or `no_show` (at least one), a `cash_payment_blocks` row is inserted for the customer and the order's phone hash, in the same transaction. The rule reads all of the order's lines, so it does not depend on cancel order. A refusal of only some lines, and any `other` cancel, never blocks. An online order never blocks.
+  - If a refusal leaves only lines totalling 0, the administrator cancels them (reason `other`) instead of a handover.
+  - A cancellation that leaves a cash order with lines still live sends the "order cancelled" email with the new amount due.
 - **Tests:**
-  - A customer cancel racing "start production" has exactly one winner (repeated 100 times).
+  - A customer cancel racing "start printing" has exactly one winner (repeated 100 times), including on a two-line order where printing starts on the line the cancel checks last.
+  - A cash handover racing an admin cancel on another line of the same order: one winner, no deadlock.
+  - A cash handover on an order whose lines are all cancelled gives 409.
+  - Two concurrent line changes on one order (cancels of both remaining lines) leave the order status correct: an all-cancelled cash order is `cancelled`, leaves the cash-due view and stops counting toward `cash_max_open_orders`.
+  - Two concurrent `refused` cancels of the last two live lines of a cash order create exactly one block row.
+  - Illegal edges: `returned → cancelled` on a paid online line, `returned → refunded` on an unpaid cash line, `no_show` from `returned` or `ready_to_ship` — each 409.
+  - `ready_for_pickup → cancelled`: on a cash order with `no_show` or `refused` it blocks; on an online order it creates a refund and never blocks.
+  - A refusal before shipping (`ready_to_ship → cancelled`, `refused`) of a whole cash order blocks.
+  - The block outcome is the same whichever order the lines are cancelled in (`refused` then `other`, and `other` then `refused`: no block in both).
   - STL lines are unaffected.
-  - **Mandatory end-to-end (SRS §5.6):** mixed order → paid → admin cancels the physical line in production → partial refund of that line plus shipping → STL line still delivered or awaiting delivery → order `partially_refunded` → refund pending until settled.
+  - Self-cancel on a `pending_payment` online order and on an STL-only order gives 409, and `can_cancel` is false for both.
+  - Self-cancel on a paid mixed order: only the physical lines are cancelled and refunded, the STL line stays in the delivery queue, and the order is `partially_refunded`.
+  - Cash refusal end to end: cash order → shipped → returned → cancelled (`refused`), no refund, order `cancelled`, and the next checkout by that customer, or by another account with the same phone, offers online only.
+  - A partly refused cash order: one line cancelled (`refused`), the handover records the rest, no block. (Revenue and badge for the refused line are tested in VS-043 and VS-036.)
+  - A refusal that leaves only $0 lines: the administrator cancels them with `other`; the order ends `cancelled` without a handover and without a block.
+  - A refund item on a cancelled line of a paid cash order gives 422.
+  - An `other` cancel of a whole cash order never blocks.
+  - **Mandatory end-to-end (SRS §5.6):** mixed order → paid online → admin cancels the physical line in production → partial refund of that line → STL line still delivered or awaiting delivery → order `partially_refunded` → refund pending until settled.
+  - Mixed: physical line cancelled (cancellation refund) and then the STL line refunded → `refunded`.
+  - Mixed: the STL line refunded first (payment `partially_refunded`), then the physical line started and cancelled by the admin with its refund — not refused by BR-148; order `refunded`.
+  - Mixed: physical `returned → refunded` while the STL line is delivered → `partially_refunded`.
+  - Mixed: a manual refund after a cancellation-created refund, at exactly the remaining balance (succeeds) and at one cent over (422).
+  - Mixed: an STL refund racing a cancellation of the physical line on the same order → both commit in turn, and the final status reflects both.
+  - Mixed: a partial refund of the STL line, then a cancellation (full refund) of the physical line → `partially_refunded`, not `refunded`.
+  - Mixed: the physical line's cancellation refund fails while the STL line is delivered → the refund stays owed, and the order is `partially_refunded`, never `completed`.
+  - A partial goodwill refund on a `pending` physical line, then a self-cancel (and separately an admin cancel), refunds exactly the remaining balance.
+  - Self-cancel of a paid physical-only online order: order `cancelled`, refund pending in the obligations queue.
+  - Admin cancel on a `pending_payment` online order gives 409.
+  - A same-customer cash checkout with a different phone, racing a cancel that inserts a block: the checkout either commits first or sees the block; never an order placed after the block that should have stopped it.
+  - An accepted $0 cash line that is `shipped` is cancelled directly (`other`) without a return.
 - **Done when:**
   - The SRS §5.6 end-to-end test passes.
-  - The cancel-versus-production race always has one winner.
+  - The cancel-versus-start-printing race always has one winner, with no deadlock.
+  - An unpaid cash line is never refunded, and only a whole-order refusal or no-show blocks cash, whatever the cancel order.
 
-## VS-032 — Live Whish adapter
+## VS-032 — Live online payment provider
 **Status:** Not started
-**Depends on:** VS-020, VS-024, VS-030 (and Whish merchant credentials)
-**Goal:** Real revenue: setting `PAYMENT_PROVIDER=whish` runs the same checkout, verification, recovery and refund flows against Whish.
-- **Model / migration:** None, unless Whish needs extra provider metadata.
-- **Endpoints / jobs:** None new; the webhook route from VS-023 is IP-allowlisted in VS-020's nginx.
+**Depends on:** VS-020, VS-024, VS-030 (and the SRS §30.4 provider decision and merchant credentials)
+**Goal:** Real online revenue: configuring the chosen provider(s) runs the same checkout, verification and recovery flows against them. Refunds stay manual (ADR-024).
+- **Model / migration:** Adds the chosen provider value(s) to `payment_provider`; provider metadata only if needed.
+- **Endpoints / jobs:** None new; the provider-neutral webhook route from VS-023 is IP-allowlisted in VS-020's nginx.
 - **Logic:**
   - Reuses the payment port from VS-023.
-  - The Whish adapter implements create-payment and redirect, signature check (if offered), status query (if not offered, manual confirmation from VS-024 stays on) and refund (if not offered, settlement is `manual`).
-  - Chargebacks are recorded as a refund with reason `chargeback`, which marks affected STL lines `refunded`.
-  - Record Whish's answers to SRS §30.1 in an ADR.
-- **Tests:** The same contract fixtures as the mock (paid, underpaid, failed, bad signature, duplicate, timeout), run against the Whish sandbox; an end-to-end payment on staging.
+  - Replaces the single `payment_provider` setting with a list of configured online providers, and renames the Whish-specific settings in `src/app/core/config.py` and `.env.example` (`whish_*`, `whish_webhook_ips`) to per-provider names. If §30.4 chooses both, checkout and retry let the customer pick one, stored on the payment row (VS-023, VS-024).
+  - The adapter implements create-payment and redirect, signature check (if offered), and status query (if not offered, manual confirmation from VS-024 stays on). It has no refund operation: every V1 refund is manual, even if the provider offers a refund API. A card gateway uses a hosted or redirect page so card data never reaches the platform.
+  - Chargebacks are recorded as a refund of `kind = chargeback`, already `settled` and never in the obligations queue, split across lines by the administrator, under the ADR-024 lock order (`orders`, lines, `payments`, `refunds`). Lines covered in full become `refunded`; an unfinished physical line covered in full is then cancelled with no further refund (balance 0). Any amount beyond the payment's remaining balance is recorded as `excess_cents` and alerted.
+  - Record the decision and the provider's answers to SRS §30.1 in an ADR.
+- **Tests:**
+  - The same contract fixtures as the mock (paid, underpaid, failed, bad signature, duplicate, timeout, late success after expiry), run against the provider's sandbox; an end-to-end payment on staging.
+  - A chargeback on a mixed order whose physical line is still `in_production`: the chargeback is `settled` at once and never appears as a pending obligation; the STL line becomes `refunded`; the admin then cancels the physical line and no second refund is created; the order status is correct.
+  - A chargeback after a partial refund: allocations stay within each line's balance, and any amount beyond the payment's remaining balance is recorded as `excess_cents` with an alert.
+  - A chargeback can never be settled again or marked failed.
 - **Done when:**
   - Every fixture passes against the sandbox.
-  - No checkout or order code changed.
+  - No checkout, order or cash-handover code changed.
 
 ## VS-033 — Contact form and captcha
 **Status:** Not started
@@ -772,6 +900,23 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - The queue is admin-only.
   - Status changes are audited.
 - **Done when:** Only captcha-verified, rate-limited messages reach the queue.
+
+## VS-029b — Receipt confirmation and problem report
+**Status:** Not started
+**Depends on:** VS-029, VS-033
+**Goal:** After delivery or pickup a customer can say "I got it" or report a problem, and the administrator sees it on the order, without either being required.
+- **Model / migration:** None (`order_items.receipt_confirmed_at` and `problem_reported_at` come from VS-023); a nullable `contact_messages.order_id` if VS-033 did not add it.
+- **Endpoints / jobs:** `POST /api/v1/me/orders/{id}/confirm-receipt` and `POST /api/v1/me/orders/{id}/report-problem` (body: message).
+- **Logic:**
+  - Owner-only, verified, CSRF-protected POSTs from the order page. The email buttons only open that page: nothing changes state on a GET, because email scanners follow links.
+  - Both lock the `orders` row first, then the lines (ADR-024 lock order).
+  - Confirm sets `receipt_confirmed_at` on the order's `delivered` / `picked_up` lines that lack it; idempotent; no state change and no effect on the order status.
+  - Report creates a contact message linked to the order in the VS-033 queue (no captcha, as the caller is signed in; rate-limited) and sets `problem_reported_at`. Resolution uses the existing return, refund and cancel tools.
+- **Tests:**
+  - Another customer's order gives 404; an order with no delivered line gives 409.
+  - Confirming twice changes nothing the second time.
+  - An order completes without confirmation.
+- **Done when:** Receipt confirmation and problem reports are recorded on the order and never block completion.
 
 ## VS-034 — Bring Your Idea submission
 **Status:** Not started
@@ -815,19 +960,20 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 
 ## VS-036 — Reviews and Verified Purchase badge
 **Status:** Not started
-**Depends on:** VS-015, VS-028, VS-030
+**Depends on:** VS-015, VS-028, VS-030, VS-031
 **Goal:** Any verified user reviews a product. The badge honestly reflects current purchase evidence, and product ratings stay correct.
 - **Model / migration:** `reviews` (rating CHECK 1–5; unique `(user_id, product_id)` among live rows).
 - **Endpoints / jobs:** `GET /api/v1/products/{slug}/reviews`, `GET /api/v1/me/reviews`, `POST /api/v1/reviews`, `PATCH/DELETE /api/v1/reviews/{id}`.
 - **Logic:**
-  - Adds a badge-recompute hook to payment application (VS-023) and refunds (VS-030).
-  - The badge is true when the user has a paid, non-refunded line (STL or physical) for the product.
+  - Adds a badge-recompute hook to payment application (VS-023), the cash handover (VS-029) and refunds (VS-030).
+  - The badge is true when the user has a paid (BR-149), non-refunded line (STL or physical) for the product. A cash line counts only once its cash is recorded (ADR-024).
   - Links are rejected; the text passes a profanity filter; posting is rate-limited.
   - `average_rating` and `review_count` are recomputed under a product lock in the same transaction.
 - **Tests:**
   - A non-buyer can review but gets no badge.
   - A duplicate review gives 409.
   - A refund removes the badge.
+  - An unpaid cash line gives no badge; the handover grants it; a refused (cancelled) cash line never does, even when the rest of its order was handed over and paid.
   - Concurrent edits leave the aggregates correct.
   - WhatsApp-only products never get a badge.
 - **Done when:**
@@ -932,19 +1078,21 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 
 ## VS-043 — Business analytics
 **Status:** Not started
-**Depends on:** VS-029, VS-030, VS-036, VS-039
+**Depends on:** VS-029, VS-030, VS-031, VS-036, VS-039
 **Goal:** The administrator sees revenue split by physical and STL (attributed per line), recent purchases, customer statistics, pending offers, top-rated products and best-selling STLs.
 - **Model / migration:** None.
 - **Endpoints / jobs:** `GET /api/v1/admin/analytics/overview`, `/revenue`, `/recent-purchases`, `/customers`, `/top-rated-products`, `/stl-sales` (best-selling STLs from paid, unrefunded lines, plus lines awaiting delivery; replaces the removed download analytics).
 - **Logic:**
   - Metric definitions are written first, in the endpoint docs:
-    - revenue = paid line snapshot amounts plus shipping, minus refunds, dated by payment date;
+    - revenue = paid line (BR-149) snapshot amounts minus refunds, dated by payment date (a cash payment's date is its handover); no shipping (ADR-024); an unpaid cash order and a cancelled cash line are not revenue;
     - day boundaries use `Asia/Beirut`.
   - Date ranges are bounded to 366 days.
   - Each context is read through a reporting port, with no cross-context joins.
 - **Tests:**
   - A mixed order splits revenue correctly by stream.
   - A partial refund reduces revenue.
+  - An unpaid cash order adds nothing; its handover adds its revenue on the handover date; a refused line of a partly accepted cash order adds nothing.
+  - A partial-amount refund of one line reduces revenue by that amount only, and a refund of the rest removes the line entirely; a failed refund reduces nothing; a late-capture refund never appears.
   - An out-of-range period gives 400.
   - A failing query returns an error, not zeros.
 - **Done when:** The backend's figures match the documented definitions on seeded data.
@@ -957,7 +1105,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 - **Endpoints / jobs:** `GET /api/v1/me/export`.
 - **Logic:**
   - Each context exposes an export port returning customer-safe records.
-  - The export covers the profile, addresses, orders with STL delivery records, reviews and offers (the SRS list), including soft-deleted rows, marked as such.
+  - The export covers the profile, addresses, orders with payment method and STL delivery records, reviews and offers (the SRS list), including soft-deleted rows, marked as such.
   - It is streamed, rate-limited (3 per day) and audited.
 - **Tests:**
   - Only the caller's data appears.
@@ -1034,7 +1182,8 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - An IDOR and authorization test matrix generated from the OpenAPI route list.
   - A load test on staging-sized hardware.
   - A launch checklist:
-    - client values for pickup address, WhatsApp number, zones and rates;
+    - client values for pickup address and WhatsApp number, and a review of the cash limits (`cash_max_order_total`, `cash_max_open_orders`);
+    - the online payment provider decided (SRS §30.4) and live (VS-032);
     - legal pages;
     - the real captcha keys;
     - `accepting_orders` switched to `true`.

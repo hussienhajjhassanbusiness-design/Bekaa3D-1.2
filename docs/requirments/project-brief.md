@@ -12,7 +12,7 @@
 
 Bekaa3D is a production dual-commerce platform that sells both made-to-order physical products and STL files, which the administrator emails to buyers after payment (ADR-019).
 
-The backend handles online payments, payment webhooks, independently verified transactions, mixed orders, per-line fulfillment, partial refunds, an STL delivery queue, offer negotiations, full-text search, user-generated uploads, audit logging, and several reliability-critical background jobs.
+The backend handles online payments, cash on delivery for physical-only orders (ADR-024), payment webhooks, independently verified transactions, mixed orders, per-line fulfillment, partial refunds, an STL delivery queue, offer negotiations, full-text search, user-generated uploads, audit logging, and several reliability-critical background jobs.
 
 Its classification is driven by transactional and operational complexity rather than traffic volume. Payment verification, refunds, checkout idempotency, concurrency races, file security, and recovery procedures must remain correct even when the number of users is relatively small.
 
@@ -24,12 +24,12 @@ Its classification is driven by transactional and operational complexity rather 
 - No active-active or automatic failover
 - No object storage or CDN in V1
 - No dedicated external search engine
-- No second payment provider in V1
+- No second online payment provider in V1, unless SRS §30.4 chooses both Whish and a card gateway
 - No courier API integration
 - No international shipping
+- No platform-charged shipping; the courier prices and collects delivery (ADR-024)
 - No mobile applications
 - No product variants
-- No cash on delivery
 - No tax or VAT calculation
 - No event-streaming platform such as Kafka
 
@@ -58,7 +58,8 @@ Its classification is driven by transactional and operational complexity rather 
 - The 99% availability target becomes insufficient for the business
 - A single server becomes an unacceptable point of failure
 - PostgreSQL full-text and trigram search no longer meet search-quality or latency targets
-- Whish outages or business requirements justify a second payment provider
+- Online-provider outages or business requirements justify a second payment provider
+- Cash-on-delivery refusals make the cash option unprofitable (ADR-024)
 - Manual STL delivery becomes a bottleneck and automated delivery is reconsidered (ADR-019)
 - Background-job volume requires independently scalable worker pools
 - Multiple development teams need independent ownership and deployment cycles
@@ -182,13 +183,13 @@ Can browse as a visitor but cannot perform protected write actions until email v
 - Partition maintenance
 - Notification and projection updates
 
-### Payment provider — Whish
+### Payment provider — undecided
 
-External system responsible for payment processing, callbacks, and transaction-status queries where supported.
+External system responsible for online payment processing, callbacks, and transaction-status queries where supported. Whish, a card gateway, or both are being considered (SRS §30.4, ADR-024).
 
 ### Courier
 
-External to the platform. The courier is not a system user, and V1 contains no courier API integration.
+External to the platform. The courier sets and collects the delivery fee and collects the cash for cash-on-delivery orders. The courier is not a system user, and V1 contains no courier API integration.
 
 The authentication and role boundaries are explicitly defined in the SRS.
 
@@ -207,9 +208,9 @@ The authentication and role boundaries are explicitly defined in the SRS.
 - Customer profiles and saved addresses
 - Mixed cart containing physical and digital products
 - Idempotent checkout
-- Delivery and workshop-pickup fulfillment
-- Shipping zones and flat shipping fees
-- Whish payment integration
+- Courier delivery and workshop-pickup fulfillment
+- Online payment integration (provider undecided, SRS §30.4)
+- Cash on delivery and cash at pickup for physical-only orders (ADR-024)
 - Payment webhook handling
 - Independent payment verification
 - Payment reconciliation
@@ -218,7 +219,6 @@ The authentication and role boundaries are explicitly defined in the SRS.
 - Per-line order statuses
 - Customer and administrator cancellation
 - Full and partial per-line refunds
-- Shipping-fee refunds
 - Refund-obligation tracking
 - STL delivery queue with manual email delivery (ADR-019)
 - STL offer and counter-offer negotiation
@@ -248,7 +248,7 @@ The following exclusions are deliberate and should not be added without a formal
 - International shipping
 - Courier API integration
 - Live courier tracking
-- Cash on delivery
+- Shipping zones, shipping fees and shipping refunds (ADR-024)
 - Guest checkout
 - Product comments separate from reviews
 - Online payment for Bring Your Idea requests
@@ -266,14 +266,14 @@ The following exclusions are deliberate and should not be added without a formal
 - Active-active failover
 - External search engines such as Elasticsearch
 - Object storage and CDN delivery in the initial release
-- Multiple payment providers
+- Multiple online payment providers, unless SRS §30.4 chooses both Whish and a card gateway
 - WhatsApp Business API integration
 - Loyalty points
 - Gift cards
 - Discount coupons
 - AI recommendations
 
-The original SRS explicitly excludes product variants, international shipping, courier integration, cash on delivery, guest checkout, comments, Bring Your Idea payment, STL licensing, mobile applications, and tax calculation.
+The original SRS explicitly excluded product variants, international shipping, courier integration, cash on delivery (moved into V1 by ADR-024), guest checkout, comments, Bring Your Idea payment, STL licensing, mobile applications, and tax calculation.
 
 ## Constraints
 
@@ -295,7 +295,8 @@ The original SRS explicitly excludes product variants, international shipping, c
 - Prices are stored and charged in USD
 - Physical products are made on demand
 - Physical fulfillment is manually managed
-- Workshop pickup and Lebanese delivery zones are supported
+- Workshop pickup and Lebanese courier delivery are supported; the courier prices delivery
+- Customers may pay physical-only orders in cash on delivery or at pickup
 - WhatsApp remains an important purchasing and communication path
 - V1 has one primary administrator
 
@@ -318,10 +319,11 @@ The SRS requires Clean Architecture with domain, application, infrastructure, an
 
 ### Payment integration
 
-- Whish is the only payment provider in V1
-- Merchant credentials are required for live payment delivery
-- Webhook-signature support, status-query support, refunds, rate limits, sandbox availability, and settlement behavior remain dependent on Whish
+- The online provider is undecided: Whish, a card gateway, or both (SRS §30.4), due before VS-032
+- Merchant credentials are required for live online payment
+- Webhook-signature support, status-query support, refunds, rate limits, sandbox availability, and settlement behavior depend on the chosen provider
 - Nothing may be produced or sent solely because a callback was received
+- Cash is recorded only by the administrator at handover, in the same action that marks the order delivered or picked up
 
 ### Hosting and reliability
 
@@ -351,13 +353,13 @@ The SRS requires Clean Architecture with domain, application, infrastructure, an
 
 The delivery milestone is a phased V1 release:
 
-| Phase | Contents | Blocked by Whish? |
+| Phase | Contents | Blocked by provider? |
 | --- | --- | --- |
 | **0 — Foundation** | Database, authentication, verification, admin foundation, catalogue, search, settings, outbox, and job infrastructure | No |
 | **1 — Storefront** | Public pages, reviews, wishlist, notifications, Bring Your Idea, contact, and WhatsApp paths | No |
-| **2 — Commerce** | Cart, checkout, orders, fulfillment, shipping, pickup, cancellation, and refunds using a mock payment provider | No |
+| **2 — Commerce** | Cart, checkout, orders, fulfillment, delivery, pickup, cash on delivery, cancellation, and refunds using a mock payment provider | No |
 | **3 — Digital** | STL delivery queue and offers | No |
-| **4 — Live payments** | Whish integration, callbacks, independent verification, reconciliation, and manual-confirmation fallback | **Yes** |
+| **4 — Live payments** | Online provider integration, callbacks, independent verification, reconciliation, and manual-confirmation fallback | **Yes** |
 | **5 — Hardening** | Rate limits, captcha, malware scanning, MFA, monitoring, backup drill, data rights, and load testing | No |
 
-Production launch must not occur before Phase 4 and Phase 5 acceptance. Only the live-payment phase is blocked by Whish credentials.
+Production launch must not occur before Phase 4 and Phase 5 acceptance. Only the live-payment phase is blocked by the provider decision and credentials.

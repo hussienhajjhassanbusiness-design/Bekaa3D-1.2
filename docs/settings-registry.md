@@ -38,7 +38,7 @@ to apply now.
 | `checkout_hold_period` | duration | seconds | `1800` (30 min) | 300 – 7 200 | ❌ |
 | `unverified_account_purge_period` | duration | seconds | `2592000` (30 d) | 604 800 – 7 776 000 | ❌ |
 | `daily_download_cap` | integer | downloads / customer / UTC day | `20` | 1 – 1 000 | ❌ — obsolete since ADR-019 (no downloads); removed by VS-023b |
-| `free_shipping_threshold` | money | cents | `null` | 0 – 1 000 000 cents | ✅ |
+| `free_shipping_threshold` | money | cents | `null` | 0 – 1 000 000 cents | ✅ — obsolete since ADR-024 (the platform charges no shipping); removed by VS-028 |
 | `pickup_address` | string | — | `null` | ≤ 500 chars | ✅ |
 | `pickup_hours` | string | — | `null` | ≤ 200 chars | ✅ |
 | `whatsapp_number` | string | — | `null` | E.164, ≤ 15 digits | ✅ |
@@ -46,7 +46,8 @@ to apply now.
 ### Notes on individual settings
 
 **`accepting_orders` defaults to `false`.** A freshly deployed system has no
-catalogue, no shipping zones and no verified payment provider. Defaulting to
+catalogue and no verified payment provider (it had no shipping zones either,
+before ADR-024 removed them). Defaulting to
 open would mean the one window in which checkout is unconfigured is also the one
 in which customers can reach it. An administrator opens the shop deliberately.
 
@@ -59,18 +60,35 @@ exactly what the purge job did from a source-code constant before VS-007.
 Deployment therefore changes no behaviour; it only moves the control from code
 into the database.
 
-**`free_shipping_threshold` defaults to JSON `null`.** BR-076 calls the
-threshold optional, so "off" has to be representable, and any number would be a
-business decision nobody has made.
+**`free_shipping_threshold` defaults to JSON `null`.** BR-076 called the
+threshold optional, so "off" had to be representable. ADR-024 removed BR-076:
+the courier prices and collects delivery, so VS-028 deletes this setting.
 
 **`pickup_address`, `pickup_hours` and `whatsapp_number` default to JSON
 `null`** because the real values are awaited from the client (SRS §30.2). They
 are served publicly, so a plausible-looking placeholder address would be worse
 than a visibly absent one — the frontend hides an element whose value is null.
 
+## Planned by VS-028 (ADR-024)
+
+Not seeded yet. VS-028 adds these with the cash-on-delivery checkout and deletes
+`free_shipping_threshold`:
+
+| Key | Type | Unit | Default | Range | Public |
+|---|---|---|---|---|:-:|
+| `cash_payment_enabled` | boolean | — | `true` | — | ✅ |
+| `cash_max_open_orders` | integer | unpaid, uncancelled cash orders / customer or contact phone | `1` | 1 – 10 | ❌ |
+| `cash_max_order_total` | money | cents (USD) | `10000` (100 USD) | 1 – 1 000 000 cents | ✅ |
+
+`cash_payment_enabled` switches cash off without touching online orders or
+existing cash orders. The two limits bound how much printing a fake or refused
+cash order can waste (SRS §9.8); the total is checked after checkout recomputes it. The maximum total is public because checkout
+must tell the customer why cash is unavailable; the open-order limit is private,
+like other abuse limits.
+
 ## JSON null is not SQL NULL
 
-`settings.value` is `JSONB NOT NULL`, yet five settings default to null. Those
+`settings.value` is `JSONB NOT NULL`, yet five settings default to null (four once VS-028 deletes `free_shipping_threshold`). Those
 are two different nulls:
 
 - **SQL NULL** means "no value in this column". Forbidden here.
@@ -82,7 +100,7 @@ The model sets `JSONB(none_as_null=False)` so Python `None` is written as JSON
 
 ## Public settings
 
-`GET /api/v1/settings/public` is unauthenticated and returns exactly five keys:
+`GET /api/v1/settings/public` is unauthenticated and today returns exactly five keys:
 
 ```
 accepting_orders, free_shipping_threshold, pickup_address, pickup_hours, whatsapp_number
@@ -100,7 +118,17 @@ Adding a row to the `settings` table therefore cannot make it public. Making a
 setting public is an edit to the registry *and* to the response schema, in a
 reviewed change.
 
-The other seven are internal. `daily_download_cap` was deliberately private
+VS-028 changes the allowlist (ADR-024): `free_shipping_threshold` leaves it, and
+`cash_payment_enabled` and `cash_max_order_total` join it, giving six keys:
+
+```
+accepting_orders, cash_payment_enabled, cash_max_order_total, pickup_address, pickup_hours, whatsapp_number
+```
+
+Both changes go through the registry and `PublicSettingsRead` together, as
+described above.
+
+Of today's twelve seeded keys, the seven not in today's five-key list are internal. `daily_download_cap` was deliberately private
 (publishing an abuse limit tells an abuser how to pace themselves); it is now
 obsolete, because ADR-019 removed downloads, and VS-023b deletes it.
 
@@ -130,7 +158,7 @@ not just the first.
 | `GET /api/v1/admin/settings` | Admin + MFA | Cursor page, ordered by key; `limit` (default 20, max 100), `prefix`, `type` |
 | `GET /api/v1/admin/settings/{key}` | Admin + MFA | `404` for an unknown key |
 | `PATCH /api/v1/admin/settings/{key}` | Admin + MFA + CSRF | `422 SETTING_INVALID` on a bad value; audited |
-| `GET /api/v1/settings/public` | Public | The five allowlisted keys; rate limited |
+| `GET /api/v1/settings/public` | Public | The allowlisted keys (five today, six after VS-028); rate limited |
 
 Keys cannot be created through the API. A new setting arrives as a registry
 entry plus a migration that seeds its row.
