@@ -141,7 +141,7 @@ Then:
 
 The profile view returns the customer's account information (ID, email, verification/account state)
 Multiple delivery addresses may be saved
-A JSON export contains the customer’s profile, addresses, orders (with STL delivery records), reviews, and offers
+A JSON export contains the customer’s profile, addresses, orders (with payment method and STL delivery records), reviews, and offers
 Account deletion anonymizes personal data while retaining required financial and delivery records
 Login is disabled after anonymization
 
@@ -291,7 +291,8 @@ Given:
 The customer has a non-empty cart
 An idempotency key is supplied
 The platform is accepting orders
-Required delivery or pickup information is present
+Required delivery or pickup information is present, including a contact phone for pickup
+A payment method is chosen: online, or cash for an order whose every line is physical
 
 When:
 
@@ -303,10 +304,10 @@ The system locks the cart
 Every product and quantity is revalidated
 Current prices are compared with cart snapshots
 Price changes require customer confirmation
-Shipping and totals are recomputed server-side
-Order and order-line snapshots are created
-A pending payment attempt is created
-Terms consent is recorded
+Totals are recomputed server-side; no shipping amount is charged, because the courier collects the delivery fee
+Order and order-line snapshots are created, including the payment method and contact phone
+For an online order, a pending payment attempt is created; a cash order gets no payment until its cash handover
+Terms consent is recorded, including the cash terms for a cash order
 Estimated dispatch is calculated for physical lines
 The cart is cleared
 The response is stored against the idempotency key
@@ -314,7 +315,9 @@ The response is stored against the idempotency key
 Negative cases:
 
 WhatsApp-only, unavailable, hidden, or deleted products are rejected
-Delivery without a valid address or zone is rejected
+Delivery without a valid address, or pickup without a contact phone, is rejected
+Cash is rejected for an order with any STL line, when cash is switched off, or when the customer is blocked from cash
+Cash is rejected when the customer already has the maximum number of unpaid cash orders or the total exceeds the cash maximum
 An already-owned STL is removed or rejected according to the checkout rule
 A reused idempotency key with a different body returns a conflict
 New checkout is rejected while the global accepting-orders switch is disabled
@@ -323,14 +326,15 @@ Client-supplied totals are ignored
 State transitions touched:
 
 Cart → cleared
-No order → pending payment
-No payment → pending
+No order → pending payment (online) or in progress (cash)
+No payment → pending (online only)
 
 Concurrent access:
 
 Repeated checkout with the same key and body returns the original result
 Two different keys submitted against the same cart must not create two valid orders
 Cart locking and database constraints ensure only one checkout consumes the cart
+The cart lock serialises one customer's checkouts, so two parallel cash checkouts cannot both pass the open-cash-order limit
 
 Failure behaviour:
 
@@ -338,12 +342,12 @@ Order creation, line creation, payment creation, consent recording, idempotency 
 If any step fails, the entire operation rolls back
 No payment redirect is returned unless the order transaction commits
 
-Traceability: F-042 through F-046, F-052.
+Traceability: F-042, F-044, F-046, F-052, F-053.
 
 FR-07: Process and independently verify payment
 
 As a customer,
-I can complete payment through Whish,
+I can complete an online payment through the payment provider,
 so that my order can be fulfilled securely.
 
 Given:
@@ -352,8 +356,8 @@ A valid pending order and live payment attempt exist
 
 When:
 
-The customer is redirected to Whish
-Whish sends a callback
+The customer is redirected to the payment provider
+The provider sends a callback
 The system reconciles a payment
 An administrator performs permitted manual confirmation
 
@@ -403,6 +407,8 @@ If provider queries are unavailable, payment requires administrator confirmation
 
 The SRS identifies reconciliation as critical because a lost callback could otherwise leave a customer charged without receiving the purchased product.
 
+Cash orders never enter this flow: they have no payment attempt, and their cash is recorded at handover (FR-20).
+
 Traceability: F-047 through F-051.
 
 FR-08: Fulfill physical order lines
@@ -413,19 +419,20 @@ so that customers receive accurate status information.
 
 Given:
 
-Payment has been independently confirmed
+An online order's payment has been independently confirmed, or the order is a cash order
 The order contains one or more physical lines
 
 When:
 
-The administrator starts production
+The administrator marks start printing
 Marks an item ready, shipped, delivered, ready for pickup, picked up, or returned
 
 Then:
 
 Every line follows the valid state machine
 Order-level status is recomputed from payment and line statuses
-The customer receives relevant notifications
+The customer is emailed and notified at ready ("your order is finished"), shipped, ready for pickup, and delivered or picked up
+Start printing is internal: no email or notification, and the customer sees the line as received
 Every transition records actor, timestamp, prior state, new state, and notes
 
 Negative cases:
@@ -435,6 +442,7 @@ Customers cannot directly set fulfillment states
 A delivery line cannot use pickup-only transitions
 A pickup line cannot use shipping-only transitions
 A returned item is not automatically treated as terminal
+On a cash order, delivered and picked up are reached only through the cash handover (FR-20)
 
 State transitions touched:
 
@@ -448,11 +456,15 @@ pending → in_production → ready_for_pickup → picked_up
 
 Return resolution:
 
-returned → shipped | in_production | refunded
+returned → shipped | in_production | refunded (paid line) | cancelled (unpaid cash line, no refund)
+
+Pickup no-show:
+
+ready_for_pickup → cancelled (administrator)
 
 Concurrent access:
 
-A customer cancellation racing the start of production must lock the same order line
+A customer cancellation racing start printing must lock the same order line
 Exactly one operation succeeds according to the committed state
 Concurrent administrator transitions from the same original state must not both succeed
 
@@ -469,15 +481,14 @@ Traceability: F-060 through F-068.
 FR-09: Cancel an eligible order line
 
 As a verified customer,
-I can cancel an eligible physical order before production begins,
+I can cancel an eligible physical order before printing begins,
 so that I am not charged for work that has not started.
 
 Given:
 
 The customer owns the order
-Payment has been completed
-The physical line is still pending
-No production work has started
+The order is paid online, or is an unpaid cash order
+Every physical line is still pending: the administrator has not marked start printing
 
 When:
 
@@ -486,7 +497,7 @@ The customer requests cancellation
 Then:
 
 The line becomes cancelled
-A refund obligation is created when money must be returned
+A refund obligation is created when money must be returned; an unpaid cash order creates none
 Order status is recomputed
 Audit and notification records are created
 
@@ -504,7 +515,7 @@ Paid order → cancelled or partially refunded, depending on remaining lines
 
 Concurrent access:
 
-Cancellation and production-start operations lock the same line
+Cancellation and start-printing operations lock the same line
 Only one transition may commit
 The losing request receives an invalid-state conflict
 
@@ -529,7 +540,7 @@ The requested amount does not exceed the remaining refundable balance
 
 When:
 
-The administrator refunds one or more lines or the shipping fee
+The administrator refunds one or more lines (there is no shipping fee to refund)
 A payment reversal or chargeback is confirmed
 
 Then:
@@ -538,13 +549,14 @@ A refund record and refund-line records are created
 The obligation remains pending until confirmed settled
 Relevant line and order statuses are recomputed
 Refunded STL lines become refunded; one not yet sent leaves the delivery queue
+A cash payment is refunded with method manual, up to the cash recorded
 Audit and customer-notification records are created
 
 Negative cases:
 
 The total refunded amount cannot exceed the paid amount
 The same amount cannot be refunded twice
-Unpaid orders cannot be refunded
+Unpaid orders cannot be refunded, including cash orders whose cash has not been recorded
 Unauthorized users cannot issue refunds
 Refunding an STL line never deletes its delivery record
 
@@ -715,6 +727,7 @@ Links, prohibited content, or excessive submissions may be rejected
 Hidden reviews do not contribute to public aggregates
 Unverified users cannot review or modify a wishlist
 Customers cannot edit other customers’ reviews
+An unpaid or refused cash purchase never earns the badge
 
 State transitions touched:
 
@@ -728,7 +741,7 @@ Concurrent access:
 
 A unique constraint prevents duplicate reviews or wishlist items
 Rating aggregates must remain correct during concurrent review updates
-A purchase being paid or refunded triggers badge recomputation
+A purchase being paid (online verification or cash handover) or refunded triggers badge recomputation
 
 Failure behaviour:
 
@@ -860,6 +873,7 @@ Negative cases:
 Email-provider failure must not roll back payment, order, or fulfillment changes
 Sensitive data must not be exposed in notification payloads
 Duplicate processing must not send uncontrolled duplicate messages
+Start printing never produces a customer email or notification
 
 State transitions touched:
 
@@ -899,7 +913,8 @@ Inspects audit history
 
 Then:
 
-Orders, offers, refunds, payments, reviews, custom requests, and messages can be filtered and processed
+Orders (including cash orders awaiting handover), offers, refunds, payments, reviews, custom requests, and messages can be filtered and processed
+Cash limits (switch, open cash orders per customer, maximum cash total) are typed settings, and a customer's cash block can be cleared
 Typed settings are validated before saving
 Every setting change records previous value, new value, actor, and timestamp
 Revenue is attributed by order line and product stream
@@ -930,7 +945,7 @@ A dashboard write and its audit entry commit atomically
 Analytics failure must not affect operational transactions
 Unavailable analytics should return an error rather than fabricated zero values
 
-Traceability: F-113 through F-128.
+Traceability: F-114 through F-128.
 
 FR-19: Execute reliability-critical scheduled jobs
 
@@ -949,7 +964,7 @@ A scheduled cadence is reached
 Then:
 
 Email outbox runs every minute
-Offers and stale checkouts expire every five minutes
+Offers and stale online checkouts expire every five minutes
 Stuck payments are reconciled every fifteen minutes
 Unverified accounts, expired attachments, and orphan files are processed daily
 Backup integrity is verified daily
@@ -966,7 +981,7 @@ State transitions touched:
 
 Outbox pending → sent or retrying
 Offer active → expired
-Unpaid order → cancelled
+Unpaid online order → cancelled (a cash order is never expired by a job)
 Payment unresolved → paid, failed, expired, or manual review
 Attachment active → purged
 Detail partition active → aggregated and pruned
@@ -983,3 +998,101 @@ Cron-liveness monitoring alerts when expected execution stops
 Payment reconciliation, partition creation, backup verification, disk pressure, and outbox backlog require operational alerts
 
 The required jobs and their cadences are defined by the SRS.
+
+FR-20: Record cash on delivery or at pickup
+
+As an administrator,
+I can record the cash collected for a cash order in the same action that marks it delivered or picked up,
+so that the payment is confirmed by a documented manual check and the order completes.
+
+Given:
+
+The order's payment method is cash and no cash has been recorded
+Every live (non-cancelled) line is shipped (delivery) or ready for pickup (pickup)
+The courier has reported the order delivered and paid, or the customer paid at the counter
+
+When:
+
+The administrator records the cash handover with the amount collected
+
+Then:
+
+The amount equals the sum of live line totals
+Every live line becomes delivered or picked up
+One payment is created with provider cash, status paid, the amount, and the recording administrator
+Order status and the Verified Purchase badge are recomputed
+History, audit, notification, and the delivered or picked-up email with the cash receipt are written
+
+Negative cases:
+
+A different amount is rejected and nothing changes
+A line not yet shipped or ready for pickup rejects the handover
+An online order cannot use the cash handover
+The transition endpoint cannot mark a cash order's line delivered or picked up
+Customers cannot record cash
+No callback, webhook, or job can create a cash payment
+
+State transitions touched:
+
+Physical shipped → delivered, or ready_for_pickup → picked_up, for every live line
+No payment → paid (cash)
+Order in progress → completed
+
+Refusal:
+
+shipped → returned → cancelled, or ready_for_pickup → cancelled, with no refund obligation
+The customer's cash block is set in the same transaction
+
+Concurrent access:
+
+The handover locks the order and its lines
+Two administrators recording the same handover: one succeeds, one gets a conflict; one payment, one audit row, one email
+A handover racing an administrator cancellation on the same order has exactly one winner
+
+Failure behaviour:
+
+Line changes, payment creation, projection, history, audit, and outbox commit atomically
+An email failure does not roll back the handover
+
+Traceability: F-053, F-054, F-065.
+
+FR-21: Confirm receipt or report a problem
+
+As a verified customer,
+I can confirm that I received my order or report a problem with it,
+so that the administrator knows the outcome of the delivery.
+
+Given:
+
+The customer owns the order
+At least one line is delivered or picked up
+
+When:
+
+The customer presses "I got it" or "Report a problem" on the order page
+
+Then:
+
+"I got it" records receipt confirmation on the delivered or picked-up lines
+"Report a problem" records the report and creates a contact message linked to the order
+Neither changes a line's state, and the order completes without them
+
+Negative cases:
+
+Another customer's order is not found
+An order with no delivered or picked-up line rejects both actions
+Following a link in the email never changes state; the action is a signed-in request from the order page
+
+State transitions touched:
+
+None; timestamps only
+
+Concurrent access:
+
+Confirming twice keeps the first confirmation
+
+Failure behaviour:
+
+The report and its contact message commit together
+
+Traceability: F-069.

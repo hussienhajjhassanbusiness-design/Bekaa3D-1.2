@@ -38,7 +38,7 @@ to apply now.
 | `checkout_hold_period` | duration | seconds | `1800` (30 min) | 300 – 7 200 | ❌ |
 | `unverified_account_purge_period` | duration | seconds | `2592000` (30 d) | 604 800 – 7 776 000 | ❌ |
 | `daily_download_cap` | integer | downloads / customer / UTC day | `20` | 1 – 1 000 | ❌ — obsolete since ADR-019 (no downloads); removed by VS-023b |
-| `free_shipping_threshold` | money | cents | `null` | 0 – 1 000 000 cents | ✅ |
+| `free_shipping_threshold` | money | cents | `null` | 0 – 1 000 000 cents | ✅ — obsolete since ADR-024 (the platform charges no shipping); removed by VS-028 |
 | `pickup_address` | string | — | `null` | ≤ 500 chars | ✅ |
 | `pickup_hours` | string | — | `null` | ≤ 200 chars | ✅ |
 | `whatsapp_number` | string | — | `null` | E.164, ≤ 15 digits | ✅ |
@@ -59,14 +59,31 @@ exactly what the purge job did from a source-code constant before VS-007.
 Deployment therefore changes no behaviour; it only moves the control from code
 into the database.
 
-**`free_shipping_threshold` defaults to JSON `null`.** BR-076 calls the
-threshold optional, so "off" has to be representable, and any number would be a
-business decision nobody has made.
+**`free_shipping_threshold` defaults to JSON `null`.** BR-076 called the
+threshold optional, so "off" had to be representable. ADR-024 removed BR-076:
+the courier prices and collects delivery, so VS-028 deletes this setting.
 
 **`pickup_address`, `pickup_hours` and `whatsapp_number` default to JSON
 `null`** because the real values are awaited from the client (SRS §30.2). They
 are served publicly, so a plausible-looking placeholder address would be worse
 than a visibly absent one — the frontend hides an element whose value is null.
+
+## Planned by VS-028 (ADR-024)
+
+Not seeded yet. VS-028 adds these with the cash-on-delivery checkout and deletes
+`free_shipping_threshold`:
+
+| Key | Type | Unit | Default | Range | Public |
+|---|---|---|---|---|:-:|
+| `cash_payment_enabled` | boolean | — | `true` | — | ✅ |
+| `cash_max_open_orders` | integer | unpaid, uncancelled cash orders / customer | `1` | 1 – 10 | ❌ |
+| `cash_max_order_total` | money | cents (USD) | `10000` (100 USD) | 0 – 1 000 000 cents | ✅ |
+
+`cash_payment_enabled` switches cash off without touching online orders or
+existing cash orders. The two limits bound how much printing a fake or refused
+cash order can waste (SRS §9.8). The maximum total is public because checkout
+must tell the customer why cash is unavailable; the open-order limit is private,
+like other abuse limits.
 
 ## JSON null is not SQL NULL
 
@@ -99,6 +116,8 @@ to be removed for one to escape:
 Adding a row to the `settings` table therefore cannot make it public. Making a
 setting public is an edit to the registry *and* to the response schema, in a
 reviewed change.
+
+`free_shipping_threshold` leaves the allowlist when VS-028 deletes it (ADR-024).
 
 The other seven are internal. `daily_download_cap` was deliberately private
 (publishing an abuse limit tells an abuser how to pace themselves); it is now

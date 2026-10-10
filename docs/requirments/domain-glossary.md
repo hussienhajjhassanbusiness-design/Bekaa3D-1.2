@@ -22,8 +22,8 @@ A synonym must not be introduced when a canonical term already exists.
 | **Administrator**               | An authorized user who operates catalogue, orders, payments, refunds, offers, moderation, settings, and analytics.                                                             | Customer, System, database operator                                     |
 | **System**                      | Automated application behavior such as scheduled jobs, projections, expiration, reconciliation, and notifications.                                                             | Administrator or external service                                       |
 | **Payment Provider**            | An external service that processes money and exposes payment creation, callback, status-query, and possibly refund capabilities.                                               | Payment record, Order, Webhook Event                                    |
-| **Whish**                       | The payment provider used by Bekaa3D in V1.                                                                                                                                    | A Payment, wallet balance, or internal Bekaa3D service                  |
-| **Courier**                     | An external party responsible for physically transporting an order to a customer.                                                                                              | System user, Fulfillment Method, Shipping Zone                          |
+| **Whish** | A Lebanese payment provider; a candidate online provider for V1, undecided (SRS §30.4, ADR-024). | A Payment, wallet balance, internal Bekaa3D service, or the chosen provider |
+| **Courier** | An external party that transports an order to a customer, sets and collects the Courier Delivery Fee, and collects the order total for a Cash on Delivery order. | System user, Fulfillment Method, Payment Provider |
 | **Catalogue**                   | The searchable public collection of physical and STL products.                                                                                                                 | Inventory, Cart, Admin product editor                                   |
 | **Product**                     | A sellable catalogue item shared by both physical and STL product types.                                                                                                       | Order Item, Cart Item                                                   |
 | **Physical Product**            | A made-to-order product that requires production and may be delivered or collected from the workshop.                                                                          | Stocked inventory item, STL Product                                     |
@@ -44,16 +44,16 @@ A synonym must not be introduced when a canonical term already exists.
 | **Cart**                        | The verified customer’s persistent collection of products being considered for checkout.                                                                                       | Order, Wishlist, Payment                                                |
 | **Cart Item**                   | One product selection inside a cart, including quantity and the price observed when it was added.                                                                              | Order Item, Product                                                     |
 | **Price Snapshot**              | The recorded product price at a specific business moment, such as cart addition or order placement.                                                                            | Current catalogue price                                                 |
-| **Checkout**                    | The transactional process that validates a cart and creates an order, order items, consent record, and pending payment.                                                        | Payment verification, Order fulfillment                                 |
+| **Checkout** | The transactional process that validates a cart and creates an order, order items and consent record, plus a pending payment for an online order. | Payment verification, Order fulfillment |
 | **Idempotency Key**             | A client-supplied identifier ensuring that repeating the same protected request does not create a duplicate result.                                                            | Order number, payment-provider event ID                                 |
 | **Order**                       | The commercial record created from a successful checkout or accepted-offer checkout, containing monetary totals, customer snapshots, fulfillment information, and order items. | Cart, Payment, Shipment                                                 |
 | **Order Number**                | The human-readable identifier used by customers and administrators to reference an order.                                                                                      | Database primary key, Idempotency Key                                   |
 | **Order Source**                | The workflow that created an order, such as cart checkout or accepted-offer checkout.                                                                                          | Marketing source or payment provider                                    |
 | **Order Item**                  | A purchased product line inside an order with immutable product, price, quantity, and fulfillment snapshots.                                                                   | Cart Item, Product, Shipment                                            |
-| **Physical Order Item**         | An order item representing a physical product and carrying production and fulfillment state.                                                                                   | Entire Order, Digital Order Item                                        |
+| **Physical Order Item** | An order item representing a physical product and carrying production and fulfillment state, and optional receipt confirmation and problem report timestamps. | Entire Order, Digital Order Item |
 | **Digital Order Item**          | An order item representing an STL product and carrying its delivery state (awaiting delivery, delivered, refunded).                                                            | STL File                                                                |
 | **Mixed Order**                 | An order containing at least one physical order item and at least one digital order item.                                                                                      | A product with both purchase modes                                      |
-| **Order Status**                | A derived projection calculated from payment state and order-item states.                                                                                                      | A value directly selected by an administrator                           |
+| **Order Status** | A derived projection calculated from the payment method, payment state and order-item states. | A value directly selected by an administrator |
 | **Order-Item Status**           | The individual fulfillment or digital-delivery state of one order item.                                                                                                        | Order Status, Payment Status                                            |
 | **Projection**                  | A value derived and maintained from authoritative underlying records. Order Status is a projection.                                                                            | Independent source of truth                                             |
 | **Snapshot**                    | An immutable copy of business data captured at a specific moment, especially order placement.                                                                                  | Live reference that changes with catalogue edits                        |
@@ -62,36 +62,43 @@ A synonym must not be introduced when a canonical term already exists.
 | **Fulfillment**                 | The operational process of producing and handing over physical order items, and of emailing purchased STL files (STL Delivery).                                                | Payment, Checkout                                                       |
 | **Fulfillment Method**          | The selected handover method for physical order items: Delivery or Pickup.                                                                                                     | Purchase Mode, Payment Method                                           |
 | **Delivery**                    | A fulfillment method in which a physical product is transported to a customer address.                                                                                         | Dispatch, Shipment record, Pickup                                       |
-| **Pickup**                      | A fulfillment method in which the customer collects a paid physical product from the workshop.                                                                                 | Cash on delivery, Delivery                                              |
+| **Pickup** | A fulfillment method in which the customer collects a physical product from the workshop, paid online beforehand or in cash at pickup. | Delivery |
 | **Delivery Address**            | A customer-managed address that may be selected for a delivery checkout.                                                                                                       | Order Address Snapshot                                                  |
 | **Address Snapshot**            | The immutable address copied onto an order at checkout.                                                                                                                        | A saved address that changes when the customer edits their address book |
-| **Shipping Zone**               | An administrator-managed Lebanese geographic area with a configured flat delivery fee.                                                                                         | Courier route, address, international shipping region                   |
-| **Shipping Fee**                | The monetary charge calculated from the selected shipping zone and snapshotted onto the order.                                                                                 | Product price, tax, courier payment                                     |
+| **Contact Phone** | The Lebanese phone number snapshotted onto every physical order: the address phone for delivery, entered at checkout for pickup. The courier's and administrator's contact. | Account email, live address-book phone |
+| **Courier Delivery Fee** | The fee the courier sets and collects from the customer on delivery. Never part of the order total; checkout and emails say "delivery fee paid to the courier on delivery" (ADR-024). | Shipping fee charged by the platform, product price |
 | **Lead Time**                   | The number of days required to produce one batch of a physical product.                                                                                                        | Estimated delivery time                                                 |
 | **Batch Size**                  | The number of units that can be produced within one lead-time cycle.                                                                                                           | Maximum quantity per order                                              |
 | **Maximum Quantity per Line**   | The greatest physical-product quantity allowed in one cart or order line.                                                                                                      | Batch Size, stock level                                                 |
 | **Estimated Dispatch Date**     | The estimated date by which all physical items should be ready to leave the workshop.                                                                                          | Guaranteed delivery date                                                |
 | **Dispatch**                    | The event of a physical order becoming ready to leave or actually leaving the workshop.                                                                                        | Delivery to the customer                                                |
-| **Production**                  | The manufacturing work performed for a paid physical order item.                                                                                                               | Order creation or payment processing                                    |
+| **Production** | The manufacturing work performed for a physical order item: after payment for an online order, after placement for a cash order. | Order creation or payment processing |
 | **Cancellation**                | Stopping an eligible order item before completion, subject to the production cutoff and refund rules.                                                                          | Refund settlement                                                       |
-| **Production Cutoff**           | The transition into `in_production`, after which customers can no longer self-cancel.                                                                                          | Checkout expiration or payment expiration                               |
-| **Return**                      | A physical item that comes back after shipment or delivery failure and requires re-shipment, reprinting, or refund resolution.                                                 | Refund, Cancellation                                                    |
-| **Payment**                     | The internal record of a money-processing attempt associated with an order.                                                                                                    | Order, provider callback, proof of successful payment                   |
-| **Payment Attempt**             | One attempt to collect the order total through the payment provider. Only one live attempt may exist per order.                                                                | Customer retry request after an active attempt                          |
+| **Production Cutoff** | The "start printing" transition into `in_production`, after which customers can no longer self-cancel. `in_production` is internal; customers see the item as received. | Checkout expiration or payment expiration |
+| **Return** | A physical item that comes back after shipment or delivery failure and requires re-shipment, reprinting, refund, or (unpaid cash only) cancellation. | Refund, Cancellation |
+| **Payment** | The internal record of a money-processing attempt associated with an order, or of cash recorded at handover. | Order, provider callback, proof of successful payment |
+| **Payment Attempt** | One attempt to collect an online order's total through the payment provider. Only one live attempt may exist per order; cash orders have none. | Customer retry request after an active attempt, Cash Handover |
 | **Payment Status**              | The lifecycle state of a payment, such as pending, processing, paid, failed, expired, partially refunded, or refunded.                                                         | Order Status                                                            |
+| **Payment Method** | The per-order choice at checkout: `online` or `cash`. Cash is allowed only when every order item is physical (ADR-024). | Purchase Mode, Fulfillment Method, Payment Provider |
+| **Cash on Delivery (COD)** | Payment method `cash` with delivery: the courier collects the order total in cash at the door. With pickup it is "cash at pickup", paid at the counter. | Pickup, Courier Delivery Fee, an online payment |
+| **Cash Handover** | The single administrator action that records the cash collected for a cash order and, in the same transaction, marks every live order item delivered or picked up. It creates the order's one `cash` Payment and is the documented manual confirmation for cash. | Payment Verification, Manual Payment Confirmation of an online payment |
+| **Cash Block** | `users.cash_payment_blocked_at`: set when a cash order is refused or not collected; the customer is offered only online payment until an administrator clears it. | Account deactivation, Rate Limit |
+| **Payment Due** | A derived flag on an unpaid cash order; the admin "cash due" view lists these orders. | Pending Payment, Order Status |
 | **Pending Payment**             | A payment created but not yet completed or independently confirmed.                                                                                                            | Unpaid cart                                                             |
-| **Paid**                        | A payment state reached only after independent server-side confirmation of provider status and amount.                                                                         | Callback received                                                       |
+| **Paid** | A payment state reached only after independent server-side confirmation of provider status and amount, or, for cash, by the Cash Handover. | Callback received |
 | **Payment Callback**            | A notification sent by the payment provider indicating that a payment event may have occurred.                                                                                 | Proof of payment                                                        |
 | **Webhook Event**               | The persisted representation of a callback received from an external provider.                                                                                                 | Payment record or Payment Confirmation                                  |
 | **Webhook Signature**           | Provider-supplied cryptographic evidence that a callback was sent by the provider, where supported.                                                                            | Independent payment-status verification                                 |
 | **Payment Verification**        | The server-side process of querying or otherwise independently confirming provider status, currency, and amount.                                                               | Trusting callback contents                                              |
-| **Manual Payment Confirmation** | An administrator-confirmed payment based on checking the provider dashboard when automated status verification is unavailable.                                                 | Arbitrary administrator override                                        |
+| **Manual Payment Confirmation** | An administrator-confirmed online payment based on checking the provider dashboard when automated status verification is unavailable. | Arbitrary administrator override, Cash Handover |
 | **Payment Reconciliation**      | A scheduled process that checks payments stuck in processing and resolves missed callbacks.                                                                                    | Accounting reconciliation of all business revenue                       |
 | **Live Payment**                | A payment in pending, processing, or paid state that prevents another active attempt for the same order.                                                                       | Any historical failed or expired payment                                |
-| **Refund**                      | A record representing money that must be returned for specified order items, shipping, or both.                                                                                | Cancellation, Chargeback, store credit                                  |
-| **Refund Item**                 | The portion of a refund allocated to a specific order item or shipping component.                                                                                              | Order Item                                                              |
+| **Refund** | A record representing money that must be returned for specified order items. | Cancellation, Chargeback, store credit |
+| **Refund Item** | The portion of a refund allocated to a specific order item. | Order Item |
 | **Refund Obligation**           | A tracked duty to return money that remains open until settlement is confirmed.                                                                                                | Completed refund transfer                                               |
 | **Refund Settlement**           | Confirmation that the customer has actually received the refunded amount.                                                                                                      | Creation or approval of a refund record                                 |
+| **Receipt Confirmation** | The customer's optional "I got it" on a delivered or picked-up order, recorded as `receipt_confirmed_at`; never required to complete the order. | Delivery, Order completion |
+| **Problem Report** | The customer's optional "Report a problem" on a delivered or picked-up order: sets `problem_reported_at` and creates a contact message linked to the order. | Return, Refund request, Review |
 | **Partial Refund**              | A refund covering less than the complete paid order amount.                                                                                                                    | Partial payment                                                         |
 | **Chargeback**                  | A payment reversal initiated through the payment provider or financial channel.                                                                                                | Administrator-issued Refund                                             |
 | **STL Delivery**                | The administrator emailing a paid STL's files from their own drive and marking the digital order item delivered (ADR-019).                                                       | Download, automatic delivery                                            |
@@ -141,7 +148,7 @@ A synonym must not be introduced when a canonical term already exists.
 | **Rate Limit**                  | A restriction on how frequently an actor may perform an action within a period.                                                                                                | Offer Cooldown                                                          |
 | **Captcha**                     | A public-form anti-abuse verification mechanism.                                                                                                                               | Email verification or authentication                                    |
 | **Storage Provider**            | The infrastructure abstraction responsible for private and public file persistence.                                                                                            | Database repository                                                     |
-| **Payment Provider Port**       | The application-facing interface for creating, querying, verifying, and refunding provider payments.                                                                           | Whish-specific implementation                                           |
+| **Payment Provider Port** | The application-facing interface for creating, querying, verifying, and refunding online provider payments. Cash has no adapter. | Provider-specific implementation |
 | **Repository**                  | An application interface responsible for loading and persisting domain aggregates.                                                                                             | Service, API router, generic utility module                             |
 | **Bounded Context**             | A business module that owns its domain concepts and persistence and is accessed by other contexts through explicit interfaces.                                                 | Microservice or arbitrary folder                                        |
 | **Aggregate**                   | A consistency boundary whose related changes are controlled through one domain entry point and transaction.                                                                    | Database table or bounded context                                       |
@@ -216,13 +223,20 @@ class PurchaseMode(StrEnum):
 
 `FulfillmentMethod` answers **how a physical order is handed to the customer**.
 
+`PaymentMethod` answers **how an order is paid** (ADR-024).
+
 ```python
 class FulfillmentMethod(StrEnum):
     DELIVERY = "delivery"
     PICKUP = "pickup"
+
+
+class PaymentMethod(StrEnum):
+    ONLINE = "online"
+    CASH = "cash"
 ```
 
-These three concepts must never share one enum or database column.
+These four concepts must never share one enum or database column.
 
 ### 4. Distinguish current data from snapshots
 
@@ -232,9 +246,8 @@ Use explicit snapshot names on order records:
 product_name_snapshot
 unit_price_cents
 image_url_snapshot
-shipping_zone_name_snapshot
-shipping_fee_cents
 address_snapshot
+contact_phone_snapshot
 lead_time_days_snapshot
 batch_size_snapshot
 ```
@@ -267,6 +280,7 @@ receive_webhook()
 verify_payment()
 reconcile_payment()
 confirm_payment_manually()
+record_cash_handover()
 ```
 
 Never name the webhook receiver:
@@ -277,7 +291,7 @@ mark_as_paid()
 complete_payment()
 ```
 
-Receiving a callback does not confirm payment.
+Receiving a callback does not confirm payment. Only `record_cash_handover()` creates a cash payment.
 
 ### 7. Distinguish ownership from delivery
 
@@ -289,6 +303,7 @@ Since ADR-019 there is no Entitlement or Download. A paid, unrefunded digital Or
 * **Refund** records money to be returned.
 * **Refund Settlement** confirms that money was returned.
 * **Return** records a physical item coming back after shipment or delivery.
+* **Cash refusal** is a return of an unpaid cash item that ends in cancellation with no refund.
 
 One action may lead to another, but they are not synonyms.
 
@@ -319,8 +334,6 @@ payments
 webhook_events
 refunds
 refund_items
-
-shipping_zones
 
 offers
 offer_rounds
@@ -361,7 +374,6 @@ Recommended route nouns:
 /notifications
 /custom-requests
 /contact-messages
-/shipping-zones
 /settings
 /audit-logs
 ```

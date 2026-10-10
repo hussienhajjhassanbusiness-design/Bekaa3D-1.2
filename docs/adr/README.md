@@ -17,7 +17,7 @@ Only expensive-to-reverse decisions belong here. Folder names and small refactor
 - [ADR-009: Preserve business history with soft deletion and anonymisation](ADR-009-soft-delete-anonymisation-retention.md)
 - [ADR-010: Use separate translation tables for bilingual content](ADR-010-translation-tables.md) — superseded by ADR-016
 - [ADR-011: Use a transactional outbox and durable scheduled arq jobs](ADR-011-transactional-outbox-and-arq.md)
-- [ADR-012: Use a payment-provider abstraction and independently verify payment](ADR-012-payment-provider-abstraction.md)
+- [ADR-012: Use a payment-provider abstraction and independently verify payment](ADR-012-payment-provider-abstraction.md) — provider choice reopened by ADR-024
 - [ADR-013: Centralize cross-context technical integrations behind shared ports](ADR-013-shared-external-integration-ports.md)
 - [ADR-014: Use first-class entitlements and nginx-protected STL delivery](ADR-014-entitlements-and-protected-downloads.md) — superseded by ADR-019
 - [ADR-015: Partition downloads and audit logs by month](ADR-015-partition-high-volume-logs.md) — downloads part superseded by ADR-019
@@ -29,6 +29,7 @@ Only expensive-to-reverse decisions belong here. Folder names and small refactor
 - [ADR-021: Scan the raw upload, then re-encode; store before the row commits](ADR-021-image-upload-pipeline.md)
 - [ADR-022: Derive storefront commerce capabilities from product state only](ADR-022-storefront-commerce-capabilities.md)
 - [ADR-023: Rank storefront search by relevance, fall back to trigram below five hits, and pin the mode in the cursor](ADR-023-storefront-search-order-and-fallback.md)
+- [ADR-024: The courier prices and collects shipping; physical-only orders may be paid in cash on delivery](ADR-024-cash-on-delivery-and-courier-priced-shipping.md)
 
 ## Governance
 

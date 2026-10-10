@@ -1,8 +1,9 @@
 # Bekaa3D — Software Requirements Specification
 
-**Version:** 1.1
-**Date:** August 2026; revised 2026-10-06
+**Version:** 1.2
+**Date:** August 2026; revised 2026-10-06, 2026-10-10
 **Revision 1.1:** STL files are delivered manually by email and never stored on the platform — see ADR-019.
+**Revision 1.2:** The courier prices and collects shipping; physical-only orders may be paid in cash on delivery; the online payment provider is an open decision — see ADR-024.
 **Status:** Approved for development
 **Supersedes:** Discovery Report v1 & v2, Design Pack Part 1 v1.0 & v1.1, Design Pack Part 2, Independent Audit
 
@@ -69,7 +70,7 @@ serves two distinct commercial models through one system:
 
 | Half                       | What it sells                       | How it transacts                                |
 | -------------------------- | ----------------------------------- | ----------------------------------------------- |
-| **A — Physical catalogue** | 3D-printed products, made on demand | Per product: online checkout, WhatsApp, or both |
+| **A — Physical catalogue** | 3D-printed products, made on demand | Per product: checkout (paid online or in cash on delivery), WhatsApp, or both |
 | **B — STL marketplace**    | Digital model files                 | Online checkout only, emailed by the administrator |
 
 ### 1.2 Business Context
@@ -80,8 +81,9 @@ relationship-based and cash-oriented. The platform's defining design decision �
 through a modern online checkout, through a human WhatsApp conversation, or
 both, at the administrator's discretion per item.
 
-This is also the system's accessibility safeguard. Customers without a Whish
-balance or card are never locked out; they use WhatsApp.
+This is also the system's accessibility safeguard. Customers without a wallet
+balance or card are never locked out: they pay for physical goods in cash on
+delivery or at pickup (ADR-024), or use WhatsApp.
 
 ### 1.3 Scope of Version 1
 
@@ -91,8 +93,9 @@ balance or card are never locked out; they use WhatsApp.
 * Physical product catalogue with three purchase modes
 * STL digital marketplace; purchased files are emailed manually by the administrator (ADR-019)
 * Cart supporting mixed digital + physical orders
-* Online payment via Whish
-* Manual fulfillment workflow (delivery and workshop pickup)
+* Online payment through a provider still to be chosen (§30.4)
+* Cash on delivery and cash at pickup for orders whose every line is physical (ADR-024)
+* Manual fulfillment workflow (courier delivery and workshop pickup)
 * Offer/negotiation system for STL products
 * Reviews, wishlist, notifications
 * Bring Your Idea lead workflow
@@ -104,7 +107,7 @@ balance or card are never locked out; they use WhatsApp.
 * Product variants (colour/material selection at purchase) — routed to WhatsApp
 * International shipping — routed to WhatsApp for quotation
 * Courier API integration — fulfillment is manual
-* Cash on delivery
+* Charging, zoning or refunding shipping — the courier prices and collects the delivery fee (ADR-024)
 * Guest checkout — account required for all purchases
 * Product comments (distinct from reviews) — deferred
 * BYI online payment — lead workflow only
@@ -116,11 +119,11 @@ balance or card are never locked out; they use WhatsApp.
 ### 1.4 Success Criteria
 
 1. A customer can discover, evaluate, and purchase an STL file, then receive it by email from the administrator.
-2. A customer can order a physical product online and track it to delivery or pickup.
+2. A customer can order a physical product, pay online or in cash on delivery, and track it to delivery or pickup.
 3. A customer can reach the business via WhatsApp for anything the platform doesn't transact.
 4. The administrator can operate the entire business from the dashboard without database access.
 5. The English storefront is fully usable end to end. V1 is English-only — see ADR-016.
-6. No payment can be granted without independent server-side verification.
+6. No payment can be granted without independent server-side verification or, for cash, the administrator recording the cash collected.
 
 ---
 
@@ -135,8 +138,8 @@ balance or card are never locked out; they use WhatsApp.
 | **Customer (verified)**      | Yes                      | All purchasing, cart, checkout, offers, reviews, wishlist, order management, self-cancellation, data export, account deletion |
 | **Administrator**            | Yes                      | Full catalogue, order, fulfillment, refund, offer, moderation, settings, and analytics control                                           |
 | **System**                   | —                        | Scheduled jobs, projections, notifications, expiry, reconciliation                                                                       |
-| **Payment Provider (Whish)** | External                 | Payment processing, webhook callbacks, status queries                                                                                    |
-| **Courier**                  | External, outside system | Physical delivery. **Not a system user** — no tracking integration in V1                                                                 |
+| **Payment Provider**         | External                 | Online payment processing, webhook callbacks, status queries. Provider not yet chosen (§30.4)                                            |
+| **Courier**                  | External, outside system | Physical delivery; sets and collects the delivery fee, and collects the cash for cash-on-delivery orders. **Not a system user** — no tracking integration in V1 |
 
 ### 2.2 The Verification Boundary
 
@@ -195,23 +198,23 @@ Every rule is numbered for traceability. `BR-` prefix.
 | BR-024 | Physical line quantity may not exceed the product's maximum per line.                                          |
 | BR-025 | An STL the customer already owns (a paid, unrefunded STL line) cannot be added or purchased again.             |
 | BR-026 | Cart lines snapshot the price at the time of adding; a changed price is surfaced for confirmation at checkout. |
-| BR-027 | Delivery address and shipping fee are required only when the cart contains at least one physical line.         |
+| BR-027 | A delivery address is required only for a delivery order; the platform never charges a shipping fee (ADR-024). |
 
 ### 3.3 Checkout & Orders
 
 | ID     | Rule                                                                                                                               |
 | ------ | ---------------------------------------------------------------------------------------------------------------------------------- |
 | BR-030 | Checkout requires a verified account. There is no guest checkout.                                                                  |
-| BR-031 | All prices, shipping, and totals are recomputed server-side; client-supplied amounts are never trusted.                            |
+| BR-031 | All prices and totals are recomputed server-side; client-supplied amounts are never trusted.                                       |
 | BR-032 | Each order carries a human-readable order number.                                                                                  |
 | BR-033 | Order lines snapshot product name, price, and image at purchase; later catalogue edits never alter order history. |
 | BR-034 | An order's fulfillment method is Delivery, Pickup, or none (digital-only orders).                                                  |
 | BR-035 | Order status is a derived projection of payment status and line statuses; it is never set directly.                                |
 | BR-036 | Each order line carries its own fulfillment status.                                                                                |
-| BR-037 | Estimated dispatch date = max across physical lines of (lead time × ceil(quantity ÷ batch size)).                                  |
-| BR-038 | Customers are promised an estimated **dispatch** date, never a delivery date; courier transit is outside the company's control.    |
-| BR-039 | Unpaid checkouts expire after a configurable hold period and are cancelled automatically.                                          |
-| BR-040 | The global "accepting orders" kill switch blocks new checkouts but never affects payments already in flight.                       |
+| BR-037 | Estimated dispatch date = placement date + max across physical lines of (lead time × ceil(quantity ÷ batch size)); customers see it as the estimated ready date. |
+| BR-038 | Customers are promised an estimated **dispatch** date, never a delivery date; courier transit and the delivery fee are outside the company's control. |
+| BR-039 | Unpaid **online** checkouts expire after a configurable hold period and are cancelled automatically. Cash orders have no hold (BR-142). |
+| BR-040 | The global "accepting orders" kill switch blocks new checkouts, cash orders included, but never affects payments already in flight or cash handovers of existing orders. |
 | BR-041 | Checkout is idempotent; a repeated request with the same idempotency key returns the original order.                               |
 | BR-042 | Digital lines enter `awaiting_delivery` on payment verification and are fulfilled when the administrator emails the file and marks the line delivered, independently of physical lines. |
 
@@ -221,13 +224,13 @@ Every rule is numbered for traceability. `BR-` prefix.
 | ------ | ----------------------------------------------------------------------------------------------------------------------------- |
 | BR-050 | All prices are in USD.                                                                                                        |
 | BR-051 | Money is stored as integer cents with an explicit currency code; floats are never used.                                       |
-| BR-052 | Whish is the sole payment provider in V1, behind a provider abstraction.                                                      |
+| BR-052 | Online payment goes through one or more providers behind a provider abstraction; which provider is an open decision (§30.4). A mock provider serves development and tests. |
 | BR-053 | A payment callback is a notification, never proof of payment.                                                                 |
-| BR-054 | Payment is confirmed only by independent server-side verification (status query or, failing that, manual admin confirmation). |
-| BR-055 | The confirmed amount must match the order total; a lesser amount is never treated as paid.                                    |
+| BR-054 | Payment is confirmed only by independent server-side verification (status query or, failing that, manual admin confirmation). For a cash order, the administrator recording the cash collected at handover is that manual confirmation (BR-143). |
+| BR-055 | The confirmed amount must match the amount due — the order total online, the sum of live line totals in cash; a lesser amount is never treated as paid. |
 | BR-056 | Duplicate webhook deliveries are idempotent and never apply a payment twice.                                                  |
-| BR-057 | Nothing is delivered or produced before confirmed payment — no STL is sent, nothing is manufactured.                          |
-| BR-058 | At most one live payment attempt may exist per order; a retry is permitted only after the prior attempt fails or expires.     |
+| BR-057 | No STL is sent before verified online payment. Physical production may start once an online order is paid or a cash order is placed. |
+| BR-058 | At most one live payment attempt may exist per order; a retry of an online payment is permitted only after the prior attempt fails or expires. Cash orders have no payment attempts to retry. |
 | BR-059 | No tax is applied in V1; the price shown is the price charged.                                                                |
 
 ### 3.5 Refunds & Cancellation
@@ -236,27 +239,28 @@ Every rule is numbered for traceability. `BR-` prefix.
 | ------ | -------------------------------------------------------------------------------------------------------------------------------- |
 | BR-060 | STL purchases are final; this is presented and consent is recorded at checkout.                                                  |
 | BR-061 | Physical orders are refundable at the administrator's discretion, on a published baseline policy.                                |
-| BR-062 | Refunds may be partial and per-line, including shipping.                                                                         |
+| BR-062 | Refunds may be partial and per-line. There is no shipping to refund (ADR-024).                                                   |
 | BR-063 | Every refund creates a tracked obligation record that remains pending until settled.                                             |
 | BR-064 | A refunded digital line is marked refunded; if it has not been sent yet it leaves the delivery queue and must not be sent.       |
 | BR-065 | A file already emailed cannot be recalled; the protections are the all-sales-final consent record and the delivery record.     |
-| BR-066 | A customer may cancel their own order while it is paid but not yet in production.                                                |
-| BR-067 | Once a line enters production, self-cancellation closes and cancellation becomes an admin decision.                              |
+| BR-066 | A customer may cancel their own order while every physical line is still `pending`, whether it was paid online or is an unpaid cash order. |
+| BR-067 | Once the administrator marks any line "start printing" (`in_production`), self-cancellation closes and cancellation becomes an admin decision. |
 | BR-068 | STL lines are never self-cancellable.                                                                                            |
 | BR-069 | A customer whose STL line was refunded may purchase the product again.                                                           |
 
-### 3.6 Shipping & Fulfillment
+### 3.6 Delivery & Fulfillment
 
 | ID     | Rule                                                                           |
 | ------ | ------------------------------------------------------------------------------ |
-| BR-070 | Shipping uses admin-managed zones with flat rates.                             |
-| BR-071 | Only Lebanese zones are enabled in V1.                                         |
+| BR-070 | Removed by ADR-024 — the courier prices delivery; there are no shipping zones. |
+| BR-071 | Delivery addresses are Lebanese only in V1.                                    |
 | BR-072 | International customers are directed to WhatsApp for a quotation.              |
-| BR-073 | Workshop pickup is offered, is free, and requires no address.                  |
-| BR-074 | Shipping fee and zone are snapshotted onto the order.                          |
+| BR-073 | Workshop pickup is offered, is free, and requires no address; it is paid online or in cash at pickup under BR-141. |
+| BR-074 | Removed by ADR-024 — there is no shipping fee or zone to snapshot.             |
 | BR-075 | Fulfillment is entirely manual; no courier integration exists in V1.           |
-| BR-076 | An optional free-shipping threshold may be configured.                         |
-| BR-077 | A returned item is not terminal; it may be re-shipped, reprinted, or refunded. |
+| BR-076 | Removed by ADR-024 — there is no free-shipping threshold.                      |
+| BR-077 | A returned item is not terminal; it may be re-shipped, reprinted, or refunded, or — for an unpaid cash line — cancelled with no refund. |
+| BR-078 | Every physical order carries a contact phone: the address's phone for delivery, a phone entered at checkout for pickup. It is the courier's and administrator's contact. |
 
 ### 3.7 Offers
 
@@ -282,7 +286,7 @@ Every rule is numbered for traceability. `BR-` prefix.
 | ------ | ----------------------------------------------------------------------------------------- |
 | BR-100 | Any verified user may review any product; a purchase is not required.                     |
 | BR-101 | One review per user per product, editable but not stackable.                              |
-| BR-102 | Reviews backed by a real purchase display a Verified Purchase badge.                      |
+| BR-102 | Reviews backed by a real purchase display a Verified Purchase badge. A cash purchase counts only once its cash is recorded. |
 | BR-103 | WhatsApp-only products can never earn the badge, as no purchase record exists.            |
 | BR-104 | The badge is recomputed when a purchase is paid or refunded.                              |
 | BR-105 | Ratings are 1–5 integers.                                                                 |
@@ -324,6 +328,19 @@ Every rule is numbered for traceability. `BR-` prefix.
 | BR-134 | All timestamps are stored in UTC.                                                                   |
 | BR-135 | Removed by ADR-019 — there are no downloads to log.                                                 |
 
+### 3.12 Cash Payment (ADR-024)
+
+| ID     | Rule                                                                                                                                         |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| BR-140 | The customer chooses the payment method at checkout: online, or cash (on delivery, or at pickup). It is snapshotted on the order and never changes. |
+| BR-141 | Cash is allowed only when every line of the order is physical. STL-only and mixed orders are paid online first, because an emailed file cannot be taken back. |
+| BR-142 | A cash order is placed without payment and has no checkout hold; its physical lines may enter production once it is placed.                  |
+| BR-143 | The administrator records the cash once per order, at handover, in the same action and transaction that marks every live line delivered or picked up. The amount must equal the sum of live line totals. |
+| BR-144 | A refused or unreachable cash delivery goes shipped → returned → cancelled, and a pickup no-show goes ready for pickup → cancelled, with no refund because nothing was paid. Either blocks cash for that customer until an administrator clears it. |
+| BR-145 | Cash checkout is limited by admin-editable settings: on/off switch (`cash_payment_enabled`, default on), open unpaid cash orders per customer (`cash_max_open_orders`, default 1), and maximum cash order total (`cash_max_order_total`, default 10 000 cents = 100 USD). |
+| BR-146 | The platform never charges, zones or refunds shipping. Checkout and emails say "delivery fee paid to the courier on delivery".               |
+| BR-147 | After delivery or pickup the customer may confirm receipt or report a problem. Both are optional; the order completes without them.          |
+
 ---
 
 ## 4. Feature Catalogue
@@ -364,7 +381,7 @@ Complete inventory. `F-` prefix. Phase indicates build order (§28).
 | F-030 | Wishlist management                              | 1     |
 | F-031 | Review management                                | 1     |
 | F-032 | Notification centre with read/unread             | 1     |
-| F-033 | Self-service order cancellation (pre-production) | 2     |
+| F-033 | Self-service order cancellation (while every physical line is pending) | 2 |
 | F-034 | Data export (JSON)                               | 5     |
 | F-035 | Account deletion via anonymisation               | 5     |
 
@@ -375,16 +392,18 @@ Complete inventory. `F-` prefix. Phase indicates build order (§28).
 | F-040 | Mixed cart (digital + physical)                             | 2     |
 | F-041 | Quantity management with per-product caps                   | 2     |
 | F-042 | Price-change detection and confirmation at checkout         | 2     |
-| F-043 | Shipping zone selection and fee calculation                 | 2     |
+| F-043 | Removed by ADR-024 (shipping zone selection and fee)        | —     |
 | F-044 | Workshop pickup option                                      | 2     |
-| F-045 | Free-shipping threshold                                     | 2     |
+| F-045 | Removed by ADR-024 (free-shipping threshold)                | —     |
 | F-046 | Idempotent checkout                                         | 2     |
-| F-047 | Whish payment redirect and return handling                  | 4     |
+| F-047 | Online payment redirect and return handling                 | 4     |
 | F-048 | Webhook receipt with signature verification where available | 4     |
 | F-049 | Independent server-side payment verification                | 4     |
 | F-050 | Payment reconciliation for missed callbacks                 | 4     |
-| F-051 | Manual payment confirmation fallback                        | 4     |
+| F-051 | Manual online-payment confirmation fallback                 | 4     |
 | F-052 | Order confirmation with terms consent capture               | 2     |
+| F-053 | Payment method choice at checkout: online, or cash on delivery / at pickup for physical-only orders, within the cash limits | 2 |
+| F-054 | Record cash and mark delivered or picked up in one admin action | 2  |
 
 ### 4.4 Fulfillment
 
@@ -393,19 +412,20 @@ Complete inventory. `F-` prefix. Phase indicates build order (§28).
 | F-060 | Order queue with status filters and search                          | 2     |
 | F-061 | Per-line fulfillment status transitions                             | 2     |
 | F-062 | Internal admin notes on orders                                      | 2     |
-| F-063 | Delivery workflow: production → ready to ship → shipped → delivered | 2     |
-| F-064 | Pickup workflow: production → ready for pickup → picked up          | 2     |
-| F-065 | Return handling with re-ship, reprint, or refund                    | 2     |
+| F-063 | Delivery workflow: received → printing (internal) → ready → shipped → delivered | 2 |
+| F-064 | Pickup workflow: received → printing (internal) → ready for pickup → picked up  | 2 |
+| F-065 | Return handling with re-ship, reprint, refund, or cancellation of an unpaid cash line | 2 |
 | F-066 | Order cancellation by admin                                         | 2     |
-| F-067 | Estimated dispatch date calculation                                 | 2     |
+| F-067 | Estimated dispatch (ready) date calculation                         | 2     |
 | F-068 | Global accepting-orders kill switch                                 | 2     |
+| F-069 | Customer receipt confirmation ("I got it") and problem report       | 2     |
 
 ### 4.5 Refunds
 
 | ID    | Feature                                            | Phase |
 | ----- | -------------------------------------------------- | ----- |
 | F-070 | Full and partial per-line refunds                  | 2     |
-| F-071 | Shipping fee refund                                | 2     |
+| F-071 | Removed by ADR-024 (shipping fee refund)           | —     |
 | F-072 | Refund obligation tracking until settled           | 2     |
 | F-073 | Refunded STL line leaves the delivery queue        | 3     |
 | F-074 | Pending refunds admin queue                        | 2     |
@@ -454,7 +474,7 @@ F-080 to F-082 and F-084 to F-088 (STL upload, bundles, versions, downloads, dow
 | F-110 | Product CRUD, both types                    | 0     |
 | F-111 | Image upload, reorder, cover selection      | 0     |
 | F-112 | Category, material, colour management       | 0     |
-| F-113 | Shipping zone management                    | 2     |
+| F-113 | Removed by ADR-024 (shipping zone management) | —   |
 | F-114 | Typed settings editor                       | 0     |
 | F-116 | User management                             | 0     |
 | F-117 | Audit log viewer                            | 5     |
@@ -464,7 +484,7 @@ F-080 to F-082 and F-084 to F-088 (STL upload, bundles, versions, downloads, dow
 
 | ID    | Feature                                                  | Phase |
 | ----- | -------------------------------------------------------- | ----- |
-| F-120 | Revenue by stream (physical vs STL), attributed per line | 2     |
+| F-120 | Revenue by stream (physical vs STL), attributed per line; cash counted when recorded | 2 |
 | F-121 | Recent purchases                                         | 2     |
 | F-122 | Pending offers count                                     | 3     |
 | F-123 | Wishlist statistics and most-wishlisted                  | 1     |
@@ -499,7 +519,7 @@ F-080 to F-082 and F-084 to F-088 (STL upload, bundles, versions, downloads, dow
 4. Adds to cart, or submits an offer if negotiating.
 5. Proceeds to checkout — no address required for a digital-only order.
 6. Accepts terms including all-sales-final for digital goods.
-7. Redirected to Whish, completes payment.
+7. Redirected to the online payment provider, completes payment.
 8. System independently verifies the payment.
 9. The STL line enters the admin's delivery queue; confirmation email and notification sent, saying the file will be emailed.
 10. The administrator emails the file from their own drive to the customer's account email and marks the line delivered.
@@ -509,15 +529,15 @@ F-080 to F-082 and F-084 to F-088 (STL upload, bundles, versions, downloads, dow
 
 1. Visitor browses the physical catalogue.
 2. Opens a product configured Online Only or Both.
-3. Sees price, production lead time, and estimated dispatch.
+3. Sees price, production lead time, and estimated ready date.
 4. Registers and verifies, adds to cart with quantity within the cap.
-5. At checkout chooses delivery (with address and zone fee) or free workshop pickup.
+5. At checkout chooses delivery (with a saved address; "delivery fee paid to the courier on delivery") or free workshop pickup (with a contact phone), and chooses to pay online.
 6. Server recomputes all totals; customer accepts terms.
-7. Pays via Whish; system verifies independently.
+7. Pays online; system verifies independently.
 8. Order enters the admin queue.
-9. Admin marks in production → ready → shipped or ready for pickup.
-10. Customer receives status emails and notifications throughout.
-11. Admin marks delivered or picked up; order completes.
+9. Admin marks start printing (internal, not shown to the customer) → ready → shipped, or → ready for pickup.
+10. Customer receives emails and notifications at ready ("your order is finished"), shipped or ready for pickup, and delivered or picked up.
+11. Admin marks delivered or picked up; order completes. The customer may press "I got it" or "Report a problem" from the order page; neither is required.
 
 ### 5.3 Order via WhatsApp
 
@@ -548,12 +568,21 @@ F-080 to F-082 and F-084 to F-088 (STL upload, bundles, versions, downloads, dow
 ### 5.6 Mixed Order with Partial Refund
 
 1. Customer's cart contains one STL file and one physical product.
-2. Single payment covers both; delivery address required for the physical line.
-3. On verification: the STL line enters the delivery queue; physical line enters production.
+2. A single online payment covers both (a mixed order cannot be paid in cash); delivery address required for the physical line.
+3. On verification: the STL line enters the delivery queue; the physical line stays `pending` and the admin marks start printing.
 4. A printer failure makes the physical item unproducible.
-5. Admin cancels that line and issues a partial refund covering it and shipping.
+5. Admin cancels that line and issues a partial refund covering it.
 6. The STL line is unaffected; the administrator still sends (or has already sent) the file.
 7. Order status becomes Partially Refunded; the refund is tracked until settled.
+
+### 5.7 Purchase a Physical Product with Cash on Delivery
+
+1. A verified customer's cart holds only physical products.
+2. At checkout they choose delivery or pickup and pay in cash; the cash limits apply (BR-145).
+3. The order is placed unpaid, with no checkout hold; confirmation email says the order total is paid in cash on delivery (or at pickup) and the delivery fee is paid to the courier.
+4. The administrator may call the contact phone, then marks start printing → ready → shipped (or ready for pickup), notifying the customer as in 5.2.
+5. The courier delivers and collects the cash; the administrator records the cash and marks every line delivered in one action. The payment becomes paid and the order completes.
+6. If the customer refuses or cannot be reached, the line goes shipped → returned → cancelled with no refund, and the customer can no longer choose cash until an administrator allows it again.
 
 ---
 
@@ -565,7 +594,7 @@ F-080 to F-082 and F-084 to F-088 (STL upload, bundles, versions, downloads, dow
 
 **Common to both types:** name, description, category, price, multiple images, visibility flag, featured flag, availability toggle, SEO metadata (title, description, OG image, slug). Catalogue text lives in plain columns on the owning table — V1 is English-only, see ADR-016 and §17.2.
 
-**Physical only:** purchase mode, material, colour, dimensions, production lead time (days), batch size, maximum quantity per line, weight (optional, reserved for future weight-based shipping).
+**Physical only:** purchase mode, material, colour, dimensions, production lead time (days), batch size, maximum quantity per line, weight (optional; unused since the courier prices delivery, ADR-024).
 
 Availability is common to both types (owner decision, 2026-10-07): with manual STL delivery (ADR-019) the administrator must be able to pause STL sales.
 
@@ -626,23 +655,25 @@ Executed inside a single transaction:
 4. Validate every line: product exists, not deleted, visible, available, purchase mode permits online sale.
 5. Re-verify STL ownership (a paid, unrefunded STL line); silently drop anything acquired since adding.
 6. Validate quantities against current caps.
-7. Determine fulfillment method; require address for delivery.
-8. Resolve the shipping zone and rate; apply free-shipping threshold if configured.
-9. **Recompute all totals server-side.**
-10. Create order, order items with snapshots, and a pending payment.
+7. Determine fulfillment method; require an address for delivery and a contact phone for pickup (BR-078).
+8. Validate the payment method: cash only if every line is physical, cash is enabled, the customer is not blocked from cash, has fewer than `cash_max_open_orders` unpaid, uncancelled cash orders, and the total is within `cash_max_order_total` (BR-141, BR-145).
+9. **Recompute all totals server-side.** There is no shipping component.
+10. Create order and order items with snapshots; for an online order also create a pending payment. A cash order gets no payment until the cash is recorded.
 11. Compute the estimated dispatch date.
 12. Clear the cart.
-13. Record terms consent with timestamp.
+13. Record terms consent with timestamp, including the cash terms for a cash order.
 
 ### 7.4 Conditional Requirements
 
-| Cart contents      | Address      | Shipping fee | Fulfillment method |
-| ------------------ | ------------ | ------------ | ------------------ |
-| STL only           | Not required | None         | None (null)        |
-| Physical, delivery | Required     | Zone rate    | Delivery           |
-| Physical, pickup   | Not required | Free         | Pickup             |
-| Mixed, delivery    | Required     | Zone rate    | Delivery           |
-| Mixed, pickup      | Not required | Free         | Pickup             |
+| Cart contents      | Address      | Contact phone   | Fulfillment method | Payment method  |
+| ------------------ | ------------ | --------------- | ------------------ | --------------- |
+| STL only           | Not required | Not required    | None (null)        | Online          |
+| Physical, delivery | Required     | From address    | Delivery           | Online or cash  |
+| Physical, pickup   | Not required | Entered         | Pickup             | Online or cash  |
+| Mixed, delivery    | Required     | From address    | Delivery           | Online          |
+| Mixed, pickup      | Not required | Entered         | Pickup             | Online          |
+
+No row carries a shipping fee: the courier sets and collects it on delivery (ADR-024).
 
 ### 7.5 Idempotency
 
@@ -654,7 +685,7 @@ Checkout requires an `Idempotency-Key` header. A repeated key with a matching re
 
 ### 8.1 Order Composition
 
-An order carries: order number, customer, source (cart or offer), derived status, fulfillment method, monetary breakdown (subtotal, shipping, tax=0, total, currency), address snapshot, shipping zone and rate snapshot, customer note, internal admin note, estimated dispatch date, and lifecycle timestamps.
+An order carries: order number, customer, source (cart or offer), derived status, fulfillment method, payment method (online or cash), monetary breakdown (subtotal, tax=0, total, currency), address snapshot, contact phone snapshot, customer note, internal admin note, estimated dispatch date, and lifecycle timestamps.
 
 Each line carries: product reference, type, name snapshot, image snapshot, unit price, quantity, line total, its own fulfillment status, lead time and batch size snapshots, and an optional offer reference.
 
@@ -664,31 +695,37 @@ A mixed order can have its physical half cancelled while the digital half still 
 
 ### 8.3 Delivery Workflow
 
-`pending` → `in_production` → `ready_to_ship` → `shipped` → `delivered`
+`pending` (received) → `in_production` (start printing) → `ready_to_ship` (finished) → `shipped` → `delivered`
 
-Exits: cancellation before production (customer or admin) or during production (admin only, creating a refund obligation). From `shipped`, a failed delivery moves to `returned`, which may then be re-shipped, reprinted, or refunded. From `delivered`, an upheld claim moves to `refunded`.
+`in_production` is internal: the customer sees it as "Received" and gets no email or notification for it. The customer is emailed and notified at `ready_to_ship` ("your order is finished"), `shipped` and `delivered`.
+
+Exits: cancellation while `pending` (customer or admin) or later before shipping (admin only; a paid line creates a refund obligation, an unpaid cash line does not). From `shipped`, a failed or refused delivery moves to `returned`, which may then be re-shipped, reprinted, refunded (paid line), or cancelled (unpaid cash line, no refund). From `delivered`, an upheld claim on a paid line moves to `refunded`.
 
 ### 8.4 Pickup Workflow
 
 `pending` → `in_production` → `ready_for_pickup` → `picked_up`
 
-Payment has already occurred online, so no money changes hands at handover. The workshop address and hours are configurable settings displayed at checkout and in the ready-for-pickup notification.
+An online order was paid before production. A cash order is paid at the counter: the administrator records the cash and marks the lines picked up in one action (§9.8). A customer who never collects is cancelled by the administrator from `ready_for_pickup`. The workshop address and hours are configurable settings displayed at checkout and in the ready-for-pickup notification.
 
 ### 8.5 The Cancellation Cutoff
 
-Entering production is the boundary. Before it, the customer may self-cancel. After it, cancellation requires admin action because material and machine time have been committed.
+"Start printing" (`pending → in_production`) is the boundary. Before it, the customer may self-cancel the order's physical lines. After it, cancellation requires admin action because material and machine time have been committed. The administrator marks it when work begins.
 
 This transition and a customer self-cancellation contend for the same row lock, so exactly one wins — the race cannot leave the order in an ambiguous state.
 
 ### 8.6 Dispatch Estimation
 
-`dispatch_days = max over physical lines of (lead_time_days × ceil(quantity ÷ batch_size))`
+`dispatch_days = max over physical lines of (lead_time_days × ceil(quantity ÷ batch_size))`, counted from when the order is placed, for both payment methods. Customers see it as the estimated ready date.
 
 Batch size matters: if one print takes six hours and four fit on the bed, ten units is three cycles, not ten. A naive `max(lead_time)` would systematically understate multi-unit orders — precisely the orders where a missed date causes the most damage.
 
 ### 8.7 Admin Capabilities
 
-View and filter the queue; inspect customer and order detail; transition line statuses; add internal notes (never customer-visible); cancel lines or orders; issue refunds; view the pending-refund obligations queue; work the STL delivery queue (§10.2).
+View and filter the queue, including a "cash due" filter for unpaid cash orders; inspect customer and order detail; transition line statuses; record cash at handover (§9.8); add internal notes (never customer-visible); cancel lines or orders; issue refunds; view the pending-refund obligations queue; work the STL delivery queue (§10.2); clear a customer's cash block.
+
+### 8.8 Receipt Confirmation and Problem Reports
+
+The delivered and picked-up emails have "I got it" and "Report a problem" buttons. They only open the order page; the action itself is a signed-in request there, never a link that changes state, because email scanners follow links. "I got it" records `receipt_confirmed_at` on the delivered lines. "Report a problem" records `problem_reported_at` and creates a contact message linked to the order for the administrator. Neither changes a line's state, and the order completes without them.
 
 ---
 
@@ -696,7 +733,7 @@ View and filter the queue; inspect customer and order detail; transition line st
 
 ### 9.1 Provider Abstraction
 
-All payment interaction sits behind a provider interface: create payment, query status, issue refund (where supported), verify webhook signature (where supported). Whish is the first adapter; a mock adapter enables full development and testing without credentials. Additional providers require no changes outside their adapter.
+All online payment interaction sits behind a provider interface: create payment, query status, issue refund (where supported), verify webhook signature (where supported). Which provider — Whish, a card gateway, or both — is an open decision (§30.4); a mock adapter enables full development and testing without credentials. Additional providers require no changes outside their adapter. Cash is not a provider adapter: it is recorded by the administrator (§9.8).
 
 ### 9.2 Verification — the Critical Path
 
@@ -709,34 +746,46 @@ The webhook endpoint is public. If it were trusted, a forged callback would get 
 3. **Verify the signature** if the provider offers one. Failure rejects and alerts.
 4. **Independently query** the provider for transaction status, holding no database locks.
 5. **Confirm the amount matches** the order total exactly. A lesser amount is never treated as paid.
-6. **Apply the result** in a second transaction: mark paid, move STL lines to `awaiting_delivery`, move physical lines to production, close any live offer, recompute the order projection, write audit and history, enqueue emails.
+6. **Apply the result** in a second transaction: mark paid, move STL lines to `awaiting_delivery`, leave physical lines `pending` and eligible for production, close any live offer, recompute the order projection, write audit and history, enqueue emails.
 
 If the provider offers no status query, the event is queued for **manual admin confirmation** against the provider dashboard. Slower, but a forged callback still yields nothing.
 
 ### 9.3 Missed Callbacks
 
-A scheduled reconciliation job queries the provider for any payment stuck in processing beyond a threshold. Without it, a lost callback leaves a customer charged with nothing delivered and no recovery path — the single worst failure mode in the system.
+A scheduled reconciliation job queries the provider for any online payment stuck in processing beyond a threshold. Without it, a lost callback leaves a customer charged with nothing delivered and no recovery path — the single worst failure mode in the system.
 
 ### 9.4 One Live Payment Per Order
 
-A database constraint permits only one payment in pending, processing, or paid state per order. A retry requires the prior attempt to have failed or expired, which is what the checkout-release job provides.
+A database constraint permits only one payment in pending, processing, or paid state per order. A retry requires the prior attempt to have failed or expired, which is what the checkout-release job provides. A cash order has no payment until its single cash payment is recorded, so it never has a second.
 
 ### 9.5 Refund Policy
 
 | Product type | Policy                                                                                                                                                                          |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | STL          | All sales final. Consent recorded at checkout with timestamp.                                                                                                                   |
-| Physical     | Admin discretion on a published baseline: full refund before production; damaged, wrong, or undelivered resolved by replacement or refund with evidence within a stated window. |
+| Physical     | Admin discretion on a published baseline: full refund before production; damaged, wrong, or undelivered resolved by replacement or refund with evidence within a stated window. A cash order is refundable only after its cash is recorded. |
 
 ### 9.6 Refund Execution
 
-Refunds may cover any subset of lines plus shipping. Each creates a refund record with amount, currency, reason, requester, approver, method, and settlement state. Digital lines in a refund become `refunded`; one not yet sent leaves the delivery queue.
+Refunds may cover any subset of lines; there is no shipping component. Each creates a refund record with amount, currency, reason, requester, approver, method, and settlement state. Digital lines in a refund become `refunded`; one not yet sent leaves the delivery queue.
 
-The record remains a **tracked pending obligation** until settled. If the provider has no refund API, settlement is a manual transfer — exactly the kind of task that gets forgotten without a queue driving it.
+The record remains a **tracked pending obligation** until settled. If the provider has no refund API, settlement is a manual transfer — exactly the kind of task that gets forgotten without a queue driving it. A cash payment is always refunded with method `manual`, up to the cash recorded.
 
 ### 9.7 Chargeback Handling
 
-A confirmed reversal marks the affected STL lines refunded (removing any not yet sent from the delivery queue) and audits the event. A file already emailed cannot be recalled; the mitigations are the recorded consent and the delivery record as evidence.
+A confirmed reversal marks the affected STL lines refunded (removing any not yet sent from the delivery queue) and audits the event. A file already emailed cannot be recalled; the mitigations are the recorded consent and the delivery record as evidence. Chargebacks apply to online payments only.
+
+### 9.8 Cash on Delivery and Cash at Pickup
+
+Decided in ADR-024.
+
+1. **Eligibility.** Cash is offered only when every line is physical, `cash_payment_enabled` is on, the customer is not blocked from cash, has no other unpaid, uncancelled cash order (`cash_max_open_orders`, default 1), and the total is at most `cash_max_order_total` (default 10 000 cents). Checked at checkout under the cart lock, which serialises one customer's checkouts.
+2. **Placement.** The order is created without a payment row and without a checkout hold. Stale-checkout release, reconciliation and payment retry never apply to it.
+3. **Handover — one action, one transaction, once per order.** Every live (non-cancelled) line must be `shipped` (delivery) or `ready_for_pickup` (pickup). The administrator enters the cash collected, which must equal the sum of live line totals. The action locks the order and its lines, marks them all `delivered` or `picked_up`, creates one `payments` row (provider `cash`, status `paid`, amount, recording administrator, `verified_at`), recomputes the order status, and writes history, audit, the in-app notification and the delivered / picked-up email with the cash receipt.
+4. **When to record.** When the courier reports the order delivered and paid. Settling up with the courier afterwards is outside the platform.
+5. **Partial acceptance.** A line the customer refused is cancelled first (`returned → cancelled`); the amount due drops and the handover covers the rest.
+6. **Refusal.** A refused or unreachable delivery goes `shipped → returned → cancelled`; a pickup no-show goes `ready_for_pickup → cancelled`. No refund obligation is created, and `users.cash_payment_blocked_at` is set so the customer is offered only online payment until an administrator clears it.
+7. **Proof.** No external input can create a cash payment; recording it is the documented manual admin confirmation of BR-054.
 
 ---
 
@@ -812,7 +861,7 @@ Any verified user may review any product without purchasing. This is a deliberat
 
 **Guardrails:** one review per user per product (editable), Verified Purchase badge where a real paid, unrefunded purchase exists, admin hide/restore, rate limiting, link and profanity filtering.
 
-The badge is **recomputed** when a purchase is paid or refunded — a cached flag written once would leave a refunded buyer displaying credibility they no longer hold.
+The badge is **recomputed** when a purchase is paid or refunded — a cached flag written once would leave a refunded buyer displaying credibility they no longer hold. A cash purchase is paid when its cash is recorded at handover; an unpaid or refused cash order never earns the badge.
 
 WhatsApp-only products can never earn the badge, since no purchase record exists. This is a known and accepted bias.
 
@@ -826,7 +875,7 @@ Verified users add and remove products. The admin sees total wishlist counts and
 
 ### 12.4 Notifications
 
-An in-app notification centre complements email. Types include offer updates, purchase confirmation, STL file sent, order status changes, and account events. Each carries a type, JSON payload, and read state.
+An in-app notification centre complements email. Types include offer updates, purchase confirmation, STL file sent, customer-visible order status changes (never "start printing"), and account events. Each carries a type, JSON payload, and read state.
 
 ---
 
@@ -880,11 +929,11 @@ Passwords hashed with Argon2id. Tokens delivered as httpOnly, Secure, SameSite c
 
 ### 14.4 Addresses
 
-Multiple saved addresses with a default. Fields: label, recipient name, phone, governorate, city, area, street, and **landmark notes** — Lebanese addressing is landmark-based, so free-text notes are functionally required rather than decorative.
+Multiple saved addresses with a default. Fields: label, recipient name, Lebanese phone number, governorate, city, area, street, and **landmark notes** — Lebanese addressing is landmark-based, so free-text notes are functionally required rather than decorative. The phone is the courier's contact for delivery and is snapshotted onto the order (BR-078).
 
 ### 14.5 Data Rights
 
-**Export:** JSON containing profile, addresses, orders (with STL delivery records), reviews, and offers.
+**Export:** JSON containing profile, addresses, orders (with payment method and STL delivery records), reviews, and offers.
 
 **Deletion:** implemented as anonymisation. Login is disabled and personal data stripped, but financial and delivery records are retained in anonymised form — required for accounting and referential integrity. Deletion is blocked while orders are open or refunds unsettled, since fulfilling an order requires the name and address.
 
@@ -898,21 +947,21 @@ Product CRUD for both types; image upload, reorder, and cover selection; categor
 
 ### 15.2 Order Management
 
-Filterable queue by status, date, customer, and fulfillment method; order detail with customer information; per-line status transitions; internal notes; cancellation; refund issuance.
+Filterable queue by status, date, customer, fulfillment method, payment method, and cash due; order detail with customer information and contact phone; per-line status transitions; cash handover recording; internal notes; cancellation; refund issuance.
 
 ### 15.3 Queues
 
-STL lines awaiting delivery; Bring Your Idea pipeline; contact messages; pending offers; pending refund obligations; payments requiring manual confirmation; review moderation.
+STL lines awaiting delivery; cash orders awaiting handover; Bring Your Idea pipeline; contact messages (including problem reports linked to orders); pending offers; pending refund obligations; payments requiring manual confirmation; review moderation.
 
 ### 15.4 Settings
 
-Typed, admin-editable configuration with audit trail. At minimum: accepting-orders kill switch, offer response window, offer checkout window, rejection cooldown, minimum offer percentage, checkout hold period, unverified purge period, free-shipping threshold, pickup address and hours, WhatsApp number.
+Typed, admin-editable configuration with audit trail. At minimum: accepting-orders kill switch, offer response window, offer checkout window, rejection cooldown, minimum offer percentage, checkout hold period, unverified purge period, cash payment switch, maximum open cash orders per customer, maximum cash order total, pickup address and hours, WhatsApp number.
 
 These are settings rather than constants specifically so operational changes never require a deployment.
 
 ### 15.5 Analytics
 
-**Revenue must be attributed per line item**, not per order — a mixed order would otherwise corrupt the STL revenue figure the business relies on.
+**Revenue must be attributed per line item**, not per order — a mixed order would otherwise corrupt the STL revenue figure the business relies on. Revenue is paid line amounts minus refunds; there is no shipping revenue. Cash revenue counts from the moment the cash is recorded; an unpaid cash order is not revenue.
 
 Reports: revenue by stream, recent purchases, customer statistics, top rated products, most wishlisted, best-selling STL, STL lines awaiting delivery, pending offers, Bring Your Idea funnel conversion.
 
@@ -929,13 +978,13 @@ There is no inventory dashboard, as products are made on demand.
 | Registration verification   | Customer  |
 | Verification resend         | Customer  |
 | Password reset              | Customer  |
-| Order confirmation          | Customer  |
-| Payment receipt             | Customer  |
+| Order confirmation (online, or "pay in cash on delivery / at pickup") | Customer |
+| Payment receipt (online)    | Customer  |
 | STL file sent               | Customer  |
-| Order in production         | Customer  |
+| Order finished (ready)      | Customer  |
 | Order shipped               | Customer  |
 | Ready for pickup            | Customer  |
-| Order delivered / picked up | Customer  |
+| Order delivered / picked up, with the cash receipt for a cash order and "I got it" / "Report a problem" buttons | Customer |
 | Order cancelled             | Customer  |
 | Refund issued               | Customer  |
 | Offer countered             | Customer  |
@@ -943,7 +992,7 @@ There is no inventory dashboard, as products are made on demand.
 | Offer rejected              | Customer  |
 | Offer expiring soon         | Customer  |
 
-WhatsApp-only orders generate no system email — those conversations happen entirely off-platform.
+WhatsApp-only orders generate no system email — those conversations happen entirely off-platform. "Start printing" sends nothing; it is internal. Every email about a delivery order says "delivery fee paid to the courier on delivery".
 
 ### 16.2 Delivery Architecture
 
@@ -1001,8 +1050,8 @@ Dependencies point inward only. Domain has no framework or database imports.
 | Identity       | Users, addresses, sessions, tokens                                  |
 | Catalog        | Products, categories, materials, colours, images                    |
 | Ordering       | Cart, orders, order items, status history                           |
-| Payments       | Payment attempts, webhook events, refunds                           |
-| Fulfillment    | Shipping zones, fulfillment transitions, STL delivery               |
+| Payments       | Payment attempts (online and recorded cash), webhook events, refunds |
+| Fulfillment    | Fulfillment transitions, cash handover, STL delivery — no tables of its own since ADR-024; line state lives on order items |
 | Negotiation    | Offers, offer rounds                                                |
 | Engagement     | Reviews, wishlist, notifications, custom requests, contact messages |
 | Platform       | Settings, audit log, email outbox, idempotency records              |
@@ -1013,7 +1062,7 @@ Cross-context access goes through service interfaces. Direct joins into another 
 
 | Abstraction              | Purpose                                               |
 | ------------------------ | ----------------------------------------------------- |
-| Payment provider port    | Whish today, any provider later, mock for development |
+| Payment provider port    | Online provider still to be chosen (§30.4), mock for development |
 | Storage port             | Local filesystem today, S3-compatible later           |
 | Email provider port      | Provider-agnostic transactional delivery              |
 | Captcha port             | Provider-agnostic verification                        |
@@ -1033,7 +1082,7 @@ Cross-context access goes through service interfaces. Direct joins into another 
 
 **Payments:** Payment, WebhookEvent, Refund, RefundItem
 
-**Fulfillment:** ShippingZone
+**Fulfillment:** none of its own (ShippingZone removed by ADR-024)
 
 **Negotiation:** Offer, OfferRound
 
@@ -1048,7 +1097,7 @@ Numbered for traceability. `INV-` prefix.
 **Money**
 
 * INV-01 — All monetary values are integer cents with an explicit currency code.
-* INV-02 — Prices, shipping, and totals are always recomputed server-side.
+* INV-02 — Prices and totals are always recomputed server-side; no order carries a shipping amount.
 * INV-03 — Order and line snapshots are immutable after placement.
 
 **STL delivery**
@@ -1083,6 +1132,11 @@ Numbered for traceability. `INV-` prefix.
 * INV-19 — At most one live payment per order.
 * INV-20 — Order status is a projection, never assigned directly.
 
+**Cash payment**
+
+* INV-21 — A cash order has only physical lines.
+* INV-22 — A cash payment is created only by the handover action, in the same transaction that marks every live line delivered or picked up, for exactly the sum of live line totals; at most one per order.
+
 ---
 
 ## 20. State Machines
@@ -1096,14 +1150,18 @@ pending ──> processing ──> paid ──> partially_refunded ──> refun
    └──> expired  └──> expired
 ```
 
-`paid` is reachable only through independent server-side verification.
+For an online payment, `paid` is reachable only through independent server-side verification. A cash payment is never `pending` or `processing`: it is created directly as `paid` by the handover action (§9.8), and may then be refunded like any other.
 
 ### 20.2 Order Status (derived projection)
 
 ```
-payment pending or processing        → pending_payment
-payment failed or expired            → cancelled
-payment paid:
+online order:
+    payment pending or processing    → pending_payment
+    payment failed or expired        → cancelled
+cash order, no payment yet:
+    all lines cancelled              → cancelled
+    otherwise                        → in_progress
+payment paid (online or cash):
     all lines cancelled              → cancelled
     all lines refunded               → refunded
     any refund present               → partially_refunded
@@ -1111,7 +1169,7 @@ payment paid:
     otherwise                        → in_progress
 ```
 
-Recomputed within the same transaction as any payment or line change.
+Recomputed within the same transaction as any payment or line change. An unpaid cash order is `in_progress`; the API exposes a derived `payment_due` flag so the customer and the "cash due" admin filter can tell it apart.
 
 ### 20.3 Order Line — Digital
 
@@ -1126,20 +1184,28 @@ pending ──> awaiting_delivery ──> delivered
 ### 20.4 Order Line — Physical (Delivery)
 
 ```
-pending ──> in_production ──> ready_to_ship ──> shipped ──> delivered ──> refunded
-   │             │                    ↑            │
-   └─> cancelled └─> cancelled        └── returned ┘
-                                          └──> in_production (reprint)
-                                          └──> refunded
+pending ──> in_production ──> ready_to_ship ──> shipped ──> delivered ──> refunded (paid)
+   │             │                  │              │
+   │             │                  │              └──> returned ──> shipped (re-ship)
+   │             │                  │                       ├──> in_production (reprint)
+   │             │                  │                       ├──> refunded (paid line)
+   │             │                  │                       └──> cancelled (unpaid cash line)
+   └─> cancelled └─> cancelled      └─> cancelled
+       (customer      (admin)           (admin)
+        or admin)
 ```
 
-`returned` is deliberately not terminal.
+`returned` is deliberately not terminal. `in_production` ("start printing") is internal and shown to the customer as "Received". Cancelling a paid line creates a refund obligation; cancelling an unpaid cash line does not. For a cash order, `shipped → delivered` happens only through the handover action (§9.8), for all live lines at once.
 
 ### 20.5 Order Line — Physical (Pickup)
 
 ```
-pending ──> in_production ──> ready_for_pickup ──> picked_up ──> refunded
+pending ──> in_production ──> ready_for_pickup ──> picked_up ──> refunded (paid)
+   │             │                   │
+   └─> cancelled └─> cancelled       └─> cancelled (admin; no-show)
 ```
+
+For a cash order, `ready_for_pickup → picked_up` happens only through the handover action. A cash no-show (`ready_for_pickup → cancelled`) and a cash refusal (`returned → cancelled`) set the customer's cash block (BR-144).
 
 ### 20.6 Offer
 
@@ -1197,6 +1263,8 @@ Application checks provide good error messages; **database constraints provide t
 | Product type field check                          | Type integrity           |
 | STL line quantity = 1                             | INV-08                   |
 | Delivery requires address                         | Fulfillability           |
+| Physical order requires contact phone             | BR-078                   |
+| Cash payment requires recording administrator     | INV-22                   |
 | Rating between 1 and 5                            | BR-105                   |
 | Non-negative money on every monetary column       | INV-01                   |
 
@@ -1214,6 +1282,7 @@ Catalogue indexes are **partial**, filtered on non-deleted and visible rows — 
 | GIN trigram on name                             | Typo tolerance, autocomplete |
 | (user, placed) on orders                        | Customer order history       |
 | (status, placed) on orders                      | Admin queue                  |
+| (placed) partial on unpaid cash orders          | Cash-due filter              |
 | (fulfillment status, order) partial physical    | Fulfillment queue            |
 | (placed) partial STL lines awaiting delivery    | STL delivery queue           |
 | (status, responds_by) on offers                 | Expiry job                   |
@@ -1264,12 +1333,16 @@ Every error carries a **stable machine-readable code**. The client renders its o
 | Email not verified                         | 403    | EMAIL_VERIFICATION_REQUIRED                                    |
 | Not owner or not admin                     | 404    | NOT_FOUND (deliberately not 403 — avoids confirming existence) |
 | Already owned                              | 409    | PRODUCT_ALREADY_OWNED                                          |
+| Line or order not in a state for the action | 409   | INVALID_STATE_TRANSITION                                       |
 | Live offer exists                          | 409    | OFFER_ALREADY_ACTIVE                                           |
 | Idempotency key reused with different body | 409    | IDEMPOTENCY_KEY_CONFLICT                                       |
 | Offer checkout window elapsed              | 410    | OFFER_CHECKOUT_EXPIRED                                         |
 | Quantity over cap                          | 422    | QUANTITY_EXCEEDS_LIMIT                                         |
 | Offer below floor                          | 422    | OFFER_BELOW_MINIMUM                                            |
 | Product not purchasable                    | 422    | PRODUCT_NOT_PURCHASABLE                                        |
+| Cash chosen for an order with an STL line, or cash disabled or blocked | 422 | PAYMENT_METHOD_NOT_ALLOWED                  |
+| Open cash orders or cash total over limit  | 422    | CASH_PAYMENT_LIMIT_REACHED                                     |
+| Cash entered differs from the amount due   | 422    | CASH_AMOUNT_MISMATCH                                           |
 | Cooldown active                            | 422    | OFFER_COOLDOWN_ACTIVE                                          |
 | Rate limited                               | 429    | RATE_LIMITED                                                   |
 | Orders paused                              | 503    | ORDERS_PAUSED                                                  |
@@ -1280,11 +1353,11 @@ Every error carries a **stable machine-readable code**. The client renders its o
 
 **Authentication:** register, login, logout, refresh, verify email, resend verification, password reset request and confirm.
 
-**Customer:** profile, addresses, orders (including STL delivery status), order cancellation, cart operations, checkout, offers (create, counter, accept, withdraw, checkout), wishlist, reviews, notifications, data export, account deletion.
+**Customer:** profile, addresses, orders (including STL delivery status and payment due), order cancellation, receipt confirmation and problem report, cart operations, checkout, offers (create, counter, accept, withdraw, checkout), wishlist, reviews, notifications, data export, account deletion.
 
-**Admin:** product CRUD, image management, STL delivery queue, categories, materials, colours, shipping zones, order queue and transitions, refunds, offer management, custom request pipeline, contact messages, review moderation, settings, analytics, payment reconciliation.
+**Admin:** product CRUD, image management, STL delivery queue, categories, materials, colours, order queue and transitions, cash handover, customer cash block, refunds, offer management, custom request pipeline, contact messages, review moderation, settings, analytics, payment reconciliation.
 
-**Webhook:** payment provider callback — public, IP-allowlisted, signature-verified where available.
+**Webhook:** online payment provider callback (`/api/v1/webhooks/payments/{provider}`) — public, IP-allowlisted, signature-verified where available.
 
 Admin routes are mounted on a separate router with separate authentication and rate limits. Sharing a namespace with public routes is how authorization mistakes happen.
 
@@ -1296,8 +1369,8 @@ Admin routes are mounted on a separate router with separate authentication and r
 | --------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `dispatch_outbox`           | 1 min   | Delivers queued email with backoff. Without it, verification emails are lost and users are locked out entirely.                                              |
 | `expire_offers`             | 5 min   | Expires offers whose turn deadline passed. Without it, negotiations never close.                                                                             |
-| `release_stale_checkouts`   | 5 min   | Cancels unpaid orders past hold. Without it, the one-live-payment constraint permanently blocks retry.                                                       |
-| `reconcile_payments`        | 15 min  | Queries the provider for stuck payments. **Most important job in the system** — without it a lost callback leaves a customer charged with nothing delivered. |
+| `release_stale_checkouts`   | 5 min   | Cancels unpaid online orders past hold; never touches cash orders. Without it, the one-live-payment constraint permanently blocks retry.                     |
+| `reconcile_payments`        | 15 min  | Queries the provider for stuck online payments. **Most important job in the system** — without it a lost callback leaves a customer charged with nothing delivered. |
 | `purge_unverified_accounts` | Daily   | Removes never-verified accounts.                                                                                                                             |
 | `purge_expired_attachments` | Daily   | Deletes expired reference images from disk and database.                                                                                                     |
 | `reap_orphan_files`         | Daily   | Reconciles filesystem against database. Filesystem writes are not transactional with Postgres, so orphans occur.                                             |
@@ -1323,7 +1396,7 @@ None on the server (ADR-019). The STL files live on the administrator's own driv
 
 ### 24.4 Secrets
 
-Never committed. Environment file with restricted permissions or Docker secrets. Required: database URL, Redis URL, JWT signing key, CSRF secret, IP hash salt, Whish channel and secret, webhook IP allowlist, email provider key, captcha secret, Sentry DSN, backup repository URL and encryption key.
+Never committed. Environment file with restricted permissions or Docker secrets. Required: database URL, Redis URL, JWT signing key, CSRF secret, IP hash salt, online payment provider credentials, webhook IP allowlist, email provider key, captcha secret, Sentry DSN, backup repository URL and encryption key.
 
 **The backup encryption key must also be stored off the server.** An encrypted backup whose only key lives on the failed host is not a backup.
 
@@ -1393,7 +1466,7 @@ Lint, type check, test, migration reversibility check, image build, deployment w
 | SEC-16 | Files stored outside the web root with generated names                    |
 | SEC-17 | STL files never stored on or served by the platform (ADR-019)             |
 | SEC-18 | Webhook signature verification where available                            |
-| SEC-19 | Independent server-side payment verification always                       |
+| SEC-19 | Independent server-side verification of every online payment; cash recorded only by an administrator at handover |
 | SEC-20 | Webhook idempotency by unique event identifier                            |
 | SEC-21 | Server-side price authority; client amounts never trusted                 |
 | SEC-22 | Output encoding and sanitisation of all user content                      |
@@ -1415,9 +1488,9 @@ Lint, type check, test, migration reversibility check, image build, deployment w
 | **Unit**         | State machine transitions including illegal edges, money arithmetic, dispatch estimation                                                                                 |
 | **Integration**  | Real PostgreSQL. **Every constraint asserted by attempting to violate it.** A mock or SQLite asserts nothing, because the invariants live in partial indexes and checks |
 | **Contract**     | Payment adapter against a mock implementing every verification branch, including the no-status-API worst case                                                           |
-| **End-to-end**   | Cart checkout through payment and STL delivery queue to delivered; offer through acceptance, one-time checkout, and payment; mixed order through partial refund         |
-| **Concurrency**  | Parallel double-checkout (including the same STL twice), duplicate webhooks, self-cancel racing production start, refund racing mark-delivered, concurrent offer submission |
-| **Security**     | IDOR sweep across every identified route, unverified-email write attempts, marking another customer's line delivered, price tampering                                                |
+| **End-to-end**   | Cart checkout through payment and STL delivery queue to delivered; offer through acceptance, one-time checkout, and payment; mixed order through partial refund; cash order through handover to completed; cash order refused (returned → cancelled, no refund, cash blocked) |
+| **Concurrency**  | Parallel double-checkout (including the same STL twice, and two cash checkouts against the one-open-cash-order limit), duplicate webhooks, self-cancel racing start printing, refund racing mark-delivered, two admins recording the same cash handover, cash handover racing an admin cancel, concurrent offer submission |
+| **Security**     | IDOR sweep across every identified route, unverified-email write attempts, marking another customer's line delivered, confirming receipt on another customer's order, price tampering, cash chosen for an order with an STL line |
 
 **Mandatory coverage:** the mixed-order partial-refund path, identified in audit as the most bug-prone area in the system.
 
@@ -1425,16 +1498,16 @@ Lint, type check, test, migration reversibility check, image build, deployment w
 
 ## 28. Build Phases
 
-| Phase                 | Contents                                                                                                    | Blocked by Whish? |
-| --------------------- | ----------------------------------------------------------------------------------------------------------- | ----------------- |
-| **0 — Foundation**    | Migrations, auth, verification, i18n, admin shell, catalogue CRUD, search, settings, outbox, jobs           | No                |
-| **1 — Storefront**    | Public catalogue, product pages, reviews, wishlist, notifications, Bring Your Idea, contact, WhatsApp paths | No                |
-| **2 — Commerce**      | Cart, checkout, orders, fulfillment workflow, shipping zones, pickup, refunds — against mock provider       | No                |
-| **3 — Digital**       | STL delivery queue, offers                                                                                  | No                |
-| **4 — Payments live** | Whish adapter, webhook, verification, reconciliation, manual confirmation                                   | **Yes**           |
-| **5 — Hardening**     | Rate limits, captcha, scanning, MFA, monitoring, backup drill, data rights, load test                       | No                |
+| Phase                 | Contents                                                                                                    | Blocked by provider? |
+| --------------------- | ----------------------------------------------------------------------------------------------------------- | -------------------- |
+| **0 — Foundation**    | Migrations, auth, verification, i18n, admin shell, catalogue CRUD, search, settings, outbox, jobs           | No                   |
+| **1 — Storefront**    | Public catalogue, product pages, reviews, wishlist, notifications, Bring Your Idea, contact, WhatsApp paths | No                   |
+| **2 — Commerce**      | Cart, checkout, orders, fulfillment workflow, pickup, cash on delivery and handover, refunds — against mock provider | No          |
+| **3 — Digital**       | STL delivery queue, offers                                                                                  | No                   |
+| **4 — Payments live** | Online provider adapter, webhook, verification, reconciliation, manual confirmation                         | **Yes**              |
+| **5 — Hardening**     | Rate limits, captcha, scanning, MFA, monitoring, backup drill, data rights, load test                       | No                   |
 
-Phases 0–3 and 5 are fully unblocked. Only Phase 4 requires merchant credentials, and its interface is fixed by the adapter contract, making it a swap rather than a rewrite.
+Phases 0–3 and 5 are fully unblocked. Only Phase 4 requires the provider decision (§30.4) and merchant credentials, and its interface is fixed by the adapter contract, making it a swap rather than a rewrite. Cash orders need no provider at all.
 
 ---
 
@@ -1442,21 +1515,23 @@ Phases 0–3 and 5 are fully unblocked. Only Phase 4 requires merchant credentia
 
 | #  | Severity     | Risk                                                                                    | Mitigation                                                                                      |
 | -- | ------------ | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| 1  | **Critical** | Whish onboarding incomplete; gates all revenue on both halves                           | Apply immediately via the Whish app; develop against mock; phase delivery                       |
+| 1  | **Critical** | Online provider not yet chosen or onboarded; gates all STL revenue and online physical revenue | Decide per §30.4 and apply immediately; develop against mock; cash orders sell physical goods meanwhile |
 | 2  | **Critical** | Webhook authenticity unresolved — a forged callback would yield free goods              | Always re-query the provider server-side; never trust callback payload; idempotency by event ID |
 | 3  | **High**     | Refund mechanism unknown; manual refunds get forgotten                                  | Confirm during onboarding; system tracks obligations until settled                              |
-| 4  | **High**     | Prepaid plus made-on-demand — money held for goods that do not yet exist                | Lead times, quantity caps, availability toggle, kill switch, fast refund path                   |
+| 4  | **High**     | Online prepaid plus made-on-demand — money held for goods that do not yet exist         | Lead times, quantity caps, availability toggle, kill switch, fast refund path                   |
+| 19 | **High**     | Cash on delivery (ADR-024): goods are printed before payment, so fake or refused orders waste material and machine time | Cash switch, one open cash order per customer, 100 USD cash cap, contact phone to call before printing, refusal blocks cash for the customer, admin may cancel an unpaid line at any time |
+| 20 | **Medium**   | The courier holds collected cash between delivery and remittance; the platform records the cash when the courier reports it, not when it reaches the business | Settle with the courier regularly outside the platform; the cash-due filter and handover records show what each delivery should have collected |
 | 5  | **High**     | Single host is a single point of failure for application and database                   | Tested off-server backups; storage abstraction enables rapid migration                          |
 | 6  | **High**     | Email is critical-path — it gates every user action                                     | Reputable provider, SPF/DKIM, outbox with retry, monitoring, resend                             |
 | 7  | **Medium**   | Mixed-order partial refunds are the most bug-prone path                                 | Per-line modelling from the start; mandatory heavy test coverage                                |
 | 8  | **Medium**   | Manual fulfillment by one person; no tracking evidence for disputes                     | Internal notes, audit log, status emails, published policy                                      |
 | 18 | **Medium**   | Manual STL delivery (ADR-019): slow or forgotten sends; email attachment limits (~20–25 MB) below bundle size; the admin's drive is the only copy of the files | Delivery queue oldest-first; customer notified on send; compress or send a storage link for large bundles; owner backs up the drive |
 | 9  | **Medium**   | Open reviews permit fake ratings that poison Top Rated                                  | Verified badge, one per user, moderation, rate limiting                                         |
-| 10 | **Medium**   | Single payment provider; no fallback                                                    | Provider abstraction ready for a second adapter                                                 |
+| 10 | **Medium**   | Single online payment provider; no fallback                                             | Provider abstraction ready for a second adapter; cash covers physical orders during an outage   |
 | 11 | **Medium**   | Unauthenticated guest uploads on a host co-locating database and inventory              | Content validation, re-encoding, scanning, quotas, private storage, retention                   |
 | 12 | **Medium**   | Disk exhaustion corrupts the database                                                   | Retention policies, partitioning, disk alerting above 80%                                       |
 | 14 | **Medium**   | No product variants; colour requests divert to WhatsApp                                 | Accepted limitation; monitor WhatsApp volume for reconsideration                                |
-| 15 | **Low-Med**  | International demand may arrive before zones are enabled                                | WhatsApp quotation path; zone model already built                                               |
+| 15 | **Low-Med**  | International demand arrives while delivery is Lebanon-only                             | WhatsApp quotation path                                                                         |
 | 16 | **Low-Med**  | No caching or CDN                                                                       | Monitor; add when metrics justify                                                               |
 | 17 | **Low**      | Account deletion versus record retention tension                                        | Anonymise rather than purge; block while orders open                                            |
 
@@ -1466,11 +1541,13 @@ Phases 0–3 and 5 are fully unblocked. Only Phase 4 requires merchant credentia
 
 None block the start of development. Each should close before its module is built.
 
-### 30.1 Awaiting Whish
+### 30.1 Awaiting the Online Payment Provider
+
+These questions apply to whichever provider §30.4 chooses; the Whish answers so far are noted.
 
 | Item                                             | Impact                                                                                                                                                             |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Wallet-balance only, or general card acceptance? | **Determines whether the STL marketplace can serve customers outside Lebanon.** Their reply describes payment from a Whish balance; card acceptance is unconfirmed |
+| Wallet-balance only, or general card acceptance? | **Determines whether the STL marketplace can serve customers outside Lebanon.** Whish's reply describes payment from a Whish balance; card acceptance is unconfirmed |
 | Callback signature mechanism                     | Whether signature verification is active                                                                                                                           |
 | Transaction status query API                     | Whether manual confirmation fallback is needed                                                                                                                     |
 | Refund API or manual transfer                    | Refund workflow and admin burden                                                                                                                                   |
@@ -1484,10 +1561,11 @@ None block the start of development. Each should close before its module is buil
 
 | Item                                | Impact                                               |
 | ----------------------------------- | ---------------------------------------------------- |
-| Domain registration                 | Blocks Whish application, email SPF/DKIM, deployment |
+| Domain registration                 | Blocks the payment provider application, email SPF/DKIM, deployment |
 | STL delivery time promise           | Text shown on STL pages and at checkout (ADR-019)    |
 | Transactional email provider        | Critical-path infrastructure                         |
-| Courier partner and per-zone rates  | Data entry, not schema                               |
+| Courier partner                     | Operations; the courier sets its own fee (ADR-024)   |
+| Cash terms wording                  | Checkout consent text for cash orders and the refusal rule |
 | Workshop pickup address and hours   | Settings values                                      |
 | Pickup identity check policy        | Order number only, or identification?                |
 | Refund baseline policy wording      | Published customer-facing text                       |
@@ -1506,13 +1584,19 @@ None block the start of development. Each should close before its module is buil
 | Monitoring tooling selection                | Operations                                                                                                       |
 | Frontend framework and rendering strategy   | **Outside backend scope; owned by the frontend team.** SEO requirements rule out a plain client-side application |
 
+### 30.4 Online Payment Provider (ADR-024)
+
+| Item                                         | Impact                                                                                                                                                                  | Due          |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| Whish, a card gateway, or both               | Which adapters VS-032 builds, the credentials and webhook allowlist, refund and status-query capabilities (§30.1). A card gateway should use a hosted or redirect payment page so card data never reaches the platform | Before VS-032 |
+
 ---
 
 ## 31. Future Roadmap
 
-**Near term:** enable international shipping zones; courier API integration with tracking numbers; cash on delivery; customer invoice PDF download; abandoned-cart recovery; notification preferences and unsubscribe; bulk admin operations; tracking-number field.
+**Near term:** international delivery; courier API integration with tracking numbers; customer invoice PDF download; abandoned-cart recovery; notification preferences and unsubscribe; bulk admin operations; tracking-number field.
 
-**Medium term:** object storage migration with CDN; caching layer; second payment provider; product variants if WhatsApp volume justifies; 3D model preview for STL products; structured product Q&A; recommended print settings metadata; wishlist price-drop alerts; discount coupons; multi-admin roles.
+**Medium term:** object storage migration with CDN; caching layer; second online payment provider (unless §30.4 already chooses two); product variants if WhatsApp volume justifies; 3D model preview for STL products; structured product Q&A; recommended print settings metadata; wishlist price-drop alerts; discount coupons; multi-admin roles.
 
 **Long term:** mobile applications with push notifications; WhatsApp Business API for in-system tracking of manual orders; advanced analytics and reporting; commercial STL licensing; loyalty programme; gift cards; AI-assisted search and recommendations; additional languages; B2B enquiry path.
 
@@ -1526,19 +1610,22 @@ None block the start of development. Each should close before its module is buil
 | **Batch Size**            | Units producible per lead-time cycle; drives dispatch estimation                             |
 | **Bounded Context**       | A module owning its own tables and accessed only through service interfaces                  |
 | **Bring Your Idea (BYI)** | The custom-printing lead workflow                                                            |
+| **Cash Handover**         | The single admin action that records the cash collected for a cash order and marks its live lines delivered or picked up |
+| **Cash on Delivery (COD)** | Payment method `cash` with delivery: the courier collects the order total in cash at the door; at pickup it is paid at the counter |
+| **Courier Delivery Fee**  | The fee the courier sets and collects from the customer on delivery; never part of the order total |
 | **Idempotency Key**       | Client-supplied header preventing duplicate order or refund creation                         |
 | **Kill Switch**           | Global setting pausing all new online checkouts                                              |
 | **Lead Time**             | Days required to produce one batch of a physical product                                     |
 | **Mixed Order**           | An order containing both digital and physical lines                                          |
 | **Outbox**                | Table holding emails written inside a business transaction, delivered afterwards by a worker |
+| **Payment Method**        | Per-order choice at checkout: `online` or `cash`; distinct from Purchase Mode and Fulfillment Method |
 | **Projection**            | A derived value maintained from other state; order status is one                             |
 | **Purchase Mode**         | Per-product setting: Online Only, WhatsApp Only, or Both                                     |
-| **Shipping Zone**         | Named geographic area with a flat delivery rate                                              |
 | **Snapshot**              | Immutable copy of a value captured at order time                                             |
 | **STL Delivery Queue**    | Admin list of paid STL lines awaiting delivery, oldest first (ADR-019)                       |
 | **Soft Delete**           | Marking a record deleted without removing it                                                 |
 | **Verified Purchase**     | Review badge indicating a genuine purchase record exists                                     |
-| **Whish**                 | Lebanese payment provider; Whish Pay is its merchant service                                 |
+| **Whish**                 | Lebanese payment provider; Whish Pay is its merchant service. A candidate online provider (§30.4) |
 
 ---
 
