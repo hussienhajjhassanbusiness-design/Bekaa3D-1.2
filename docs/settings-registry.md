@@ -88,7 +88,7 @@ like other abuse limits.
 
 ## JSON null is not SQL NULL
 
-`settings.value` is `JSONB NOT NULL`, yet five settings default to null. Those
+`settings.value` is `JSONB NOT NULL`, yet five settings default to null (four once VS-028 deletes `free_shipping_threshold`). Those
 are two different nulls:
 
 - **SQL NULL** means "no value in this column". Forbidden here.

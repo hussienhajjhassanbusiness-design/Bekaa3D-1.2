@@ -362,7 +362,7 @@ When:
 The customer is redirected to the payment provider chosen at checkout
 The provider sends a callback to its own route
 The system reconciles a payment
-An administrator performs permitted manual confirmation, only on a live attempt of an uncancelled order
+An administrator performs permitted manual confirmation: it applies a live attempt of an uncancelled order, and records a late capture for any other
 
 Then:
 
@@ -394,7 +394,8 @@ Pending → processing
 Pending or processing → paid
 Pending or processing → failed
 Pending or processing → expired
-Failed or expired attempt, or cancelled order, then a provider success → late capture: `late_captured_at` recorded, status unchanged, automatic refund obligation, alert, order and lines untouched
+Failed or expired attempt, cancelled order, or a captured amount that does not match the total, then a confirmed capture → late capture: `late_captured_at` recorded, status unchanged (a mismatched live attempt becomes failed), automatic late-capture refund obligation, alert, order and lines untouched
+A duplicate success for an attempt already paid → no change
 
 Concurrent access:
 
@@ -410,6 +411,7 @@ The callback endpoint persists the event and responds quickly
 External provider queries occur without holding database locks
 A failed provider query leaves payment unresolved rather than paid
 A late provider success is never applied to the order; the captured money becomes a refund obligation
+The hold release never cancels an order whose provider check failed or timed out, or that has an unprocessed webhook event; it skips and alerts
 A payment retry locks the order and re-checks it, so it cannot add a payment to an order the hold release has cancelled
 Stuck payments are retried through reconciliation
 If provider queries are unavailable, payment requires administrator confirmation against the provider dashboard
@@ -472,7 +474,11 @@ returned → shipped | in_production | refunded (paid line) | cancelled (unpaid 
 
 Pickup no-show:
 
-ready_for_pickup → cancelled (administrator, with reason no_show or other)
+ready_for_pickup → cancelled (administrator, with reason refused, no_show or other)
+
+$0 unpaid cash line:
+
+shipped → cancelled (administrator, reason other)
 
 Concurrent access:
 
@@ -525,7 +531,7 @@ Terminal lines cannot be cancelled again
 State transitions touched:
 
 Physical pending → cancelled
-Paid order → cancelled or partially refunded, depending on remaining lines
+Paid order → cancelled, partially refunded or refunded, depending on remaining lines and earlier refunds
 Unpaid cash order → cancelled
 
 Administrator cancellations from ready_to_ship, returned or ready_for_pickup record a reason: refused, no_show (ready_for_pickup only) or other; see FR-20 for the cash block.
@@ -539,7 +545,8 @@ The losing request receives an invalid-state conflict
 Failure behaviour:
 
 Cancellation and refund-obligation creation occur atomically
-A failed refund-provider action leaves a tracked pending obligation rather than losing the cancellation record
+The cancellation refund is the line's remaining balance, and none is created when that is zero
+A failed cancellation refund stays owed in the obligations queue until reissued; the cancellation record is never lost
 
 Traceability: F-033, F-066.
 
@@ -553,22 +560,24 @@ Given:
 
 The order has a confirmed payment
 The refunded lines are paid lines: a cancelled line of a cash order was never paid and has nothing refundable
+The administrator has refunded the money by hand (provider dashboard or cash); the platform never calls a provider refund API
 The refundable amount is greater than zero
 The requested amount does not exceed the remaining refundable balance
 
 When:
 
 The administrator refunds one or more lines (there is no shipping fee to refund)
-A payment reversal or chargeback is confirmed
+A payment reversal or chargeback is confirmed, and is recorded already settled, split per line, outside the obligations queue
 
 Then:
 
 A refund record and refund-line records are created
-A refund of part of a line leaves the line in its state; a line becomes refunded only when its non-failed refunds cover its whole total
+A refund of part of a line leaves the line in its state; a line becomes refunded only when its refunds cover its whole total
+A refund that would empty an unfinished physical line is rejected; the line is cancelled instead
 The obligation remains pending until confirmed settled
 Relevant line and order statuses are recomputed
 Refunded STL lines become refunded; one not yet sent leaves the delivery queue
-A cash payment is refunded with method manual, up to the cash recorded
+A cash payment is refunded up to the cash recorded
 When refunds cover all paid money, the order becomes refunded
 Audit and customer-notification records are created
 
@@ -588,7 +597,7 @@ Paid or partially_refunded → refunded
 Digital awaiting_delivery or delivered → refunded
 Physical terminal state → refunded (only when fully refunded)
 Refund pending → settled or failed
-Refund failed → its amount is freed, it no longer counts toward balances or status, and lines it made refunded return to their previous state
+Refund pending → failed → stays owed in the obligations queue, changes no line state, never counts toward refunded status, and is reissued as a new pending refund
 
 Concurrent access:
 
@@ -598,8 +607,8 @@ Only amounts within the remaining balance may commit
 
 Failure behaviour:
 
-If a provider has no refund API, the obligation remains in the administrator queue until manually settled
-Provider failure must not remove or falsely settle the obligation
+Every refund is manual in V1: the obligation remains in the administrator queue until the administrator settles it after paying it
+A failed refund must not remove or falsely settle the obligation; it stays owed until reissued
 STL line refund and confirmed refund state changes occur transactionally
 
 Traceability: F-070 through F-074.
@@ -986,7 +995,7 @@ A scheduled cadence is reached
 Then:
 
 Email outbox runs every minute
-Offers and stale online checkouts expire every five minutes
+Offers and stale online checkouts expire every five minutes (a stale checkout is released only when the provider confirms it unpaid)
 Stuck payments are reconciled every fifteen minutes
 Unverified accounts, expired attachments, and orphan files are processed daily
 Backup integrity is verified daily

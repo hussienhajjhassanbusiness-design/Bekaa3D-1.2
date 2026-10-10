@@ -1,6 +1,6 @@
 # ADR-012: Use a payment-provider abstraction and independently verify payment
 
-**Status:** Accepted  
+**Status:** Accepted; amended by [ADR-024](ADR-024-cash-on-delivery-and-courier-priced-shipping.md) (provider choice reopened; verify-before-producing applies to online orders only; no provider refund operation in V1).  
 **Date:** 2026-08-10  
 **Source basis:** SRS BR-052–BR-058, §9.1–§9.4
 

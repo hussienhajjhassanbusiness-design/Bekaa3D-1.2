@@ -295,17 +295,22 @@ failed
 
 ```text
 pending
-processing
 settled
 failed
 ```
 
-### `refund_method`
+`failed` refunds stay owed until reissued (ADR-024).
+
+### `refund_kind`
 
 ```text
-provider
-manual
+admin
+cancellation
+late_capture
+chargeback
 ```
+
+Every V1 refund is manual, so there is no `refund_method` (ADR-024).
 
 ### `offer_actor`
 
@@ -1205,7 +1210,7 @@ batch_size_snapshot IS NULL
 | `currency` | CHAR(3) | No | CHECK = `USD` |
 | `initiated_at` | TIMESTAMPTZ | No |  |
 | `verified_at` | TIMESTAMPTZ | Yes |  |
-| `late_captured_at` | TIMESTAMPTZ | Yes | set when the provider reports success for an attempt that was no longer live, or on a cancelled order; the row stays `failed` / `expired` and is refunded automatically (ADR-024) |
+| `late_captured_at` | TIMESTAMPTZ | Yes | set when money was captured but cannot be applied: an attempt no longer live, a cancelled order, or an amount that does not match (the attempt is then `failed`); the row stays `failed` / `expired` and is refunded automatically (ADR-024) |
 | `failed_at` | TIMESTAMPTZ | Yes |  |
 | `expired_at` | TIMESTAMPTZ | Yes |  |
 | `provider_metadata` | JSONB | Yes | provider-specific metadata only |
@@ -1290,45 +1295,42 @@ Duplicate webhook delivery must not apply a payment twice or repeat state transi
 | `payment_id` | UUID | No | FK → `payments.id` |
 | `amount_cents` | BIGINT | No | CHECK > 0 |
 | `currency` | CHAR(3) | No | CHECK = `USD` |
-| `reason` | TEXT | No | `late_capture` marks an automatic refund of a late capture; it has no refund items |
-| `requested_by` | UUID | No | FK → `users.id` |
+| `kind` | `refund_kind` | No | `admin`, `cancellation`, `late_capture` or `chargeback` |
+| `reason` | TEXT | No | free text for people; never used to classify a refund |
+| `requested_by` | UUID | Yes | FK → `users.id`; NULL only for `kind = late_capture` (created by the system) |
 | `approved_by` | UUID | Yes | FK → `users.id` |
-| `method` | enum | No | provider/manual |
-| `status` | enum | No | settlement state |
-| `provider_refund_id` | TEXT | Yes |  |
+| `status` | `refund_status` | No | `pending`, `settled` or `failed` |
+| `reissued_at` | TIMESTAMPTZ | Yes | set on a `failed` refund when it is reissued |
+| `reissue_of_refund_id` | UUID | Yes | FK → `refunds.id`; the failed refund this one reissues; UNIQUE |
+| `excess_cents` | BIGINT | Yes | chargebacks only: amount the bank took beyond the remaining balance; CHECK ≥ 0 |
 | `initiated_at` | TIMESTAMPTZ | No |  |
 | `settled_at` | TIMESTAMPTZ | Yes |  |
 | `created_at` | TIMESTAMPTZ | No |  |
 | `updated_at` | TIMESTAMPTZ | No |  |
 
-### Proposed `refund_status`
+### Constraints
 
 ```text
-pending
-processing
-settled
-failed
+requested_by IS NULL → kind = 'late_capture'
+reissued_at IS NOT NULL → status = 'failed'
+kind = 'chargeback' → status = 'settled'
+excess_cents IS NOT NULL → kind = 'chargeback'
+UNIQUE(payment_id) WHERE kind = 'late_capture' AND status <> 'failed'
 ```
-
-### Proposed `refund_method`
-
-```text
-provider
-manual
-```
-
-Exact values require confirmation from the payment/refund implementation.
 
 ### Rules
 
 - partial refund supported;
 - refund may cover selected lines; there is no shipping component (ADR-024);
-- a refund of a `cash` payment always uses method `manual`, up to the cash recorded;
-- only paid lines are refundable (BR-149); a line's refundable amount is `line_total_cents` minus its items in non-failed refunds, and a cancelled cash line has 0;
-- a line becomes `refunded` only when its non-failed refund items cover its whole total; a partial refund leaves it in its state;
-- a `failed` refund frees its amount, never counts toward balances or the order status, and returns the lines it made `refunded` to their previous state (an STL line stays `refunded`, with an alert, if the product was bought again meanwhile);
-- a `late_capture` refund has no items, is created automatically, and never counts toward the order status;
-- refund remains a tracked obligation until settled or failed;
+- every V1 refund is manual: the administrator pays it in the provider dashboard or in cash and settles it here; the platform never calls a provider refund API;
+- a refund of a `cash` payment is capped at the cash recorded;
+- only paid lines are refundable (BR-149); a line's refundable amount is `line_total_cents` minus its items in non-failed refunds and in failed refunds not yet reissued, and a cancelled cash line has 0;
+- a line becomes `refunded` only when its refund items cover its whole total; a partial refund leaves it in its state; a refund that would empty an unfinished physical line (`pending`, `in_production`, `ready_to_ship`, `shipped`, `ready_for_pickup`) is refused (cancel instead);
+- a cancellation refund is the line's remaining balance, and none is created when that is 0;
+- a `failed` refund changes no line state and stays owed (in the obligations queue) until reissued; it never counts toward `refunded` status, but an owed one counts as a refund present;
+- a `late_capture` refund has no items and no requester, is created automatically, never counts toward the order status, and is exempt from the item-sum check;
+- a `chargeback` refund is created already `settled`, split per line, and never enters the obligations queue;
+- refund remains a tracked obligation until settled, or until reissued if it failed;
 - a fully refunded STL line becomes `refunded` and leaves the delivery queue if not yet sent;
 - an unsettled refund blocks account deletion.
 
@@ -1336,7 +1338,7 @@ Exact values require confirmation from the payment/refund implementation.
 
 ```text
 (created_at)
-WHERE status IN ('pending', 'processing')
+WHERE status = 'pending' OR (status = 'failed' AND reissued_at IS NULL)   -- obligations queue: pending and owed
 ```
 
 ---
@@ -1359,7 +1361,7 @@ A line should appear at most once in the same refund:
 UNIQUE(refund_id, order_item_id)
 ```
 
-The sum of refund-item amounts must be validated transactionally against `refunds.amount_cents` and against the amount originally paid/refundable. This is a cross-row invariant and is not a simple CHECK.
+Except for `kind = late_capture` (no items), the sum of refund-item amounts must be validated transactionally against `refunds.amount_cents` and against the amount originally paid/refundable. This is a cross-row invariant and is not a simple CHECK.
 
 ---
 
@@ -1954,8 +1956,9 @@ Not every business rule can be expressed as a local SQL CHECK. These must be imp
 22. The cash handover requires at least one live line, marks every live line delivered / picked up and creates the single cash payment for exactly their total (above zero), in one transaction under the ADR-024 lock order.
 23. A cash refusal or no-show (`ready_to_ship`, `returned` or `ready_for_pickup` → `cancelled`) creates no refund; when a cancel leaves the order with no live line and every such cancelled line carries `refused` or `no_show` (at least one), a `cash_payment_blocks` row is inserted in the same transaction, under the phone advisory lock, independent of cancel order.
 24. No physical line of an unpaid online order changes state (BR-148), except the hold release cancelling its `pending` lines; a payment that reached `paid` (`paid`, `partially_refunded`, `refunded`) allows transitions.
-24a. A provider success on a non-live attempt or a cancelled order is a late capture: `late_captured_at`, an automatic refund, an alert, no change to the order or lines.
-24b. A line is `refunded` only when fully refunded by non-failed refunds; a failed refund is undone.
+24a. A capture on a non-live attempt, a cancelled order, or for a mismatched amount is a late capture: `late_captured_at`, one automatic refund, an alert, no change to the order or lines; a duplicate success for a `paid` attempt is a no-op.
+24b. A line is `refunded` only when fully refunded; an unfinished physical line is never refunded in full; a failed refund changes no line state and stays owed until reissued.
+24c. The hold release cancels an order only when the provider confirms it unpaid; it skips orders whose check fails or that have an unprocessed webhook event.
 25. Refundable amounts, revenue and the badge count only paid lines (BR-149).
 26. Every write that changes an order's lines, payment or refunds locks `orders` first, then lines by `id`, then `payments` (ADR-024).
 
@@ -2003,6 +2006,7 @@ Projection is recomputed in the same transaction as payment/line/refund changes,
 ```text
 pending -> awaiting_delivery -> delivered
 awaiting_delivery | delivered -> refunded
+pending -> cancelled            # hold release only; frees the ownership index
 ```
 
 ## 17.4 Physical Delivery Line
@@ -2013,6 +2017,7 @@ pending                          # received
       -> ready_to_ship           # finished
           -> shipped
               -> delivered       # cash order: only via the cash handover
+              -> cancelled       # unpaid cash line totalling 0 only; reason other
                   -> refunded    # paid only
               -> returned
                   -> shipped
@@ -2170,7 +2175,7 @@ WHERE status = 'processing'
 
 ```text
 (created_at)
-WHERE status IN ('pending', 'processing')
+WHERE status = 'pending' OR (status = 'failed' AND reissued_at IS NULL)
 ```
 
 ## 19.10 Notifications
@@ -2445,11 +2450,11 @@ The handover locks the order row, then all its lines, checks at least one live l
 
 ## Cash Checkout Limits
 
-The open-cash-order count and the blocks are read under the cart lock, which serialises one customer's checkouts, and a transaction-scoped advisory lock on the phone hash (`pg_advisory_xact_lock`), which serialises cash checkouts from different accounts sharing a phone. A cancel that may insert a block takes the same advisory lock, after the order and line locks.
+The open-cash-order count and the blocks are read under the cart lock, which serialises one customer's checkouts, and a transaction-scoped advisory lock on the phone hash (`pg_advisory_xact_lock`), which serialises cash checkouts from different accounts sharing a phone. A cancel that may insert a block also locks the customer's cart and then takes the advisory lock, after the order and line locks; checkout never locks an existing `orders` row, so this cannot cycle.
 
 ## Payment Retry vs Hold Release
 
-Retry locks the order row and re-checks `pending_payment` and `cancelled_at IS NULL` before inserting; the hold release locks the same row. Exactly one wins: a retry never adds a payment to a cancelled order.
+Retry locks the order row and re-checks `pending_payment` and `cancelled_at IS NULL` before inserting; the hold release locks the same row. Exactly one wins: a retry never adds a payment to a cancelled order. The hold release cancels only when the provider confirms the attempt unpaid; it skips orders whose provider check fails or times out, or that have an unprocessed webhook event.
 
 ## Offer Submission
 
