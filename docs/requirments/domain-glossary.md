@@ -84,8 +84,8 @@ A synonym must not be introduced when a canonical term already exists.
 | **Payment Method** | The per-order choice at checkout: `online` or `cash`. Cash is allowed only when every order item is physical (ADR-024). | Purchase Mode, Fulfillment Method, Payment Provider |
 | **Cash on Delivery (COD)** | Payment method `cash` with delivery: the courier collects the amount due (the sum of live line totals) in cash at the door. With pickup it is "cash at pickup", paid at the counter. | Pickup, Courier Delivery Fee, an online payment |
 | **Cash Handover** | The single administrator action that records the cash collected for a cash order and, in the same transaction, marks every live order item delivered or picked up. It creates the order's one `cash` Payment and is the documented manual confirmation for cash. | Payment Verification, Manual Payment Confirmation of an online payment |
-| **Cash Payment Block** | A `cash_payment_blocks` row created when a `refused` or `no_show` cancel leaves a cash order with no live line. While uncleared it removes cash from checkout for that customer and for any account using the same normalised contact phone. Cleared, never deleted, by an administrator. | Account deactivation, Rate Limit, a partial refusal |
-| **Cancel Reason** | `refused`, `no_show` or `other`, recorded when an administrator cancels a line from `returned` or `ready_for_pickup`. Only `refused` and `no_show` can create a Cash Payment Block. | Customer note, refund reason |
+| **Cash Payment Block** | A `cash_payment_blocks` row created when a cancel leaves a cash order with no live line and every line cancelled from `ready_to_ship`, `returned` or `ready_for_pickup` carries `refused` or `no_show`. While uncleared it removes cash from checkout for that customer and for any account whose contact phone has the same keyed hash. Holds only the hash, never the number. Cleared, never deleted, by an administrator. | Account deactivation, Rate Limit, a partial refusal |
+| **Cancel Reason** | `refused`, `no_show` or `other`, recorded when an administrator cancels a line from `ready_to_ship`, `returned` or `ready_for_pickup`; `no_show` only from `ready_for_pickup`. Only `refused` and `no_show` can create a Cash Payment Block. | Customer note, refund reason |
 | **Paid Line** | A line of an order whose payment reached `paid`, unless it was cancelled without a refund obligation. Only paid lines are refundable and count toward revenue and the Verified Purchase badge; a cancelled cash line never is one (BR-149). | A line of a paid order regardless of its state |
 | **Payment Due** | A derived flag on an unpaid cash order; the admin "cash due" view lists these orders. | Pending Payment, Order Status |
 | **Pending Payment**             | A payment created but not yet completed or independently confirmed.                                                                                                            | Unpaid cart                                                             |
@@ -101,6 +101,8 @@ A synonym must not be introduced when a canonical term already exists.
 | **Refund Item** | The portion of a refund allocated to a specific order item. | Order Item |
 | **Refund Obligation**           | A tracked duty to return money that remains open until settlement is confirmed.                                                                                                | Completed refund transfer                                               |
 | **Refund Settlement**           | Confirmation that the customer has actually received the refunded amount.                                                                                                      | Creation or approval of a refund record                                 |
+| **Failed Refund** | A refund marked `failed` because the money did not reach the customer. Its amount is freed for reissue, it never counts toward balances or refunded status, and lines it made `refunded` return to their previous state (ADR-024). | Settled refund, cancelled refund obligation |
+| **Late Capture** | A provider success reported for an attempt that is no longer live, or on a cancelled order. Recorded as `late_captured_at`; never applied to the order; refunded automatically. | Paid, Payment Verification |
 | **Receipt Confirmation** | The customer's optional "I got it" on a delivered or picked-up order, recorded as `receipt_confirmed_at`; never required to complete the order. | Delivery, Order completion |
 | **Problem Report** | The customer's optional "Report a problem" on a delivered or picked-up order: sets `problem_reported_at` and creates a contact message linked to the order. | Return, Refund request, Review |
 | **Partial Refund**              | A refund covering less than the complete paid order amount.                                                                                                                    | Partial payment                                                         |
@@ -307,7 +309,7 @@ Since ADR-019 there is no Entitlement or Download. A paid, unrefunded digital Or
 * **Refund** records money to be returned.
 * **Refund Settlement** confirms that money was returned.
 * **Return** records a physical item coming back after shipment or delivery.
-* **Cash refusal** is a return of an unpaid cash item that ends in cancellation with no refund.
+* **Cash refusal** is the cancellation, with no refund, of an unpaid cash item the customer refused: before shipping, at the door (after a return), or at the pickup counter.
 
 One action may lead to another, but they are not synonyms.
 
@@ -333,6 +335,7 @@ cart_items
 orders
 order_items
 order_status_history
+cash_payment_blocks
 
 payments
 webhook_events
@@ -348,7 +351,6 @@ notifications
 custom_requests
 custom_request_attachments
 contact_messages
-cash_payment_blocks
 
 settings
 audit_logs

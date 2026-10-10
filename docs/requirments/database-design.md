@@ -184,7 +184,7 @@ no_show
 other
 ```
 
-Recorded on an administrator cancel from `returned` (`refused` or `other`) or `ready_for_pickup` (`no_show` or `other`). Only `refused` and `no_show` can create a cash payment block (ADR-024).
+Recorded on an administrator cancel from `ready_to_ship` or `returned` (`refused` or `other`) or `ready_for_pickup` (`refused`, `no_show` or `other`). Only `refused` and `no_show` can create a cash payment block (ADR-024).
 
 ## 3.5 `order_source`
 
@@ -960,6 +960,7 @@ but determining whether the referenced product is STL is cross-table. The transa
 | `currency` | CHAR(3) | No | CHECK = `USD` |
 | `recipient_name` | TEXT | Yes | delivery snapshot |
 | `contact_phone_snapshot` | TEXT | Yes | required when `fulfillment_method` is not NULL: the address phone for delivery, entered at checkout for pickup (BR-078); stored normalised to E.164 |
+| `contact_phone_hash` | TEXT | Yes | keyed `HMAC-SHA256` of the normalised phone (secret `PHONE_HASH_SALT`, never rotated); set with `contact_phone_snapshot`; used for cash matching |
 | `governorate` | TEXT | Yes | delivery snapshot |
 | `city` | TEXT | Yes | delivery snapshot |
 | `area` | TEXT | Yes | delivery snapshot |
@@ -1027,7 +1028,7 @@ The fact that an order actually contains physical/digital lines is cross-row and
 (status, placed_at DESC)
 ```
 
-The fulfilment queue excludes `pending_payment` orders (BR-148). The open-cash-order count matches `user_id` or `contact_phone_snapshot`; add `(contact_phone_snapshot) WHERE payment_method = 'cash'` if `EXPLAIN` shows the need. The "cash due" admin filter (unpaid cash orders) gets a partial index in VS-029 once `EXPLAIN` shows its shape.
+The fulfillment queue excludes `pending_payment` orders (BR-148). The open-cash-order count matches `user_id` or `contact_phone_hash`; add `(contact_phone_hash) WHERE payment_method = 'cash'` if `EXPLAIN` shows the need. The "cash due" admin filter (unpaid cash orders) gets a partial index in VS-029 once `EXPLAIN` shows its shape.
 
 ---
 
@@ -1056,7 +1057,7 @@ The fulfilment queue excludes `pending_payment` orders (BR-148). The open-cash-o
 | `fulfilled_at` | TIMESTAMPTZ | Yes | for STL: when marked delivered |
 | `delivered_by` | UUID | Yes | FK → `users.id`; STL only: administrator who marked it delivered |
 | `payment_method` | `payment_method` | No | copy of the order's; composite FK `(order_id, payment_method)` → `orders(id, payment_method)` |
-| `cancel_reason` | `cancel_reason` | Yes | set only with `fulfillment_status = 'cancelled'` from `returned` or `ready_for_pickup` |
+| `cancel_reason` | `cancel_reason` | Yes | set only with `fulfillment_status = 'cancelled'` from `ready_to_ship`, `returned` or `ready_for_pickup` |
 | `receipt_confirmed_at` | TIMESTAMPTZ | Yes | physical only: customer pressed "I got it" (ADR-024) |
 | `problem_reported_at` | TIMESTAMPTZ | Yes | physical only: customer reported a problem (ADR-024) |
 | `created_at` | TIMESTAMPTZ | No |  |
@@ -1165,7 +1166,7 @@ batch_size_snapshot IS NULL
 |---|---|---:|---|
 | `id` | UUID | No | PK |
 | `user_id` | UUID | No | FK → `users.id` |
-| `contact_phone` | TEXT | No | E.164, copied from the order |
+| `contact_phone_hash` | TEXT | No | copied from `orders.contact_phone_hash`; the plaintext number is never stored here |
 | `order_id` | UUID | No | FK → `orders.id`; UNIQUE |
 | `reason` | `cancel_reason` | No | CHECK `reason IN ('refused', 'no_show')` |
 | `created_at` | TIMESTAMPTZ | No |  |
@@ -1174,15 +1175,16 @@ batch_size_snapshot IS NULL
 
 ### Rules
 
-- inserted in the transaction of the `refused` / `no_show` cancel that leaves a cash order with no live line; never for a partial refusal, an `other` cancel or an online order;
-- cash is unavailable while any uncleared row matches the customer **or** the normalised contact phone;
+- inserted, under the phone advisory lock, in the transaction of the cancel that leaves a cash order with no live line, when every line cancelled from `ready_to_ship`, `returned` or `ready_for_pickup` carries `refused` or `no_show` (at least one); never for a partial refusal, an order with any `other` such cancel, or an online order;
+- survives account anonymisation without readable personal data, because it holds only the hash;
+- cash is unavailable while any uncleared row matches the customer **or** the phone hash;
 - cleared, never deleted.
 
 ### Indexes
 
 ```text
 (user_id) WHERE cleared_at IS NULL
-(contact_phone) WHERE cleared_at IS NULL
+(contact_phone_hash) WHERE cleared_at IS NULL
 ```
 
 ---
@@ -1203,6 +1205,7 @@ batch_size_snapshot IS NULL
 | `currency` | CHAR(3) | No | CHECK = `USD` |
 | `initiated_at` | TIMESTAMPTZ | No |  |
 | `verified_at` | TIMESTAMPTZ | Yes |  |
+| `late_captured_at` | TIMESTAMPTZ | Yes | set when the provider reports success for an attempt that was no longer live, or on a cancelled order; the row stays `failed` / `expired` and is refunded automatically (ADR-024) |
 | `failed_at` | TIMESTAMPTZ | Yes |  |
 | `expired_at` | TIMESTAMPTZ | Yes |  |
 | `provider_metadata` | JSONB | Yes | provider-specific metadata only |
@@ -1226,7 +1229,8 @@ At most one cash payment per order (INV-22), and cash only on a cash order (INV-
 ```text
 UNIQUE(order_id) WHERE provider = 'cash'
 (provider = 'cash') = (order_payment_method = 'cash')
-provider = 'cash' → status <> 'pending' AND status <> 'processing' AND recorded_by IS NOT NULL AND verified_at IS NOT NULL AND amount_cents > 0
+provider = 'cash' → status IN ('paid', 'partially_refunded', 'refunded') AND recorded_by IS NOT NULL AND verified_at IS NOT NULL AND amount_cents > 0
+late_captured_at IS NOT NULL → status IN ('failed', 'expired') AND provider <> 'cash'
 provider <> 'cash' → recorded_by IS NULL
 ```
 
@@ -1286,7 +1290,7 @@ Duplicate webhook delivery must not apply a payment twice or repeat state transi
 | `payment_id` | UUID | No | FK → `payments.id` |
 | `amount_cents` | BIGINT | No | CHECK > 0 |
 | `currency` | CHAR(3) | No | CHECK = `USD` |
-| `reason` | TEXT | No |  |
+| `reason` | TEXT | No | `late_capture` marks an automatic refund of a late capture; it has no refund items |
 | `requested_by` | UUID | No | FK → `users.id` |
 | `approved_by` | UUID | Yes | FK → `users.id` |
 | `method` | enum | No | provider/manual |
@@ -1320,9 +1324,12 @@ Exact values require confirmation from the payment/refund implementation.
 - partial refund supported;
 - refund may cover selected lines; there is no shipping component (ADR-024);
 - a refund of a `cash` payment always uses method `manual`, up to the cash recorded;
-- only paid lines are refundable (BR-149); a line's refundable amount is `line_total_cents` minus its earlier refund items, and a cancelled cash line has 0;
-- refund remains a tracked obligation until settled;
-- a refunded STL line becomes `refunded` and leaves the delivery queue if not yet sent;
+- only paid lines are refundable (BR-149); a line's refundable amount is `line_total_cents` minus its items in non-failed refunds, and a cancelled cash line has 0;
+- a line becomes `refunded` only when its non-failed refund items cover its whole total; a partial refund leaves it in its state;
+- a `failed` refund frees its amount, never counts toward balances or the order status, and returns the lines it made `refunded` to their previous state (an STL line stays `refunded`, with an alert, if the product was bought again meanwhile);
+- a `late_capture` refund has no items, is created automatically, and never counts toward the order status;
+- refund remains a tracked obligation until settled or failed;
+- a fully refunded STL line becomes `refunded` and leaves the delivery queue if not yet sent;
 - an unsettled refund blocks account deletion.
 
 ### Index
@@ -1943,10 +1950,12 @@ Not every business rule can be expressed as a local SQL CHECK. These must be imp
 18. Dispatch estimate is calculated from physical order-line snapshots.
 19. Kill switch blocks new checkout but not an in-flight payment.
 20. Category cannot be archived/deleted while live products remain assigned.
-21. Cash checkout respects `cash_payment_enabled`, uncleared blocks for the customer or phone, `cash_max_open_orders` for the customer or phone, and `cash_max_order_total` against the **recomputed** total; checked after the recompute, under the cart lock and an advisory lock on the normalised phone.
+21. Cash checkout respects `cash_payment_enabled`, uncleared blocks for the customer or phone hash, `cash_max_open_orders` for the customer or phone hash, and a **recomputed** total above 0 and within `cash_max_order_total`; checked after the recompute, under the cart lock and an advisory lock on the phone hash.
 22. The cash handover requires at least one live line, marks every live line delivered / picked up and creates the single cash payment for exactly their total (above zero), in one transaction under the ADR-024 lock order.
-23. A cash refusal (`returned → cancelled`) or pickup no-show (`ready_for_pickup → cancelled`) creates no refund; a `refused` / `no_show` cancel that leaves the order with no live line inserts a `cash_payment_blocks` row in the same transaction.
-24. No physical line of an unpaid online order changes state (BR-148).
+23. A cash refusal or no-show (`ready_to_ship`, `returned` or `ready_for_pickup` → `cancelled`) creates no refund; when a cancel leaves the order with no live line and every such cancelled line carries `refused` or `no_show` (at least one), a `cash_payment_blocks` row is inserted in the same transaction, under the phone advisory lock, independent of cancel order.
+24. No physical line of an unpaid online order changes state (BR-148), except the hold release cancelling its `pending` lines; a payment that reached `paid` (`paid`, `partially_refunded`, `refunded`) allows transitions.
+24a. A provider success on a non-live attempt or a cancelled order is a late capture: `late_captured_at`, an automatic refund, an alert, no change to the order or lines.
+24b. A line is `refunded` only when fully refunded by non-failed refunds; a failed refund is undone.
 25. Refundable amounts, revenue and the badge count only paid lines (BR-149).
 26. Every write that changes an order's lines, payment or refunds locks `orders` first, then lines by `id`, then `payments` (ADR-024).
 
@@ -1970,14 +1979,15 @@ paid ---------------------------------------> refunded
 ## 17.2 Order Projection
 
 ```text
-online, payment pending/processing -> pending_payment
-online, payment failed/expired     -> cancelled
+online, no payment reached paid:
+  cancelled by the hold release   -> cancelled
+  otherwise                       -> pending_payment
 
 cash, no payment yet:
   all lines cancelled      -> cancelled
   otherwise                -> in_progress
 
-payment paid (online or cash):
+payment reached paid (paid, partially_refunded, refunded; online or cash):
   all lines cancelled             -> cancelled
   refunds cover all paid money    -> refunded
   all lines refunded              -> refunded
@@ -1986,7 +1996,7 @@ payment paid (online or cash):
   otherwise                       -> in_progress
 ```
 
-Projection is recomputed in the same transaction as payment/line/refund changes, under the ADR-024 lock order. "Refunds cover all paid money" counts refund records, pending or settled.
+Projection is recomputed in the same transaction as payment/line/refund changes, under the ADR-024 lock order. It takes `orders.cancelled_at` as an input. "Refunds cover all paid money" counts non-failed refund records, pending or settled, never `late_capture` refunds; "all lines refunded" means every line fully refunded.
 
 ## 17.3 Digital Order Line
 
@@ -2011,7 +2021,8 @@ pending                          # received
                   -> cancelled   # unpaid cash only; reason refused/other; no refund; may block (§8.6)
 
 pending -> cancelled                         # customer or admin
-in_production | ready_to_ship -> cancelled   # admin decision
+in_production -> cancelled                   # admin decision
+ready_to_ship -> cancelled                   # admin; reason refused/other; cash may block (§8.6)
 ```
 
 `returned` is not terminal.
@@ -2022,7 +2033,7 @@ in_production | ready_to_ship -> cancelled   # admin decision
 pending -> in_production -> ready_for_pickup -> picked_up -> refunded (paid only)
 pending -> cancelled                          # customer or admin
 in_production -> cancelled                    # admin
-ready_for_pickup -> cancelled                 # admin; reason no_show/other; cash may block (§8.6)
+ready_for_pickup -> cancelled                 # admin; reason refused/no_show/other; cash may block (§8.6)
 ```
 
 On a cash order `ready_for_pickup -> picked_up` happens only via the cash handover.
@@ -2173,7 +2184,7 @@ WHERE status IN ('pending', 'processing')
 
 ```text
 cash_payment_blocks(user_id) WHERE cleared_at IS NULL
-cash_payment_blocks(contact_phone) WHERE cleared_at IS NULL
+cash_payment_blocks(contact_phone_hash) WHERE cleared_at IS NULL
 ```
 
 ## 19.11 Retention Jobs
@@ -2422,7 +2433,7 @@ Transaction B:
 
 ## Lock Order (ADR-024)
 
-Every write that changes an order's lines, payment or refunds takes its locks in one order: the `orders` row (`FOR UPDATE`), then the lines it reads or changes in `id` order, then the payment row, then recomputes the status. This covers line transitions, self-cancel, admin cancel, the cash handover, payment apply, refund creation and `release_stale_checkouts`. Locking a line before its order would deadlock against the handover, and two parallel line changes could each derive the order status from a stale view of the other.
+Every write that changes an order's lines, payment or refunds takes its locks in one order: the `orders` row (`FOR UPDATE`), then the lines it reads or changes in `id` order, then the payment row, then recomputes the status. This covers line transitions, self-cancel, admin cancel, the cash handover, payment apply (including late captures), payment retry, reconciliation marking an attempt failed or expired, manual confirmation, refund creation, settlement and failure, chargeback recording, receipt confirmation and problem reports, and `release_stale_checkouts`. **Nothing locks `payments` before `orders`, including batch selection:** a job selects candidate ids without locking (no `FOR UPDATE SKIP LOCKED` on `payments`), then locks each order and re-reads. Locking a line before its order would deadlock against the handover, and two parallel line changes could each derive the order status from a stale view of the other.
 
 ## Cancellation vs Start Printing
 
@@ -2434,7 +2445,11 @@ The handover locks the order row, then all its lines, checks at least one live l
 
 ## Cash Checkout Limits
 
-The open-cash-order count and the blocks are read under the cart lock, which serialises one customer's checkouts, and a transaction-scoped advisory lock on the normalised contact phone (`pg_advisory_xact_lock` on its hash), which serialises cash checkouts from different accounts sharing a phone.
+The open-cash-order count and the blocks are read under the cart lock, which serialises one customer's checkouts, and a transaction-scoped advisory lock on the phone hash (`pg_advisory_xact_lock`), which serialises cash checkouts from different accounts sharing a phone. A cancel that may insert a block takes the same advisory lock, after the order and line locks.
+
+## Payment Retry vs Hold Release
+
+Retry locks the order row and re-checks `pending_payment` and `cancelled_at IS NULL` before inserting; the hold release locks the same row. Exactly one wins: a retry never adds a payment to a cancelled order.
 
 ## Offer Submission
 

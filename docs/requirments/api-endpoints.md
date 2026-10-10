@@ -381,7 +381,7 @@ A materially changed retry uses a **new** idempotency key.
 |---|---|---|---|---|---|---|
 | `GET /api/v1/me/orders` | Authenticated | query params | `200 OrderPage` | 401 | Cursor; optional `status`, `placed_after`, `placed_before`; default `-placed_at` | Own orders only |
 | `GET /api/v1/me/orders/{order_id}` | Authenticated; owner | — | `200 OrderDetail` | 401, 404 | — | Includes lines, payment method, `payment_due`, `can_cancel`, payment projection, refund summary and status history needed by customer; `in_production` is shown as `pending` and omitted from the history |
-| `POST /api/v1/me/orders/{order_id}/cancel` | Verified Customer; owner | `CustomerOrderCancelRequest` | `200 OrderDetail` | 401, 403, 404, 409 `ORDER_NOT_CANCELLABLE` / `INVALID_STATE_TRANSITION` | — | V1 decision: cancels all still-self-cancellable physical lines atomically; digital lines are never cancelled; allowed only while every physical line is `pending`; if cancellation is no longer legally possible, no partial silent cancellation occurs |
+| `POST /api/v1/me/orders/{order_id}/cancel` | Verified Customer; owner | `CustomerOrderCancelRequest` | `200 OrderDetail` | 401, 403, 404, 409 `ORDER_NOT_CANCELLABLE` / `INVALID_STATE_TRANSITION` | — | V1 decision: cancels all still-self-cancellable physical lines atomically; digital lines are never cancelled; allowed only when `can_cancel` is true (a physical line, a cash order or a payment that reached `paid`, every physical line `pending`); if cancellation is no longer legally possible, no partial silent cancellation occurs |
 | `POST /api/v1/me/orders/{order_id}/confirm-receipt` | Verified Customer; owner; CSRF | — | `200 OrderDetail` | 401, 403, 404, 409 `INVALID_STATE_TRANSITION` | — | Sets `receipt_confirmed_at` on delivered / picked-up lines; idempotent; no state change (ADR-024, VS-029b) |
 | `POST /api/v1/me/orders/{order_id}/report-problem` | Verified Customer; owner; CSRF | `ProblemReportCreate` | `201 OrderDetail` | 401, 403, 404, 409 `INVALID_STATE_TRANSITION`, 422, 429 | — | Sets `problem_reported_at` and creates a contact message linked to the order; no state change (ADR-024, VS-029b) |
 
@@ -527,9 +527,9 @@ The admin entitlement-grant endpoint is removed by ADR-019. To give an STL away,
 | `GET /api/v1/admin/orders/{order_id}` | — | `200 AdminOrderDetail` | 401/404 | — | Customer/order data, contact phone, payment method and amount due, lines, status history, payments/refunds, internal note |
 | `PATCH /api/v1/admin/orders/{order_id}` | `AdminOrderUpdate` | `200 AdminOrderDetail` | 401/404, 422 | — | V1 restricted to mutable admin fields such as internal note; order status is not directly patchable |
 | `GET /api/v1/admin/stl-deliveries` | query params | `200 StlDeliveryPage` | 401/404, 400 | Cursor; optional `product_id`, customer; default oldest first (`placed_at`) | STL delivery queue (ADR-019): every STL line in `awaiting_delivery`, with order number, product, customer and `customer_email_snapshot` to send to |
-| `POST /api/v1/admin/orders/{order_id}/items/{item_id}/transition` | `OrderItemTransitionRequest` | `200 AdminOrderDetail` | 401/404, 409 `INVALID_STATE_TRANSITION`, 422 | — | Locks the order, then the line (ADR-024 lock order); a physical edge requires a cash order or a paid online payment (BR-148); validates the delivery/pickup/STL state machine; `→ cancelled` from `returned` or `ready_for_pickup` requires `cancel_reason` and may insert a cash payment block (BR-144); recomputes order projection; history + audit + notifications. For an STL line, `awaiting_delivery → delivered` records `delivered_at` and `delivered_by` and notifies the customer that the file was emailed. `→ in_production` sends no customer notification. On a cash order, `→ delivered` and `→ picked_up` are refused; use the cash handover |
+| `POST /api/v1/admin/orders/{order_id}/items/{item_id}/transition` | `OrderItemTransitionRequest` | `200 AdminOrderDetail` | 401/404, 409 `INVALID_STATE_TRANSITION`, 422 | — | Locks the order, then the line (ADR-024 lock order); a physical edge requires a cash order or an online payment that reached `paid` — `paid`, `partially_refunded` or `refunded` (BR-148); validates the delivery/pickup/STL state machine; `→ cancelled` from `ready_to_ship`, `returned` or `ready_for_pickup` requires `cancel_reason` and may insert a cash payment block (BR-144); recomputes order projection; history + audit + notifications. For an STL line, `awaiting_delivery → delivered` records `delivered_at` and `delivered_by` and notifies the customer that the file was emailed. `→ in_production` sends no customer notification. On a cash order, `→ delivered` and `→ picked_up` are refused; use the cash handover |
 | `POST /api/v1/admin/orders/{order_id}/cash-handover` | `CashHandoverRequest` | `200 AdminOrderDetail` | 401/404, 409 `INVALID_STATE_TRANSITION`, 422 `CASH_AMOUNT_MISMATCH` | — | Cash orders only. Locks the order, then all lines by `id`; at least one live line, and every live line `shipped` / `ready_for_pickup`; amount must equal the sum of live line totals and be above zero (the full amount the customer paid); marks them delivered / picked up, creates the single `cash` payment (`paid`, `recorded_by`), recomputes status; history + audit + notification + email with the cash receipt (ADR-024) |
-| `POST /api/v1/admin/orders/{order_id}/cancel` | `AdminOrderCancelRequest` | `200 AdminOrderDetail` | 401/404, 409 `INVALID_STATE_TRANSITION` | — | Locks the order, then all physical lines by `id`. Cancels eligible lines according to state (`pending`, `in_production`, `ready_to_ship`, `ready_for_pickup`); `cancel_reason` required for `ready_for_pickup` lines; creates a refund obligation for paid lines only; a cash `no_show` that leaves no live line inserts a cash payment block; digital rules preserved |
+| `POST /api/v1/admin/orders/{order_id}/cancel` | `AdminOrderCancelRequest` | `200 AdminOrderDetail` | 401/404, 409 `INVALID_STATE_TRANSITION` | — | Locks the order, then all physical lines by `id`. Cancels eligible lines according to state (`pending`, `in_production`, `ready_to_ship`, `ready_for_pickup`); `cancel_reason` required for `ready_to_ship` and `ready_for_pickup` lines; creates a refund obligation for paid lines only; on a cash order the BR-144 block rule applies (under the phone advisory lock); digital rules preserved |
 
 | `GET /api/v1/admin/cash-blocks` | query params | `200 CashPaymentBlockPage` | 401/404 | Cursor; filters customer, phone, `active`; default `-created_at` | Cash payment blocks (ADR-024) |
 | `POST /api/v1/admin/cash-blocks/{block_id}/clear` | — | `200 CashPaymentBlockRead` | 401/404 | — | Sets `cleared_at`/`cleared_by`; audited; idempotent |
@@ -542,10 +542,11 @@ The line-transition endpoint and, for cash orders, the cash-handover endpoint ar
 
 | Method + Path | Request | Success | Errors | Pagination / Filter / Sort | Side Effects / Notes |
 |---|---|---|---|---|---|
-| `POST /api/v1/admin/orders/{order_id}/refunds` | `RefundCreate` + required `Idempotency-Key` | `201 RefundDetail` | 401/404, 409 `IDEMPOTENCY_KEY_CONFLICT`, 422 `REFUND_EXCEEDS_AVAILABLE`, 429, 502 | — | Locks the order, then the refunded lines, then the payment. Supports selected paid-line amounts (BR-149; no shipping, ADR-024); validates each line against `line_total − already refunded` (0 for a cancelled cash line) and the payment's balance; a cash payment is refunded `manual` only, up to the cash recorded; a refunded STL line leaves the delivery queue; records obligation; audit/outbox |
+| `POST /api/v1/admin/orders/{order_id}/refunds` | `RefundCreate` + required `Idempotency-Key` | `201 RefundDetail` | 401/404, 409 `IDEMPOTENCY_KEY_CONFLICT`, 422 `REFUND_EXCEEDS_AVAILABLE`, 429, 502 | — | Locks the order, then the refunded lines, then the payment. Supports selected paid-line amounts (BR-149; no shipping, ADR-024); validates each line against `line_total − its items in non-failed refunds` (0 for a cancelled cash line) and the payment's balance; a cash payment is refunded `manual` only, up to the cash recorded; a line becomes `refunded` only when fully refunded, and a fully refunded STL line leaves the delivery queue; records obligation; audit/outbox |
 | `GET /api/v1/admin/refunds` | query params | `200 RefundPage` | 401/404 | Cursor; `status`, order/customer/date; default oldest pending first when queueing | Pending-refund obligations queue |
 | `GET /api/v1/admin/refunds/{refund_id}` | — | `200 RefundDetail` | 401/404 | — | Full settlement/audit view |
-| `POST /api/v1/admin/refunds/{refund_id}/settle` | `RefundSettlementRequest` | `200 RefundDetail` | 401/404, 409 `INVALID_STATE_TRANSITION`, 422 | — | Used for manual-transfer settlement or provider-confirmed completion; append audit; notification/outbox |
+| `POST /api/v1/admin/refunds/{refund_id}/settle` | `RefundSettlementRequest` | `200 RefundDetail` | 401/404, 409 `INVALID_STATE_TRANSITION`, 422 | — | Used for manual-transfer settlement or provider-confirmed completion; locks order, lines, payment, refund (ADR-024); the order status does not change; append audit; notification/outbox |
+| `POST /api/v1/admin/refunds/{refund_id}/fail` | `RefundFailureRequest` | `200 RefundDetail` | 401/404, 409 `INVALID_STATE_TRANSITION` | — | Marks a pending refund `failed` (ADR-024): frees its amount for reissue, returns the lines it made `refunded` to their previous state, recomputes payment and order status; audited |
 
 Refund settlement is explicit because the SRS requires obligations to remain tracked until actually settled.
 
@@ -558,7 +559,7 @@ Refund settlement is explicit because the SRS requires obligations to remain tra
 | `GET /api/v1/admin/payments` | query params | `200 PaymentPage` | 401/404 | Cursor; filters status/provider/order/date; processing oldest first | Includes payments needing manual confirmation and recorded `cash` payments |
 | `GET /api/v1/admin/payments/{payment_id}` | — | `200 PaymentDetail` | 401/404 | — | Provider references/verification history; sensitive provider secrets never returned |
 | `POST /api/v1/admin/payments/{payment_id}/reconcile` | — | `200 PaymentDetail` | 401/404, 409, 502, 503 `PAYMENT_VERIFICATION_UNAVAILABLE` | — | Queries provider outside DB lock, then applies verified result transactionally |
-| `POST /api/v1/admin/payments/{payment_id}/confirm` | `ManualPaymentConfirmRequest` | `200 PaymentDetail` | 401/404, 409, 422 | — | Online payments only: manual fallback when automatic provider status verification is unavailable; verified amount must equal order total; STL delivery queue/status/audit/outbox side effects. Cash is recorded by the cash handover instead |
+| `POST /api/v1/admin/payments/{payment_id}/confirm` | `ManualPaymentConfirmRequest` | `200 PaymentDetail` | 401/404, 409, 422 | — | Online payments only, and only a live attempt on an uncancelled order (409 otherwise): manual fallback when automatic provider status verification is unavailable; verified amount must equal order total; STL delivery queue/status/audit/outbox side effects. Cash is recorded by the cash handover instead |
 
 A callback alone never authorizes these state changes.
 
@@ -852,16 +853,16 @@ admin_note?: str
 ```text
 target_status: order_item_status
 reason?: str
-cancel_reason?: "refused" | "no_show" | "other"   # required for → cancelled from returned or ready_for_pickup
+cancel_reason?: "refused" | "no_show" | "other"   # required for → cancelled from ready_to_ship, returned or ready_for_pickup
 ```
 
-The server validates legal transition, actor, payment state (BR-148) and cancel reason (`refused` only from `returned`, `no_show` only from `ready_for_pickup`).
+The server validates legal transition, actor, payment state (BR-148) and cancel reason (`refused` or `other` from `ready_to_ship`, `returned` or `ready_for_pickup`; `no_show` only from `ready_for_pickup`).
 
 ### `AdminOrderCancelRequest`
 
 ```text
 reason: str
-cancel_reason?: "no_show" | "other"   # required when a ready_for_pickup line is cancelled
+cancel_reason?: "refused" | "no_show" | "other"   # required when a ready_to_ship or ready_for_pickup line is cancelled; no_show only for ready_for_pickup
 ```
 
 ### `CashHandoverRequest`
@@ -1091,8 +1092,14 @@ Rules:
 - server derives currency;
 - every amount is validated against remaining refundable value;
 - overall refund total is derived server-side;
-- a refunded STL line becomes `refunded` and leaves the delivery queue;
+- a fully refunded STL line becomes `refunded` and leaves the delivery queue; a partial refund leaves the line in its state;
 - provider capability may force manual method; a `cash` payment is always `manual`.
+
+### `RefundFailureRequest`
+
+```text
+reason: str
+```
 
 ### `RefundSettlementRequest`
 
@@ -1409,7 +1416,9 @@ Unknown filter/sort fields produce `400 VALIDATION_ERROR`; they are never interp
 | Customer/admin cancellation | line transitions + order projection + refund obligation for paid lines + cash payment block on a whole-order cash refusal or no-show + history + audit + outbox |
 | Cash handover | live lines to delivered / picked up + `cash` payment + order projection + badge recompute + history + audit + outbox/notification with cash receipt |
 | Receipt confirmation / problem report | line timestamps (+ contact message for a report) |
-| Refund | refund obligation + refund items + STL line refunded (leaves delivery queue) + order projection + audit + outbox |
+| Refund | refund obligation + refund items + fully refunded lines to `refunded` (STL leaves delivery queue) + order projection + audit + outbox |
+| Refund failure | refund `failed` + lines it made `refunded` back to their previous state + payment and order projection + audit |
+| Late capture | `late_captured_at` on the attempt + automatic `late_capture` refund obligation + alert; order and lines untouched |
 | Offer create/counter/accept/reject/withdraw | append offer round + state/deadline + audit + outbox/notification |
 | Review create/update/delete/moderate | review mutation + rating/review-count aggregate |
 | Wishlist add/remove | active wishlist state + wishlist-count aggregate |

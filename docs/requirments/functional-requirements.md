@@ -318,7 +318,8 @@ Negative cases:
 WhatsApp-only, unavailable, hidden, or deleted products are rejected
 Delivery without a valid address, or pickup without a contact phone, is rejected
 Cash is rejected for an order with any STL line, when cash is switched off, or when the customer or the normalised contact phone is blocked from cash
-Cash is rejected when the customer or the contact phone already has the maximum number of unpaid cash orders, or the recomputed total exceeds the cash maximum
+Cash is rejected when the customer or the contact phone already has the maximum number of unpaid cash orders, or the recomputed total is zero or exceeds the cash maximum
+The same phone written in different formats is matched as one number (normalised, then keyed-hashed)
 An unconfigured online provider is rejected
 An already-owned STL is removed or rejected according to the checkout rule
 A reused idempotency key with a different body returns a conflict
@@ -361,7 +362,7 @@ When:
 The customer is redirected to the payment provider chosen at checkout
 The provider sends a callback to its own route
 The system reconciles a payment
-An administrator performs permitted manual confirmation
+An administrator performs permitted manual confirmation, only on a live attempt of an uncancelled order
 
 Then:
 
@@ -393,6 +394,7 @@ Pending → processing
 Pending or processing → paid
 Pending or processing → failed
 Pending or processing → expired
+Failed or expired attempt, or cancelled order, then a provider success → late capture: `late_captured_at` recorded, status unchanged, automatic refund obligation, alert, order and lines untouched
 
 Concurrent access:
 
@@ -407,6 +409,8 @@ Failure behaviour:
 The callback endpoint persists the event and responds quickly
 External provider queries occur without holding database locks
 A failed provider query leaves payment unresolved rather than paid
+A late provider success is never applied to the order; the captured money becomes a refund obligation
+A payment retry locks the order and re-checks it, so it cannot add a payment to an order the hold release has cancelled
 Stuck payments are retried through reconciliation
 If provider queries are unavailable, payment requires administrator confirmation against the provider dashboard
 
@@ -429,7 +433,7 @@ The order contains one or more physical lines
 
 When:
 
-The administrator opens the fulfilment queue, which never lists unpaid online orders
+The administrator opens the fulfillment queue, which never lists unpaid online orders
 The administrator marks start printing
 Marks an item ready, shipped, delivered, ready for pickup, picked up, or returned
 
@@ -449,7 +453,7 @@ A delivery line cannot use pickup-only transitions
 A pickup line cannot use shipping-only transitions
 A returned item is not automatically treated as terminal
 On a cash order, delivered and picked up are reached only through the cash handover (FR-20)
-Any physical transition on an unpaid online order is rejected with an invalid-state conflict
+Any physical transition on an unpaid online order is rejected with an invalid-state conflict; an online payment that reached paid (paid, partially refunded or refunded) allows them, and the hold release's cancellation of pending lines is the only exception
 Customers never see start printing: the line shows as received and the history omits it
 
 State transitions touched:
@@ -496,7 +500,7 @@ so that I am not charged for work that has not started.
 Given:
 
 The customer owns the order
-The order is paid online, or is an unpaid cash order
+The order has at least one physical line, and is a cash order or has an online payment that reached paid
 Every physical line is still pending: the administrator has not marked start printing
 
 When:
@@ -524,7 +528,7 @@ Physical pending → cancelled
 Paid order → cancelled or partially refunded, depending on remaining lines
 Unpaid cash order → cancelled
 
-Administrator cancellations from returned or ready_for_pickup record a reason (refused, no_show, other); see FR-20 for the cash block.
+Administrator cancellations from ready_to_ship, returned or ready_for_pickup record a reason: refused, no_show (ready_for_pickup only) or other; see FR-20 for the cash block.
 
 Concurrent access:
 
@@ -560,6 +564,7 @@ A payment reversal or chargeback is confirmed
 Then:
 
 A refund record and refund-line records are created
+A refund of part of a line leaves the line in its state; a line becomes refunded only when its non-failed refunds cover its whole total
 The obligation remains pending until confirmed settled
 Relevant line and order statuses are recomputed
 Refunded STL lines become refunded; one not yet sent leaves the delivery queue
@@ -569,7 +574,7 @@ Audit and customer-notification records are created
 
 Negative cases:
 
-The total refunded amount cannot exceed the paid amount, and no line's refund can exceed its line total minus what was already refunded on it
+The total refunded amount cannot exceed the paid amount, and no line's refund can exceed its line total minus its items in non-failed refunds
 A refund item on a cancelled cash line is rejected
 The same amount cannot be refunded twice
 Unpaid orders cannot be refunded, including cash orders whose cash has not been recorded
@@ -581,8 +586,9 @@ State transitions touched:
 Paid → partially_refunded
 Paid or partially_refunded → refunded
 Digital awaiting_delivery or delivered → refunded
-Physical terminal state → refunded
+Physical terminal state → refunded (only when fully refunded)
 Refund pending → settled or failed
+Refund failed → its amount is freed, it no longer counts toward balances or status, and lines it made refunded return to their previous state
 
 Concurrent access:
 
@@ -1058,9 +1064,10 @@ Order in progress → completed
 
 Refusal:
 
-shipped → returned → cancelled (reason refused or other), or ready_for_pickup → cancelled (reason no_show or other), with no refund obligation
-A refused or no_show cancel that leaves the order with no live line inserts a cash payment block for the customer and the order's contact phone, in the same transaction
-Refusing only some lines, or an other cancel, never blocks
+shipped → returned → cancelled, ready_to_ship → cancelled, or ready_for_pickup → cancelled, each with reason refused, no_show (ready_for_pickup only) or other, and no refund obligation
+When a cancel leaves the order with no live line, and every line cancelled from those states carries refused or no_show (at least one), a cash payment block is inserted for the customer and the order's phone hash, in the same transaction and under the phone advisory lock; the outcome does not depend on cancel order
+Refusing only some lines, or any other cancel, never blocks
+If a refusal leaves only lines totalling zero, the administrator cancels them (other) instead of a handover
 An administrator lists and clears blocks
 
 Concurrent access:

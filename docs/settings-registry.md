@@ -78,7 +78,7 @@ Not seeded yet. VS-028 adds these with the cash-on-delivery checkout and deletes
 |---|---|---|---|---|:-:|
 | `cash_payment_enabled` | boolean | — | `true` | — | ✅ |
 | `cash_max_open_orders` | integer | unpaid, uncancelled cash orders / customer or contact phone | `1` | 1 – 10 | ❌ |
-| `cash_max_order_total` | money | cents (USD) | `10000` (100 USD) | 0 – 1 000 000 cents | ✅ |
+| `cash_max_order_total` | money | cents (USD) | `10000` (100 USD) | 1 – 1 000 000 cents | ✅ |
 
 `cash_payment_enabled` switches cash off without touching online orders or
 existing cash orders. The two limits bound how much printing a fake or refused
@@ -128,7 +128,7 @@ accepting_orders, cash_payment_enabled, cash_max_order_total, pickup_address, pi
 Both changes go through the registry and `PublicSettingsRead` together, as
 described above.
 
-The other seven are internal. `daily_download_cap` was deliberately private
+Of today's twelve seeded keys, the seven not in today's five-key list are internal. `daily_download_cap` was deliberately private
 (publishing an abuse limit tells an abuser how to pace themselves); it is now
 obsolete, because ADR-019 removed downloads, and VS-023b deletes it.
 

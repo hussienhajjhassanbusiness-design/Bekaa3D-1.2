@@ -393,17 +393,15 @@ Removed or consumed CartItems may be **soft deleted** according to the global de
 Order status is a **derived projection** and must never be assigned directly.
 
 ```text
-Online Order, payment pending or processing
-  └── PENDING_PAYMENT
-
-Online Order, payment failed or expired
-  └── CANCELLED
+Online Order, no Payment reached paid
+  ├── cancelled by the hold release   → CANCELLED
+  └── otherwise                       → PENDING_PAYMENT
 
 Cash Order, no Payment yet
   ├── all items cancelled         → CANCELLED
   └── otherwise                   → IN_PROGRESS
 
-Payment paid (online or cash)
+Payment reached paid (paid, partially refunded or refunded; online or cash)
   ├── all items cancelled             → CANCELLED
   ├── refunds cover all paid money    → REFUNDED
   ├── all items refunded              → REFUNDED
@@ -412,7 +410,7 @@ Payment paid (online or cash)
   └── otherwise                       → IN_PROGRESS
 ```
 
-This is a projection rule rather than a normal command-driven state machine. "Refunds cover all paid money" counts refund records, pending or settled. Derived flags: `payment_due` marks an unpaid cash Order; `can_cancel` is true while every physical item is `pending` and the Order is not closed.
+This is a projection rule rather than a normal command-driven state machine. A failed or expired attempt leaves the Order `PENDING_PAYMENT` until the hold release cancels it. "Refunds cover all paid money" counts non-failed refund records, pending or settled, and never late-capture refunds; "all items refunded" means every item fully refunded. Derived flags: `payment_due` marks an unpaid cash Order; `can_cancel` is true only when the Order has a physical item, is cash or has a Payment that reached paid, is not closed, and every physical item is `pending`.
 
 **Relationships:**
 
@@ -435,11 +433,11 @@ This is a projection rule rather than a normal command-driven state machine. "Re
 - **[Application]** Delivery Orders require an address snapshot.
 - **[Application]** Pickup Orders require no delivery address.
 - **[DB]** Every Order with a fulfillment method has a contact phone snapshot.
-- **[Application]** `payment_method = cash` requires every OrderItem to be physical, cash enabled, no uncleared CashPaymentBlock for the customer or the normalised contact phone, fewer than `cash_max_open_orders` open unpaid cash Orders for the customer or that phone, and a **recomputed** total within `cash_max_order_total`; checked after the totals are recomputed, under the cart lock and an advisory lock on the phone.
+- **[Application]** `payment_method = cash` requires every OrderItem to be physical, cash enabled, no uncleared CashPaymentBlock for the customer or the contact phone hash, fewer than `cash_max_open_orders` open unpaid cash Orders for the customer or that hash, and a **recomputed** total above 0 and within `cash_max_order_total`; checked after the totals are recomputed, under the cart lock and an advisory lock on the phone hash.
 - **[DB]** `payment_method` is copied onto every OrderItem and Payment under a composite foreign key to `orders(id, payment_method)`; CHECKs forbid an STL item on a cash Order and require `provider = cash` exactly on cash Orders.
-- **[Application]** The contact phone snapshot is stored normalised to E.164.
+- **[Application]** The contact phone snapshot is stored normalised to E.164, with `contact_phone_hash` (keyed `HMAC-SHA256`, secret `PHONE_HASH_SALT`, never rotated) for matching.
 - **[Application]** A cash Order has no checkout hold and no Payment until the cash handover.
-- **[Application]** An unpaid online Order never appears in the fulfilment queue, and none of its physical items may change state (BR-148).
+- **[Application]** An unpaid online Order never appears in the fulfillment queue, and none of its physical items may change state (BR-148), except the hold release cancelling its `pending` items.
 - **[DB/Application]** Every write that changes an Order's items, Payment or Refunds locks the `orders` row first, then the items in `id` order, then the Payment, and recomputes the status under those locks (ADR-024).
 - **[Application]** Digital-only Orders have no fulfillment method.
 - **[Application]** The estimated dispatch date considers all physical items, quantities, lead times, and batch sizes.
@@ -491,7 +489,7 @@ Orders are **retained**, not deleted through business workflows. Cancellation an
 - physical production snapshots
 - `receipt_confirmed_at`, `problem_reported_at` — optional customer feedback after delivery or pickup (ADR-024)
 - `payment_method` — copy of the Order's, for the database cash-integrity check
-- `cancel_reason` — `refused`, `no_show` or `other`, recorded on an administrator cancel from `returned` or `ready_for_pickup`
+- `cancel_reason` — `refused`, `no_show` (from `ready_for_pickup` only) or `other`, recorded on an administrator cancel from `ready_to_ship`, `returned` or `ready_for_pickup`
 - `offer_id`
 - lifecycle timestamps
 
@@ -562,8 +560,9 @@ PENDING
 - **[Application]** Digital fulfillment is independent of physical fulfillment in a Mixed Order.
 - **[Application]** Start printing (`pending → in_production`) closes customer self-cancellation; it sends no customer email or notification.
 - **[Application]** The customer is emailed and notified at `ready_to_ship`, `shipped`, `ready_for_pickup`, and `delivered` / `picked_up`.
-- **[Application]** Every physical transition requires a cash Order or a `paid` online Payment (BR-148).
-- **[Application]** Cancelling a paid item creates a refund obligation; cancelling an unpaid cash item creates none. A `refused` or `no_show` cancel that leaves a cash Order with no live item creates a CashPaymentBlock; a partial refusal or an `other` cancel does not.
+- **[Application]** Every physical transition requires a cash Order or an online Payment that reached paid — `paid`, `partially_refunded` or `refunded` (BR-148); the hold release's `pending → cancelled` is the only exception.
+- **[Application]** Cancelling a paid item creates a refund obligation; cancelling an unpaid cash item creates none. When a cancel leaves a cash Order with no live item, and every item cancelled from `ready_to_ship`, `returned` or `ready_for_pickup` carries `refused` or `no_show` (at least one), a CashPaymentBlock is created; the result does not depend on cancel order, and a partial refusal or any `other` prevents it. If a refusal leaves only items totalling 0, the administrator cancels them (`other`) instead of a handover.
+- **[Application]** An item becomes `refunded` only when its non-failed refunds cover its whole line total; a partial refund leaves it in its state.
 - **[Application]** A paid item is an item of an Order whose Payment reached `paid`, unless it was cancelled without a refund obligation; a cancelled cash item has nothing refundable and earns no revenue or badge (BR-149).
 - **[Application]** Customers see `in_production` as `pending`, and their status history omits it.
 - **[Application]** Receipt confirmation and problem reports never change an item's state.
@@ -633,7 +632,9 @@ A cash Payment (`provider = cash`) is created directly as `PAID` by the cash han
 - **[Domain]** An online Payment amount and currency must match the Order total; a cash Payment must equal the sum of the Order's live item totals and be above zero, with at least one live item.
 - **[Application]** A cash Payment is created only by the administrator's cash handover, in the same transaction that marks every live item delivered or picked up; no callback, webhook or job can create one.
 - **[Application]** A callback is a notification, never proof of payment.
-- **[Application]** `paid` is reachable only after independent server-side verification or permitted manual confirmation.
+- **[Application]** `paid` is reachable only after independent server-side verification of a live attempt on an uncancelled Order, or permitted manual confirmation of such an attempt.
+- **[Application]** A provider success for a `failed` or `expired` attempt, or on a cancelled Order, is a late capture: `late_captured_at` is set, the status does not change, an automatic `late_capture` Refund is created, an alert is raised, and the Order and its items are untouched.
+- **[Application]** A retry locks the Order first and re-checks that it is still `pending_payment` and not cancelled.
 - **[Application]** Underpayment must never produce `paid`.
 - **[DB]** Duplicate provider events must not apply a Payment result twice.
 - **[Application]** External provider queries occur without holding database locks, through the adapter named on the Payment row, never the callback URL; an event whose provider differs from its Payment's is stored and ignored.
@@ -749,10 +750,11 @@ The SRS explicitly requires a pending obligation that remains open until settlem
 
 ```text
 PENDING
-  └── SETTLED
+  ├── SETTLED
+  └── FAILED   (ADR-024: frees the amount for reissue)
 ```
 
-The SRS does not define additional terminal statuses. States such as `failed` or `cancelled` must not be introduced without a documented decision.
+`FAILED` is the documented decision of ADR-024 (SRS §9.6). Other states such as `cancelled` must not be introduced without a documented decision.
 
 **Relationships:**
 
@@ -767,22 +769,28 @@ The SRS does not define additional terminal statuses. States such as `failed` or
 - **[Domain]** Refund amount must be positive.
 - **[DB]** Refund money uses integer cents and an explicit currency.
 - **[Application]** Total refunds cannot exceed the remaining refundable Payment amount.
-- **[Application]** Refunds may cover selected paid OrderItems; an item's refundable amount is its line total minus what was already refunded on it, and a cancelled cash item has 0.
+- **[Application]** Refunds may cover selected paid OrderItems, in full or in part; an item's refundable amount is its line total minus its items in non-failed refunds, and a cancelled cash item has 0.
+- **[Application]** A `late_capture` Refund has no RefundItems and returns money captured after its attempt stopped being live; it never affects the Order projection.
 - **[Application]** When refunds cover all paid money, the Order derives `refunded`.
 - **[Application]** A cash Payment is refunded only after its handover, always with method `manual`, up to the cash recorded.
-- **[Application]** Refunding a digital item marks it `refunded`; one still awaiting delivery leaves the delivery queue.
+- **[Application]** Refunding a digital item in full marks it `refunded`; one still awaiting delivery leaves the delivery queue. A partial refund leaves it in the queue and owned.
+- **[Application]** A failed Refund frees its amount, never counts toward balances or status, and returns the items it had made `refunded` to their previous state (an STL item stays `refunded`, with an alert, if the product was bought again meanwhile).
 - **[Application]** A pending Refund remains visible in the administrator obligations queue until settlement.
 - **[Application]** If the online provider does not support refund APIs, settlement is recorded after manual transfer.
 - **[Application]** Refund requests use idempotency protection.
 - **[Authorization]** Only authorized administrators may issue Refunds.
-- **[DB/Application]** Concurrent refunds must lock or recheck the remaining refundable balance.
+- **[DB/Application]** Refund creation, settlement, failure and chargeback recording lock the `orders` row, then items, then the Payment, then the Refund (ADR-024), and recheck the remaining balance.
 - **[Application]** A confirmed chargeback also marks affected digital items `refunded`.
 
 **Transition rules:**
 
 - `PENDING → SETTLED`
   - Performed after provider or manual-transfer confirmation.
-  - Side effects: Payment status and Order projection recalculated.
+  - Side effects: Payment status recalculated; the Order projection already counted the Refund, so it does not change.
+
+- `PENDING → FAILED` (ADR-024)
+  - Performed when the provider refund or manual transfer fails.
+  - Side effects: the amount is freed, items it made `refunded` return to their previous state, Payment status and Order projection recalculated; the administrator can reissue.
 
 **Deletion strategy:**
 **Retain permanently.** Refunds represent financial obligations and settlement evidence.
@@ -1321,7 +1329,7 @@ These entities remain part of the domain model but generally do not require a fu
 | Colour                  | `colour_id`                        | Administrator-managed controlled value, not free text                                                    |
 | OrderStatusHistory      | `history_id`                       | Append-only record of Order projection or item-state changes                                             |
 | RefundItem              | `refund_item_id`                   | Allocates part of a Refund to an OrderItem                                                               |
-| CashPaymentBlock        | `cash_payment_block_id`            | Ordering. Created when a `refused` or `no_show` cancel leaves a cash Order with no live item; matches by customer and by normalised contact phone; cleared (never deleted) by an administrator (ADR-024) |
+| CashPaymentBlock        | `cash_payment_block_id`            | Ordering. Created when a `refused` or `no_show` cancel leaves a cash Order with no live item; matches by customer and by keyed hash of the normalised contact phone (never the plaintext number); cleared (never deleted) by an administrator (ADR-024) |
 | OfferRound              | `offer_round_id`                   | Append-only sequence within an Offer; records actor, action, amount, message, timestamp                  |
 | WishlistItem            | `wishlist_item_id`                 | Unique User–Product association; verified User only                                                      |
 | CustomRequestAttachment | `attachment_id`                    | Private, validated, re-encoded, scanned, expiring file                                                   |
