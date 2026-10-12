@@ -147,13 +147,17 @@ docker compose logs -f worker
 
 `POST /api/v1/auth/register`, `/verify-email`, and `/resend-verification` are all **enumeration-safe**: the response is identical regardless of whether the email is new, already registered-unverified, or already verified — see `docs/requirments/api-endpoints.md` §8.1. Registration writes the user, verification token, outbox message, and audit-log row in one transaction; the actual email send happens later via the outbox worker, so an email-provider outage never rolls back an account creation.
 
-`EMAIL_PROVIDER=console` (the `.env.example` default) logs the email instead of sending it — grep the `api` or `worker` container logs for `console_email_send` to find a verification link during local development:
+`EMAIL_PROVIDER=console` (the `.env.example` default) logs that an email was "sent" instead of sending it. The log line (`console_email_send`) carries only the names of the payload fields, never the token (SEC-26), so it cannot give you a verification link. To read one during local development, stop the worker and query `email_outbox`; the exact commands are in [`docs/frontend-handoff/BACKEND-RESPONSE.md`](docs/frontend-handoff/BACKEND-RESPONSE.md) (item A3).
+
+### Frontend handoff and development seed
+
+[`docs/frontend-handoff/`](docs/frontend-handoff/) answers the frontend team's contract questions, and holds `openapi.json` (regenerate with `python scripts/export_openapi.py`; a unit test fails while it is stale). `scripts/dev_seed.py` fills a development database with an administrator (MFA enrolled), a verified customer and a small catalogue:
 
 ```
-docker compose logs api worker | grep console_email_send
+docker compose run --rm -T -e PYTHONPATH=src api python - < scripts/dev_seed.py
 ```
 
-The `token` field in that log entry is the raw value to POST to `/api/v1/auth/verify-email`.
+It refuses to run unless `ENVIRONMENT` is `development` or `test`, and prints the generated credentials once.
 
 ### Browser sessions (VS-003)
 
