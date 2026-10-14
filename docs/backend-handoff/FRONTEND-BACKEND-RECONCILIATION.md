@@ -16,7 +16,7 @@ Two ADRs permanently deleted parts of the frontend's planned surface:
 - **ADR-019** — the platform never stores or serves STL files. There is no entitlement/library model, no download endpoint, no admin asset-version upload, no admin entitlement grant. STL files are emailed by hand after a verified payment.
 - **ADR-024** — the platform charges no shipping. There are no shipping zones, no shipping rate, no free-shipping threshold (the field survives in `PublicSettingsRead` only until VS-028 deletes it, and is always `null` — do not build UI on it). Cash-on-delivery for physical-only orders is new.
 
-Of the 32 slices in scope: **9 are ready to integrate now (A)**, **4 are partially ready (B)**, **12 are blocked on backend work not yet started (C)**, **5 are superseded and should be retired (D)**, **2 require a product-owner decision before they can even be correctly designed (E)**. (One slice, FVS-014, is split between A/B territory and is counted once, under B, since part of it is genuinely blocked.)
+Of the 32 slices in scope: **14 are ready to integrate now (A)**, **1 is partially ready (B)**, **10 are blocked on backend work not yet started (C)**, **5 are superseded and should be retired (D)**, **2 require a product-owner decision before they can even be correctly designed (E)**. (One slice, FVS-014, is split between A/B territory and is counted once, under B, since part of it is genuinely blocked.)
 
 The single biggest unlock since the frontend's last audit: **the admin authorization question (P1-1) that blocked every admin route is now answered** — `role` on `GET /api/v1/me` is the only source of truth, and for an MFA-enrolled administrator, *having a session at all* means MFA is complete (`401 MFA_REQUIRED` is the one exception to handle globally). This was previously the single largest structural blocker (`BACKEND-UNLOCK-HANDOFF.md` P1-1, line 12) and is now fully resolved, unblocking FVS-005, 007, 009, 010, 011, 012 for real integration.
 
@@ -63,7 +63,7 @@ Legend: **A** ready now · **B** partially ready · **C** backend not built · *
 | FVS-031 | Order cancellation & returns UX | **C** | P1-12 not built | `BACKEND-RESPONSE.md` P1-12 |
 | FVS-032 | Admin refund management | **C** | P1-13 not built; shipping/entitlement rows must be deleted now | `BACKEND-RESPONSE.md` P1-13, §3, §6 |
 
-**Counts: A = 9, B = 1, C = 12, D = 5, E = 2.** (Totals to 29 distinct classes across 32 slices; FVS-014 is the one slice that is genuinely split, recorded once as B.)
+**Counts: A = 14, B = 1, C = 10, D = 5, E = 2.** (Totals to 32 slices; FVS-014 is the one slice that is genuinely split between A/B territory, recorded once, under B.)
 
 ---
 
