@@ -284,9 +284,9 @@ class AddressModel(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
     )
-    # RESTRICT: only never-verified users are purged, and they cannot write addresses.
+    # CASCADE fires only in the never-verified purge; verified users are anonymised instead.
     user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     label: Mapped[str] = mapped_column(Text, nullable=False)
     recipient_name: Mapped[str] = mapped_column(Text, nullable=False)

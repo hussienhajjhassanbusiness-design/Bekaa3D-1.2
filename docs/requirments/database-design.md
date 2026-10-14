@@ -531,7 +531,7 @@ A deleted address is never default: `CHECK (NOT (is_default AND deleted_at IS NO
 
 ### FK Delete
 
-`users → addresses`: `ON DELETE RESTRICT` (VS-026). Only never-verified accounts are purged, and they cannot write addresses. Normal verified-account deletion is anonymisation, not hard deletion.
+`users → addresses`: `ON DELETE CASCADE`, which fires only in the physical purge of a never-verified account; no foreign key to `users` may block that purge. Normal verified-account deletion is anonymisation, not hard deletion.
 
 ### Important Note
 

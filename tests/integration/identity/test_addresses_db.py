@@ -113,12 +113,17 @@ async def test_required_fields_are_not_null(db_engine: AsyncEngine, field: str) 
             await _insert(conn, user_id, **{field: None})
 
 
-async def test_a_user_with_addresses_cannot_be_hard_deleted(db_engine: AsyncEngine) -> None:
+async def test_addresses_never_block_the_unverified_purge(db_engine: AsyncEngine) -> None:
+    """The purge is the only hard delete of a user; its addresses go with it."""
     user_id = await _user(db_engine)
     async with db_engine.connect() as conn:
-        await _insert(conn, user_id)
-        with pytest.raises(IntegrityError, match="addresses_user_id_fkey"):
-            await conn.execute(text("DELETE FROM users WHERE id = :id"), {"id": user_id})
+        await _insert(conn, user_id, is_default=True)
+        await conn.execute(text("DELETE FROM users WHERE id = :id"), {"id": user_id})
+        remaining = await conn.scalar(
+            text("SELECT count(*) FROM addresses WHERE user_id = :id"), {"id": user_id}
+        )
+        await conn.rollback()
+    assert remaining == 0
 
 
 class _FailAfterClear(SqlAddressRepository):

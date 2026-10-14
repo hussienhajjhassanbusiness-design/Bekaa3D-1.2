@@ -31,7 +31,7 @@ VS-026 builds the address book. Three documents disagreed about `landmark_notes`
 + "At most one default" holds under concurrency, proven by a race test with the lock removed (14 of 15 runs fail).
 − The 8-digit range is broad (`7x`, `8x`): an unassigned prefix such as `72` is accepted. The courier and the administrator call before dispatch, which catches a wrong number. Narrowing it later only refuses input.
 − A user who sends `is_default: false` for their first address still gets a default.
-− `addresses.user_id` is `ON DELETE RESTRICT`, stricter than the CASCADE `database-design.md` allows. Only never-verified accounts are purged, and they cannot write addresses.
+− `addresses.user_id` is `ON DELETE CASCADE`, as `database-design.md` allows. It fires only in the never-verified purge, which no foreign key to `users` may block (`test_no_foreign_key_to_users_can_block_the_purge`); verified accounts are anonymised, never deleted.
 
 ## Alternatives rejected
 

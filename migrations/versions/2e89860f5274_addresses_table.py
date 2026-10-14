@@ -60,7 +60,8 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="RESTRICT"),
+        # CASCADE: the unverified purge must never be blocked; verified users are only anonymised.
+        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.CheckConstraint(
             "NOT (is_default AND deleted_at IS NOT NULL)", name="ck_addresses_deleted_not_default"
         ),
