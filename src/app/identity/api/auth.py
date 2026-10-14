@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.captcha import CAPTCHA_RESPONSES, require_captcha
 from app.api.cookies import (
     ACCESS_COOKIE,
     REFRESH_COOKIE,
@@ -61,6 +62,8 @@ from app.identity.infrastructure.repositories import (
     UserRepository,
     VerificationTokenRepository,
 )
+from app.integrations.captcha.factory import get_captcha_verifier
+from app.integrations.captcha.ports import CaptchaPort
 from app.platform.public import SqlAuditWriter, SqlOutboxWriter
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -90,13 +93,16 @@ _RESET_CONFIRM_LIMIT = rate_limiter(key_prefix="auth:reset-confirm", limit=20, w
     status_code=status.HTTP_202_ACCEPTED,
     response_model=RegistrationAccepted,
     dependencies=[Depends(_REGISTER_LIMIT)],
-    responses={429: {"description": "Rate limit exceeded."}},
+    responses={**CAPTCHA_RESPONSES, 429: {"description": "Rate limit exceeded."}},
 )
 async def register(
     body: RegisterRequest,
     request: Request,
     session: AsyncSession = Depends(get_session),
+    captcha: CaptchaPort = Depends(get_captcha_verifier),
 ) -> RegistrationAccepted:
+    # Before any account lookup, so a refusal reads the same for every address (ADR-025).
+    await require_captcha(body.captcha_token, captcha)
     use_case = RegisterUser(
         user_repo=UserRepository(session),
         token_repo=VerificationTokenRepository(session),
@@ -382,13 +388,16 @@ async def refresh(
     status_code=status.HTTP_202_ACCEPTED,
     response_model=RegistrationAccepted,
     dependencies=[Depends(_RESEND_LIMIT)],
-    responses={429: {"description": "Rate limit exceeded."}},
+    responses={**CAPTCHA_RESPONSES, 429: {"description": "Rate limit exceeded."}},
 )
 async def resend_verification(
     body: ResendVerificationRequest,
     request: Request,
     session: AsyncSession = Depends(get_session),
+    captcha: CaptchaPort = Depends(get_captcha_verifier),
 ) -> RegistrationAccepted:
+    # Before any account lookup, so a refusal reads the same for every address (ADR-025).
+    await require_captcha(body.captcha_token, captcha)
     use_case = ResendVerification(
         user_repo=UserRepository(session),
         token_repo=VerificationTokenRepository(session),
@@ -412,6 +421,7 @@ async def resend_verification(
     summary="Request a password reset email",
     responses={
         202: {"description": "Always, whether or not the address is known."},
+        **CAPTCHA_RESPONSES,
         429: {"description": "Rate limit exceeded."},
     },
 )
@@ -419,7 +429,10 @@ async def request_password_reset(
     body: PasswordResetRequest,
     request: Request,
     session: AsyncSession = Depends(get_session),
+    captcha: CaptchaPort = Depends(get_captcha_verifier),
 ) -> PasswordResetAccepted:
+    # Before any account lookup, so a refusal reads the same for every address (ADR-025).
+    await require_captcha(body.captcha_token, captcha)
     use_case = RequestPasswordReset(
         user_repo=UserRepository(session),
         token_repo=PasswordResetTokenRepository(session),

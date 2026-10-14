@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.identity.application.services import login_throttle
 from app.identity.infrastructure.models import SessionModel
+from app.integrations.captcha.fake import FAKE_CAPTCHA_PASS
 from app.main import app as main_app
 from tests.integration.deep_support import (
     PASSWORD,
@@ -391,9 +392,22 @@ async def test_argon2_never_runs_on_the_event_loop(
 
     monkeypatch.setattr(password_hasher, "_hasher", Spy())
     with client_for(main_app) as client:
-        client.post("/api/v1/auth/register", json={"email": unique_email(), "password": PASSWORD})
-        client.post("/api/v1/auth/resend-verification", json={"email": unique_email()})
-        client.post("/api/v1/auth/password-reset/request", json={"email": user.email})
+        client.post(
+            "/api/v1/auth/register",
+            json={
+                "captcha_token": FAKE_CAPTCHA_PASS,
+                "email": unique_email(),
+                "password": PASSWORD,
+            },
+        )
+        client.post(
+            "/api/v1/auth/resend-verification",
+            json={"captcha_token": FAKE_CAPTCHA_PASS, "email": unique_email()},
+        )
+        client.post(
+            "/api/v1/auth/password-reset/request",
+            json={"captcha_token": FAKE_CAPTCHA_PASS, "email": user.email},
+        )
         client.post(LOGIN, json={"email": unique_email(), "password": "wrong-password"})
         client.post(LOGIN, json={"email": user.email, "password": "wrong-password"})
         login(client, user.email)
@@ -413,6 +427,10 @@ async def test_cookie_flags_per_environment(
     environment: str, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("ENVIRONMENT", environment)
+    if environment != "development":
+        # The fake captcha refuses to boot outside test and development (ADR-026).
+        monkeypatch.setenv("CAPTCHA_PROVIDER", "turnstile")
+        monkeypatch.setenv("TURNSTILE_SECRET", "unused-in-this-test")
     get_settings.cache_clear()
     user = await create_user(db_session)
     try:

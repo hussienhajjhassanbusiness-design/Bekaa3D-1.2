@@ -29,6 +29,7 @@ from app.identity.infrastructure.models import (
     UserModel,
     VerificationTokenModel,
 )
+from app.integrations.captcha.fake import FAKE_CAPTCHA_PASS
 from app.jobs.purge_unverified import purge_unverified_accounts
 from app.main import app as main_app
 from app.platform.infrastructure.models import AuditLogModel, EmailOutboxModel, SettingModel
@@ -122,7 +123,10 @@ async def test_an_invalid_email_is_a_422_and_creates_nothing(
 ) -> None:
     before = await db_session.scalar(select(func.count()).select_from(UserModel))
     with client_for(main_app) as client:
-        response = client.post(REGISTER, json={"email": email, "password": PASSWORD})
+        response = client.post(
+            REGISTER,
+            json={"captcha_token": FAKE_CAPTCHA_PASS, "email": email, "password": PASSWORD},
+        )
     assert_problem(response, 422, "VALIDATION_ERROR")
     db_session.expire_all()
     assert await db_session.scalar(select(func.count()).select_from(UserModel)) == before
@@ -134,7 +138,12 @@ async def test_an_invalid_email_is_a_422_and_creates_nothing(
 def test_a_local_part_over_64_octets_is_refused(length: int) -> None:
     with client_for(main_app) as client:
         response = client.post(
-            REGISTER, json={"email": "x" * length + "@example.com", "password": PASSWORD}
+            REGISTER,
+            json={
+                "captcha_token": FAKE_CAPTCHA_PASS,
+                "email": "x" * length + "@example.com",
+                "password": PASSWORD,
+            },
         )
     assert_problem(response, 422, "VALIDATION_ERROR")
 
@@ -163,7 +172,14 @@ def test_a_local_part_over_64_octets_is_refused(length: int) -> None:
 )
 def test_password_length_and_type_boundaries(password: Any, status: int) -> None:
     with client_for(main_app) as client:
-        response = client.post(REGISTER, json={"email": unique_email(), "password": password})
+        response = client.post(
+            REGISTER,
+            json={
+                "captcha_token": FAKE_CAPTCHA_PASS,
+                "email": unique_email(),
+                "password": password,
+            },
+        )
     assert response.status_code == status, response.text
 
 
@@ -187,7 +203,15 @@ async def test_mass_assignment_fields_are_refused(
 ) -> None:
     email = unique_email()
     with client_for(main_app) as client:
-        response = client.post(REGISTER, json={"email": email, "password": PASSWORD, **extra})
+        response = client.post(
+            REGISTER,
+            json={
+                "captcha_token": FAKE_CAPTCHA_PASS,
+                "email": email,
+                "password": PASSWORD,
+                **extra,
+            },
+        )
     assert_problem(response, 422, "VALIDATION_ERROR")
     assert await _rows_for(db_session, email) == []
 
@@ -199,7 +223,14 @@ async def test_an_argon2_sized_attack_cannot_be_amplified(db_session: AsyncSessi
     most - so one request can never make Argon2 hash megabytes."""
     with client_for(main_app) as client:
         started = time.perf_counter()
-        client.post(REGISTER, json={"email": unique_email(), "password": "\U0001f600" * 256})
+        client.post(
+            REGISTER,
+            json={
+                "captcha_token": FAKE_CAPTCHA_PASS,
+                "email": unique_email(),
+                "password": "\U0001f600" * 256,
+            },
+        )
         elapsed = time.perf_counter() - started
     assert elapsed < 3
 
@@ -232,8 +263,14 @@ async def test_two_spellings_of_one_address_are_one_account(
     tag = uuid.uuid4().hex[:10]
     first, second = first.format(tag), second.format(tag)
     with client_for(main_app) as client:
-        a = client.post(REGISTER, json={"email": first, "password": PASSWORD})
-        b = client.post(REGISTER, json={"email": second, "password": PASSWORD})
+        a = client.post(
+            REGISTER,
+            json={"captcha_token": FAKE_CAPTCHA_PASS, "email": first, "password": PASSWORD},
+        )
+        b = client.post(
+            REGISTER,
+            json={"captcha_token": FAKE_CAPTCHA_PASS, "email": second, "password": PASSWORD},
+        )
     assert a.status_code == b.status_code == 202, (a.text, b.text)
     db_session.expire_all()
     rows = (await db_session.scalars(select(UserModel).where(UserModel.email.contains(tag)))).all()
@@ -247,9 +284,21 @@ async def test_surrounding_whitespace_never_creates_a_second_account(
 ) -> None:
     tag = uuid.uuid4().hex[:10]
     with client_for(main_app) as client:
-        client.post(REGISTER, json={"email": f"ws{tag}@example.com", "password": PASSWORD})
+        client.post(
+            REGISTER,
+            json={
+                "captcha_token": FAKE_CAPTCHA_PASS,
+                "email": f"ws{tag}@example.com",
+                "password": PASSWORD,
+            },
+        )
         padded = client.post(
-            REGISTER, json={"email": f"  ws{tag}@example.com  ", "password": PASSWORD}
+            REGISTER,
+            json={
+                "captcha_token": FAKE_CAPTCHA_PASS,
+                "email": f"  ws{tag}@example.com  ",
+                "password": PASSWORD,
+            },
         )
     assert padded.status_code in (202, 422)
     db_session.expire_all()
@@ -266,7 +315,10 @@ async def test_plus_addressing_is_a_distinct_account_and_stored_verbatim(
     with client_for(main_app) as client:
         for email in (f"p{tag}@example.com", f"p{tag}+shop@example.com"):
             assert (
-                client.post(REGISTER, json={"email": email, "password": PASSWORD}).status_code
+                client.post(
+                    REGISTER,
+                    json={"captcha_token": FAKE_CAPTCHA_PASS, "email": email, "password": PASSWORD},
+                ).status_code
                 == 202
             )
     db_session.expire_all()
@@ -281,7 +333,10 @@ async def test_a_registered_account_is_a_customer_unverified_active_epoch_zero(
 ) -> None:
     email = unique_email()
     with client_for(main_app) as client:
-        client.post(REGISTER, json={"email": email, "password": PASSWORD})
+        client.post(
+            REGISTER,
+            json={"captcha_token": FAKE_CAPTCHA_PASS, "email": email, "password": PASSWORD},
+        )
     [row] = await _rows_for(db_session, email)
     assert (row.role, row.email_verified_at, row.is_active, row.auth_epoch) == (
         UserRole.CUSTOMER,
@@ -316,7 +371,12 @@ async def test_register_is_byte_identical_for_new_unverified_and_verified_addres
     verified = await create_user(db_session, verified=True)
     with client_for(main_app) as client:
         shapes = [
-            _shape(client.post(REGISTER, json={"email": email, "password": PASSWORD}))
+            _shape(
+                client.post(
+                    REGISTER,
+                    json={"captcha_token": FAKE_CAPTCHA_PASS, "email": email, "password": PASSWORD},
+                )
+            )
             for email in (unique_email(), unverified.email, verified.email)
         ]
     assert shapes[0] == shapes[1] == shapes[2]
@@ -330,7 +390,7 @@ async def test_resend_is_byte_identical_for_every_account_state(db_session: Asyn
     deactivated = await create_user(db_session, verified=False, active=False)
     with client_for(main_app) as client:
         shapes = [
-            _shape(client.post(RESEND, json={"email": email}))
+            _shape(client.post(RESEND, json={"captcha_token": FAKE_CAPTCHA_PASS, "email": email}))
             for email in (unique_email(), unverified.email, verified.email, deactivated.email)
         ]
     assert len(set(map(repr, shapes))) == 1
@@ -431,7 +491,7 @@ async def test_register_does_the_same_argon2_work_on_every_branch(
         db_session,
         monkeypatch,
         REGISTER,
-        lambda e: {"email": e, "password": PASSWORD},
+        lambda e: {"email": e, "password": PASSWORD, "captcha_token": FAKE_CAPTCHA_PASS},
         [unique_email(), unverified.email, verified.email],
     )
     assert counts == [1, 1, 1]
@@ -448,7 +508,7 @@ async def test_resend_does_the_same_argon2_work_on_every_branch(
         db_session,
         monkeypatch,
         RESEND,
-        lambda e: {"email": e},
+        lambda e: {"email": e, "captcha_token": FAKE_CAPTCHA_PASS},
         [unique_email(), unverified.email, verified.email],
     )
     assert len(set(counts)) == 1, counts
@@ -503,7 +563,10 @@ async def test_verification_token_expiry_boundary(
 ) -> None:
     email = unique_email()
     with client_for(main_app) as client:
-        client.post(REGISTER, json={"email": email, "password": PASSWORD})
+        client.post(
+            REGISTER,
+            json={"captcha_token": FAKE_CAPTCHA_PASS, "email": email, "password": PASSWORD},
+        )
         raw, expires_at = await _latest_token(db_session, email)
         with time_machine.travel(expires_at + offset, tick=False):
             response = client.post(VERIFY, json={"token": raw})
@@ -515,7 +578,10 @@ async def test_verification_token_expiry_boundary(
 async def test_a_used_token_stays_400_even_after_it_expires(db_session: AsyncSession) -> None:
     email = unique_email()
     with client_for(main_app) as client:
-        client.post(REGISTER, json={"email": email, "password": PASSWORD})
+        client.post(
+            REGISTER,
+            json={"captcha_token": FAKE_CAPTCHA_PASS, "email": email, "password": PASSWORD},
+        )
         raw, expires_at = await _latest_token(db_session, email)
         assert client.post(VERIFY, json={"token": raw}).status_code == 204
         with time_machine.travel(expires_at + timedelta(days=1), tick=False):
@@ -530,10 +596,13 @@ async def test_an_older_token_still_works_after_a_resend(db_session: AsyncSessio
     the inbox work, and the first one used wins."""
     email = unique_email()
     with client_for(main_app) as client:
-        client.post(REGISTER, json={"email": email, "password": PASSWORD})
+        client.post(
+            REGISTER,
+            json={"captcha_token": FAKE_CAPTCHA_PASS, "email": email, "password": PASSWORD},
+        )
         first, _ = await _latest_token(db_session, email)
         with time_machine.travel(datetime.now(UTC) + timedelta(minutes=3), tick=True):
-            client.post(RESEND, json={"email": email})
+            client.post(RESEND, json={"captcha_token": FAKE_CAPTCHA_PASS, "email": email})
         second, _ = await _latest_token(db_session, email)
         assert first != second
         assert client.post(VERIFY, json={"token": first}).status_code == 204
@@ -554,7 +623,10 @@ async def test_one_verification_token_redeemed_concurrently_succeeds_once(
         for _ in range(5):
             email = unique_email()
             async with async_client(app) as client:
-                await client.post(REGISTER, json={"email": email, "password": PASSWORD})
+                await client.post(
+                    REGISTER,
+                    json={"captcha_token": FAKE_CAPTCHA_PASS, "email": email, "password": PASSWORD},
+                )
             raw, _ = await _latest_token(db_session, email)
             clients = [async_client(app) for _ in range(20)]
             try:
@@ -578,7 +650,10 @@ async def test_the_emailed_verification_link_is_followable(db_session: AsyncSess
     the token in the fragment, and the frontend POSTs that token to the API."""
     email = unique_email()
     with client_for(main_app) as client:
-        client.post(REGISTER, json={"email": email, "password": PASSWORD})
+        client.post(
+            REGISTER,
+            json={"captcha_token": FAKE_CAPTCHA_PASS, "email": email, "password": PASSWORD},
+        )
         db_session.expire_all()
         outbox = await db_session.scalar(
             select(EmailOutboxModel).where(EmailOutboxModel.recipient_email == email)
@@ -633,7 +708,10 @@ async def test_resend_cooldown_boundary(
 ) -> None:
     email = unique_email()
     with client_for(main_app) as client:
-        client.post(REGISTER, json={"email": email, "password": PASSWORD})
+        client.post(
+            REGISTER,
+            json={"captcha_token": FAKE_CAPTCHA_PASS, "email": email, "password": PASSWORD},
+        )
         db_session.expire_all()
         created = await db_session.scalar(
             select(VerificationTokenModel.created_at)
@@ -642,7 +720,12 @@ async def test_resend_cooldown_boundary(
         )
         assert created is not None
         with time_machine.travel(created + elapsed, tick=False):
-            assert client.post(RESEND, json={"email": email}).status_code == 202
+            assert (
+                client.post(
+                    RESEND, json={"captcha_token": FAKE_CAPTCHA_PASS, "email": email}
+                ).status_code
+                == 202
+            )
     assert await _token_count(db_session, email) == (2 if issues else 1)
 
 
@@ -658,7 +741,10 @@ async def test_concurrent_resends_issue_at_most_one_email(
         clients = [async_client(app) for _ in range(10)]
         try:
             responses = await asyncio.gather(
-                *(c.post(RESEND, json={"email": user.email}) for c in clients)
+                *(
+                    c.post(RESEND, json={"captcha_token": FAKE_CAPTCHA_PASS, "email": user.email})
+                    for c in clients
+                )
             )
         finally:
             for c in clients:
@@ -684,7 +770,17 @@ async def test_concurrent_registration_of_one_address_is_uniformly_202(
         clients = [async_client(app) for _ in range(10)]
         try:
             responses = await asyncio.gather(
-                *(c.post(REGISTER, json={"email": email, "password": PASSWORD}) for c in clients)
+                *(
+                    c.post(
+                        REGISTER,
+                        json={
+                            "captcha_token": FAKE_CAPTCHA_PASS,
+                            "email": email,
+                            "password": PASSWORD,
+                        },
+                    )
+                    for c in clients
+                )
             )
         finally:
             for c in clients:
@@ -707,7 +803,17 @@ async def test_concurrent_registration_never_creates_two_accounts(
         clients = [async_client(app) for _ in range(10)]
         try:
             await asyncio.gather(
-                *(c.post(REGISTER, json={"email": email, "password": PASSWORD}) for c in clients)
+                *(
+                    c.post(
+                        REGISTER,
+                        json={
+                            "captcha_token": FAKE_CAPTCHA_PASS,
+                            "email": email,
+                            "password": PASSWORD,
+                        },
+                    )
+                    for c in clients
+                )
             )
         finally:
             for c in clients:
@@ -720,9 +826,15 @@ async def test_concurrent_registration_never_creates_two_accounts(
 async def test_re_registration_that_reissues_mail_is_audited(db_session: AsyncSession) -> None:
     email = unique_email()
     with client_for(main_app) as client:
-        client.post(REGISTER, json={"email": email, "password": PASSWORD})
+        client.post(
+            REGISTER,
+            json={"captcha_token": FAKE_CAPTCHA_PASS, "email": email, "password": PASSWORD},
+        )
         with time_machine.travel(datetime.now(UTC) + timedelta(minutes=3), tick=True):
-            client.post(REGISTER, json={"email": email, "password": PASSWORD})
+            client.post(
+                REGISTER,
+                json={"captcha_token": FAKE_CAPTCHA_PASS, "email": email, "password": PASSWORD},
+            )
     assert await _token_count(db_session, email) == 2
     [user] = await _rows_for(db_session, email)
     actions = (
@@ -898,20 +1010,35 @@ def test_the_register_limit_is_exact_and_ignores_spoofed_forwarding_headers() ->
         for n in range(5):
             response = client.post(
                 REGISTER,
-                json={"email": unique_email(), "password": PASSWORD},
+                json={
+                    "captcha_token": FAKE_CAPTCHA_PASS,
+                    "email": unique_email(),
+                    "password": PASSWORD,
+                },
                 headers={"X-Forwarded-For": f"203.0.113.{n}", "X-Real-IP": f"198.51.100.{n}"},
             )
             assert response.status_code == 202
             remaining.append(response.headers["ratelimit-remaining"])
         sixth = client.post(
             REGISTER,
-            json={"email": unique_email(), "password": PASSWORD},
+            json={
+                "captcha_token": FAKE_CAPTCHA_PASS,
+                "email": unique_email(),
+                "password": PASSWORD,
+            },
             headers={"X-Forwarded-For": "203.0.113.99"},
         )
     assert remaining == ["4", "3", "2", "1", "0"]
     assert_problem(sixth, 429, "RATE_LIMITED")
     with client_for(main_app) as other:
         assert (
-            other.post(REGISTER, json={"email": unique_email(), "password": PASSWORD}).status_code
+            other.post(
+                REGISTER,
+                json={
+                    "captcha_token": FAKE_CAPTCHA_PASS,
+                    "email": unique_email(),
+                    "password": PASSWORD,
+                },
+            ).status_code
             == 202
         )

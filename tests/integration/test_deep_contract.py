@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.identity.domain.enums import UserRole
+from app.integrations.captcha.fake import FAKE_CAPTCHA_PASS
 from app.main import app as main_app
 from tests.integration.deep_support import (
     CONFIRM_PATH,
@@ -86,15 +87,39 @@ async def tour(db_session: AsyncSession, configured_app: None) -> Record:
             content=b"{",
             headers={"content-type": "application/json"},
         )
-        _call(r, c, "POST", "/api/v1/auth/register", json={"email": "bad"})
+        _call(
+            r,
+            c,
+            "POST",
+            "/api/v1/auth/register",
+            json={"captcha_token": FAKE_CAPTCHA_PASS, "email": "bad"},
+        )
         email = unique_email()
-        _call(r, c, "POST", "/api/v1/auth/register", json={"email": email, "password": PASSWORD})
-        _call(r, c, "POST", "/api/v1/auth/resend-verification", json={"email": email})
+        _call(
+            r,
+            c,
+            "POST",
+            "/api/v1/auth/register",
+            json={"captcha_token": FAKE_CAPTCHA_PASS, "email": email, "password": PASSWORD},
+        )
+        _call(
+            r,
+            c,
+            "POST",
+            "/api/v1/auth/resend-verification",
+            json={"captcha_token": FAKE_CAPTCHA_PASS, "email": email},
+        )
         _call(r, c, "POST", "/api/v1/auth/verify-email", json={"token": "nope"})
         _call(
             r, c, "POST", "/api/v1/auth/login", json={"email": email, "password": "wrong-password"}
         )
-        _call(r, c, "POST", "/api/v1/auth/password-reset/request", json={"email": email})
+        _call(
+            r,
+            c,
+            "POST",
+            "/api/v1/auth/password-reset/request",
+            json={"captcha_token": FAKE_CAPTCHA_PASS, "email": email},
+        )
         _call(
             r,
             c,
@@ -112,7 +137,11 @@ async def tour(db_session: AsyncSession, configured_app: None) -> Record:
                 c,
                 "POST",
                 "/api/v1/auth/register",
-                json={"email": unique_email(), "password": PASSWORD},
+                json={
+                    "captcha_token": FAKE_CAPTCHA_PASS,
+                    "email": unique_email(),
+                    "password": PASSWORD,
+                },
             )
 
     disabled = await create_user(db_session, active=False)

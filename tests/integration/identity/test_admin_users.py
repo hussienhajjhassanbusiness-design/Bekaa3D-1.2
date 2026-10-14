@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.cookies import REFRESH_COOKIE_PATH
 from app.identity.infrastructure.models import SessionModel, UserModel
 from app.identity.infrastructure.repositories import SessionRepository
+from app.integrations.captcha.fake import FAKE_CAPTCHA_PASS
 from app.platform.infrastructure.models import AuditLogModel
 from tests.integration.identity.test_login import (
     PASSWORD,
@@ -73,7 +74,10 @@ async def register_unverified(
     client: TestClient, db_session: AsyncSession, email: str
 ) -> UserModel:
     """Register without redeeming the verification token."""
-    response = client.post("/api/v1/auth/register", json={"email": email, "password": PASSWORD})
+    response = client.post(
+        "/api/v1/auth/register",
+        json={"captcha_token": FAKE_CAPTCHA_PASS, "email": email, "password": PASSWORD},
+    )
     assert response.status_code == 202, response.text
     user = await db_session.scalar(select(UserModel).where(UserModel.email == email))
     assert user is not None

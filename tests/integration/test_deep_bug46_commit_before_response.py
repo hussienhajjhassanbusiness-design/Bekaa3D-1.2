@@ -27,6 +27,7 @@ from app.engagement.public import create_notification
 from app.identity.application.security.token_service import generate_raw_token, hash_token
 from app.identity.infrastructure.models import SessionModel, UserModel
 from app.identity.infrastructure.repositories import PasswordResetTokenRepository
+from app.integrations.captcha.fake import FAKE_CAPTCHA_PASS
 from app.main import app as main_app
 from tests.integration.deep_support import (
     PASSWORD,
@@ -95,7 +96,10 @@ async def test_a_registration_whose_commit_fails_is_not_answered_202(
 ) -> None:
     email = _marked_email()
     with client_for(main_app, raise_server_exceptions=False) as client:
-        response = client.post("/api/v1/auth/register", json={"email": email, "password": PASSWORD})
+        response = client.post(
+            "/api/v1/auth/register",
+            json={"captcha_token": FAKE_CAPTCHA_PASS, "email": email, "password": PASSWORD},
+        )
     db_session.expire_all()
     stored = await db_session.scalar(
         select(func.count()).select_from(UserModel).where(UserModel.email == email)

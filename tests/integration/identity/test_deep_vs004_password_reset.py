@@ -17,6 +17,7 @@ from app.core.config import get_settings
 from app.identity.application.security.token_service import generate_raw_token, hash_token
 from app.identity.infrastructure.models import PasswordResetTokenModel, SessionModel, UserModel
 from app.identity.infrastructure.repositories import PasswordResetTokenRepository
+from app.integrations.captcha.fake import FAKE_CAPTCHA_PASS
 from app.main import app as main_app
 from app.platform.infrastructure.models import EmailOutboxModel
 from tests.integration.deep_support import (
@@ -93,7 +94,7 @@ async def test_reset_request_is_byte_identical_for_every_account_state(
     in_cooldown = await create_user(db_session)
     varying = {"x-request-id", "date", "ratelimit-remaining", "ratelimit-reset"}
     with client_for(main_app) as client:
-        client.post(REQUEST, json={"email": in_cooldown.email})
+        client.post(REQUEST, json={"captcha_token": FAKE_CAPTCHA_PASS, "email": in_cooldown.email})
     responses = []
     for email in (
         unique_email(),
@@ -104,7 +105,9 @@ async def test_reset_request_is_byte_identical_for_every_account_state(
     ):
         # A client per request: five requests from one IP is exactly the limit.
         with client_for(main_app) as client:
-            responses.append(client.post(REQUEST, json={"email": email}))
+            responses.append(
+                client.post(REQUEST, json={"captcha_token": FAKE_CAPTCHA_PASS, "email": email})
+            )
     shapes = {
         (r.status_code, r.content, tuple(sorted(h for h in r.headers if h not in varying)))
         for r in responses
@@ -128,7 +131,7 @@ async def test_reset_request_timing_does_not_reveal_whether_the_account_exists(
             order = [(known, user.email), (unknown, unique_email())]
             for bucket, email in order if i % 2 else reversed(order):
                 started = time.perf_counter()
-                client.post(REQUEST, json={"email": email})
+                client.post(REQUEST, json={"captcha_token": FAKE_CAPTCHA_PASS, "email": email})
                 bucket.append(time.perf_counter() - started)
     print("TIMING", describe(known, unknown))
     assert not distinguishable(known, unknown), describe(known, unknown)
@@ -149,10 +152,10 @@ async def test_reset_request_cooldown_boundary(
     user = await create_user(db_session)
     uid, email = user.id, user.email
     with client_for(main_app) as client:
-        client.post(REQUEST, json={"email": email})
+        client.post(REQUEST, json={"captcha_token": FAKE_CAPTCHA_PASS, "email": email})
         [first] = await _reset_tokens(db_session, uid)
         with time_machine.travel(first.created_at + elapsed, tick=False):
-            client.post(REQUEST, json={"email": email})
+            client.post(REQUEST, json={"captcha_token": FAKE_CAPTCHA_PASS, "email": email})
     assert len(await _reset_tokens(db_session, uid)) == issued
 
 
@@ -166,7 +169,12 @@ async def test_concurrent_reset_requests_queue_one_email(
     async with running_app(make_app) as app:
         clients = [async_client(app) for _ in range(10)]
         try:
-            await asyncio.gather(*(c.post(REQUEST, json={"email": user.email}) for c in clients))
+            await asyncio.gather(
+                *(
+                    c.post(REQUEST, json={"captcha_token": FAKE_CAPTCHA_PASS, "email": user.email})
+                    for c in clients
+                )
+            )
         finally:
             for c in clients:
                 await c.aclose()
@@ -183,7 +191,7 @@ async def test_the_emailed_reset_link_is_followable(db_session: AsyncSession) ->
     user = await create_user(db_session)
     user_id, email, old_hash = user.id, user.email, user.password_hash
     with client_for(main_app) as client:
-        client.post(REQUEST, json={"email": email})
+        client.post(REQUEST, json={"captcha_token": FAKE_CAPTCHA_PASS, "email": email})
         db_session.expire_all()
         outbox = await db_session.scalar(
             select(EmailOutboxModel).where(

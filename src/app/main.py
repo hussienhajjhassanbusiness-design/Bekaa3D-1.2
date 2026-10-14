@@ -16,12 +16,15 @@ from app.core import models as _models  # noqa: F401 - registers models onto Bas
 from app.core.config import get_settings
 from app.core.database import CONNECT_TIMEOUT_SECONDS, make_engine, make_session_factory
 from app.core.logging import configure_logging
+from app.integrations.captcha.factory import captcha_verifier
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     configure_logging()
     settings = get_settings()
+    # Fail at boot, not on the first form, when captcha is misconfigured (ADR-026).
+    captcha_verifier(settings)
     app.state.db_engine = make_engine(settings.database_url)
     app.state.db_session_factory = make_session_factory(app.state.db_engine)
     # redis-py ships py.typed but Redis.from_url itself isn't fully annotated upstream.

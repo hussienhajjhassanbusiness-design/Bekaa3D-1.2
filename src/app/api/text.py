@@ -9,9 +9,23 @@ from typing import Annotated
 
 from pydantic import AfterValidator, EmailStr
 
-from app.core.text import reject_control_characters
+from app.core.text import (
+    CONTROL_CHARACTER_MESSAGE,
+    has_control_characters,
+    reject_control_characters,
+)
 
 PlainStr = Annotated[str, AfterValidator(reject_control_characters)]
+
+
+def _reject_control_except_line_breaks(value: str) -> str:
+    if has_control_characters(value, allow_line_breaks=True):
+        raise ValueError(CONTROL_CHARACTER_MESSAGE)
+    return value
+
+
+# Free text that may span lines, such as a contact message body.
+MultilineStr = Annotated[str, AfterValidator(_reject_control_except_line_breaks)]
 
 # RFC 5321 4.5.3.1.1. email-validator 2.3 stopped enforcing it, so addresses no
 # compliant mail server can deliver to were registered (BUG-21).

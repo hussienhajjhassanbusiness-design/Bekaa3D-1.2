@@ -23,6 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.core.config import get_settings
+from app.integrations.captcha.fake import FAKE_CAPTCHA_PASS
 from app.jobs import outbox as outbox_job
 from app.jobs.registry import CRON_JOBS, FUNCTIONS
 from app.platform.domain.entities import REDACTED
@@ -273,7 +274,14 @@ async def test_a_blip_between_incr_and_expire_cannot_leave_an_immortal_counter(
     async with running_app(make_app) as app:
         app.state.redis = _ExpireFailsOnce(app.state.redis)
         async with async_client(app, ip=ip) as client:
-            await client.post(REGISTER, json={"email": unique_email(), "password": PASSWORD})
+            await client.post(
+                REGISTER,
+                json={
+                    "captcha_token": FAKE_CAPTCHA_PASS,
+                    "email": unique_email(),
+                    "password": PASSWORD,
+                },
+            )
     probe = await _redis()
     try:
         ttl = await probe.ttl(f"ratelimit:auth:register:{ip}")
@@ -298,7 +306,12 @@ async def test_a_counter_already_left_without_a_ttl_is_healed_on_its_next_hit(
         assert await probe.ttl(key) == -1
         async with running_app(make_app) as app, async_client(app, ip=ip) as client:
             response = await client.post(
-                REGISTER, json={"email": unique_email(), "password": PASSWORD}
+                REGISTER,
+                json={
+                    "captcha_token": FAKE_CAPTCHA_PASS,
+                    "email": unique_email(),
+                    "password": PASSWORD,
+                },
             )
         ttl = await probe.ttl(key)
     finally:
@@ -313,7 +326,14 @@ async def test_a_counter_already_left_without_a_ttl_is_healed_on_its_next_hit(
 async def test_every_429_carries_retry_after(make_app: Callable[[], FastAPI]) -> None:
     async with running_app(make_app) as app, async_client(app) as client:
         responses = [
-            await client.post(REGISTER, json={"email": unique_email(), "password": PASSWORD})
+            await client.post(
+                REGISTER,
+                json={
+                    "captcha_token": FAKE_CAPTCHA_PASS,
+                    "email": unique_email(),
+                    "password": PASSWORD,
+                },
+            )
             for _ in range(6)
         ]
     limited = responses[-1]
@@ -329,9 +349,23 @@ async def test_the_limit_window_resets_when_its_key_expires(
     ip = fresh_ip()
     async with running_app(make_app) as app, async_client(app, ip=ip) as client:
         for _ in range(5):
-            ok = await client.post(REGISTER, json={"email": unique_email(), "password": PASSWORD})
+            ok = await client.post(
+                REGISTER,
+                json={
+                    "captcha_token": FAKE_CAPTCHA_PASS,
+                    "email": unique_email(),
+                    "password": PASSWORD,
+                },
+            )
             assert ok.status_code == 202
-        limited = await client.post(REGISTER, json={"email": unique_email(), "password": PASSWORD})
+        limited = await client.post(
+            REGISTER,
+            json={
+                "captcha_token": FAKE_CAPTCHA_PASS,
+                "email": unique_email(),
+                "password": PASSWORD,
+            },
+        )
         assert limited.status_code == 429
         assert limited.headers["ratelimit-remaining"] == "0"
         assert 0 < int(limited.headers["ratelimit-reset"]) <= 3600
@@ -341,7 +375,14 @@ async def test_the_limit_window_resets_when_its_key_expires(
         finally:
             await probe.aclose()
         await asyncio.sleep(0.2)
-        again = await client.post(REGISTER, json={"email": unique_email(), "password": PASSWORD})
+        again = await client.post(
+            REGISTER,
+            json={
+                "captcha_token": FAKE_CAPTCHA_PASS,
+                "email": unique_email(),
+                "password": PASSWORD,
+            },
+        )
     assert again.status_code == 202
     assert again.headers["ratelimit-remaining"] == "4"
 
@@ -356,8 +397,18 @@ async def test_a_limited_request_does_no_work(
     blocked = unique_email()
     async with running_app(make_app) as app, async_client(app) as client:
         for _ in range(5):
-            await client.post(REGISTER, json={"email": unique_email(), "password": PASSWORD})
-        limited = await client.post(REGISTER, json={"email": blocked, "password": PASSWORD})
+            await client.post(
+                REGISTER,
+                json={
+                    "captcha_token": FAKE_CAPTCHA_PASS,
+                    "email": unique_email(),
+                    "password": PASSWORD,
+                },
+            )
+        limited = await client.post(
+            REGISTER,
+            json={"captcha_token": FAKE_CAPTCHA_PASS, "email": blocked, "password": PASSWORD},
+        )
     assert limited.status_code == 429
     db_session.expire_all()
     assert (
@@ -378,7 +429,14 @@ async def test_parallel_requests_cannot_overshoot_the_limit(
     async with running_app(make_app) as app, async_client(app) as client:
         responses = await asyncio.gather(
             *(
-                client.post(REGISTER, json={"email": unique_email(), "password": PASSWORD})
+                client.post(
+                    REGISTER,
+                    json={
+                        "captcha_token": FAKE_CAPTCHA_PASS,
+                        "email": unique_email(),
+                        "password": PASSWORD,
+                    },
+                )
                 for _ in range(20)
             )
         )

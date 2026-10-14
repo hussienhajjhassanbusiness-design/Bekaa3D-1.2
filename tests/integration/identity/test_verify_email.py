@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.identity.infrastructure.models import UserModel, VerificationTokenModel
+from app.integrations.captcha.fake import FAKE_CAPTCHA_PASS
 from app.platform.infrastructure.models import AuditLogModel, EmailOutboxModel
 
 
@@ -16,7 +17,12 @@ def _unique_email() -> str:
 
 async def _register_and_get_token(client: TestClient, db_session: AsyncSession, email: str) -> str:
     response = client.post(
-        "/api/v1/auth/register", json={"email": email, "password": "correct-horse-battery"}
+        "/api/v1/auth/register",
+        json={
+            "captcha_token": FAKE_CAPTCHA_PASS,
+            "email": email,
+            "password": "correct-horse-battery",
+        },
     )
     assert response.status_code == 202, response.text
     outbox = await db_session.scalar(

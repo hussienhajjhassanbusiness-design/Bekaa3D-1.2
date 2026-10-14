@@ -3,6 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
+from app.api.captcha import CaptchaToken
 from app.api.text import Email, PlainStr
 from app.identity.domain.entities import User
 from app.identity.domain.enums import UserRole
@@ -20,6 +21,7 @@ class RegisterRequest(BaseModel):
     # 8 characters minimum, no composition rules - BR-120 explicitly favours
     # minimal registration friction over a stricter policy.
     password: PlainStr = Field(min_length=8, max_length=256)
+    captcha_token: CaptchaToken
 
 
 class VerifyEmailRequest(BaseModel):
@@ -34,6 +36,7 @@ class ResendVerificationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     email: Email
+    captcha_token: CaptchaToken
 
 
 class RegistrationAccepted(BaseModel):
@@ -187,6 +190,7 @@ class PasswordResetRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     email: Email
+    captcha_token: CaptchaToken
 
 
 class PasswordResetConfirm(BaseModel):
