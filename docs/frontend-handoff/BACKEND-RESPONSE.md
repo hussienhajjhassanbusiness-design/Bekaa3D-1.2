@@ -3,7 +3,7 @@
 Answers every item in [`../frontend-requests/BACKEND-UNLOCK-HANDOFF.md`](../frontend-requests/BACKEND-UNLOCK-HANDOFF.md)
 by its ID, in the field order of [`../frontend-requests/BACKEND-RESPONSE-TEMPLATE.md`](../frontend-requests/BACKEND-RESPONSE-TEMPLATE.md).
 
-- **Backend state:** slices VS-001 to VS-016 and VS-033 (contact form and captcha) are built. Nothing else exists yet: no cart, checkout, order, payment, refund, address or Bring Your Idea route.
+- **Backend state:** slices VS-001 to VS-016, VS-026 (address book) and VS-033 (contact form and captcha) are built. Nothing else exists yet: no cart, checkout, order, payment, refund or Bring Your Idea route.
 - **Schemas are not retyped here.** Field lists live in [`openapi.json`](openapi.json), generated from the code and checked by a test. A block names the schema; open it at `components.schemas.<Name>`.
 - **Decisions since the first version:** three open questions were decided on 2026-10-14 and recorded in [ADR-025](../adr/ADR-025-frontend-contract-decisions.md): admin `available_actions` (C8, P1-11), the STL ownership check (C11) and Turnstile captcha on five forms (P2-1, P2-6, P2-7). Captcha is now built (VS-033, [ADR-026](../adr/ADR-026-captcha-refusal-and-outage.md)); the other two are provisional until their slices are built.
 - **Every example below is real**, captured from the application running against a database filled by [`scripts/dev_seed.py`](../../scripts/dev_seed.py). IDs and timestamps will differ on your machine.
@@ -13,7 +13,7 @@ by its ID, in the field order of [`../frontend-requests/BACKEND-RESPONSE-TEMPLAT
 1. [Shared conventions](#1-shared-conventions) — errors, cookies, CSRF, the admin boundary, rate limits
 2. [Built and confirmed](#2-built-and-confirmed) — A1, A2, A3, B1, B2, B3, B4, B5, C1, C2, P1-1 to P1-7, P2-5, P2-6, P2-8
 3. [Removed by ADR-019 and ADR-024](#3-removed-by-adr-019-and-adr-024) — C4, C9, C10, P1-8, P1-9
-4. [Not built yet (provisional)](#4-not-built-yet-provisional) — C3, C5, C6, C7, C8, C11, C12, P1-10 to P1-13, P2-2; also P2-1, P2-3, P2-4 and P2-7, which VS-033 has since built
+4. [Not built yet (provisional)](#4-not-built-yet-provisional) — C5, C6, C7, C8, C11, C12, P1-10 to P1-13, P2-2; also P2-1, P2-3, P2-4 and P2-7, which VS-033 has since built, and C3, which VS-026 has since built
 5. [Test accounts and fixtures](#5-test-accounts-and-fixtures) — items 1 to 9
 6. [Corrections to "confirmed" items in the request](#6-corrections-to-confirmed-items-in-the-request)
 7. [Open questions](#7-open-questions) — three decided by ADR-025, ten still open
@@ -1906,39 +1906,69 @@ Build order on the backend: VS-020 (staging) or VS-022 (cart) next, then VS-023 
 
 ### Domain / item: C3 — Address book contract
 
-**Status:** not built. PROVISIONAL. Slice: VS-026.
+**Status:** **built** (VS-026). Decisions: [ADR-027](../adr/ADR-027-address-book-decisions.md). Full contract: [`docs/address-book.md`](../address-book.md).
 
-**Confirmed endpoint:** none yet. Planned:
+**Confirmed endpoint:**
 - `GET /api/v1/me/addresses`, `POST /api/v1/me/addresses`
 - `GET`, `PATCH`, `DELETE /api/v1/me/addresses/{address_id}`
 - `PUT /api/v1/me/addresses/{address_id}/default`
 
-**Request schema:** provisional; see [`../requirments/api-endpoints.md`](../requirments/api-endpoints.md) section 29.3 (`AddressCreate`, `AddressUpdate`). Planned fields: `label`, `recipient_name`, `phone`, `governorate`, `city` (required); `area`, `street`, `landmark_notes`, `is_default` (optional).
+**Request schema:** `AddressCreate`, `AddressUpdate` in `openapi.json`.
+- Required: `label`, `recipient_name`, `phone`, `governorate`, `city`, `landmark_notes`.
+- Optional: `area`, `street`, `is_default`.
+- `landmark_notes` is **required**, which changes the provisional answer.
+- `PATCH` takes any subset. An empty body is `422`; `null` clears `area` or `street`.
 
-**Response schema:** provisional: `AddressList`, `AddressRead`. Field lists are not written yet beyond the request fields.
+**Response schema:** `AddressRead` is the fields above (phone in E.164), plus `id`, `is_default`, `created_at`, `updated_at`. `AddressList` is `{"items": AddressRead[]}`.
 
-**Enums/statuses/actions:** none planned.
+**Enums/statuses/actions:** `governorate` is one of `akkar`, `baalbek_hermel`, `beirut`, `beqaa`, `keserwan_jbeil`, `mount_lebanon`, `nabatieh`, `north`, `south`. Labels are yours to translate.
 
-**Errors:** provisional: `401`, `403 EMAIL_VERIFICATION_REQUIRED` on writes, `404 NOT_FOUND` for another user's address, `422 VALIDATION_ERROR`, `409` on a delete that is not allowed.
+**Errors:**
+- `401 AUTH_REQUIRED`.
+- `403 CSRF_INVALID` or `EMAIL_VERIFICATION_REQUIRED` on writes.
+- `404 NOT_FOUND` for another user's, a deleted or an unknown id; all three are the same body.
+- `422 VALIDATION_ERROR`, with `errors[].loc` naming the field.
+- `422 ADDRESS_LIMIT_REACHED` at 20 saved addresses.
+- There is no `409`.
 
-**Auth/CSRF/MFA:** reads: any signed-in user. Writes: verified customer plus `X-CSRF-Token`.
+**Auth/CSRF/MFA:** reads: any signed-in user, verified or not. Writes: verified customer plus `X-CSRF-Token`.
 
-**Concurrency/idempotency:** switching the default is atomic. The database allows one default per user.
+**Concurrency/idempotency:** the default switch is atomic. The database allows one default per user, and parallel switches end with exactly one. `PUT …/default` is idempotent.
 
-**Example success JSON:** none; not built.
+**Example success JSON:**
 
-**Example error JSON:** none; not built.
+```json
+{
+  "id": "6f1c2a8e-5d0b-4e7a-9c3f-1b2d3e4f5a6b",
+  "label": "Home",
+  "recipient_name": "Rima Haddad",
+  "phone": "+9613123456",
+  "governorate": "beqaa",
+  "city": "Zahle",
+  "area": "Hoch el Oumara",
+  "street": null,
+  "landmark_notes": "Blue gate opposite the bakery",
+  "is_default": true,
+  "created_at": "2026-10-15T09:30:00Z",
+  "updated_at": "2026-10-15T09:30:00Z"
+}
+```
 
-**Fixture/test account:** none possible yet.
+**Example error JSON:** see [C1](#domain--item-c1--rfc-9457-field-level-validation-error-shape).
 
-**Authoritative source/OpenAPI file:** none yet. Plan: VS-026; api-endpoints.md sections 9.2 and 29.3.
+**Fixture/test account:** any verified seed customer; the seed adds no addresses.
 
-**Notes:** your questions, provisionally.
-- **No postal code and no country.** Addresses are Lebanese only: governorate, city, optional area, street and landmark notes.
-- `phone` must be a Lebanese number. It is the courier's contact and is copied onto the order.
-- **Default address:** both mechanisms are planned. `PUT .../{address_id}/default` is the dedicated action; `is_default: true` on create or update does the same. The previous default is cleared in the same transaction.
-- **Delete is a soft delete.** Past orders are unaffected because they keep their own copy of the address. A delete can be refused with `409` while a checkout in progress needs the address. Whether the default address can be deleted, and what becomes default afterwards, is **not specified**; see section 7.
-- The list is not paginated ("hard-limited"; the limit is not chosen yet).
+**Authoritative source/OpenAPI file:** `openapi.json`; `docs/address-book.md`.
+
+**Notes:**
+- **No postal code and no country.** Addresses are Lebanese only.
+- `phone` accepts any common Lebanese spelling (`03 123 456`, `71 123 456`, `+961 3 123 456`, `00961…`) and comes back as E.164. Show it as you like; send it back as it is.
+- **Default address:**
+  - A user's **first** address becomes the default automatically.
+  - Later ones become default only through `PUT …/default`, or `is_default: true` on create or update; the previous default is cleared in the same transaction.
+  - `PATCH {"is_default": false}` on the default clears it.
+- **Delete is a soft delete.** Deleting the default leaves **no** default; nothing is promoted (open question 10, now answered). Past orders keep their own copy of the address.
+- The list is not paginated: at most 20 addresses, the default first, then newest.
 
 ### Domain / item: C5 — Cart contract
 
@@ -2601,7 +2631,7 @@ Against [`MINIMUM-MANUAL-TEST-UNLOCK.md`](../frontend-requests/MINIMUM-MANUAL-TE
 |---|---|
 | 1 — Real public storefront | **Unlocked now.** B1 to B4 are answered and the seed provides the catalogue. One gap: images need the `/media` workaround in B4. |
 | 2 — Real customer account | **Unlocked now.** Password reset (FVS-004) is unlocked too: P2-6 is built. |
-| 3 — Real purchase flow | **Blocked on the backend.** C1 and C2 are answered. C3, C5, C6, C7, C8 and C12 are not built. C4 is removed. |
+| 3 — Real purchase flow | **Blocked on the backend.** C1 and C2 are answered. C3 is built (VS-026). C5, C6, C7, C8 and C12 are not built. C4 is removed. |
 | 4 — Real admin operations | **Partly unlocked.** P1-1 to P1-7 are built: admin login with MFA, settings, customers, reference data, products, images. P1-10 to P1-13 are not built. P1-8 and P1-9 are removed. |
 
 ---
@@ -2616,7 +2646,7 @@ The request lists some things as already confirmed that are not true of the back
 | `GET /api/v1/me/entitlements` is confirmed (C9) | Removed by ADR-019. It does not exist. |
 | `GET /api/v1/me/downloads` is confirmed (C10) | Removed by ADR-019. It does not exist. |
 | `POST /api/v1/admin/users/{user_id}/entitlements` is confirmed (P1-9) | Removed by ADR-019. It does not exist. |
-| `GET /api/v1/cart`, `POST /api/v1/checkout`, `/api/v1/me/addresses*`, `GET /me/orders/{id}` are confirmed (C3, C5, C6, C7) | The paths are planned and unchanged, but none is built. Calling them today answers `404`. |
+| `GET /api/v1/cart`, `POST /api/v1/checkout`, `/api/v1/me/addresses*`, `GET /me/orders/{id}` are confirmed (C3, C5, C6, C7) | The paths are planned and unchanged. `/me/addresses*` is built (VS-026); the others are not, and answer `404` today. |
 | Cart lines are addressed by `{item_id}` (C5) | Planned as `{product_id}`. |
 | URL filter keys `category`, `material`, `colour` are the wire names (B2) | The API takes `category_id`, `material_id`, `colour_id`, as UUIDs, one value each. |
 | Turnstile is confirmed for register and resend (P2-6, P2-7) | **Built** (VS-033): register, resend and the reset request require `captcha_token` ([P2-7](#domain--item-p2-7--turnstile-field-contract)). |
@@ -2647,7 +2677,7 @@ These are not backend gaps to be filled by reading code. Each needed a decision,
 | 7 | Captcha vendor, and whether captcha also covers registration, resend and password reset (P2-1, P2-7; SRS SEC-12). | FVS-002, FVS-004, FVS-015, FVS-016 | **Decided:** Cloudflare Turnstile on register, resend verification, the password-reset request, contact and Bring Your Idea; VS-033 builds the captcha port and applies it to all five. Built in VS-033: a refused token is `400 CAPTCHA_INVALID`, an outage `503 SERVICE_UNAVAILABLE` ([ADR-026](../adr/ADR-026-captcha-refusal-and-outage.md)). |
 | 8 | Consent wording: terms, digital final sale, cash terms (C6; SRS section 30.2). | FVS-026 | Open. Product owner; legal text |
 | 9 | STL delivery-time promise shown on product pages and at checkout (C10; SRS section 30.2). | FVS-014, FVS-026 | Open. Product owner |
-| 10 | Can the default address be deleted, and what becomes default afterwards (C3). | FVS-023 | Open. Backend, in VS-026 |
+| 10 | Can the default address be deleted, and what becomes default afterwards (C3). | FVS-023 | **Answered (VS-026, ADR-027):** yes; no address becomes default afterwards |
 | 11 | Bring Your Idea attachment limits and the wire name of the file field (P2-2). | FVS-015 | Open. Backend, in VS-034 |
 | 12 | Should `/me` return an explicit `mfa_completed` flag (P1-1)? Not needed, but the frontend may prefer it. | FVS-005 | Open. Frontend to request if wanted |
 | 13 | An administrator account without MFA, to test the enrolment screens (P1-2). There is no API to create one. | FVS-005 | Open. Backend owner, on request |

@@ -505,14 +505,14 @@ Because `CITEXT` is used, the implementation may use a direct unique partial ind
 |---|---|---:|---|
 | `id` | UUID | No | PK |
 | `user_id` | UUID | No | FK → `users.id` |
-| `label` | TEXT | No |  |
-| `recipient_name` | TEXT | No |  |
-| `phone` | TEXT | No | Lebanese number; the courier's contact |
-| `governorate` | TEXT | No |  |
+| `label` | TEXT | No | 1-50 characters |
+| `recipient_name` | TEXT | No | 1-100 characters |
+| `phone` | TEXT | No | Lebanese number in E.164 (`^\+961[0-9]{7,8}$`); the courier's contact |
+| `governorate` | TEXT | No | One of the nine governorate slugs (CHECK) |
 | `city` | TEXT | No |  |
 | `area` | TEXT | Yes |  |
 | `street` | TEXT | Yes |  |
-| `landmark_notes` | TEXT | Yes |  |
+| `landmark_notes` | TEXT | No | Required: SRS 14.4 (ADR-027); 1-500 characters |
 | `is_default` | BOOLEAN | No | Default `FALSE` |
 | `deleted_at` | TIMESTAMPTZ | Yes |  |
 | `created_at` | TIMESTAMPTZ | No |  |
@@ -527,9 +527,11 @@ UNIQUE(user_id)
 WHERE is_default = TRUE AND deleted_at IS NULL
 ```
 
+A deleted address is never default: `CHECK (NOT (is_default AND deleted_at IS NOT NULL))`. Text columns carry length and non-blank checks. Every write first locks the owner's `users` row `FOR NO KEY UPDATE` (ADR-027).
+
 ### FK Delete
 
-`users → addresses`: `ON DELETE CASCADE` is acceptable only for the physical purge of a never-verified account. Normal verified-account deletion is anonymisation, not hard deletion.
+`users → addresses`: `ON DELETE CASCADE`, which fires only in the physical purge of a never-verified account; no foreign key to `users` may block that purge. Normal verified-account deletion is anonymisation, not hard deletion.
 
 ### Important Note
 

@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
+from app.identity.domain.address import Address, AddressDetails
 from app.identity.domain.entities import (
     MfaCredential,
     MfaRecoveryCode,
@@ -146,3 +147,25 @@ class PasswordResetTokenStore(Protocol):
     async def save(self, token: PasswordResetToken) -> None: ...
 
     async def consume_outstanding_for_user(self, *, user_id: UUID, at: datetime) -> int: ...
+
+
+class AddressStore(Protocol):
+    """Implemented by `app.identity.infrastructure.addresses.SqlAddressRepository`."""
+
+    async def lock_address_book(self, user_id: UUID) -> None: ...
+
+    async def list_live(self, user_id: UUID) -> list[Address]: ...
+
+    async def get_live(self, *, address_id: UUID, user_id: UUID) -> Address | None: ...
+
+    async def count_live(self, user_id: UUID) -> int: ...
+
+    async def clear_default(self, user_id: UUID) -> None: ...
+
+    async def add(self, *, user_id: UUID, details: AddressDetails, is_default: bool) -> Address: ...
+
+    async def update(
+        self, address_id: UUID, *, user_id: UUID, details: AddressDetails, is_default: bool
+    ) -> Address: ...
+
+    async def soft_delete(self, address_id: UUID, *, user_id: UUID) -> None: ...

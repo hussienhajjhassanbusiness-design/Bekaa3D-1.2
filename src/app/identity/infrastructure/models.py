@@ -19,7 +19,16 @@ from sqlalchemy.dialects.postgresql import CITEXT, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
-from app.identity.domain.enums import MfaMethod, UserRole
+from app.core.phone import E164_PATTERN
+from app.identity.domain.address import (
+    AREA_MAX,
+    CITY_MAX,
+    LABEL_MAX,
+    LANDMARK_NOTES_MAX,
+    RECIPIENT_NAME_MAX,
+    STREET_MAX,
+)
+from app.identity.domain.enums import Governorate, MfaMethod, UserRole
 
 
 class UserModel(Base):
@@ -247,4 +256,72 @@ class MfaRecoveryCodeModel(Base):
             "mfa_credential_id",
             postgresql_where=text("used_at IS NULL"),
         ),
+    )
+
+
+def _required_text(column: str, limit: int) -> CheckConstraint:
+    return CheckConstraint(
+        f"char_length({column}) <= {limit} AND {column} ~ '[^[:space:]]'",
+        name=f"ck_addresses_{column}_length",
+    )
+
+
+def _optional_text(column: str, limit: int) -> CheckConstraint:
+    return CheckConstraint(
+        f"{column} IS NULL OR (char_length({column}) <= {limit} AND {column} ~ '[^[:space:]]')",
+        name=f"ck_addresses_{column}_length",
+    )
+
+
+_GOVERNORATES = ", ".join(f"'{g.value}'" for g in Governorate)
+
+
+class AddressModel(Base):
+    """database-design.md 5.2, with `landmark_notes` NOT NULL (SRS 14.4 wins, VS-026 Q1)."""
+
+    __tablename__ = "addresses"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    # CASCADE fires only in the never-verified purge; verified users are anonymised instead.
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    label: Mapped[str] = mapped_column(Text, nullable=False)
+    recipient_name: Mapped[str] = mapped_column(Text, nullable=False)
+    phone: Mapped[str] = mapped_column(Text, nullable=False)
+    governorate: Mapped[str] = mapped_column(Text, nullable=False)
+    city: Mapped[str] = mapped_column(Text, nullable=False)
+    area: Mapped[str | None] = mapped_column(Text)
+    street: Mapped[str | None] = mapped_column(Text)
+    landmark_notes: Mapped[str] = mapped_column(Text, nullable=False)
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index(
+            "uq_addresses_one_default_per_user",
+            "user_id",
+            unique=True,
+            postgresql_where=text("is_default AND deleted_at IS NULL"),
+        ),
+        Index("ix_addresses_user_live", "user_id", postgresql_where=text("deleted_at IS NULL")),
+        CheckConstraint(
+            "NOT (is_default AND deleted_at IS NOT NULL)", name="ck_addresses_deleted_not_default"
+        ),
+        CheckConstraint(f"governorate IN ({_GOVERNORATES})", name="ck_addresses_governorate"),
+        CheckConstraint(f"phone ~ '^{E164_PATTERN.pattern}$'", name="ck_addresses_phone_e164"),
+        _required_text("label", LABEL_MAX),
+        _required_text("recipient_name", RECIPIENT_NAME_MAX),
+        _required_text("city", CITY_MAX),
+        _required_text("landmark_notes", LANDMARK_NOTES_MAX),
+        _optional_text("area", AREA_MAX),
+        _optional_text("street", STREET_MAX),
     )
