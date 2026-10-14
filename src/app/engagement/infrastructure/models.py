@@ -2,12 +2,19 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, func, text
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Index, Text, func, text
+from sqlalchemy.dialects.postgresql import CITEXT, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
-from app.engagement.domain.enums import NotificationType
+from app.engagement.domain.contact_message import (
+    EMAIL_MAX,
+    MESSAGE_MAX,
+    NAME_MAX,
+    PHONE_MAX,
+    SUBJECT_MAX,
+)
+from app.engagement.domain.enums import ContactMessageStatus, NotificationType
 
 
 class NotificationModel(Base):
@@ -67,4 +74,60 @@ class NotificationModel(Base):
             text("created_at DESC"),
             postgresql_where=text("read_at IS NULL"),
         ),
+    )
+
+
+class ContactMessageModel(Base):
+    """database-design.md 12.6 minus `user_id` and `order_id`, which VS-029b adds (VS-033 Q8)."""
+
+    __tablename__ = "contact_messages"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    email: Mapped[str] = mapped_column(CITEXT, nullable=False)
+    phone: Mapped[str | None] = mapped_column(Text)
+    subject: Mapped[str | None] = mapped_column(Text)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[ContactMessageStatus] = mapped_column(
+        Enum(
+            ContactMessageStatus,
+            name="contact_message_status",
+            values_callable=lambda enum: [e.value for e in enum],
+        ),
+        nullable=False,
+        server_default=ContactMessageStatus.NEW.value,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            f"char_length(name) <= {NAME_MAX} AND name ~ '[^[:space:]]'",
+            name="ck_contact_messages_name_length",
+        ),
+        CheckConstraint(
+            f"char_length(email) BETWEEN 3 AND {EMAIL_MAX} AND position('@' in email) > 1",
+            name="ck_contact_messages_email_shape",
+        ),
+        CheckConstraint(
+            f"phone IS NULL OR (char_length(phone) <= {PHONE_MAX} AND phone ~ '[^[:space:]]')",
+            name="ck_contact_messages_phone_length",
+        ),
+        CheckConstraint(
+            f"subject IS NULL OR (char_length(subject) <= {SUBJECT_MAX} "
+            "AND subject ~ '[^[:space:]]')",
+            name="ck_contact_messages_subject_length",
+        ),
+        CheckConstraint(
+            f"char_length(message) <= {MESSAGE_MAX} AND message ~ '[^[:space:]]'",
+            name="ck_contact_messages_message_length",
+        ),
+        # Queue order (VS-033 Q9): new first, oldest first; the enum sorts by declaration.
+        Index("ix_contact_messages_queue", "status", "created_at", "id"),
     )

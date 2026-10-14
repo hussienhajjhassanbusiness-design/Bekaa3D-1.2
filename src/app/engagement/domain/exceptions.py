@@ -34,3 +34,26 @@ class NotificationNotFoundError(EngagementDomainError):
     def __init__(self, notification_id: object) -> None:
         super().__init__(f"No notification {notification_id!r} belongs to this user.")
         self.notification_id = notification_id
+
+
+class InvalidContactMessageTransitionError(EngagementDomainError):
+    """A contact message status may only move forward (VS-033)."""
+
+    def __init__(self, current: object, target: object) -> None:
+        super().__init__(f"Contact message cannot move from {current!s} to {target!s}.")
+        self.current = current
+        self.target = target
+
+
+class ContactMessageNotFoundError(EngagementDomainError):
+    def __init__(self, message_id: object) -> None:
+        super().__init__(f"No contact message {message_id!r}.")
+        self.message_id = message_id
+
+
+class InvalidContactDetailsError(EngagementDomainError):
+    """Names the offending fields only; never their values, which are visitor PII."""
+
+    def __init__(self, fields: list[str]) -> None:
+        super().__init__(f"Invalid contact details: {', '.join(fields)}")
+        self.fields = fields
