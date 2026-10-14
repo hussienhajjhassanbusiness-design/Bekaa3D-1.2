@@ -12,3 +12,17 @@ class MfaMethod(StrEnum):
     a hunt for every string literal that assumed TOTP."""
 
     TOTP = "totp"
+
+
+class Governorate(StrEnum):
+    """Lebanon's nine governorates (VS-026 Q2); addresses are Lebanese only (BR-071)."""
+
+    AKKAR = "akkar"
+    BAALBEK_HERMEL = "baalbek_hermel"
+    BEIRUT = "beirut"
+    BEQAA = "beqaa"
+    KESERWAN_JBEIL = "keserwan_jbeil"
+    MOUNT_LEBANON = "mount_lebanon"
+    NABATIEH = "nabatieh"
+    NORTH = "north"
+    SOUTH = "south"

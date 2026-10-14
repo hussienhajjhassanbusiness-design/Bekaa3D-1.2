@@ -209,3 +209,25 @@ class LastActiveAdministratorError(IdentityDomainError):
     def __init__(self, user_id: UUID) -> None:
         super().__init__(f"User {user_id} is the last active administrator.")
         self.user_id = user_id
+
+
+class AddressNotFoundError(IdentityDomainError):
+    """Unknown, deleted or another user's address: one error, so the API gives one 404."""
+
+    def __init__(self, address_id: UUID) -> None:
+        super().__init__(f"Address {address_id} not found.")
+        self.address_id = address_id
+
+
+class InvalidAddressError(IdentityDomainError):
+    """Names the offending fields only; never their values, which are personal data."""
+
+    def __init__(self, fields: list[str]) -> None:
+        super().__init__(f"Invalid address: {', '.join(fields)}")
+        self.fields = fields
+
+
+class AddressLimitReachedError(IdentityDomainError):
+    def __init__(self, limit: int) -> None:
+        super().__init__(f"At most {limit} saved addresses are allowed.")
+        self.limit = limit
