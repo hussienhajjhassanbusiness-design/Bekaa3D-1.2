@@ -58,6 +58,12 @@ def test_refuses_non_lebanese_or_malformed(raw: str) -> None:
         normalise_lebanese_phone(raw)
 
 
+@pytest.mark.parametrize("raw", [None, 3123456, b"03123456"])
+def test_refuses_a_non_string(raw: object) -> None:
+    with pytest.raises(InvalidPhoneNumberError):
+        normalise_lebanese_phone(raw)
+
+
 def test_error_never_echoes_the_number() -> None:
     with pytest.raises(InvalidPhoneNumberError) as caught:
         normalise_lebanese_phone("+33 6 12 34 56 78")

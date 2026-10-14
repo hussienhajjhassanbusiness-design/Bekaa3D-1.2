@@ -56,7 +56,9 @@ class UpdateAddress(_AddressCommand):
         is_default = address.is_default if make_default is None else make_default
         if is_default and not address.is_default:
             await self._addresses.clear_default(user_id)
-        return await self._addresses.update(address_id, details=details, is_default=is_default)
+        return await self._addresses.update(
+            address_id, user_id=user_id, details=details, is_default=is_default
+        )
 
 
 class SetDefaultAddress(_AddressCommand):
@@ -65,11 +67,13 @@ class SetDefaultAddress(_AddressCommand):
         if address.is_default:
             return address
         await self._addresses.clear_default(user_id)
-        return await self._addresses.update(address_id, details=address.details, is_default=True)
+        return await self._addresses.update(
+            address_id, user_id=user_id, details=address.details, is_default=True
+        )
 
 
 class DeleteAddress(_AddressCommand):
     async def execute(self, *, user_id: UUID, address_id: UUID) -> None:
         """Soft delete; deleting the default leaves none, nothing is promoted (VS-026 Q5)."""
         await self._locked_live(user_id=user_id, address_id=address_id)
-        await self._addresses.soft_delete(address_id)
+        await self._addresses.soft_delete(address_id, user_id=user_id)

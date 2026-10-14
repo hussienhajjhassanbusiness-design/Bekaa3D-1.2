@@ -70,16 +70,18 @@ class FakeAddresses:
         return address
 
     async def update(
-        self, address_id: UUID, *, details: AddressDetails, is_default: bool
+        self, address_id: UUID, *, user_id: UUID, details: AddressDetails, is_default: bool
     ) -> Address:
         address = replace(self.rows[address_id], details=details, is_default=is_default)
-        self._guard("update", address.user_id)
+        assert address.user_id == user_id and address.deleted_at is None
+        self._guard("update", user_id)
         self.rows[address_id] = address
         return address
 
-    async def soft_delete(self, address_id: UUID) -> None:
+    async def soft_delete(self, address_id: UUID, *, user_id: UUID) -> None:
         address = self.rows[address_id]
-        self._guard("soft_delete", address.user_id)
+        assert address.user_id == user_id and address.deleted_at is None
+        self._guard("soft_delete", user_id)
         self.rows[address_id] = replace(address, is_default=False, deleted_at=NOW)
 
     def defaults(self, user_id: UUID) -> list[UUID]:

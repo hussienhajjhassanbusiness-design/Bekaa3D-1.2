@@ -109,21 +109,21 @@ class SqlAddressRepository:
         return _to_domain((await self._session.execute(stmt)).one())
 
     async def update(
-        self, address_id: UUID, *, details: AddressDetails, is_default: bool
+        self, address_id: UUID, *, user_id: UUID, details: AddressDetails, is_default: bool
     ) -> Address:
         stmt = (
             update(_A)
-            .where(_A.id == address_id)
+            .where(_A.id == address_id, _A.user_id == user_id, _LIVE)
             .values(is_default=is_default, updated_at=func.now(), **_values(details))
             .returning(*_COLUMNS)
             .execution_options(synchronize_session=False)
         )
         return _to_domain((await self._session.execute(stmt)).one())
 
-    async def soft_delete(self, address_id: UUID) -> None:
+    async def soft_delete(self, address_id: UUID, *, user_id: UUID) -> None:
         stmt = (
             update(_A)
-            .where(_A.id == address_id)
+            .where(_A.id == address_id, _A.user_id == user_id, _LIVE)
             .values(is_default=False, deleted_at=func.now(), updated_at=func.now())
             .execution_options(synchronize_session=False)
         )

@@ -195,7 +195,16 @@ async def test_patch_updates_only_given_fields_and_null_clears_optionals(
 
 @pytest.mark.parametrize(
     "patch",
-    [{}, {"landmark_notes": None}, {"label": None}, {"governorate": "paris"}, {"bogus": 1}],
+    [
+        {},
+        {"landmark_notes": None},
+        {"label": None},
+        {"phone": None},
+        {"phone": "123"},
+        {"governorate": None},
+        {"governorate": "paris"},
+        {"bogus": 1},
+    ],
 )
 async def test_invalid_patch_is_422_and_changes_nothing(
     db_session: AsyncSession, patch: dict[str, Any]

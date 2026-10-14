@@ -19,8 +19,10 @@ class InvalidPhoneNumberError(ValueError):
         super().__init__("must be a Lebanese phone number, e.g. +961 3 123 456 or 71 123 456")
 
 
-def normalise_lebanese_phone(raw: str) -> str:
+def normalise_lebanese_phone(raw: object) -> str:
     """`+961 3 123 456`, `03123456`, `9613123456`, `00961…` all give `+9613123456`."""
+    if not isinstance(raw, str):
+        raise InvalidPhoneNumberError()
     text = raw.strip()
     if len(text) > INPUT_MAX or _ALLOWED.fullmatch(text) is None:
         raise InvalidPhoneNumberError()

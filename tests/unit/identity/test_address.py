@@ -54,6 +54,8 @@ def test_landmark_notes_may_span_lines() -> None:
         ("area", "Ham\tra"),
         ("phone", "+33 6 12 34 56 78"),
         ("phone", "not a phone"),
+        ("phone", None),
+        ("governorate", None),
         ("governorate", "paris"),
         ("governorate", "Beqaa"),
     ],
