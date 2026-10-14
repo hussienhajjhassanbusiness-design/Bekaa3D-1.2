@@ -204,7 +204,7 @@ These codes are implementation additions needed to give the frontend determinist
 | 503 | `PAYMENT_VERIFICATION_UNAVAILABLE` | Automated verification unavailable and manual verification is required |
 | 405 | `METHOD_NOT_ALLOWED` | Route exists but not for this method; response carries `Allow`. Under `/api/v1/admin` only an MFA-complete administrator ever sees it (VS-011); everyone else gets 401/404 per SEC-10 |
 | 500 | `INTERNAL_ERROR` | Unexpected server fault; details are logged, never returned |
-| 503 | `SERVICE_UNAVAILABLE` | A required dependency (database, Redis) is unreachable or timed out; retrying later is safe |
+| 503 | `SERVICE_UNAVAILABLE` | A required dependency (database, Redis, the captcha provider) is unreachable or timed out; retrying later is safe. A captcha outage carries `Retry-After` (ADR-026) |
 
 **Security note:** authentication, resend-verification, and password-reset flows must preserve the SRS anti-enumeration requirement. Do not leak account existence through response body, timing, or status differences.
 
