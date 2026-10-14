@@ -5,6 +5,7 @@ by its ID, in the field order of [`../frontend-requests/BACKEND-RESPONSE-TEMPLAT
 
 - **Backend state:** slices VS-001 to VS-016 are built. Nothing after them exists yet: no cart, checkout, order, payment, refund, address, contact or Bring Your Idea route.
 - **Schemas are not retyped here.** Field lists live in [`openapi.json`](openapi.json), generated from the code and checked by a test. A block names the schema; open it at `components.schemas.<Name>`.
+- **Decisions since the first version:** three open questions were decided on 2026-10-14 and recorded in [ADR-025](../adr/ADR-025-frontend-contract-decisions.md): admin `available_actions` (C8, P1-11), the STL ownership check (C11) and Turnstile captcha on five forms (P2-1, P2-6, P2-7). They are still provisional until their slices are built.
 - **Every example below is real**, captured from the application running against a database filled by [`scripts/dev_seed.py`](../../scripts/dev_seed.py). IDs and timestamps will differ on your machine.
 
 ## Contents
@@ -15,7 +16,7 @@ by its ID, in the field order of [`../frontend-requests/BACKEND-RESPONSE-TEMPLAT
 4. [Not built yet (provisional)](#4-not-built-yet-provisional) — C3, C5, C6, C7, C8, C11, C12, P1-10 to P1-13, P2-1 to P2-4, P2-7
 5. [Test accounts and fixtures](#5-test-accounts-and-fixtures) — items 1 to 9
 6. [Corrections to "confirmed" items in the request](#6-corrections-to-confirmed-items-in-the-request)
-7. [Open questions nobody has decided](#7-open-questions-nobody-has-decided)
+7. [Open questions](#7-open-questions) — three decided by ADR-025, ten still open
 
 ---
 
@@ -595,7 +596,7 @@ An STL product, `GET /api/v1/products/dragon-stl`
 
 **Notes:**
 - **No stock.** Products are made to order; there is no quantity in stock anywhere. Availability is the single boolean `is_available`.
-- **No "owned" indicator.** This endpoint is anonymous and cacheable, so it cannot know who is asking. See [C11](#domain--item-c11--per-product-ownership-check).
+- **No "owned" indicator here.** This endpoint is anonymous and cacheable, so it cannot know who is asking. A signed-in customer's ownership comes from a separate endpoint, decided in [ADR-025](../adr/ADR-025-frontend-contract-decisions.md) and built in VS-023; see [C11](#domain--item-c11--per-product-ownership-check).
 - `material`, `colour`, `dimensions`, `production_lead_time_days`, `batch_size`, `max_quantity_per_line` and `purchase_mode` are `null` on every STL product.
 - `max_quantity_per_line` is the cart quantity cap for a physical product. An STL is always quantity 1.
 - STL pages have no delivery-time field. The file is emailed by the administrator after payment (ADR-019); the promise text is an open business decision.
@@ -1665,6 +1666,7 @@ Set-Cookie: csrf_token=<redacted>; Max-Age=2592000; Path=/; SameSite=lax
 - A second `request` within 2 minutes for the same account sends no second email, silently.
 - **A successful reset signs the user out everywhere.** It does not sign them in: send them to the login page.
 - A reset does not remove an administrator's MFA.
+- From VS-033 the reset **request** needs a Turnstile `captcha_token` ([ADR-025](../adr/ADR-025-frontend-contract-decisions.md)); see [P2-7](#domain--item-p2-7--turnstile-field-contract). The confirm step does not.
 
 ### Domain / item: P2-8 — Rate-limit (429) universality
 
@@ -2083,7 +2085,7 @@ Build order on the backend: VS-020 (staging) or VS-022 (cart) next, then VS-023 
 - **Customers never see `in_production`.** Customer responses show it as `pending` and leave it out of the status history.
 - Order status: `"pending_payment" | "in_progress" | "completed" | "partially_refunded" | "refunded" | "cancelled"`. It is derived by the server and never set directly.
 - **Available actions, customer side: yes, as booleans on `OrderDetail`:** `can_cancel` and `payment_due`. Use them; do not re-derive them.
-- **Available actions, admin side: not specified.** No list of legal next transitions per line is planned. See Notes and section 7.
+- **Available actions, admin side: decided** ([ADR-025](../adr/ADR-025-frontend-contract-decisions.md), VS-029). Every line of `AdminOrderDetail` carries `available_actions`: a list of `{target_status, cancel_reasons}` the transition endpoint would accept at read time. `cancel_reasons` is empty when no reason is taken; otherwise one of the listed reasons is required. See [P1-11](#domain--item-p1-11--admin-order-fulfillment).
 
 **Errors:** provisional: `401`, `404 NOT_FOUND`.
 
@@ -2102,23 +2104,27 @@ Build order on the backend: VS-020 (staging) or VS-022 (cart) next, then VS-023 
 **Notes:**
 - A cash order is `in_progress` from the moment it is placed, with `payment_due: true`.
 - `can_cancel` is true only while the order has a physical line, is paid or is cash, and every physical line is still `pending`. STL lines are never cancelled.
-- Your request for a machine-readable list of legal admin transitions is reasonable and is **not in the specification**. The transition rules are a pure table on the server, so returning them would be cheap. It needs a decision before VS-029; it is recorded in section 7.
+- Your request for a machine-readable list of legal admin transitions is **decided: yes** ([ADR-025](../adr/ADR-025-frontend-contract-decisions.md)). The admin screens should render only the listed actions and never re-encode the state machine. Customer responses do not carry the list; customers use `can_cancel`.
 
 ### Domain / item: C11 — Per-product ownership check
 
-**Status:** partly built. The product-level signal exists; the per-customer signal is not built and not specified. PROVISIONAL. Slice: VS-023.
+**Status:** partly built. The product-level signal exists. The per-customer check is **decided** ([ADR-025](../adr/ADR-025-frontend-contract-decisions.md)) but not built. PROVISIONAL. Slice: VS-023.
 
-**Confirmed endpoint:** built today: `capabilities` on `GET /api/v1/products/{slug}` ([B3](#domain--item-b3--product-detail-contract)). No ownership endpoint exists or is planned.
+**Confirmed endpoint:**
+- built today: `capabilities` on `GET /api/v1/products/{slug}` ([B3](#domain--item-b3--product-detail-contract));
+- decided, not built: `GET /api/v1/me/stl-ownership?product_id=<uuid>` (VS-023).
 
-**Request schema:** not applicable.
+**Request schema:** ownership check: `product_id` query parameter, UUID, required.
 
-**Response schema:** built: `Capabilities` in `openapi.json`. It is the same for every visitor.
+**Response schema:** built: `Capabilities` in `openapi.json`, the same for every visitor. Ownership check, provisional: `200 {"product_id": "<uuid>", "owned": <bool>}` (`StlOwnershipRead` in api-endpoints.md section 30).
 
 **Enums/statuses/actions:** not applicable.
 
-**Errors:** provisional: `409 PRODUCT_ALREADY_OWNED` from `POST /api/v1/cart/items` and from checkout.
+**Errors:** provisional:
+- ownership check: `401 AUTH_REQUIRED` when signed out; `422 VALIDATION_ERROR` for a missing or malformed `product_id`;
+- `409 PRODUCT_ALREADY_OWNED` from `POST /api/v1/cart/items` and from checkout.
 
-**Auth/CSRF/MFA:** not applicable.
+**Auth/CSRF/MFA:** ownership check: any signed-in user, verified or not; `GET`, so no CSRF header.
 
 **Concurrency/idempotency:** the database will allow one live STL line per customer and product, so two parallel checkouts cannot both buy the same STL.
 
@@ -2131,10 +2137,10 @@ Build order on the backend: VS-020 (staging) or VS-022 (cart) next, then VS-023 
 **Authoritative source/OpenAPI file:** ADR-019 decision 5; ADR-022; VS-023.
 
 **Notes:**
-- **There is no "is this product owned by me" field, and none is planned.** The product page is public and identical for everyone, so it cannot carry one.
-- **Do not diff the entitlement list**: there is no entitlement list ([C9](#domain--item-c9--entitlements--customer-library-contract)).
-- What is planned: the server refuses. Adding an owned STL to the cart answers `409 PRODUCT_ALREADY_OWNED`, and checkout drops or refuses it. The frontend can show "you already own this" from that error.
-- Showing "owned" on the product page **before** the user clicks is not specified. It would need either an authenticated per-product signal or a small endpoint listing the customer's owned product ids. This is an open request; see section 7.
+- **Decided** ([ADR-025](../adr/ADR-025-frontend-contract-decisions.md)): a signed-in customer asks `GET /api/v1/me/stl-ownership?product_id=` for the product on screen. Call it only when the visitor is signed in and the product is an STL; the public product response stays the same for everyone.
+- `owned` is true when the customer has a paid, unrefunded STL line for the product (`awaiting_delivery` or `delivered`, not fully refunded). An unknown, hidden or physical product answers `owned: false`.
+- **It is a hint, not a guarantee.** The cart still refuses a second purchase with `409 PRODUCT_ALREADY_OWNED`, and checkout refuses it too. That includes an STL held by the customer's own unpaid order, for which the check answers `owned: false`; handle the `409` as well.
+- **Do not diff an entitlement list**: there is none ([C9](#domain--item-c9--entitlements--customer-library-contract)).
 
 ### Domain / item: C12 — Idempotency-Key mechanism
 
@@ -2225,7 +2231,7 @@ Build order on the backend: VS-020 (staging) or VS-022 (cart) next, then VS-023 
 
 **Response schema:** provisional: `AdminOrderPage`, `AdminOrderDetail`, `StlDeliveryPage` (rows: `order_id`, `order_number`, `order_item_id`, product summary, customer summary, `customer_email_snapshot`, `paid_at`).
 
-**Enums/statuses/actions:** provisional: line status as in [C8](#domain--item-c8--orderorder-line-status-enum-and-available-actions). `cancel_reason`: `"refused" | "no_show" | "other"`. **No list of legal next actions per line is specified.**
+**Enums/statuses/actions:** provisional: line status as in [C8](#domain--item-c8--orderorder-line-status-enum-and-available-actions). `cancel_reason`: `"refused" | "no_show" | "other"`. **Machine-readable actions: yes** ([ADR-025](../adr/ADR-025-frontend-contract-decisions.md)): every line carries `available_actions`, a list of `{target_status, cancel_reasons}`.
 
 **Errors:** provisional: `409 INVALID_STATE_TRANSITION` (illegal step, or another administrator got there first), `422 CASH_AMOUNT_MISMATCH`, `422 VALIDATION_ERROR`.
 
@@ -2246,7 +2252,8 @@ Build order on the backend: VS-020 (staging) or VS-022 (cart) next, then VS-023 
 - Nothing physical can move on an online order that is not paid. Unpaid online orders never appear in the queue.
 - A cash order's lines cannot be moved to `delivered` or `picked_up` through the transition endpoint. The **cash handover** does it for the whole order at once and records the payment; the amount entered must equal the amount due exactly.
 - Order status cannot be patched. It is always derived.
-- Because no "legal next actions" field is specified, `TransitionAffordance` has nothing to read yet. This is the admin half of the open question in [C8](#domain--item-c8--orderorder-line-status-enum-and-available-actions).
+- `TransitionAffordance` reads `available_actions` ([ADR-025](../adr/ADR-025-frontend-contract-decisions.md)): one button per entry, and a reason picker limited to its `cancel_reasons` when that list is not empty. A line with `[]` has no action. The list is computed at read time; after a `409` from the transition endpoint, re-read the order and render the new list.
+- The cash handover is an order-level action and is not in `available_actions`. It is available when every live line is `shipped` (delivery) or `ready_for_pickup` (pickup).
 
 ### Domain / item: P1-12 — Cancellation and returns
 
@@ -2331,17 +2338,17 @@ Build order on the backend: VS-020 (staging) or VS-022 (cart) next, then VS-023 
 
 ### Domain / item: P2-1 — Captcha provider (BYI/contact)
 
-**Status:** not built. PROVISIONAL. Slice: VS-033. The vendor is not formally decided.
+**Status:** not built. Vendor and scope **decided** ([ADR-025](../adr/ADR-025-frontend-contract-decisions.md)): Cloudflare Turnstile on five forms. PROVISIONAL until VS-033. Slice: VS-033.
 
 **Confirmed endpoint:** none.
 
-**Request schema:** provisional: a `captcha_token` field in the contact and Bring Your Idea bodies.
+**Request schema:** provisional: a required `captcha_token` field in the bodies of `POST /api/v1/auth/register`, `/auth/resend-verification`, `/auth/password-reset/request`, `POST /api/v1/contact-messages` and `POST /api/v1/custom-requests` (a multipart field there).
 
 **Response schema:** not applicable.
 
 **Enums/statuses/actions:** not applicable.
 
-**Errors:** not specified. A rejected captcha is expected to be a `422`; the code is not written.
+**Errors:** VS-033 adds one stable code for a missing or refused token; its name and status are chosen there. On the three auth routes it is the same answer whatever the email address.
 
 **Auth/CSRF/MFA:** not applicable.
 
@@ -2353,12 +2360,13 @@ Build order on the backend: VS-020 (staging) or VS-022 (cart) next, then VS-023 
 
 **Fixture/test account:** none.
 
-**Authoritative source/OpenAPI file:** none yet. Plan: VS-033 (a captcha port with a fake adapter and one real provider).
+**Authoritative source/OpenAPI file:** none yet. Plan: VS-033 (a captcha port with a Turnstile adapter and a fake adapter); [ADR-025](../adr/ADR-025-frontend-contract-decisions.md).
 
 **Notes:**
 - **No captcha exists anywhere in the backend today.** There is no vendor adapter and no route checks a token.
-- **Vendor:** no document names one. The only trace is an unused `TURNSTILE_SECRET` variable in `.env.example`, which suggests Cloudflare Turnstile was intended, but that is a hint, not a decision. See section 7.
-- **Site keys:** none exist for any environment. They are created when the vendor account is set up, and they are public values that belong in the frontend's own configuration.
+- **Vendor: Cloudflare Turnstile** (decided, [ADR-025](../adr/ADR-025-frontend-contract-decisions.md)). The backend's secret is `TURNSTILE_SECRET`.
+- **Site keys:** none exist yet for any environment. They are created when the Turnstile account is set up, and they are public values that belong in the frontend's own configuration.
+- **Release together.** On the three auth routes the token is a breaking change: today the field is rejected, after VS-033 it is required. The frontend's Turnstile widget and VS-033 must ship in the same release.
 - Tests will use a fake adapter, so the frontend will be able to submit a fixed test token locally.
 
 ### Domain / item: P2-2 — Bring-Your-Idea submission
@@ -2459,7 +2467,7 @@ Build order on the backend: VS-020 (staging) or VS-022 (cart) next, then VS-023 
 
 ### Domain / item: P2-7 — Turnstile field contract
 
-**Status:** not built, and not planned for registration. This corrects the request.
+**Status:** not built. **Decided** ([ADR-025](../adr/ADR-025-frontend-contract-decisions.md)): VS-033 adds Turnstile to registration, resend verification and the password-reset request. Until then, no captcha.
 
 **Confirmed endpoint:** `POST /api/v1/auth/register` and `POST /api/v1/auth/resend-verification` are built, **without captcha**.
 
@@ -2507,10 +2515,12 @@ Build order on the backend: VS-020 (staging) or VS-022 (cart) next, then VS-023 
 **Authoritative source/OpenAPI file:** [`openapi.json`](openapi.json).
 
 **Notes:**
-- The request says Turnstile is "already confirmed for register/resend". **It is not.** Nothing in the backend verifies a captcha, and no slice in the plan adds one to registration, resend or password reset. Those routes are protected by rate limits and by identical, slowed responses.
-- **Do not send a token field now.** It breaks registration.
-- **When is it turned on?** There is no date, because there is no plan. The SRS has a security requirement for captcha "on all public unauthenticated forms" (SEC-12), and the plan implements it only for contact and Bring Your Idea. Whether it should also cover registration is an open question for the product owner; see section 7.
-- If it is added later, the field name will be announced with that change. `captcha_token` is the name used in the contact and Bring Your Idea drafts.
+- When the request was written, Turnstile was not confirmed for register or resend: nothing in the backend verifies a captcha today. It is **now decided** ([ADR-025](../adr/ADR-025-frontend-contract-decisions.md), SEC-12) and arrives with VS-033.
+- **Field name:** `captcha_token`, required, in `RegisterRequest`, `ResendVerificationRequest` and `PasswordResetRequest`.
+- **Do not send it before VS-033 ships.** Until then it is rejected and breaks registration, as the example shows. After VS-033 a request without it is refused. Ship the frontend widget in the same release as VS-033.
+- **When is it turned on?** With VS-033. That slice has no date yet; watch the slice status table.
+- The captcha is checked before any account lookup and refuses the same way whatever the email, so the enumeration-safe behaviour of these routes is unchanged.
+- Login, email verification and password-reset confirmation take no captcha.
 
 ---
 
@@ -2556,7 +2566,7 @@ The request lists some things as already confirmed that are not true of the back
 | `GET /api/v1/cart`, `POST /api/v1/checkout`, `/api/v1/me/addresses*`, `GET /me/orders/{id}` are confirmed (C3, C5, C6, C7) | The paths are planned and unchanged, but none is built. Calling them today answers `404`. |
 | Cart lines are addressed by `{item_id}` (C5) | Planned as `{product_id}`. |
 | URL filter keys `category`, `material`, `colour` are the wire names (B2) | The API takes `category_id`, `material_id`, `colour_id`, as UUIDs, one value each. |
-| Turnstile is confirmed for register and resend (P2-6, P2-7) | No captcha exists, and a token field is rejected with `422`. |
+| Turnstile is confirmed for register and resend (P2-6, P2-7) | No captcha exists yet, and a token field is rejected with `422`. Turnstile on register, resend and the reset request is now decided for VS-033 (ADR-025). |
 | Password reset fields are unconfirmed (P2-6) | Built since VS-004 and fully specified. |
 | The admin settings list endpoint is unconfirmed (P1-3) | Built: `GET /api/v1/admin/settings`. |
 | Admin user detail and update paths are unconfirmed (P1-4) | Built. |
@@ -2569,22 +2579,22 @@ The request lists some things as already confirmed that are not true of the back
 
 ---
 
-## 7. Open questions nobody has decided
+## 7. Open questions
 
-These are not backend gaps to be filled by reading code. Each needs a decision, most of them from the product owner. They are listed so that nobody builds on a guess.
+These are not backend gaps to be filled by reading code. Each needed a decision, most of them from the product owner. Three were decided on 2026-10-14 and are recorded in [ADR-025](../adr/ADR-025-frontend-contract-decisions.md); the rest are still open, so nobody should build on a guess.
 
-| # | Question | Blocks | Who decides |
+| # | Question | Blocks | Status |
 |---|---|---|---|
-| 1 | Should admin order responses list the legal next actions for each line? The specification has none; the frontend asked for it (C8, P1-11). | FVS-030, FVS-031 | Product owner, before VS-029 |
-| 2 | Should a signed-in customer be able to see "you own this STL" before pressing "add to cart"? Nothing is specified (C11). | FVS-014, FVS-025 | Product owner, before VS-023 |
-| 3 | Payment return URL, its query parameters, and the polling interval, backoff, maximum duration and timeout (C7). | FVS-027 | Depends on the online provider (SRS section 30.4) |
-| 4 | Which online payment provider: Whish, a card gateway, or both (SRS section 30.4). | FVS-026, FVS-027 | Product owner, before VS-032 |
-| 5 | Idempotency key lifetime and required format (C12). | FVS-026, FVS-032 | Backend, in VS-023 |
-| 6 | Where the refundable balance per line is returned (P1-13). | FVS-032 | Backend, in VS-030 |
-| 7 | Captcha vendor, and whether captcha also covers registration, resend and password reset (P2-1, P2-7; SRS SEC-12). | FVS-002, FVS-015, FVS-016 | Product owner, before VS-033 |
-| 8 | Consent wording: terms, digital final sale, cash terms (C6; SRS section 30.2). | FVS-026 | Product owner; legal text |
-| 9 | STL delivery-time promise shown on product pages and at checkout (C10; SRS section 30.2). | FVS-014, FVS-026 | Product owner |
-| 10 | Can the default address be deleted, and what becomes default afterwards (C3). | FVS-023 | Backend, in VS-026 |
-| 11 | Bring Your Idea attachment limits and the wire name of the file field (P2-2). | FVS-015 | Backend, in VS-034 |
-| 12 | Should `/me` return an explicit `mfa_completed` flag (P1-1)? Not needed, but the frontend may prefer it. | FVS-005 | Frontend to request if wanted |
-| 13 | An administrator account without MFA, to test the enrolment screens (P1-2). There is no API to create one. | FVS-005 | Backend owner, on request |
+| 1 | Should admin order responses list the legal next actions for each line? (C8, P1-11) | FVS-030, FVS-031 | **Decided:** yes. Every line of `AdminOrderDetail` carries `available_actions` (`{target_status, cancel_reasons}`), built in VS-029. |
+| 2 | Should a signed-in customer be able to see "you own this STL" before pressing "add to cart"? (C11) | FVS-014, FVS-025 | **Decided:** yes, through `GET /api/v1/me/stl-ownership?product_id=` (`{product_id, owned}`), built in VS-023. The cart still refuses a second purchase. |
+| 3 | Payment return URL, its query parameters, and the polling interval, backoff, maximum duration and timeout (C7). | FVS-027 | Open. Depends on the online provider (SRS section 30.4) |
+| 4 | Which online payment provider: Whish, a card gateway, or both (SRS section 30.4). | FVS-026, FVS-027 | Open. Product owner, before VS-032 |
+| 5 | Idempotency key lifetime and required format (C12). | FVS-026, FVS-032 | Open. Backend, in VS-023 |
+| 6 | Where the refundable balance per line is returned (P1-13). | FVS-032 | Open. Backend, in VS-030 |
+| 7 | Captcha vendor, and whether captcha also covers registration, resend and password reset (P2-1, P2-7; SRS SEC-12). | FVS-002, FVS-004, FVS-015, FVS-016 | **Decided:** Cloudflare Turnstile on register, resend verification, the password-reset request, contact and Bring Your Idea; VS-033 builds the captcha port and applies it to all five. Still open inside VS-033: the error code for a refused token, and how a Turnstile outage is answered. |
+| 8 | Consent wording: terms, digital final sale, cash terms (C6; SRS section 30.2). | FVS-026 | Open. Product owner; legal text |
+| 9 | STL delivery-time promise shown on product pages and at checkout (C10; SRS section 30.2). | FVS-014, FVS-026 | Open. Product owner |
+| 10 | Can the default address be deleted, and what becomes default afterwards (C3). | FVS-023 | Open. Backend, in VS-026 |
+| 11 | Bring Your Idea attachment limits and the wire name of the file field (P2-2). | FVS-015 | Open. Backend, in VS-034 |
+| 12 | Should `/me` return an explicit `mfa_completed` flag (P1-1)? Not needed, but the frontend may prefer it. | FVS-005 | Open. Frontend to request if wanted |
+| 13 | An administrator account without MFA, to test the enrolment screens (P1-2). There is no API to create one. | FVS-005 | Open. Backend owner, on request |

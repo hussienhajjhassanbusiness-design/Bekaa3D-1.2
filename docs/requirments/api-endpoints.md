@@ -249,8 +249,8 @@ These are intentionally outside `/api/v1`.
 
 | Method + Path | Auth / Authorization | Request | Success | Errors | Pagination / Filter / Sort | Side Effects / Notes |
 |---|---|---|---|---|---|---|
-| `POST /api/v1/custom-requests` | Public; captcha + rate limit | `multipart/form-data CustomRequestCreate` | `201 CustomRequestReceipt` | 400, 422 `UPLOAD_REJECTED` / `MALWARE_DETECTED`, 429 | — | Validates/re-encodes/scans private attachments; creates lead; admin-only attachments; no transaction/payment |
-| `POST /api/v1/contact-messages` | Public; captcha + rate limit | `ContactMessageCreate` + captcha token | `201 ContactMessageReceipt` | 400, 422, 429 | — | Adds message to admin queue |
+| `POST /api/v1/custom-requests` | Public; Turnstile captcha (ADR-025) + rate limit | `multipart/form-data CustomRequestCreate` | `201 CustomRequestReceipt` | 400, 422 `UPLOAD_REJECTED` / `MALWARE_DETECTED`, 429 | — | Validates/re-encodes/scans private attachments; creates lead; admin-only attachments; no transaction/payment |
+| `POST /api/v1/contact-messages` | Public; Turnstile captcha (ADR-025) + rate limit | `ContactMessageCreate` + captcha token | `201 ContactMessageReceipt` | 400, 422, 429 | — | Adds message to admin queue |
 
 ---
 
@@ -260,13 +260,13 @@ These are intentionally outside `/api/v1`.
 
 | Method + Path | Auth / Authorization | Request | Success | Errors | Side Effects / Notes |
 |---|---|---|---|---|---|
-| `POST /api/v1/auth/register` | Public | `RegisterRequest` | `202 RegistrationAccepted` | 400, 422, 429 | **Enumeration-safe:** same response whether address is new or already registered; if eligible, creates unverified account and enqueues verification email |
+| `POST /api/v1/auth/register` | Public; Turnstile captcha from VS-033 (ADR-025) | `RegisterRequest` | `202 RegistrationAccepted` | 400, 422, 429 | **Enumeration-safe:** same response whether address is new or already registered; if eligible, creates unverified account and enqueues verification email |
 | `POST /api/v1/auth/login` | Public | `LoginRequest` | Customer: `200 SessionRead`; Admin needing MFA: `202 MfaChallengeRead` | 400, 401, 403, 429 | Progressive delay/lockout; successful customer login sets auth + CSRF cookies |
 | `POST /api/v1/auth/logout` | Authenticated | — | `204` | 401, 403 CSRF | Revokes current session; clears cookies |
 | `POST /api/v1/auth/refresh` | Authenticated refresh cookie | — | `204` | 401, 403 CSRF, 429 | Rotates refresh token/hash/version and CSRF cookie; detects token reuse |
 | `POST /api/v1/auth/verify-email` | Public | `VerifyEmailRequest` | `204` | 400 `INVALID_TOKEN`, 410 `RESOURCE_EXPIRED`, 429 | Single-use token; audits account event |
-| `POST /api/v1/auth/resend-verification` | Public or authenticated | `ResendVerificationRequest` | `202` | 429 | Uniform response regardless of account existence/state; outbox email if eligible |
-| `POST /api/v1/auth/password-reset/request` | Public | `PasswordResetRequest` | `202` | 429 | Uniform response; enqueue reset email only when appropriate |
+| `POST /api/v1/auth/resend-verification` | Public or authenticated; Turnstile captcha from VS-033 (ADR-025) | `ResendVerificationRequest` | `202` | 429 | Uniform response regardless of account existence/state; outbox email if eligible |
+| `POST /api/v1/auth/password-reset/request` | Public; Turnstile captcha from VS-033 (ADR-025) | `PasswordResetRequest` | `202` | 429 | Uniform response; enqueue reset email only when appropriate |
 | `POST /api/v1/auth/password-reset/confirm` | Public | `PasswordResetConfirm` | `204` | 400, 410, 429 | Replaces password hash; revokes all sessions; audits security event |
 
 ## 8.2 Admin MFA
@@ -281,6 +281,10 @@ Persistence is defined in Step 12 by `mfa_credentials` and one-time hashed `mfa_
 | `POST /api/v1/auth/mfa/setup/confirm` | Authenticated admin enrollment session | `MfaSetupConfirmRequest` | `200 MfaRecoveryCodesRead` | 401, 422, 429 | Enables MFA only after valid code; returns one-time recovery codes |
 | `POST /api/v1/auth/mfa/verify` | MFA challenge | `MfaVerifyRequest` | `204` | 401 `MFA_INVALID`, 410, 429 | Completes admin login; sets full auth + CSRF cookies |
 | `POST /api/v1/auth/mfa/recovery-codes/regenerate` | Admin + MFA | `MfaRecoveryRegenerateRequest` | `200 MfaRecoveryCodesRead` | 401, 404, 429 | Invalidates previous recovery codes; audit event |
+
+### Captcha on Authentication Forms
+
+From VS-033, register, resend verification and the password-reset request require a Turnstile `captcha_token` (ADR-025, SEC-12). The captcha is verified before any account lookup, and a refused captcha gives the same answer whatever the email address, so it is not an account-existence oracle. Login, email verification and reset confirmation take no captcha.
 
 ### Registration Anti-Enumeration Behaviour
 
@@ -393,6 +397,10 @@ The delivered / picked-up email links only to the order page; it never carries a
 # 12. Customer STL Purchases
 
 Removed by ADR-019: there is no STL library, entitlement or download endpoint, because the platform stores no STL files. A customer sees each STL purchase and whether it has been sent as a line in `GET /api/v1/me/orders/{order_id}` (`fulfillment_status`: `awaiting_delivery` or `delivered`, with `delivered_at`). The file itself arrives by email from the administrator.
+
+| Method + Path | Auth / Authorization | Request | Success | Errors | Pagination / Filter / Sort | Side Effects / Notes |
+|---|---|---|---|---|---|---|
+| `GET /api/v1/me/stl-ownership` | Authenticated | `product_id` query parameter (UUID, required) | `200 StlOwnershipRead` | 401, 422 | — | ADR-025, VS-023. `owned` is true when the caller has a paid, unrefunded STL line for the product (`awaiting_delivery` or `delivered`, not fully refunded). An unknown, hidden or physical product answers `owned: false`. A hint for the product page only: the cart and checkout still refuse a second purchase with 409 `PRODUCT_ALREADY_OWNED` |
 
 ---
 
@@ -525,7 +533,7 @@ The admin entitlement-grant endpoint is removed by ADR-019. To give an STL away,
 | Method + Path | Request | Success | Errors | Pagination / Filter / Sort | Side Effects / Notes |
 |---|---|---|---|---|---|
 | `GET /api/v1/admin/orders` | query params | `200 AdminOrderPage` | 401/404, 400 | Cursor; filters `status`, `fulfillment_method`, `payment_method`, `payment_due`, customer, order number, dates; default `-placed_at` | Admin fulfillment queue; never lists `pending_payment` orders (BR-148); `payment_due=true` is the "cash due" view |
-| `GET /api/v1/admin/orders/{order_id}` | — | `200 AdminOrderDetail` | 401/404 | — | Customer/order data, contact phone, payment method and amount due, lines, status history, payments/refunds, internal note |
+| `GET /api/v1/admin/orders/{order_id}` | — | `200 AdminOrderDetail` | 401/404 | — | Customer/order data, contact phone, payment method and amount due, lines with `available_actions` (ADR-025), status history, payments/refunds, internal note |
 | `PATCH /api/v1/admin/orders/{order_id}` | `AdminOrderUpdate` | `200 AdminOrderDetail` | 401/404, 422 | — | V1 restricted to mutable admin fields such as internal note; order status is not directly patchable |
 | `GET /api/v1/admin/stl-deliveries` | query params | `200 StlDeliveryPage` | 401/404, 400 | Cursor; optional `product_id`, customer; default oldest first (`placed_at`) | STL delivery queue (ADR-019): every STL line in `awaiting_delivery`, with order number, product, customer and `customer_email_snapshot` to send to |
 | `POST /api/v1/admin/orders/{order_id}/items/{item_id}/transition` | `OrderItemTransitionRequest` | `200 AdminOrderDetail` | 401/404, 409 `INVALID_STATE_TRANSITION`, 422 | — | Locks the order, then the line (ADR-024 lock order); a physical edge requires a cash order or an online payment that reached `paid` — `paid`, `partially_refunded` or `refunded` (BR-148); validates the delivery/pickup/STL state machine; `→ cancelled` from `ready_to_ship`, `returned` or `ready_for_pickup` requires `cancel_reason` and may insert a cash payment block (BR-144; it then also locks the customer's cart and takes the phone advisory lock); an unpaid cash line totalling 0 may go `shipped → cancelled` (`other`); recomputes order projection; history + audit + notifications. For an STL line, `awaiting_delivery → delivered` records `delivered_at` and `delivered_by` and notifies the customer that the file was emailed. `→ in_production` sends no customer notification. On a cash order, `→ delivered` and `→ picked_up` are refused; use the cash handover |
@@ -537,6 +545,8 @@ The admin entitlement-grant endpoint is removed by ADR-019. To give an STL away,
 | `POST /api/v1/admin/cash-blocks/{block_id}/clear` | — | `200 CashPaymentBlockRead` | 401/404 | — | Sets `cleared_at`/`cleared_by`; audited; idempotent |
 
 The line-transition endpoint and, for cash orders, the cash-handover endpoint are the only normal API paths for fulfillment status changes.
+
+Every line of every `AdminOrderDetail` (including the one returned by a transition, handover or cancel) carries `available_actions`: the transitions the line-transition endpoint would accept for it at read time (ADR-025). It is a hint; the endpoint remains the authority and answers 409 `INVALID_STATE_TRANSITION` after a concurrent change.
 
 ---
 
@@ -676,6 +686,7 @@ Only significant request fields are listed here. All schemas reject unknown fiel
 ```text
 email: Email
 password: str
+captcha_token: str   # from VS-033 (ADR-025)
 ```
 
 ### `LoginRequest`
@@ -695,12 +706,14 @@ token: str
 
 ```text
 email: Email
+captcha_token: str   # from VS-033 (ADR-025)
 ```
 
 ### `PasswordResetRequest`
 
 ```text
 email: Email
+captcha_token: str   # from VS-033 (ADR-025)
 ```
 
 ### `PasswordResetConfirm`
@@ -1292,6 +1305,25 @@ paid_at
 
 Order lines in `OrderDetail` carry `fulfillment_status` (with `in_production` shown as `pending`) and, for STL lines, `delivered_at`; physical lines carry `receipt_confirmed_at` and `problem_reported_at`.
 
+## `AdminOrderDetail` line actions
+
+Each line in `AdminOrderDetail` carries (ADR-025):
+
+```text
+available_actions[]:
+  target_status: order_item_status
+  cancel_reasons: ["refused" | "no_show" | "other"]   # empty: no reason taken; otherwise one is required
+```
+
+Computed from the same transition table the line-transition endpoint enforces, including the BR-148 payment gate and the cash-handover rule. `[]` when no transition is legal.
+
+## `StlOwnershipRead`
+
+```text
+product_id: UUID
+owned: bool
+```
+
 ## `PublicSettingsRead`
 
 Strict allowlist, e.g.:
@@ -1518,7 +1550,7 @@ This section verifies that every V1 feature in the SRS has an API or an intentio
 | F-024 View account profile | `GET /me` |
 | F-025 Address book | `/me/addresses*` |
 | F-026 Order history/detail | `/me/orders*` |
-| F-027 Purchased STLs with delivery status | `/me/orders*` line status |
+| F-027 Purchased STLs with delivery status | `/me/orders*` line status; `GET /me/stl-ownership` for one product (ADR-025) |
 | F-028 Removed (ADR-019) | — |
 | F-029 Offer history | `/me/offers*` |
 | F-030 Wishlist | `/me/wishlist*` |
@@ -1641,7 +1673,7 @@ This section verifies that every V1 feature in the SRS has an API or an intentio
 | Feature | Endpoint / Mechanism |
 |---|---|
 | F-130 Email outbox | internal DB + worker; no public CRUD |
-| F-132 Captcha | public form validation; no backend captcha-management endpoint |
+| F-132 Captcha | Turnstile on register, resend verification, password-reset request, contact and Bring Your Idea (ADR-025); no backend captcha-management endpoint |
 | F-133 Rate limiting | middleware/nginx/Redis; response headers |
 | F-134 Correlation logging | middleware |
 | F-135 Audit logging | side effect + admin read-only viewer |
