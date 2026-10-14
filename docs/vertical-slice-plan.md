@@ -30,7 +30,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 | VS-023b | STL delivery queue and mark-as-sent | VS-023 | Not started |
 | VS-024 | Payment recovery: reconciliation, stale checkouts, manual confirm | VS-023 | Not started |
 | VS-025 | Customer order history | VS-023 | Not started |
-| VS-026 | Address book | VS-008 | Not started |
+| VS-026 | Address book | VS-008 | Done |
 | VS-027 | Shipping zones | — | Removed (ADR-024) |
 | VS-028 | Physical checkout: delivery, pickup, payment method, dispatch estimate | VS-023, VS-024, VS-026 | Not started |
 | VS-029 | Admin order queue, fulfillment and cash handover | VS-028, VS-023b, VS-024, VS-025 | Not started |
@@ -646,7 +646,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 - **Done when:** A customer sees exactly what they bought, at the price they paid.
 
 ## VS-026 — Address book
-**Status:** Not started
+**Status:** Done
 **Depends on:** VS-008
 **Goal:** A verified customer saves Lebanese delivery addresses and picks a default.
 - **Model / migration:** `addresses` (label, recipient, phone, governorate, city, area, street, landmark notes), soft-deletable, with a partial unique index allowing one default per user.
@@ -679,6 +679,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 - **Endpoints / jobs:** `POST /api/v1/checkout` accepts `fulfillment_method`, `address_id`, `contact_phone` (pickup only), `payment_method`, `payment_provider` (online, when more than one is configured) and a note.
 - **Logic:**
   - Reuses the checkout transaction from VS-023, addresses from VS-026, and `SettingsReader` (VS-007).
+  - Locks the chosen address `FOR SHARE` (owner, live) and refuses a deleted or foreign one with 422 `INVALID_FULFILLMENT`; that is why the address `DELETE` has no `409` (ADR-027). Contact phones are normalised with `app.core.phone` (VS-026), the same parser as the address book.
   - Enforces the SRS §7.4 matrix; a mismatch gives 422 `INVALID_FULFILLMENT`.
   - Snapshots the address, the contact phone normalised to E.164 and its hash (the address's phone for delivery, the entered Lebanese phone for pickup), the payment method, lead time and batch size.
   - Totals are recomputed first (`subtotal + tax`; no shipping). Cash rules are then checked against the **recomputed** total, under the cart lock (which serialises one customer's checkouts) and a transaction-scoped advisory lock on the phone hash (which serialises checkouts from different accounts sharing it):

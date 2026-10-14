@@ -198,6 +198,7 @@ These codes are implementation additions needed to give the frontend determinist
 | 422 | `CASH_PAYMENT_LIMIT_REACHED` | The customer or the contact phone already has the maximum open unpaid cash orders, or the recomputed total exceeds the cash maximum (ADR-024) |
 | 422 | `CASH_AMOUNT_MISMATCH` | Cash entered at handover differs from the amount due (ADR-024) |
 | 422 | `UPLOAD_REJECTED` | Type/size/count/content validation failed |
+| 422 | `ADDRESS_LIMIT_REACHED` | The customer already has the maximum of 20 live saved addresses (VS-026, ADR-027) |
 | 422 | `MALWARE_DETECTED` | Uploaded content failed malware scan |
 | 422 | `SETTING_INVALID` | Setting value does not match its declared type/range |
 | 502 | `PAYMENT_PROVIDER_ERROR` | Provider call failed |
@@ -318,11 +319,11 @@ There is no normal “disable MFA” endpoint in V1 because the SRS treats admin
 
 | Method + Path | Auth / Authorization | Request | Success | Errors | Pagination | Side Effects / Notes |
 |---|---|---|---|---|---|---|
-| `GET /api/v1/me/addresses` | Authenticated | — | `200 AddressList` | 401 | Hard-limited | Own addresses only |
-| `POST /api/v1/me/addresses` | Verified Customer | `AddressCreate` | `201 AddressRead` | 401, 403, 422 | — | Setting default clears prior default atomically |
+| `GET /api/v1/me/addresses` | Authenticated | — | `200 AddressList` | 401 | Hard-limited: at most 20 live addresses (ADR-027) | Own addresses only; default first, then newest |
+| `POST /api/v1/me/addresses` | Verified Customer | `AddressCreate` | `201 AddressRead` | 401, 403, 422 `ADDRESS_LIMIT_REACHED` | — | Setting default clears prior default atomically; a user's first live address is always the default (ADR-027) |
 | `GET /api/v1/me/addresses/{address_id}` | Authenticated; owner | — | `200 AddressRead` | 401, 404 | — | Object ownership |
 | `PATCH /api/v1/me/addresses/{address_id}` | Verified Customer; owner | `AddressUpdate` | `200 AddressRead` | 401, 403, 404, 422 | — | Historical orders unaffected because they use snapshots |
-| `DELETE /api/v1/me/addresses/{address_id}` | Verified Customer; owner | — | `204` | 401, 403, 404, 409 | — | Soft delete; reject deletion when needed by an in-progress checkout/order workflow |
+| `DELETE /api/v1/me/addresses/{address_id}` | Verified Customer; owner | — | `204` | 401, 403, 404 | — | Soft delete; deleting the default leaves none. No `409`: checkout locks the address it snapshots and refuses a deleted one (ADR-027) |
 | `PUT /api/v1/me/addresses/{address_id}/default` | Verified Customer; owner | — | `200 AddressRead` | 401, 403, 404 | — | Atomically switches default |
 
 ---
@@ -773,13 +774,19 @@ governorate: str
 city: str
 area?: str
 street?: str
-landmark_notes?: str
+landmark_notes: str   # required: SRS 14.4 (ADR-027)
 is_default?: bool
 ```
 
+`phone` is a Lebanese number in any common spelling, stored and returned as E.164 (`+9613123456`). `governorate` is one of `akkar`, `baalbek_hermel`, `beirut`, `beqaa`, `keserwan_jbeil`, `mount_lebanon`, `nabatieh`, `north`, `south`. Full contract: [`docs/address-book.md`](../address-book.md).
+
 ### `AddressUpdate`
 
-Same fields optional; empty update rejected.
+Same fields optional; empty update rejected; `null` clears `area` or `street` only. `is_default: false` on the default clears it.
+
+### `AddressRead`
+
+The create fields (phone in E.164) plus `id`, `is_default`, `created_at`, `updated_at`. `AddressList` is `{items: AddressRead[]}`.
 
 ---
 
