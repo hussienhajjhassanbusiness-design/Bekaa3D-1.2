@@ -7,7 +7,7 @@ description: Use when about to mark a Bekaa3D FVS slice complete, before committ
 
 ## Overview
 
-`FRONTEND-VERTICAL-SLICE-PLAN.md` §19 defines what "done" means for a Bekaa3D FVS slice in prose. This skill is the same checklist in enforceable form, to run at the exact moment a slice is about to be called finished — the moment agents are most tempted to round up.
+`docs/plans/frontend-slices/FRONTEND-VERTICAL-SLICE-PLAN.md` §19 defines what "done" means for a Bekaa3D FVS slice in prose. This skill is the same checklist in enforceable form, to run at the exact moment a slice is about to be called finished — the moment agents are most tempted to round up.
 
 **REQUIRED BACKGROUND:** `superpowers:verification-before-completion` — that skill covers the general discipline of proving claims with evidence before declaring success; this skill adds the Bekaa3D-specific items that a generic completion check wouldn't know to look for (backend-contract fidelity, IDOR-hiding, money-is-never-client-authoritative, admin-hiding-isn't-authorization). Run both — this doesn't replace it.
 
@@ -25,8 +25,8 @@ Every item that applies to the slice must be independently verified, not assumed
 
 **Traceability**
 1. Backend VS dependency identified (cite the exact `VS-xxx`)
-2. Frontend FVS identified (cite the exact `FVS-xxx` from `FRONTEND-VERTICAL-SLICE-PLAN.md`)
-3. Real API contract used — every endpoint/field traces to `vertical-slice-plan.md`, a confirmed OpenAPI spec, or an implemented backend contract (never invented — see `bekaa3d-api-contract`)
+2. Frontend FVS identified (cite the exact `FVS-xxx` from `docs/plans/frontend-slices/FRONTEND-VERTICAL-SLICE-PLAN.md`)
+3. Real API contract used — every endpoint/field traces to `docs/plans/backend/vertical-slice-plan.md`, a confirmed OpenAPI spec, or an implemented backend contract (never invented — see `bekaa3d-api-contract`)
 4. Route created and matches the plan's routing table (or a documented, justified deviation)
 
 **Layout**
@@ -59,12 +59,12 @@ Every item that applies to the slice must be independently verified, not assumed
 **Testing**
 22. Unit/component tests added
 23. Integration tests added where appropriate (mocked API contract behavior, including the slice's documented error cases)
-24. End-to-end happy path added/extended where the slice completes a critical journey (`FRONTEND-VERTICAL-SLICE-PLAN.md` §16)
+24. End-to-end happy path added/extended where the slice completes a critical journey (`docs/plans/frontend-slices/FRONTEND-VERTICAL-SLICE-PLAN.md` §16)
 25. Important failure path tested (not just the happy path — e.g., price-change conflict, expired window, IDOR-hidden resource)
 
 **Contract fidelity**
 26. No invented API behavior anywhere in the diff (re-check against `bekaa3d-api-contract`'s red flags)
-27. No unresolved contract assumption silently implemented — anything uncertain is logged in `FRONTEND-VERTICAL-SLICE-PLAN.md` §17, not guessed and shipped
+27. No unresolved contract assumption silently implemented — anything uncertain is logged in `docs/plans/frontend-slices/FRONTEND-VERTICAL-SLICE-PLAN.md` §17, not guessed and shipped
 
 **Build health**
 28. Tests passing (actually run, output observed — not assumed from "the code looks right")

@@ -79,7 +79,7 @@ See `tokens.md` §§2–9 for: type scale (display/h1–h4/body/caption), 4px-ba
 
 ## Responsive & States
 
-Breakpoints: mobile ≤767px, tablet 768–1023px, desktop ≥1024px (matches `FRONTEND-VERTICAL-SLICE-PLAN.md` §14 — do not introduce a second breakpoint system).
+Breakpoints: mobile ≤767px, tablet 768–1023px, desktop ≥1024px (matches `docs/plans/frontend-slices/FRONTEND-VERTICAL-SLICE-PLAN.md` §14 — do not introduce a second breakpoint system).
 
 Every interactive element needs distinct, visible: default → hover → focus-visible → active → disabled treatments. Focus indicator is **always** a visible 2px outline (brand-lime-derived, never removed via `outline: none` without an equivalent replacement) — this is a hard requirement, not a nice-to-have, per WCAG 2.4.7.
 

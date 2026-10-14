@@ -7,7 +7,7 @@ description: Use when writing or reviewing any Bekaa3D frontend code that calls,
 
 ## Overview
 
-`vertical-slice-plan.md` (VS-001–VS-040) is the **only** source of truth for what the Bekaa3D backend does. Not intuition, not "how e-commerce usually works," not what looks reasonable for a REST API. If a request/response shape, endpoint, enum, or behavior isn't in that document (or a confirmed OpenAPI spec / implemented contract), it does not exist yet — and code must not be written as if it does.
+`docs/plans/backend/vertical-slice-plan.md` (VS-001–VS-040) is the **only** source of truth for what the Bekaa3D backend does. Not intuition, not "how e-commerce usually works," not what looks reasonable for a REST API. If a request/response shape, endpoint, enum, or behavior isn't in that document (or a confirmed OpenAPI spec / implemented contract), it does not exist yet — and code must not be written as if it does.
 
 **Violating the letter of this rule is violating the spirit of it.** Writing invented code and disclosing the invention afterward is still inventing the contract — it is not a compliant middle ground.
 
@@ -34,11 +34,11 @@ Frontend validation exists to improve UX (fast feedback, fewer round-trips) — 
 
 ## What "No Endpoint Exists" Actually Means
 
-If a requested feature has no corresponding `VS-xxx` slice in `vertical-slice-plan.md`:
+If a requested feature has no corresponding `VS-xxx` slice in `docs/plans/backend/vertical-slice-plan.md`:
 
 1. **Say so, first, before writing implementation code.** "This isn't in the backend plan — here's what would need to be confirmed with the backend team before frontend work starts" is a complete and correct response on its own.
 2. If a sketch/prototype is genuinely useful to unblock design discussion, it must be **visibly, inline, unmissable** as speculative — not production-shaped code with a disclosure paragraph tacked on at the end (see Real-World Failure below). Mark every invented field/endpoint with an inline `// NEEDS BACKEND CONFIRMATION: <what specifically>` comment at its point of use, not just a prose summary after the code.
-3. Log it as an open item in `FRONTEND-VERTICAL-SLICE-PLAN.md` §17 (the contract-gap list) rather than letting it live only in a chat response or a code comment that will be forgotten.
+3. Log it as an open item in `docs/plans/frontend-slices/FRONTEND-VERTICAL-SLICE-PLAN.md` §17 (the contract-gap list) rather than letting it live only in a chat response or a code comment that will be forgotten.
 
 ## Real-World Failure (baseline, observed)
 
@@ -56,17 +56,17 @@ Asked to build the integration layer for a "Recently Viewed Products" feature �
 
 ## Red Flags — Stop and Flag Instead
 
-- You're about to write a `fetch`/`apiClient` call to a path that isn't a direct quote from `vertical-slice-plan.md` or a confirmed OpenAPI spec.
+- You're about to write a `fetch`/`apiClient` call to a path that isn't a direct quote from `docs/plans/backend/vertical-slice-plan.md` or a confirmed OpenAPI spec.
 - You're inventing a field name because "it's probably called that."
 - You're designing an auth/session/identity mechanism (headers, tokens, cookies) that isn't VS-003/VS-005's documented cookie+CSRF model.
 - You're about to hide a UI element to "handle" an authorization case instead of relying on the backend to refuse the action (see Authorization below).
 - The feature you're building has no `VS-xxx` citation anywhere in your task.
 
-**All of these mean: stop, mark the gap inline (`NEEDS BACKEND CONFIRMATION`), and log it in `FRONTEND-VERTICAL-SLICE-PLAN.md` §17 before writing implementation-shaped code.**
+**All of these mean: stop, mark the gap inline (`NEEDS BACKEND CONFIRMATION`), and log it in `docs/plans/frontend-slices/FRONTEND-VERTICAL-SLICE-PLAN.md` §17 before writing implementation-shaped code.**
 
 ## RFC 9457 Error Handling
 
-The backend returns RFC 9457 problem-details responses (VS-001). Parse every non-2xx response into a typed `ApiError` and branch UI treatment by status class — see `bekaa3d-commerce-ux` and `FRONTEND-VERTICAL-SLICE-PLAN.md` §10 for the per-status-code UI pattern (400/422 inline field errors, 401 silent-refresh, 403/404 existence-hiding, 409 conflict-specific UI, 429 retry guidance, 5xx generic). Never assume a validation-error body shape that hasn't been confirmed — the exact field-level error structure is itself a logged `NEEDS BACKEND CONFIRMATION` item.
+The backend returns RFC 9457 problem-details responses (VS-001). Parse every non-2xx response into a typed `ApiError` and branch UI treatment by status class — see `bekaa3d-commerce-ux` and `docs/plans/frontend-slices/FRONTEND-VERTICAL-SLICE-PLAN.md` §10 for the per-status-code UI pattern (400/422 inline field errors, 401 silent-refresh, 403/404 existence-hiding, 409 conflict-specific UI, 429 retry guidance, 5xx generic). Never assume a validation-error body shape that hasn't been confirmed — the exact field-level error structure is itself a logged `NEEDS BACKEND CONFIRMATION` item.
 
 ## Authentication, CSRF, MFA, Authorization
 
@@ -77,7 +77,7 @@ The backend returns RFC 9457 problem-details responses (VS-001). Parse every non
 
 ## Maintaining the Contract-Gap List
 
-`FRONTEND-VERTICAL-SLICE-PLAN.md` §17 is the living list. When you find a new gap:
+`docs/plans/frontend-slices/FRONTEND-VERTICAL-SLICE-PLAN.md` §17 is the living list. When you find a new gap:
 
 ```
 **Issue:** <short name>
@@ -99,4 +99,4 @@ Append to §17 rather than resolving it by guessing, and rather than leaving it 
 | Inventing a guest-identity/auth header | Auth/session mechanisms are already defined (VS-003/005) — never parallel-invent one. |
 | Hiding an admin button to "protect" an action | Confirm the backend independently refuses it — hiding is not authorization. |
 | Treating client-side validation as final | Client validation is UX only; the server's response is authoritative. |
-| Letting a caveat live only in chat/PR description | Log it in `FRONTEND-VERTICAL-SLICE-PLAN.md` §17 so it isn't lost. |
+| Letting a caveat live only in chat/PR description | Log it in `docs/plans/frontend-slices/FRONTEND-VERTICAL-SLICE-PLAN.md` §17 so it isn't lost. |

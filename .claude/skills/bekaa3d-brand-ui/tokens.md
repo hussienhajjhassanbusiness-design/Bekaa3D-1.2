@@ -1,6 +1,6 @@
 # Bekaa3D Design Token Reference
 
-Source: `ChatGPT Image Sep 26, 2026, 04_34_37 PM.jpg` (the supplied Bekaa3D logo — hexagonal "B" mark, lime→forest-green gradient, near-black "BEKAA" wordmark, dark-green "3D," tagline "Engineered Grade 3D Solutions" in mid-green).
+Source: `docs/assets/ChatGPT Image Sep 26, 2026, 04_34_37 PM.jpg` (the supplied Bekaa3D logo — hexagonal "B" mark, lime→forest-green gradient, near-black "BEKAA" wordmark, dark-green "3D," tagline "Engineered Grade 3D Solutions" in mid-green).
 
 **Status: initial proposal, not an approved brand spec.** These tokens are visually sampled/approximated from the one logo asset provided. If an official brand guideline (exact hex values, approved type family, usage rules) becomes available, update this file and treat it as the new source of truth — do not keep both versions in circulation.
 
@@ -139,7 +139,7 @@ Flat by default — shadow exists only to signal something is floating above the
 | `container-max` (storefront) | 1280px, centered, `space-4` side gutter minimum on mobile |
 | `container-max` (admin) | fluid up to 1600px — admin tables/dashboards benefit from more width than storefront content |
 
-Matches `FRONTEND-VERTICAL-SLICE-PLAN.md` §14 exactly — this is the single breakpoint system for the whole app, not a second competing scale.
+Matches `docs/plans/frontend-slices/FRONTEND-VERTICAL-SLICE-PLAN.md` §14 exactly — this is the single breakpoint system for the whole app, not a second competing scale.
 
 ## 11. Button Variants
 
@@ -168,4 +168,4 @@ Hover: darken background 8%. Active: darken 12% + scale 0.98 (subtle, no bounce)
 
 - Exact hex precision should be re-verified against a vector/brand-book source if one becomes available (see Status note above).
 - No licensed/approved UI typeface has been specified — this document assumes a system-adjacent geometric sans as a placeholder; confirm with brand/marketing before final implementation.
-- Dark-mode tokens are intentionally not defined — nothing in `FRONTEND-VERTICAL-SLICE-PLAN.md` or `vertical-slice-plan.md` requires dark mode for V1; add a token set here if that requirement appears.
+- Dark-mode tokens are intentionally not defined — nothing in `docs/plans/frontend-slices/FRONTEND-VERTICAL-SLICE-PLAN.md` or `docs/plans/backend/vertical-slice-plan.md` requires dark mode for V1; add a token set here if that requirement appears.
