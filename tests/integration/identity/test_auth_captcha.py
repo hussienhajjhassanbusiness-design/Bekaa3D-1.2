@@ -159,19 +159,22 @@ async def test_an_accepted_token_reaches_the_flow(
 @pytest.mark.integration
 @pytest.mark.usefixtures("configured_app")
 @pytest.mark.parametrize(("path", "takes_password"), ROUTES)
-async def test_a_refused_captcha_takes_as_long_for_a_known_address_as_an_unknown_one(
+async def test_a_refused_captcha_takes_as_long_for_new_unverified_and_verified_addresses(
     db_session: AsyncSession, captcha: FakeCaptcha, path: str, takes_password: bool
 ) -> None:
-    known = (await create_user(db_session)).email
-    timings: dict[bool, list[float]] = {True: [], False: []}
+    unverified = (await create_user(db_session, verified=False)).email
+    verified = (await create_user(db_session)).email
+    timings: dict[str, list[float]] = {"new": [], "unverified": [], "verified": []}
     with client_for(main_app) as client:
         for _ in range(TIMING_SAMPLES):
-            for is_known in (True, False):
-                email = known if is_known else unique_email()
+            for kind, email in (
+                ("new", unique_email()),
+                ("unverified", unverified),
+                ("verified", verified),
+            ):
                 started = time.perf_counter()
                 client.post(path, json=_body(takes_password, email, "forged"))
-                timings[is_known].append(time.perf_counter() - started)
-    print("TIMING", describe(timings[True], timings[False]))
-    assert not distinguishable(timings[True], timings[False]), describe(
-        timings[True], timings[False]
-    )
+                timings[kind].append(time.perf_counter() - started)
+    for a, b in (("new", "unverified"), ("new", "verified"), ("unverified", "verified")):
+        print("TIMING", a, b, describe(timings[a], timings[b]))
+        assert not distinguishable(timings[a], timings[b]), describe(timings[a], timings[b])

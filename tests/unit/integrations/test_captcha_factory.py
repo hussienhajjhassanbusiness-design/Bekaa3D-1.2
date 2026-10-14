@@ -1,6 +1,7 @@
 """ADR-026: the fake captcha can never stand in for Turnstile outside test and development."""
 
 import pytest
+from fastapi import FastAPI
 
 from app.core.config import Settings
 from app.integrations.captcha.factory import captcha_verifier
@@ -48,3 +49,24 @@ def test_anything_else_refuses_to_start(provider: str, environment: str) -> None
 def test_turnstile_without_a_secret_refuses_to_start() -> None:
     with pytest.raises(ValueError, match="TURNSTILE_SECRET"):
         captcha_verifier(_settings("turnstile", "production", secret=""))
+
+
+@pytest.mark.parametrize(
+    ("provider", "environment", "secret"),
+    [("fake", "production", "s3cret"), ("turnstile", "production", "")],
+)
+async def test_the_api_refuses_to_start_with_a_bad_captcha_config(
+    monkeypatch: pytest.MonkeyPatch, provider: str, environment: str, secret: str
+) -> None:
+    import app.main as main_module
+
+    bad = _settings(provider, environment, secret=secret)
+    monkeypatch.setattr(main_module, "get_settings", lambda: bad)
+    monkeypatch.setattr(main_module, "make_engine", _must_not_run)
+    with pytest.raises(ValueError, match=r"not allowed|TURNSTILE_SECRET"):
+        async with main_module.lifespan(FastAPI()):
+            pass
+
+
+def _must_not_run(*_args: object) -> None:
+    raise AssertionError("the database was touched before the captcha config was checked")
