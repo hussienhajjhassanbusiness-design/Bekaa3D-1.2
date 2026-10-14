@@ -503,9 +503,11 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - `POST /api/v1/checkout` (requires an `Idempotency-Key` header; optional `payment_provider`, required when more than one online provider is configured) and `POST /api/v1/webhooks/payments/{provider}` (provider-neutral, ADR-024).
   - A verification arq job.
   - New `purge_expired_idempotency_records` job (daily).
+  - `GET /api/v1/me/stl-ownership?product_id=` (ADR-025): `200 {product_id, owned}` for any signed-in user.
 - **Logic:**
   - Reuses `SettingsReader` (VS-007), `create_notification` (VS-008) and the outbox (VS-002).
   - Adds the "STL already owned" check: the cart (VS-022) refuses an owned STL with 409 `PRODUCT_ALREADY_OWNED`; checkout silently drops an STL acquired since it was added (SRS §7.3 step 5); and an ownership-index violation during checkout (the STL is in another live order) gives 409 `PRODUCT_ALREADY_OWNED`.
+  - The ownership check (ADR-025) reads through the same ownership query: `owned` is true for a paid, unrefunded STL line (`awaiting_delivery` or `delivered`, not fully refunded). An unknown, hidden or physical product answers `owned: false`, so it reveals no product. It is a hint; the cart and checkout refusals above stay.
   - New payment-provider port with a mock adapter covering every verification branch.
   - Checkout runs in one transaction:
     1. Idempotency check.
@@ -532,6 +534,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - A duplicate webhook applies the payment once.
   - Two parallel checkouts of one STL by one customer: one order, one 409 `PRODUCT_ALREADY_OWNED`.
   - An owned STL cannot be added to the cart (409).
+  - Ownership check: `owned` is false before payment and for another customer's purchase, true once the line is `awaiting_delivery` or `delivered`, and false for an unknown, hidden or physical product id; anonymous gives 401; a missing or malformed `product_id` gives 422.
   - A failure leaves the cart intact.
   - A provider-reported failure leaves the order `pending_payment`.
   - Startup fails with `ENVIRONMENT=production` and `mock` configured.
@@ -731,6 +734,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
     - recomputes the status and writes history, audit, notification and the email with the cash receipt.
   - The delivered / picked-up email's "I got it" and "Report a problem" buttons link to the order page; VS-029b adds the actions.
   - Clearing a cash block sets `cleared_at` and `cleared_by`; clearing an already-cleared block is a no-op 200.
+  - **Available actions (ADR-025):** every line of every `AdminOrderDetail` carries `available_actions`, a list of `{target_status, cancel_reasons}` the transition endpoint would accept at read time. It comes from the same pure transition table, so it includes the BR-148 payment gate, the cash-handover rule and the $0 `shipped → cancelled` edge; `cancel_reasons` is empty when no reason is taken. VS-023b's STL edge is listed too. Customer responses never carry it.
 - **Tests:**
   - Every legal and illegal edge, per fulfillment method and payment method.
   - "Start printing" (or any physical transition) on a `pending_payment` online order gives 409, and the order never appears in the fulfillment queue.
@@ -742,6 +746,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - Cash blocks (rows seeded directly, since VS-031 creates them): a customer gets 404 on both routes; clearing writes an audit row; a second clear is idempotent; after clearing, checkout offers cash again for that customer and phone.
   - An email-provider outage does not block a transition.
   - The internal note is never visible to the customer.
+  - `available_actions` matches the endpoint: for every line state, fulfillment method, payment method and payment state, each listed action succeeds with one of its `cancel_reasons` (when any), and every unlisted target gives 409; an unpaid online order's lines and a cash order's `→ delivered` / `→ picked_up` are never listed.
 - **Done when:**
   - No route sets `order.status` directly, and no route but the handover creates a cash payment.
   - No physical line of an unpaid online order ever moves, except the hold release cancelling it.
@@ -885,21 +890,26 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 ## VS-033 — Contact form and captcha
 **Status:** Not started
 **Depends on:** VS-005
-**Goal:** A visitor messages the business without an account, and the administrator works through a message queue.
+**Goal:** A visitor messages the business without an account, the administrator works through a message queue, and every public form is captcha-protected (SEC-12, ADR-025).
 - **Model / migration:** `contact_messages` (status `new`, `read`, `replied` or `archived`).
 - **Endpoints / jobs:** `POST /api/v1/contact-messages`, `GET /api/v1/admin/contact-messages`, `GET/PATCH /api/v1/admin/contact-messages/{id}`.
 - **Logic:**
   - Reuses the rate limiter (VS-002) and `AuditWriter`.
-  - New `CaptchaPort` with a fake adapter and one real provider adapter.
+  - New `CaptchaPort` with a Cloudflare Turnstile adapter (`TURNSTILE_SECRET`) and a fake adapter refused outside `test` and `development` (an allowlist, like the scanner's).
+  - **Applied to all five public forms (ADR-025):** `POST /api/v1/contact-messages` here, `POST /api/v1/custom-requests` when VS-034 builds it, and the already-built `POST /api/v1/auth/register`, `/auth/resend-verification` and `/auth/password-reset/request`. Each request schema gains a required `captcha_token`. This is a breaking change for the three auth routes, so release it with the frontend's Turnstile widget.
+  - On the three auth routes the captcha is verified before any account lookup, and a refused captcha gives the same answer whatever the email; the enumeration floor (SEC-06) still applies.
+  - Adds one stable error code for a missing or refused token to api-endpoints.md §5.2, and decides how a Turnstile outage is answered (failing open would defeat the control).
   - Captcha is checked, then per-IP and per-email limits, then the row is inserted.
   - Admin status changes take a row lock and are audited.
   - Message bodies are never logged.
 - **Tests:**
   - A bad captcha stores nothing.
+  - Register, resend and reset-request each refuse a missing or bad token, with the same answer and timing for a new, unverified and verified address; existing auth tests send a token the fake adapter accepts.
+  - The fake adapter is refused with `ENVIRONMENT` set to `production`, `staging` and `prod`.
   - A rate-limit breach gives 429.
   - The queue is admin-only.
   - Status changes are audited.
-- **Done when:** Only captcha-verified, rate-limited messages reach the queue.
+- **Done when:** Only captcha-verified, rate-limited messages reach the queue, and register, resend verification and the password-reset request require a valid Turnstile token.
 
 ## VS-029b — Receipt confirmation and problem report
 **Status:** Not started

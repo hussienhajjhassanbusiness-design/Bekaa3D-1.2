@@ -50,10 +50,10 @@ The last command prints the seed accounts' credentials **once**. Keep them in a 
 | C5 | Cart | Not built | VS-022 |
 | C6 | Checkout | Not built | VS-023, VS-028 |
 | C7 | Payment verification | Not built; parts undecided | VS-023 to VS-025 |
-| C8 | Order status and actions | Not built | VS-023, VS-025, VS-029 |
+| C8 | Order status and actions | Not built; admin `available_actions` decided (ADR-025) | VS-023, VS-025, VS-029 |
 | C9 | Entitlements / library | **Removed (ADR-019)** | — |
 | C10 | STL download | **Removed (ADR-019)** | — |
-| C11 | Ownership check | Product-level built; per-customer not built | VS-015; VS-023 |
+| C11 | Ownership check | Product-level built; per-customer check decided (ADR-025), not built | VS-015; VS-023 |
 | C12 | Idempotency-Key | Not built | VS-023 |
 | P1-1 | Admin authorization source | Built | VS-005, VS-006 |
 | P1-2 | Admin MFA | Built | VS-005 |
@@ -68,13 +68,13 @@ The last command prints the seed accounts' credentials **once**. Keep them in a 
 | P1-11 | Admin order fulfillment | Not built | VS-023b, VS-029 |
 | P1-12 | Cancellation and returns | Not built | VS-031 |
 | P1-13 | Refunds | Not built | VS-030 |
-| P2-1 | Captcha provider | Not built; vendor undecided | VS-033 |
+| P2-1 | Captcha provider | Not built; Turnstile decided (ADR-025) | VS-033 |
 | P2-2 | Bring Your Idea | Not built | VS-034 |
 | P2-3 | Contact form | Not built | VS-033 |
 | P2-4 | Admin contact queue | Not built | VS-033 |
 | P2-5 | Notifications | Built | VS-008 |
 | P2-6 | Password reset | Built | VS-004 |
-| P2-7 | Turnstile on register | Not built and not planned | — |
+| P2-7 | Turnstile on register | Not built; decided (ADR-025) | VS-033 |
 | P2-8 | Rate-limit shape | Built | VS-002 |
 
 Totals: 20 built, 5 removed, 16 not built.

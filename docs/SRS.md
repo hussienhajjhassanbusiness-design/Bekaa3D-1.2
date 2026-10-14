@@ -148,7 +148,7 @@ delivery or at pickup (ADR-024), or use WhatsApp.
 | Action class                                      | Requirement                            |
 | ------------------------------------------------- | -------------------------------------- |
 | View catalogue, product, reviews, search          | None                                   |
-| Submit Bring Your Idea, contact form              | Captcha + rate limit (guest permitted) |
+| Register, resend verification, request a password reset, submit Bring Your Idea or the contact form | Captcha (Turnstile, ADR-025) + rate limit (guest permitted) |
 | Cart, checkout, offer, review, wishlist           | Verified account                       |
 | All admin functions                               | Admin role + (recommended) MFA         |
 
