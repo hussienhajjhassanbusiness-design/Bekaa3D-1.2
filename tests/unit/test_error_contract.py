@@ -13,6 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import get_settings
+from app.integrations.captcha.fake import FAKE_CAPTCHA_PASS
 
 _FAKE_ENV = {
     "DATABASE_URL": "postgresql+asyncpg://fake:fake@127.0.0.1:1/fake",
@@ -125,7 +126,11 @@ def test_a_dependency_outage_is_a_503_whose_request_id_matches(client: TestClien
     SERVICE_UNAVAILABLE, and the correlation guarantee holds there too."""
     response = client.post(
         REGISTER_PATH,
-        json={"email": "someone@example.com", "password": "a-valid-password"},
+        json={
+            "captcha_token": FAKE_CAPTCHA_PASS,
+            "email": "someone@example.com",
+            "password": "a-valid-password",
+        },
         headers={"X-Request-ID": "req_caller_supplied_503"},
     )
 

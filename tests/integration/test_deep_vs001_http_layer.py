@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_session
 from app.core.config import get_settings
+from app.integrations.captcha.fake import FAKE_CAPTCHA_PASS
 from app.main import app as main_app
 from tests.integration.deep_support import asgi_client, assert_problem, client_for
 
@@ -268,7 +269,10 @@ def test_a_json_body_under_a_form_content_type_is_refused(content_type: str) -> 
 @pytest.mark.integration
 @pytest.mark.usefixtures("configured_app")
 def test_duplicate_json_keys_resolve_to_the_last_and_cannot_smuggle_a_field() -> None:
-    content = b'{"email": "a@example.com", "password": "short", "password": "long-enough-1"}'
+    content = (
+        b'{"email": "a@example.com", "password": "short", "password": "long-enough-1", '
+        b'"captcha_token": "XXXX.DUMMY.TOKEN.XXXX"}'
+    )
     with client_for(main_app) as client:
         response = client.post(
             REGISTER, content=content, headers={"content-type": "application/json"}
@@ -391,7 +395,12 @@ def test_a_redis_outage_on_a_public_endpoint_is_a_503(monkeypatch: pytest.Monkey
     try:
         with client_for(main_app, raise_server_exceptions=False) as client:
             response = client.post(
-                REGISTER, json={"email": "a@example.com", "password": "long-enough-1"}
+                REGISTER,
+                json={
+                    "captcha_token": FAKE_CAPTCHA_PASS,
+                    "email": "a@example.com",
+                    "password": "long-enough-1",
+                },
             )
         assert_problem(response, 503, "SERVICE_UNAVAILABLE")
     finally:

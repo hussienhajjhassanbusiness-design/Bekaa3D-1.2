@@ -20,3 +20,12 @@ class NotificationType(StrEnum):
     REFUND = "refund"
     OFFER = "offer"
     DOWNLOAD = "download"
+
+
+class ContactMessageStatus(StrEnum):
+    """`contact_message_status`, database-design.md 3.12; declaration order is queue order."""
+
+    NEW = "new"
+    READ = "read"
+    REPLIED = "replied"
+    ARCHIVED = "archived"

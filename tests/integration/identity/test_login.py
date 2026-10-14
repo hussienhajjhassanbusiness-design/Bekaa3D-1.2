@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.identity.application.services.login_throttle import LOCKOUT_AT_ATTEMPT, LoginThrottle
 from app.identity.infrastructure.models import SessionModel, UserModel
+from app.integrations.captcha.fake import FAKE_CAPTCHA_PASS
 from app.platform.infrastructure.models import AuditLogModel, EmailOutboxModel
 
 PASSWORD = "correct-horse-battery"
@@ -42,7 +43,10 @@ def cookie_header(response: Response, name: str) -> str | None:
 async def register_and_verify(
     client: TestClient, db_session: AsyncSession, email: str, password: str = PASSWORD
 ) -> UserModel:
-    client.post("/api/v1/auth/register", json={"email": email, "password": password})
+    client.post(
+        "/api/v1/auth/register",
+        json={"captcha_token": FAKE_CAPTCHA_PASS, "email": email, "password": password},
+    )
     outbox = await db_session.scalar(
         select(EmailOutboxModel).where(EmailOutboxModel.recipient_email == email)
     )
@@ -167,7 +171,10 @@ async def test_an_unverified_account_can_still_log_in(db_session: AsyncSession) 
 
     email = _unique_email()
     with TestClient(app) as client:
-        client.post("/api/v1/auth/register", json={"email": email, "password": PASSWORD})
+        client.post(
+            "/api/v1/auth/register",
+            json={"captcha_token": FAKE_CAPTCHA_PASS, "email": email, "password": PASSWORD},
+        )
         response = client.post("/api/v1/auth/login", json={"email": email, "password": PASSWORD})
 
     assert response.status_code == 200

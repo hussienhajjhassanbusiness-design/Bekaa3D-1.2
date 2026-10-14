@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.engagement.domain.enums import NotificationType
 from app.engagement.infrastructure.models import NotificationModel
+from app.integrations.captcha.fake import FAKE_CAPTCHA_PASS
 from tests.integration.identity.test_login import PASSWORD, register_and_verify
 from tests.integration.identity.test_mfa_enrollment import csrf_headers, unique_email
 
@@ -29,7 +30,10 @@ def _login(client: TestClient, email: str) -> None:
 
 
 async def _register_unverified(client: TestClient, email: str) -> None:
-    response = client.post("/api/v1/auth/register", json={"email": email, "password": PASSWORD})
+    response = client.post(
+        "/api/v1/auth/register",
+        json={"captcha_token": FAKE_CAPTCHA_PASS, "email": email, "password": PASSWORD},
+    )
     assert response.status_code == 202, response.text
 
 

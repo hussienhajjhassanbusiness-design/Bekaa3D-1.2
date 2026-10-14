@@ -25,6 +25,7 @@ from app.api.dependencies import get_session
 from app.identity.application.security.password_hasher import hash_password
 from app.identity.domain.enums import UserRole
 from app.identity.infrastructure.models import UserModel
+from app.integrations.captcha.fake import FAKE_CAPTCHA_PASS
 from app.jobs.outbox import dispatch_outbox
 from app.main import app as main_app
 from app.platform.infrastructure.models import EmailOutboxModel
@@ -82,7 +83,12 @@ async def test_no_credential_or_token_reaches_the_logs_across_every_flow(
     secrets["second password"] = "second-Secret-pa55word"
     with client_for(main_app) as client:
         client.post(
-            "/api/v1/auth/register", json={"email": email, "password": secrets["first password"]}
+            "/api/v1/auth/register",
+            json={
+                "captcha_token": FAKE_CAPTCHA_PASS,
+                "email": email,
+                "password": secrets["first password"],
+            },
         )
         secrets["verification token"] = await _outbox_token(db_session, email, "verification_email")
         client.post("/api/v1/auth/verify-email", json={"token": secrets["verification token"]})
@@ -95,7 +101,10 @@ async def test_no_credential_or_token_reaches_the_logs_across_every_flow(
             secrets[name] = client.cookies.get(name) or ""
         client.post("/api/v1/auth/refresh", headers=csrf(client))
         secrets["rotated refresh"] = client.cookies.get("refresh_token") or ""
-        client.post("/api/v1/auth/password-reset/request", json={"email": email})
+        client.post(
+            "/api/v1/auth/password-reset/request",
+            json={"captcha_token": FAKE_CAPTCHA_PASS, "email": email},
+        )
         secrets["reset token"] = await _outbox_token(db_session, email, "password_reset_email")
         client.post(
             "/api/v1/auth/password-reset/confirm",

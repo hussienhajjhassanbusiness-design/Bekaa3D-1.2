@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.identity.infrastructure.models import UserModel, VerificationTokenModel
+from app.integrations.captcha.fake import FAKE_CAPTCHA_PASS
 from app.platform.infrastructure.models import AuditLogModel, EmailOutboxModel
 
 
@@ -23,7 +24,12 @@ async def test_new_email_creates_unverified_user_and_queues_verification(
     email = _unique_email()
     with TestClient(app) as client:
         response = client.post(
-            "/api/v1/auth/register", json={"email": email, "password": "correct-horse-battery"}
+            "/api/v1/auth/register",
+            json={
+                "captcha_token": FAKE_CAPTCHA_PASS,
+                "email": email,
+                "password": "correct-horse-battery",
+            },
         )
 
     assert response.status_code == 202
@@ -64,10 +70,20 @@ async def test_registering_the_same_email_twice_does_not_create_a_second_account
     email = _unique_email()
     with TestClient(app) as client:
         first = client.post(
-            "/api/v1/auth/register", json={"email": email, "password": "correct-horse-battery"}
+            "/api/v1/auth/register",
+            json={
+                "captcha_token": FAKE_CAPTCHA_PASS,
+                "email": email,
+                "password": "correct-horse-battery",
+            },
         )
         second = client.post(
-            "/api/v1/auth/register", json={"email": email, "password": "correct-horse-battery"}
+            "/api/v1/auth/register",
+            json={
+                "captcha_token": FAKE_CAPTCHA_PASS,
+                "email": email,
+                "password": "correct-horse-battery",
+            },
         )
 
     # Enumeration-safe: identical response shape whether the address was new
@@ -98,7 +114,12 @@ async def test_registering_an_already_verified_email_does_not_mutate_the_account
     email = _unique_email()
     with TestClient(app) as client:
         client.post(
-            "/api/v1/auth/register", json={"email": email, "password": "correct-horse-battery"}
+            "/api/v1/auth/register",
+            json={
+                "captcha_token": FAKE_CAPTCHA_PASS,
+                "email": email,
+                "password": "correct-horse-battery",
+            },
         )
 
         outbox = await db_session.scalar(
@@ -111,7 +132,12 @@ async def test_registering_an_already_verified_email_does_not_mutate_the_account
         assert verify_response.status_code == 204
 
         register_again = client.post(
-            "/api/v1/auth/register", json={"email": email, "password": "correct-horse-battery"}
+            "/api/v1/auth/register",
+            json={
+                "captcha_token": FAKE_CAPTCHA_PASS,
+                "email": email,
+                "password": "correct-horse-battery",
+            },
         )
 
     assert register_again.status_code == 202
@@ -135,7 +161,12 @@ def test_password_below_minimum_length_is_rejected() -> None:
 
     with TestClient(app) as client:
         response = client.post(
-            "/api/v1/auth/register", json={"email": _unique_email(), "password": "short"}
+            "/api/v1/auth/register",
+            json={
+                "captcha_token": FAKE_CAPTCHA_PASS,
+                "email": _unique_email(),
+                "password": "short",
+            },
         )
 
     assert response.status_code == 422

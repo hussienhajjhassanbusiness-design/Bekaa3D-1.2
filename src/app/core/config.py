@@ -56,7 +56,9 @@ class Settings(BaseSettings):
     email_provider_key: str = ""
     email_from: str = "no-reply@example.com"
 
+    captcha_provider: str = "turnstile"
     turnstile_secret: str = ""
+    turnstile_timeout_seconds: float = 5.0
 
     sentry_dsn: str = ""
     log_level: str = "INFO"

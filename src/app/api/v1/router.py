@@ -6,6 +6,7 @@ from app.api.v1.me import router as me_router
 from app.catalog.api.reference_data import public_router as public_catalogue_router
 from app.catalog.api.search import public_router as search_router
 from app.catalog.api.storefront import public_router as storefront_router
+from app.engagement.api.contact_messages import public_router as contact_router
 from app.platform.api.settings import public_router as public_settings_router
 
 router = APIRouter(prefix="/api/v1")
@@ -22,3 +23,5 @@ router.include_router(public_catalogue_router)
 router.include_router(storefront_router)
 # VS-016. Autocomplete: GET /api/v1/search/suggestions (search itself is `q` above).
 router.include_router(search_router)
+# VS-033. Guest contact form: captcha + rate limits, no auth cookies (api-endpoints.md 7.2).
+router.include_router(contact_router)

@@ -13,6 +13,7 @@ from app.identity.infrastructure.models import (
     UserModel,
     VerificationTokenModel,
 )
+from app.integrations.captcha.fake import FAKE_CAPTCHA_PASS
 from app.platform.infrastructure.models import AuditLogModel, EmailOutboxModel
 from tests.integration.identity.test_login import PASSWORD, cookie_value, register_and_verify
 
@@ -69,7 +70,7 @@ async def _reset_outbox_rows(db_session: AsyncSession, email: str) -> list[Email
 async def _request_reset(client: TestClient, db_session: AsyncSession, email: str) -> str:
     """Run the request leg and dig the raw token out of the outbox row - the
     same path a real user takes via their inbox."""
-    response = client.post(REQUEST_PATH, json={"email": email})
+    response = client.post(REQUEST_PATH, json={"captcha_token": FAKE_CAPTCHA_PASS, "email": email})
     assert response.status_code == 202, response.text
     rows = await _reset_outbox_rows(db_session, email)
     assert rows, "no password_reset_email queued"
@@ -203,8 +204,12 @@ async def test_an_unknown_address_is_accepted_and_writes_nothing(
 
     with TestClient(app) as client:
         await register_and_verify(client, db_session, known)
-        known_response = client.post(REQUEST_PATH, json={"email": known})
-        unknown_response = client.post(REQUEST_PATH, json={"email": unknown})
+        known_response = client.post(
+            REQUEST_PATH, json={"captcha_token": FAKE_CAPTCHA_PASS, "email": known}
+        )
+        unknown_response = client.post(
+            REQUEST_PATH, json={"captcha_token": FAKE_CAPTCHA_PASS, "email": unknown}
+        )
 
     assert known_response.status_code == unknown_response.status_code == 202
     assert known_response.json() == unknown_response.json()
@@ -283,7 +288,10 @@ async def test_a_verification_token_is_not_accepted_as_a_reset_token(
 
     email = _unique_email()
     with TestClient(app) as client:
-        client.post("/api/v1/auth/register", json={"email": email, "password": PASSWORD})
+        client.post(
+            "/api/v1/auth/register",
+            json={"captcha_token": FAKE_CAPTCHA_PASS, "email": email, "password": PASSWORD},
+        )
         outbox = await db_session.scalar(
             select(EmailOutboxModel).where(EmailOutboxModel.recipient_email == email)
         )
@@ -378,8 +386,10 @@ async def test_a_second_request_inside_the_cooldown_issues_no_second_token(
     email = _unique_email()
     with TestClient(app) as client:
         await register_and_verify(client, db_session, email)
-        first = client.post(REQUEST_PATH, json={"email": email})
-        second = client.post(REQUEST_PATH, json={"email": email})
+        first = client.post(REQUEST_PATH, json={"captcha_token": FAKE_CAPTCHA_PASS, "email": email})
+        second = client.post(
+            REQUEST_PATH, json={"captcha_token": FAKE_CAPTCHA_PASS, "email": email}
+        )
 
     # Identical responses - the cooldown must not be observable from outside.
     assert first.status_code == second.status_code == 202
@@ -404,7 +414,9 @@ async def test_a_deactivated_account_is_not_sent_a_reset_email(
         user_row.is_active = False
         await db_session.commit()
 
-        response = client.post(REQUEST_PATH, json={"email": email})
+        response = client.post(
+            REQUEST_PATH, json={"captcha_token": FAKE_CAPTCHA_PASS, "email": email}
+        )
 
     assert response.status_code == 202
     assert await _reset_outbox_rows(db_session, email) == []

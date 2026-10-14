@@ -37,7 +37,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 | VS-030 | Refunds and settlement | VS-029, VS-024 | Not started |
 | VS-031 | Cancellation and returns | VS-030 | Not started |
 | VS-032 | Live online payment provider | VS-020, VS-024, VS-030 | Not started |
-| VS-033 | Contact form and captcha | VS-005 | Not started |
+| VS-033 | Contact form and captcha | VS-005 | Done |
 | VS-029b | Receipt confirmation and problem report | VS-029, VS-033 | Not started |
 | VS-034 | Bring Your Idea submission | VS-014, VS-033 | Not started |
 | VS-035 | Bring Your Idea pipeline and funnel | VS-034, VS-020 | Not started |
@@ -888,10 +888,10 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - No checkout, order or cash-handover code changed.
 
 ## VS-033 — Contact form and captcha
-**Status:** Not started
+**Status:** Done
 **Depends on:** VS-005
 **Goal:** A visitor messages the business without an account, the administrator works through a message queue, and every public form is captcha-protected (SEC-12, ADR-025).
-- **Model / migration:** `contact_messages` (status `new`, `read`, `replied` or `archived`).
+- **Model / migration:** `c2b3aae1cdee` creates `contact_messages` (status `new`, `read`, `replied` or `archived`), without `user_id` and `order_id`, which VS-029b adds.
 - **Endpoints / jobs:** `POST /api/v1/contact-messages`, `GET /api/v1/admin/contact-messages`, `GET/PATCH /api/v1/admin/contact-messages/{id}`.
 - **Logic:**
   - Reuses the rate limiter (VS-002) and `AuditWriter`.
@@ -910,12 +910,13 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - The queue is admin-only.
   - Status changes are audited.
 - **Done when:** Only captcha-verified, rate-limited messages reach the queue, and register, resend verification and the password-reset request require a valid Turnstile token.
+- **Built:** ADR-026 (a refused token is `400 CAPTCHA_INVALID`, an outage fails closed with `503`, a 60/hour attempt limit runs before the captcha). Tests: `tests/integration/engagement/test_contact_messages_api.py`, `test_contact_message_schema.py`; `tests/integration/identity/test_auth_captcha.py`; `tests/concurrency/test_contact_message_status_race.py`; `tests/unit/integrations/test_captcha_factory.py`, `test_turnstile_adapter.py`; `tests/unit/engagement/test_contact_*.py`.
 
 ## VS-029b — Receipt confirmation and problem report
 **Status:** Not started
 **Depends on:** VS-029, VS-033
 **Goal:** After delivery or pickup a customer can say "I got it" or report a problem, and the administrator sees it on the order, without either being required.
-- **Model / migration:** None (`order_items.receipt_confirmed_at` and `problem_reported_at` come from VS-023); a nullable `contact_messages.order_id` if VS-033 did not add it.
+- **Model / migration:** nullable `contact_messages.user_id` and `order_id`, which VS-033 left out (`order_items.receipt_confirmed_at` and `problem_reported_at` come from VS-023).
 - **Endpoints / jobs:** `POST /api/v1/me/orders/{id}/confirm-receipt` and `POST /api/v1/me/orders/{id}/report-problem` (body: message).
 - **Logic:**
   - Owner-only, verified, CSRF-protected POSTs from the order page. The email buttons only open that page: nothing changes state on a GET, because email scanners follow links.

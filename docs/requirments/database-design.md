@@ -1614,6 +1614,8 @@ OR (quoted_amount_cents >= 0 AND currency = 'USD')
 
 ## 12.6 `contact_messages`
 
+VS-033 built this table without `user_id` and `order_id`; VS-029b adds both, as its problem reports are their first writer.
+
 | Column | Type | Null | Constraint |
 |---|---|---:|---|
 | `id` | UUID | No | PK |

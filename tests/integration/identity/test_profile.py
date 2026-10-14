@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.identity.infrastructure.models import UserModel
+from app.integrations.captcha.fake import FAKE_CAPTCHA_PASS
 from tests.integration.identity.test_login import PASSWORD, register_and_verify
 
 PROFILE_PATH = "/api/v1/me"
@@ -25,7 +26,10 @@ def _login(client: TestClient, email: str) -> None:
 async def _register_unverified(
     client: TestClient, db_session: AsyncSession, email: str
 ) -> UserModel:
-    response = client.post("/api/v1/auth/register", json={"email": email, "password": PASSWORD})
+    response = client.post(
+        "/api/v1/auth/register",
+        json={"captcha_token": FAKE_CAPTCHA_PASS, "email": email, "password": PASSWORD},
+    )
     assert response.status_code == 202
     user = await db_session.scalar(select(UserModel).where(UserModel.email == email))
     assert user is not None

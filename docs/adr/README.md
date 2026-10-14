@@ -31,6 +31,7 @@ Only expensive-to-reverse decisions belong here. Folder names and small refactor
 - [ADR-023: Rank storefront search by relevance, fall back to trigram below five hits, and pin the mode in the cursor](ADR-023-storefront-search-order-and-fallback.md)
 - [ADR-024: The courier prices and collects shipping; physical-only orders may be paid in cash on delivery](ADR-024-cash-on-delivery-and-courier-priced-shipping.md)
 - [ADR-025: Admin order lines list their legal next actions; customers can check STL ownership; Turnstile captcha on five public forms](ADR-025-frontend-contract-decisions.md)
+- [ADR-026: A refused captcha is `400 CAPTCHA_INVALID`, a Turnstile outage fails closed with `503`, and a coarse attempt limit runs before the captcha](ADR-026-captcha-refusal-and-outage.md)
 
 ## Governance
 
