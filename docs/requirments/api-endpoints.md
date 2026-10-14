@@ -171,6 +171,7 @@ These codes are implementation additions needed to give the frontend determinist
 |---:|---|---|
 | 422 | `VALIDATION_ERROR` | Parsed body violates schema |
 | 400 | `INVALID_TOKEN` | Verification/reset token invalid |
+| 400 | `CAPTCHA_INVALID` | Captcha token empty, invalid, expired or already used; a missing field is `422 VALIDATION_ERROR`. A Turnstile outage is `503 SERVICE_UNAVAILABLE` with `Retry-After` (fail closed, ADR-026) |
 | 401 | `INVALID_CREDENTIALS` | Login failed; response remains enumeration-safe |
 | 401 | `MFA_REQUIRED` | Admin login requires second factor |
 | 401 | `MFA_INVALID` | MFA code/recovery code invalid |
@@ -250,7 +251,7 @@ These are intentionally outside `/api/v1`.
 | Method + Path | Auth / Authorization | Request | Success | Errors | Pagination / Filter / Sort | Side Effects / Notes |
 |---|---|---|---|---|---|---|
 | `POST /api/v1/custom-requests` | Public; Turnstile captcha (ADR-025) + rate limit | `multipart/form-data CustomRequestCreate` | `201 CustomRequestReceipt` | 400, 422 `UPLOAD_REJECTED` / `MALWARE_DETECTED`, 429 | — | Validates/re-encodes/scans private attachments; creates lead; admin-only attachments; no transaction/payment |
-| `POST /api/v1/contact-messages` | Public; Turnstile captcha (ADR-025) + rate limit | `ContactMessageCreate` + captcha token | `201 ContactMessageReceipt` | 400, 422, 429 | — | Adds message to admin queue |
+| `POST /api/v1/contact-messages` | Public; no auth cookies or CSRF; Turnstile captcha (ADR-025) + rate limit | `ContactMessageCreate` | `201 ContactMessageReceipt` | 400 `CAPTCHA_INVALID`, 422, 429, 503 | — | Order (ADR-026): 60/hour attempts per IP, body, captcha, then 5/hour per IP and 5/hour per email, then insert as `new`. Repeated submissions are separate messages. The body and sender are never logged (VS-033) |
 
 ---
 
@@ -284,7 +285,7 @@ Persistence is defined in Step 12 by `mfa_credentials` and one-time hashed `mfa_
 
 ### Captcha on Authentication Forms
 
-From VS-033, register, resend verification and the password-reset request require a Turnstile `captcha_token` (ADR-025, SEC-12). The captcha is verified before any account lookup, and a refused captcha gives the same answer whatever the email address, so it is not an account-existence oracle. Login, email verification and reset confirmation take no captcha.
+From VS-033, register, resend verification and the password-reset request require a Turnstile `captcha_token` (ADR-025, SEC-12). The captcha is verified before any account lookup, and a refused captcha gives the same answer whatever the email address, so it is not an account-existence oracle. A refused token is `400 CAPTCHA_INVALID` and an outage `503 SERVICE_UNAVAILABLE` (ADR-026). Login, email verification and reset confirmation take no captcha.
 
 ### Registration Anti-Enumeration Behaviour
 
@@ -617,9 +618,9 @@ A callback alone never authorizes these state changes.
 
 | Method + Path | Request | Success | Errors | Pagination / Filter / Sort | Side Effects / Notes |
 |---|---|---|---|---|---|
-| `GET /api/v1/admin/contact-messages` | query params | `200 ContactMessagePage` | 401/404 | Cursor; status/date/email; default oldest new first | Admin queue |
-| `GET /api/v1/admin/contact-messages/{message_id}` | — | `200 ContactMessageDetail` | 401/404 | — | Access audited |
-| `PATCH /api/v1/admin/contact-messages/{message_id}` | `ContactMessageAdminUpdate` | `200 ContactMessageDetail` | 401/404, 422 | — | Allowed status values: new/read/replied/archived; actual human reply can happen outside system |
+| `GET /api/v1/admin/contact-messages` | query params | `200 ContactMessagePage` | 401/404, 422 | Cursor; `status`, `created_after` (inclusive), `created_before` (exclusive), exact `email`; sorted `status` (new, read, replied, archived), then oldest first | Admin queue; audited as `contact_message.list_viewed` (filters as flags, no address) |
+| `GET /api/v1/admin/contact-messages/{message_id}` | — | `200 ContactMessageDetail` | 401/404 | — | Audited as `contact_message.viewed`; does not mark the message read |
+| `PATCH /api/v1/admin/contact-messages/{message_id}` | `ContactMessageAdminUpdate` | `200 ContactMessageDetail` | 401/404, 403 `CSRF_INVALID`, 409 `INVALID_STATE_TRANSITION`, 422 | — | Status moves forward only, skipping allowed (new, read, replied, archived); the same status is a no-op that is still audited. Checked under a row lock and audited as `contact_message.status_changed` (status only). The reply itself happens outside the system |
 
 ---
 
@@ -983,12 +984,12 @@ attachments[]  # bounded image count/size, private
 ### `ContactMessageCreate`
 
 ```text
-name
-email
-phone?
-subject?
-message
-captcha_token
+name: str            # 1-100 after trimming
+email: Email
+phone?: str          # up to 32; digits, spaces, + ( ) . -; at least 6 digits
+subject?: str        # up to 200; blank means none
+message: str         # 1-5000 after trimming; line breaks allowed
+captcha_token: str   # VS-033 (ADR-025, ADR-026)
 ```
 
 ---

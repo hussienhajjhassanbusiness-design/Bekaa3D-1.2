@@ -3,9 +3,9 @@
 Answers every item in [`../frontend-requests/BACKEND-UNLOCK-HANDOFF.md`](../frontend-requests/BACKEND-UNLOCK-HANDOFF.md)
 by its ID, in the field order of [`../frontend-requests/BACKEND-RESPONSE-TEMPLATE.md`](../frontend-requests/BACKEND-RESPONSE-TEMPLATE.md).
 
-- **Backend state:** slices VS-001 to VS-016 are built. Nothing after them exists yet: no cart, checkout, order, payment, refund, address, contact or Bring Your Idea route.
+- **Backend state:** slices VS-001 to VS-016 and VS-033 (contact form and captcha) are built. Nothing else exists yet: no cart, checkout, order, payment, refund, address or Bring Your Idea route.
 - **Schemas are not retyped here.** Field lists live in [`openapi.json`](openapi.json), generated from the code and checked by a test. A block names the schema; open it at `components.schemas.<Name>`.
-- **Decisions since the first version:** three open questions were decided on 2026-10-14 and recorded in [ADR-025](../adr/ADR-025-frontend-contract-decisions.md): admin `available_actions` (C8, P1-11), the STL ownership check (C11) and Turnstile captcha on five forms (P2-1, P2-6, P2-7). They are still provisional until their slices are built.
+- **Decisions since the first version:** three open questions were decided on 2026-10-14 and recorded in [ADR-025](../adr/ADR-025-frontend-contract-decisions.md): admin `available_actions` (C8, P1-11), the STL ownership check (C11) and Turnstile captcha on five forms (P2-1, P2-6, P2-7). Captcha is now built (VS-033, [ADR-026](../adr/ADR-026-captcha-refusal-and-outage.md)); the other two are provisional until their slices are built.
 - **Every example below is real**, captured from the application running against a database filled by [`scripts/dev_seed.py`](../../scripts/dev_seed.py). IDs and timestamps will differ on your machine.
 
 ## Contents
@@ -13,7 +13,7 @@ by its ID, in the field order of [`../frontend-requests/BACKEND-RESPONSE-TEMPLAT
 1. [Shared conventions](#1-shared-conventions) — errors, cookies, CSRF, the admin boundary, rate limits
 2. [Built and confirmed](#2-built-and-confirmed) — A1, A2, A3, B1, B2, B3, B4, B5, C1, C2, P1-1 to P1-7, P2-5, P2-6, P2-8
 3. [Removed by ADR-019 and ADR-024](#3-removed-by-adr-019-and-adr-024) — C4, C9, C10, P1-8, P1-9
-4. [Not built yet (provisional)](#4-not-built-yet-provisional) — C3, C5, C6, C7, C8, C11, C12, P1-10 to P1-13, P2-1 to P2-4, P2-7
+4. [Not built yet (provisional)](#4-not-built-yet-provisional) — C3, C5, C6, C7, C8, C11, C12, P1-10 to P1-13, P2-2; also P2-1, P2-3, P2-4 and P2-7, which VS-033 has since built
 5. [Test accounts and fixtures](#5-test-accounts-and-fixtures) — items 1 to 9
 6. [Corrections to "confirmed" items in the request](#6-corrections-to-confirmed-items-in-the-request)
 7. [Open questions](#7-open-questions) — three decided by ADR-025, ten still open
@@ -2338,36 +2338,65 @@ Build order on the backend: VS-020 (staging) or VS-022 (cart) next, then VS-023 
 
 ### Domain / item: P2-1 — Captcha provider (BYI/contact)
 
-**Status:** not built. Vendor and scope **decided** ([ADR-025](../adr/ADR-025-frontend-contract-decisions.md)): Cloudflare Turnstile on five forms. PROVISIONAL until VS-033. Slice: VS-033.
+**Status:** **built** (VS-033) for register, resend verification, the password-reset request and the contact form. Bring Your Idea gets it with VS-034. Decisions: [ADR-025](../adr/ADR-025-frontend-contract-decisions.md), [ADR-026](../adr/ADR-026-captcha-refusal-and-outage.md).
 
-**Confirmed endpoint:** none.
+**Confirmed endpoint:** `POST /api/v1/auth/register`, `/auth/resend-verification`, `/auth/password-reset/request`, `POST /api/v1/contact-messages`.
 
-**Request schema:** provisional: a required `captcha_token` field in the bodies of `POST /api/v1/auth/register`, `/auth/resend-verification`, `/auth/password-reset/request`, `POST /api/v1/contact-messages` and `POST /api/v1/custom-requests` (a multipart field there).
+**Request schema:** a required `captcha_token` string (at most 2048 characters) in each body; see `openapi.json`.
 
 **Response schema:** not applicable.
 
 **Enums/statuses/actions:** not applicable.
 
-**Errors:** VS-033 adds one stable code for a missing or refused token; its name and status are chosen there. On the three auth routes it is the same answer whatever the email address.
+**Errors:**
+- `400 CAPTCHA_INVALID`: the token is empty, invalid, expired or already used. Reset the widget and let the user try again. On the three auth routes the answer is the same whatever the email address.
+- `422 VALIDATION_ERROR`: the `captcha_token` field is missing, like any other required field.
+- `503 SERVICE_UNAVAILABLE` with `Retry-After: 30`: Turnstile could not be reached. Nothing was stored or sent; try again later. The backend never lets a request through without a verdict.
 
-**Auth/CSRF/MFA:** not applicable.
+**Auth/CSRF/MFA:** public; no cookie, no CSRF.
 
-**Concurrency/idempotency:** not applicable.
+**Concurrency/idempotency:** a token is single-use. Get a new one for every submission, including a retry after an error.
 
-**Example success JSON:** none.
+**Example success JSON:** not applicable.
 
-**Example error JSON:** none.
+**Example error JSON:** `POST /api/v1/auth/register` with a refused token
 
-**Fixture/test account:** none.
+```json
+{
+  "type": "http://localhost:8000/problems/CAPTCHA_INVALID",
+  "title": "Captcha refused",
+  "status": 400,
+  "detail": "The captcha token is empty, invalid, expired or already used.",
+  "instance": "/api/v1/auth/register",
+  "code": "CAPTCHA_INVALID",
+  "request_id": "req_44889cea7ca64f9590306a4c1e1658bc",
+  "errors": []
+}
+```
 
-**Authoritative source/OpenAPI file:** none yet. Plan: VS-033 (a captcha port with a Turnstile adapter and a fake adapter); [ADR-025](../adr/ADR-025-frontend-contract-decisions.md).
+Turnstile unreachable (`POST /api/v1/contact-messages`; header `Retry-After: 30`):
+
+```json
+{
+  "type": "http://localhost:8000/problems/SERVICE_UNAVAILABLE",
+  "title": "Service temporarily unavailable",
+  "status": 503,
+  "detail": "Captcha verification is temporarily unavailable. Retry later.",
+  "instance": "/api/v1/contact-messages",
+  "code": "SERVICE_UNAVAILABLE",
+  "request_id": "req_aab135d768354fedb08b45b349346507",
+  "errors": []
+}
+```
+
+**Fixture/test account:** a local backend with `CAPTCHA_PROVIDER=fake` accepts exactly one token, `XXXX.DUMMY.TOKEN.XXXX`. That is the token Cloudflare's public test site key (`1x00000000000000000000AA`) issues, so a development frontend using that key works unchanged. The fake refuses every other token.
+
+**Authoritative source/OpenAPI file:** [`openapi.json`](openapi.json); [ADR-026](../adr/ADR-026-captcha-refusal-and-outage.md).
 
 **Notes:**
-- **No captcha exists anywhere in the backend today.** There is no vendor adapter and no route checks a token.
-- **Vendor: Cloudflare Turnstile** (decided, [ADR-025](../adr/ADR-025-frontend-contract-decisions.md)). The backend's secret is `TURNSTILE_SECRET`.
-- **Site keys:** none exist yet for any environment. They are created when the Turnstile account is set up, and they are public values that belong in the frontend's own configuration.
-- **Release together.** On the three auth routes the token is a breaking change: today the field is rejected, after VS-033 it is required. The frontend's Turnstile widget and VS-033 must ship in the same release.
-- Tests will use a fake adapter, so the frontend will be able to submit a fixed test token locally.
+- **Vendor: Cloudflare Turnstile.** The backend's secret is `TURNSTILE_SECRET`. Site keys are public and belong in the frontend's configuration; none exist yet for staging or production.
+- **Release together.** On the three auth routes this is a breaking change: a request without `captcha_token` is now refused. Ship the widget in the same release.
+- The backend does not check Turnstile's `action` or `hostname`, so the widget needs no `action` value.
 
 ### Domain / item: P2-2 — Bring-Your-Idea submission
 
@@ -2404,122 +2433,146 @@ Build order on the backend: VS-020 (staging) or VS-022 (cart) next, then VS-023 
 
 ### Domain / item: P2-3 — Contact form
 
-**Status:** not built. PROVISIONAL. Slice: VS-033.
+**Status:** **built** (VS-033).
 
-**Confirmed endpoint:** none yet. Planned: `POST /api/v1/contact-messages`
+**Confirmed endpoint:** `POST /api/v1/contact-messages`
 
-**Request schema:** provisional; see api-endpoints.md section 29.9 (`ContactMessageCreate`): `name`, `email`, `message`, `captcha_token` (required); `phone`, `subject` (optional). Length limits are not written.
+**Request schema:** `ContactMessageCreate` in `openapi.json`:
+- `name`: 1-100 characters after trimming.
+- `email`.
+- `phone` (optional): up to 32 characters of digits, spaces and `+ ( ) . -`, with at least 6 digits.
+- `subject` (optional): up to 200 characters; a blank one counts as none.
+- `message`: 1-5000 characters after trimming; line breaks allowed.
+- `captcha_token` (required).
 
-**Response schema:** provisional: `201 ContactMessageReceipt`. Fields not written yet.
+Unknown fields are refused.
+
+**Response schema:** `201 ContactMessageReceipt`: `id` and `created_at`.
 
 **Enums/statuses/actions:** none on the public side.
 
-**Errors:** provisional: `422 VALIDATION_ERROR`, `429 RATE_LIMITED` (per IP and per email).
+**Errors:**
+- `400 CAPTCHA_INVALID` and `503 SERVICE_UNAVAILABLE` ([P2-1](#domain--item-p2-1--captcha-provider-byicontact)).
+- `422 VALIDATION_ERROR`: a field is invalid. Fields are checked before the captcha, so the token is not spent.
+- `429 RATE_LIMITED` with `Retry-After`: 60 attempts per hour per IP (checked first), then 5 accepted messages per hour per IP and 5 per hour per email address. A refused captcha does not count against the 5.
 
-**Auth/CSRF/MFA:** public; captcha and rate limit. No cookie, no CSRF.
+**Auth/CSRF/MFA:** public; no cookie, no CSRF. A signed-in user may use it too; the message is not linked to their account.
 
-**Concurrency/idempotency:** none planned.
+**Concurrency/idempotency:** none. Sending the same form twice stores two messages.
 
-**Example success JSON:** none; not built.
+**Example success JSON:**
 
-**Example error JSON:** none; not built.
+```json
+{
+  "id": "62efe9ca-af5a-40d8-82c9-88461b333e42",
+  "created_at": "2026-10-14T22:06:50.371388Z"
+}
+```
 
-**Fixture/test account:** none.
+**Example error JSON:** see [P2-1](#domain--item-p2-1--captcha-provider-byicontact) and [C1](#domain--item-c1--rfc-9457-field-level-validation-error-shape).
 
-**Authoritative source/OpenAPI file:** none yet. Plan: VS-033; api-endpoints.md sections 7.2 and 29.9.
+**Fixture/test account:** use the fake captcha token from P2-1.
 
-**Notes:** validation errors will use the shape in [C1](#domain--item-c1--rfc-9457-field-level-validation-error-shape), so `ContactForm` can map them the same way as every other form.
+**Authoritative source/OpenAPI file:** [`openapi.json`](openapi.json); api-endpoints.md sections 7.2 and 29.9.
+
+**Notes:** validation errors use the shape in [C1](#domain--item-c1--rfc-9457-field-level-validation-error-shape).
 
 ### Domain / item: P2-4 — Admin contact queue
 
-**Status:** not built. PROVISIONAL. Slice: VS-033.
+**Status:** **built** (VS-033).
 
-**Confirmed endpoint:** none yet. Planned:
+**Confirmed endpoint:**
 - `GET /api/v1/admin/contact-messages`
 - `GET /api/v1/admin/contact-messages/{message_id}`
 - `PATCH /api/v1/admin/contact-messages/{message_id}`
 
-**Request schema:** provisional: list filters by status, date and email; `ContactMessageAdminUpdate` (a status change). Field names are not written.
+**Request schema:** list query parameters are `status`, `created_after` (inclusive), `created_before` (exclusive; both need a UTC offset), `email` (exact, case-insensitive), `cursor` and `limit` (1-100, default 20). `ContactMessageAdminUpdate` is `{"status": ...}`, and nothing else is accepted.
 
-**Response schema:** provisional: `ContactMessagePage`, `ContactMessageDetail`. Fields not written yet.
+**Response schema:** `ContactMessagePage` (`items`, `next_cursor`); `ContactMessageDetail`. List rows carry every field, including name, email and message.
 
-**Enums/statuses/actions:** provisional: status `"new" | "read" | "replied" | "archived"`.
+**Enums/statuses/actions:** `"new" | "read" | "replied" | "archived"`. The status only moves forward, and steps may be skipped: `new` can go straight to `archived`. Sending the current status changes nothing and answers `200`.
 
-**Errors:** provisional: `404 NOT_FOUND`, `422 VALIDATION_ERROR`.
+**Errors:** `404 NOT_FOUND`, `403 CSRF_INVALID` (PATCH), `409 INVALID_STATE_TRANSITION` (a backward move), `422 VALIDATION_ERROR` (bad query, cursor or body).
 
 **Auth/CSRF/MFA:** administrator with MFA; `PATCH` also needs `X-CSRF-Token`.
 
-**Concurrency/idempotency:** status changes take a row lock; the last one wins.
+**Concurrency/idempotency:** a status change locks the row and is checked against the current status. If another administrator has moved it further, you get `409`; re-read the message.
 
-**Example success JSON:** none; not built.
+**Example success JSON:** `GET /api/v1/admin/contact-messages?status=new&limit=1`
 
-**Example error JSON:** none; not built.
+```json
+{
+  "items": [
+    {
+      "id": "62efe9ca-af5a-40d8-82c9-88461b333e42",
+      "name": "Rima Haddad",
+      "email": "rima@example.com",
+      "phone": "+961 3 123 456",
+      "subject": "Bulk keychains",
+      "message": "Can you print 40 keychains?",
+      "status": "new",
+      "created_at": "2026-10-14T22:06:50.371388Z",
+      "updated_at": "2026-10-14T22:06:50.371388Z"
+    }
+  ],
+  "next_cursor": null
+}
+```
 
-**Fixture/test account:** none.
+**Example error JSON:** moving a `replied` message back to `read`
 
-**Authoritative source/OpenAPI file:** none yet. Plan: VS-033; api-endpoints.md section 24.
+```json
+{
+  "type": "http://localhost:8000/problems/INVALID_STATE_TRANSITION",
+  "title": "Contact message status cannot move backwards",
+  "status": 409,
+  "detail": "A replied message cannot become read.",
+  "instance": "/api/v1/admin/contact-messages/62efe9ca-af5a-40d8-82c9-88461b333e42",
+  "code": "INVALID_STATE_TRANSITION",
+  "request_id": "req_b5489b90fe104a59a3e88ae749a8f9b8",
+  "errors": []
+}
+```
 
-**Notes:** your questions, provisionally.
-- There is **no create and no delete** on the admin side; "full CRUD" is list, read and a status update.
-- **Whether list rows include name and email is not specified.** Because the list can be filtered by email, expect them to be present, but it is not written.
-- **The filter parameter name is not specified.** The convention everywhere else is the plain field name, so `status` is the likely key.
+**Fixture/test account:** the seeded administrator; submit a message through the public form first.
+
+**Authoritative source/OpenAPI file:** [`openapi.json`](openapi.json); api-endpoints.md section 24.
+
+**Notes:**
+- There is no create and no delete on the admin side. Archive a message to clear it from the working queue.
+- The default order is `new` first, then `read`, `replied`, `archived`, and oldest first within each status. Use `status=new` for an inbox view.
+- Opening a message does not mark it read; send the `PATCH`.
 - The administrator replies outside the system (email or phone) and then sets the status to `replied`.
 
 ### Domain / item: P2-7 — Turnstile field contract
 
-**Status:** not built. **Decided** ([ADR-025](../adr/ADR-025-frontend-contract-decisions.md)): VS-033 adds Turnstile to registration, resend verification and the password-reset request. Until then, no captcha.
+**Status:** **built** (VS-033); see [P2-1](#domain--item-p2-1--captcha-provider-byicontact) for errors, the outage answer and the development token.
 
-**Confirmed endpoint:** `POST /api/v1/auth/register` and `POST /api/v1/auth/resend-verification` are built, **without captcha**.
+**Confirmed endpoint:** `POST /api/v1/auth/register`, `/auth/resend-verification`, `/auth/password-reset/request`.
 
-**Request schema:** see `openapi.json`: `RegisterRequest` (`email`, `password`), `ResendVerificationRequest` (`email`). There is no captcha field.
+**Request schema:** see `openapi.json`: `RegisterRequest` (`email`, `password`, `captcha_token`), `ResendVerificationRequest` and `PasswordResetRequest` (`email`, `captcha_token`).
 
-**Response schema:** unchanged: `202 RegistrationAccepted`.
+**Response schema:** unchanged: `202 RegistrationAccepted` / `202 PasswordResetAccepted`.
 
 **Enums/statuses/actions:** none.
 
-**Errors:**
-- `422 VALIDATION_ERROR` with `type: "extra_forbidden"` — **sending a captcha token today is an error**, because unknown fields are rejected.
+**Errors:** `400 CAPTCHA_INVALID`, `422 VALIDATION_ERROR` (field missing), `503 SERVICE_UNAVAILABLE`, `429 RATE_LIMITED`.
 
 **Auth/CSRF/MFA:** public.
 
-**Concurrency/idempotency:** not applicable.
+**Concurrency/idempotency:** a token is single-use.
 
 **Example success JSON:** not applicable.
 
-**Example error JSON:** `POST /api/v1/auth/register` with an added `captcha_token`
+**Example error JSON:** see [P2-1](#domain--item-p2-1--captcha-provider-byicontact).
 
-```json
-{
-  "type": "http://localhost:8000/problems/VALIDATION_ERROR",
-  "title": "Request body failed validation",
-  "status": 422,
-  "detail": "One or more fields failed validation.",
-  "instance": "/api/v1/auth/register",
-  "code": "VALIDATION_ERROR",
-  "request_id": "req_bbf6da9d9fb0477e9415c68b715f798f",
-  "errors": [
-    {
-      "loc": [
-        "body",
-        "captcha_token"
-      ],
-      "msg": "Extra inputs are not permitted",
-      "type": "extra_forbidden"
-    }
-  ]
-}
-```
+**Fixture/test account:** the fake token from P2-1.
 
-**Fixture/test account:** none.
-
-**Authoritative source/OpenAPI file:** [`openapi.json`](openapi.json).
+**Authoritative source/OpenAPI file:** [`openapi.json`](openapi.json); [ADR-026](../adr/ADR-026-captcha-refusal-and-outage.md).
 
 **Notes:**
-- When the request was written, Turnstile was not confirmed for register or resend: nothing in the backend verifies a captcha today. It is **now decided** ([ADR-025](../adr/ADR-025-frontend-contract-decisions.md), SEC-12) and arrives with VS-033.
-- **Field name:** `captcha_token`, required, in `RegisterRequest`, `ResendVerificationRequest` and `PasswordResetRequest`.
-- **Do not send it before VS-033 ships.** Until then it is rejected and breaks registration, as the example shows. After VS-033 a request without it is refused. Ship the frontend widget in the same release as VS-033.
-- **When is it turned on?** With VS-033. That slice has no date yet; watch the slice status table.
-- The captcha is checked before any account lookup and refuses the same way whatever the email, so the enumeration-safe behaviour of these routes is unchanged.
+- The captcha is checked before any account lookup and refuses the same way whatever the email, so these routes stay enumeration-safe.
+- **Breaking change:** a request without `captcha_token` is now refused. Ship the widget in the same release.
 - Login, email verification and password-reset confirmation take no captcha.
 
 ---
@@ -2566,7 +2619,7 @@ The request lists some things as already confirmed that are not true of the back
 | `GET /api/v1/cart`, `POST /api/v1/checkout`, `/api/v1/me/addresses*`, `GET /me/orders/{id}` are confirmed (C3, C5, C6, C7) | The paths are planned and unchanged, but none is built. Calling them today answers `404`. |
 | Cart lines are addressed by `{item_id}` (C5) | Planned as `{product_id}`. |
 | URL filter keys `category`, `material`, `colour` are the wire names (B2) | The API takes `category_id`, `material_id`, `colour_id`, as UUIDs, one value each. |
-| Turnstile is confirmed for register and resend (P2-6, P2-7) | No captcha exists yet, and a token field is rejected with `422`. Turnstile on register, resend and the reset request is now decided for VS-033 (ADR-025). |
+| Turnstile is confirmed for register and resend (P2-6, P2-7) | **Built** (VS-033): register, resend and the reset request require `captcha_token` ([P2-7](#domain--item-p2-7--turnstile-field-contract)). |
 | Password reset fields are unconfirmed (P2-6) | Built since VS-004 and fully specified. |
 | The admin settings list endpoint is unconfirmed (P1-3) | Built: `GET /api/v1/admin/settings`. |
 | Admin user detail and update paths are unconfirmed (P1-4) | Built. |
@@ -2591,7 +2644,7 @@ These are not backend gaps to be filled by reading code. Each needed a decision,
 | 4 | Which online payment provider: Whish, a card gateway, or both (SRS section 30.4). | FVS-026, FVS-027 | Open. Product owner, before VS-032 |
 | 5 | Idempotency key lifetime and required format (C12). | FVS-026, FVS-032 | Open. Backend, in VS-023 |
 | 6 | Where the refundable balance per line is returned (P1-13). | FVS-032 | Open. Backend, in VS-030 |
-| 7 | Captcha vendor, and whether captcha also covers registration, resend and password reset (P2-1, P2-7; SRS SEC-12). | FVS-002, FVS-004, FVS-015, FVS-016 | **Decided:** Cloudflare Turnstile on register, resend verification, the password-reset request, contact and Bring Your Idea; VS-033 builds the captcha port and applies it to all five. Still open inside VS-033: the error code for a refused token, and how a Turnstile outage is answered. |
+| 7 | Captcha vendor, and whether captcha also covers registration, resend and password reset (P2-1, P2-7; SRS SEC-12). | FVS-002, FVS-004, FVS-015, FVS-016 | **Decided:** Cloudflare Turnstile on register, resend verification, the password-reset request, contact and Bring Your Idea; VS-033 builds the captcha port and applies it to all five. Built in VS-033: a refused token is `400 CAPTCHA_INVALID`, an outage `503 SERVICE_UNAVAILABLE` ([ADR-026](../adr/ADR-026-captcha-refusal-and-outage.md)). |
 | 8 | Consent wording: terms, digital final sale, cash terms (C6; SRS section 30.2). | FVS-026 | Open. Product owner; legal text |
 | 9 | STL delivery-time promise shown on product pages and at checkout (C10; SRS section 30.2). | FVS-014, FVS-026 | Open. Product owner |
 | 10 | Can the default address be deleted, and what becomes default afterwards (C3). | FVS-023 | Open. Backend, in VS-026 |
