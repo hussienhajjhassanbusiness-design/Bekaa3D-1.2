@@ -1,10 +1,51 @@
 # VS-038 — Wishlist and Wishlist Analytics: Implementation Plan
 
-**Status:** APPROVED
-**Date:** 2026-10-14; re-verified 2026-10-16 against `origin/main` after fast-forwarding
-**Planned against alembic head:** `2e89860f5274` (addresses_table, VS-026) — updated from
-the original `cc87333ebe79` (product_images) now that VS-033 and VS-026 both merged.
-This slice's migration's `down_revision` is `2e89860f5274`, no longer a placeholder.
+**Status:** RE-BASELINED (implementation partially in progress — see "Changes since first draft")
+**Date:** 2026-10-14; re-verified 2026-10-16; re-baselined 2026-10-16
+**Planned against alembic head:** `2e89860f5274` (addresses_table, VS-026) — confirmed
+still current and still the single head on 2026-10-16 (`alembic heads` → `2e89860f5274
+(head)`; history chain: `cc87333ebe79` → `c2b3aae1cdee` (VS-033) → `2e89860f5274` (VS-026)).
+This slice's migration's `down_revision` must be `2e89860f5274`, no longer a placeholder.
+
+## Changes since first draft (2026-10-16 re-baseline)
+
+- **Preflight, re-confirmed:** `git fetch --all --prune` shows only `origin/main`; no
+  other remote branch; `gh pr list --state open` is empty. Nothing on GitHub touches
+  VS-038 or VS-013. **However, this local branch (`feat/vs-038-wishlist`) already carries
+  implementation commits from an earlier session**, which the chat preflight reports in
+  full: `d34d55d` (`WishlistItem` domain entity + `WishlistProductUnavailableError`,
+  step 2) and `4d61ca9` (`WishlistStore` Protocol + `ProductStore.get_many`/
+  `top_by_wishlist_count`, step 3), plus an **uncommitted** `app/catalog/public.py`
+  (`adjust_wishlist_count`, step 4) and its unit test. Steps 1–4 of §8 are therefore
+  already done or in progress, not merely planned — confirm with the owner whether to
+  continue from there or restart steps 2–4 against this re-baseline before touching the
+  migration (step 6).
+- **§3 exceptions correction:** the plan said "No new exceptions needed beyond what
+  `ApiError` already covers." The committed code (step 2) already added
+  `WishlistProductUnavailableError` to `app.engagement.domain.exceptions` — a domain
+  exception the API layer maps to 404, matching the `ContactMessageNotFoundError`/
+  `InvalidContactDetailsError` pattern VS-033 established. This is the correct call;
+  the "no new exceptions" sentence in §3 is superseded by it.
+- **§5 cursor precedent correction:** VS-033's actual merged `contact_messages.py`
+  cursor is a **3-part** keyset — `(status, created_at, id)`, base64 of
+  `"{status.value}|{created_at.isoformat()}|{id}"` — because the admin queue sorts by
+  status first. Wishlist's own cursor has no status dimension, so the 2-part
+  `(created_at, id)` design in §5 is still correct; only the citation of what
+  `contact_messages.py` does is corrected here, not the wishlist design itself.
+- **VS-026 (address book) checked for reusable conventions**, per this round's ask:
+  `app/identity/api/addresses.py` has no cursor pagination and no rate limiter (a
+  bounded, unpaginated personal list) — it offers nothing beyond the project's standard
+  `ApiError`/422 shape already used throughout. VS-033's `contact_messages.py` and
+  `admin.py`'s `admin_rate_limit` remain the closest precedents for this slice's cursor
+  and rate-limiter ordering trick, as §5 already concluded.
+- **ADR check:** ADR-025 (frontend contract decisions), ADR-026 (captcha refusal/outage),
+  and ADR-027 (address book decisions) all read — none mentions wishlist or imposes a
+  new constraint on this slice. §7's "no new ADR" stands.
+- **`products.wishlist_count` + `ck_products_wishlist_count_non_negative` re-confirmed**
+  present in `fc18b48a1780_products_table.py` — §1's claim holds.
+- **Not touched by this re-baseline:** `docs/vertical-slice-plan.md`'s VS-038 row still
+  reads "Not started", which is now stale given the in-progress code above — left as-is
+  here since updating it is step 13's job, not this plan file's.
 
 ## 0. Preflight (see chat reply for the short form)
 
