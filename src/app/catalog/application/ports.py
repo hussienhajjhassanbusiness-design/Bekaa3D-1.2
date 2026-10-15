@@ -35,6 +35,15 @@ class ProductStore(Protocol):
         """Row-locks the product: image changes serialise on it (docs/product-images.md)."""
         ...
 
+    async def get_many(self, product_ids: list[UUID]) -> list[Product]:
+        """One `WHERE id IN (...)` query; no visibility filter (VS-038 plan §3) -
+        a caller computing "available" needs a non-public product's own status."""
+        ...
+
+    async def top_by_wishlist_count(self, limit: int) -> list[Product]:
+        """Highest `wishlist_count` first, id tie-broken; no visibility filter."""
+        ...
+
 
 class ReferenceLocks(Protocol):
     async def lock_live(self, field: str, value_id: UUID) -> bool:
