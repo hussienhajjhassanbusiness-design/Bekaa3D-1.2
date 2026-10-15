@@ -58,3 +58,12 @@ class WishlistStore(Protocol):
     ) -> list[WishlistItem]: ...
 
     async def count_active(self) -> int: ...
+
+
+class WishlistCounter(Protocol):
+    async def adjust(self, product_id: UUID, delta: int) -> None:
+        """`delta` is +1 or -1, from a caller that already confirmed a real
+        state change on `wishlist_items`. Framework-free port so the
+        application layer can call it without importing a session
+        (VS-038 plan §3 refactor) - the adapter binds it to one."""
+        ...

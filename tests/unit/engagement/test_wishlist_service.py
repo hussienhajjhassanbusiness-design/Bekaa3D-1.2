@@ -1,6 +1,7 @@
 """`add_to_wishlist`/`remove_from_wishlist` against fakes (VS-038 plan §6):
-the "changed -> True" branching, repeat calls reporting no change, and the
-404-on-unavailable path - including the is_deleted case."""
+the "changed -> True" branching, repeat calls reporting no change, the
+404-on-unavailable path, and that the counter moves exactly once per real
+change - never on a repeat."""
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -87,73 +88,99 @@ class _FakeWishlistStore:
         raise NotImplementedError
 
 
-async def test_add_reports_changed_on_a_fresh_insert() -> None:
+@dataclass
+class _FakeWishlistCounter:
+    """Records every `adjust` call, so a test can see the counter moved
+    exactly once per real state change and not at all on a repeat."""
+
+    calls: list[tuple[UUID, int]] = field(default_factory=list)
+
+    async def adjust(self, product_id: UUID, delta: int) -> None:
+        self.calls.append((product_id, delta))
+
+
+async def test_add_increments_the_counter_on_a_fresh_insert() -> None:
     store = _FakeWishlistStore(add_result=True)
+    counter = _FakeWishlistCounter()
     product = _product()
 
     changed = await add_to_wishlist(
-        store, _FakeProductStore(product), user_id=uuid4(), product_id=product.id
+        store, _FakeProductStore(product), counter, user_id=uuid4(), product_id=product.id
     )
 
     assert changed is True
     assert len(store.add_calls) == 1
+    assert counter.calls == [(product.id, 1)]
 
 
-async def test_repeat_add_reports_no_change() -> None:
+async def test_repeat_add_does_not_move_the_counter() -> None:
     store = _FakeWishlistStore(add_result=False)
+    counter = _FakeWishlistCounter()
     product = _product()
 
     changed = await add_to_wishlist(
-        store, _FakeProductStore(product), user_id=uuid4(), product_id=product.id
+        store, _FakeProductStore(product), counter, user_id=uuid4(), product_id=product.id
     )
 
     assert changed is False
+    assert counter.calls == []
 
 
-async def test_repeat_remove_reports_no_change() -> None:
-    store = _FakeWishlistStore(remove_result=False)
-
-    changed = await remove_from_wishlist(store, user_id=uuid4(), product_id=uuid4())
-
-    assert changed is False
-
-
-async def test_remove_reports_changed_on_a_real_soft_delete() -> None:
+async def test_remove_decrements_the_counter_on_a_real_soft_delete() -> None:
     store = _FakeWishlistStore(remove_result=True)
+    counter = _FakeWishlistCounter()
+    product_id = uuid4()
 
-    changed = await remove_from_wishlist(store, user_id=uuid4(), product_id=uuid4())
+    changed = await remove_from_wishlist(store, counter, user_id=uuid4(), product_id=product_id)
 
     assert changed is True
+    assert counter.calls == [(product_id, -1)]
+
+
+async def test_repeat_remove_does_not_move_the_counter() -> None:
+    store = _FakeWishlistStore(remove_result=False)
+    counter = _FakeWishlistCounter()
+
+    changed = await remove_from_wishlist(store, counter, user_id=uuid4(), product_id=uuid4())
+
+    assert changed is False
+    assert counter.calls == []
 
 
 async def test_add_of_a_hidden_product_is_rejected() -> None:
     store = _FakeWishlistStore()
+    counter = _FakeWishlistCounter()
     product = _product(is_visible=False)
 
     with pytest.raises(WishlistProductUnavailableError):
         await add_to_wishlist(
-            store, _FakeProductStore(product), user_id=uuid4(), product_id=product.id
+            store, _FakeProductStore(product), counter, user_id=uuid4(), product_id=product.id
         )
     assert store.add_calls == []
+    assert counter.calls == []
 
 
 async def test_add_of_a_deleted_product_is_rejected() -> None:
     store = _FakeWishlistStore()
+    counter = _FakeWishlistCounter()
     product = _product(deleted=True)
 
     with pytest.raises(WishlistProductUnavailableError):
         await add_to_wishlist(
-            store, _FakeProductStore(product), user_id=uuid4(), product_id=product.id
+            store, _FakeProductStore(product), counter, user_id=uuid4(), product_id=product.id
         )
     assert store.add_calls == []
+    assert counter.calls == []
 
 
 async def test_add_of_an_unknown_product_is_rejected() -> None:
     store = _FakeWishlistStore()
+    counter = _FakeWishlistCounter()
     product_id = uuid4()
 
     with pytest.raises(WishlistProductUnavailableError):
         await add_to_wishlist(
-            store, _FakeProductStore(None), user_id=uuid4(), product_id=product_id
+            store, _FakeProductStore(None), counter, user_id=uuid4(), product_id=product_id
         )
     assert store.add_calls == []
+    assert counter.calls == []
