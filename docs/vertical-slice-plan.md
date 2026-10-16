@@ -1006,7 +1006,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 - **Done when:** A hide or restore updates public ratings in the same transaction.
 
 ## VS-038 — Wishlist and wishlist analytics
-**Status:** Not started
+**Status:** Done
 **Depends on:** VS-013
 **Goal:** Customers save products, and the administrator sees totals and the most-wishlisted products.
 - **Model / migration:** `wishlist_items` (soft delete; unique `(user_id, product_id)` among live rows).
