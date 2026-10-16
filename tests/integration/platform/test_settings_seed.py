@@ -29,7 +29,7 @@ async def test_every_registered_setting_is_seeded_and_nothing_else_is(
     extra row means a key exists that no code knows how to validate."""
     rows = (await db_session.scalars(select(SettingModel))).all()
     assert {row.key for row in rows} == set(REGISTRY)
-    assert len(rows) == 12
+    assert len(rows) == 14
 
 
 @pytest.mark.integration

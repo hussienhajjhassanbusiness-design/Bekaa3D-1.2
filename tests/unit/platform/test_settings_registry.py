@@ -19,9 +19,9 @@ from app.platform.domain.settings_registry import (
     validate_value,
 )
 
-# The twelve SRS 15.4 requires, written out rather than derived from the
-# registry: a test that builds its expectation from the thing under test would
-# pass just as happily if a key were deleted.
+# The twelve SRS 15.4 requires plus VS-046's two retention periods, written out
+# rather than derived from the registry: a test that builds its expectation from
+# the thing under test would pass just as happily if a key were deleted.
 REQUIRED_KEYS = (
     "accepting_orders",
     "offer_response_window",
@@ -35,6 +35,8 @@ REQUIRED_KEYS = (
     "pickup_address",
     "pickup_hours",
     "whatsapp_number",
+    "security_token_retention_period",
+    "session_retention_period",
 )
 
 
@@ -75,6 +77,8 @@ def test_no_internal_setting_is_marked_public() -> None:
         "checkout_hold_period",
         "unverified_account_purge_period",
         "daily_download_cap",
+        "security_token_retention_period",
+        "session_retention_period",
     }
     for key in internal:
         assert REGISTRY[key].is_public is False, f"{key} must not be public"
@@ -181,6 +185,21 @@ def test_the_purge_period_keeps_the_previous_hardcoded_behaviour() -> None:
     """30 days, exactly what the job used from a source-code constant before
     VS-007, so moving the control into the database changed nothing."""
     assert REGISTRY["unverified_account_purge_period"].default == 2_592_000
+
+
+@pytest.mark.parametrize(
+    ("key", "default"),
+    [("security_token_retention_period", 604_800), ("session_retention_period", 2_592_000)],
+)
+def test_the_retention_periods_are_one_to_ninety_days(key: str, default: int) -> None:
+    """VS-046 owner decision: 7 d tokens, 30 d sessions, editable within 1-90 d."""
+    assert REGISTRY[key].default == default
+    assert validate_value(key, 86_400) == 86_400
+    assert validate_value(key, 7_776_000) == 7_776_000
+    with pytest.raises(InvalidSettingValueError):
+        validate_value(key, 86_399)
+    with pytest.raises(InvalidSettingValueError):
+        validate_value(key, 7_776_001)
 
 
 # --------------------------------------------------------------------------
@@ -313,5 +332,7 @@ def test_each_setting_declares_the_type_its_consumers_expect() -> None:
         "pickup_address": SettingType.STRING,
         "pickup_hours": SettingType.STRING,
         "whatsapp_number": SettingType.STRING,
+        "security_token_retention_period": SettingType.DURATION,
+        "session_retention_period": SettingType.DURATION,
     }
     assert {key: definition.type for key, definition in REGISTRY.items()} == expected

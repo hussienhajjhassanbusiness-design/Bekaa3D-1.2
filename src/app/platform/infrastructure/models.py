@@ -2,8 +2,19 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Index, Integer, Text, func, text
-from sqlalchemy.dialects.postgresql import CITEXT, JSONB, UUID
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    Text,
+    func,
+    text,
+)
+from sqlalchemy.dialects.postgresql import BYTEA, CITEXT, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -100,6 +111,35 @@ class AuditLogModel(Base):
         Index("ix_audit_logs_request_id", "request_id"),
         {"postgresql_partition_by": "RANGE (created_at)"},
     )
+
+
+class IpHashSaltModel(Base):
+    """The current IP-hash salt (VS-046, ADR-028); old salts are deleted on rotation.
+    Bytes come from pgcrypto, never from Python; read only by the keyring."""
+
+    __tablename__ = "ip_hash_salts"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    salt: Mapped[bytes] = mapped_column(BYTEA, nullable=False)
+    is_current: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("clock_timestamp()")
+    )
+
+    __table_args__ = (
+        CheckConstraint("octet_length(salt) = 32", name="ck_ip_hash_salts_salt_length"),
+        Index(
+            "uq_ip_hash_salts_one_current",
+            "is_current",
+            unique=True,
+            postgresql_where=text("is_current"),
+        ),
+    )
+
+    def __repr__(self) -> str:
+        return f"IpHashSaltModel(id={self.id!r})"
 
 
 class SettingModel(Base):
