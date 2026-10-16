@@ -1,6 +1,6 @@
 # VS-022 — Mixed Cart: Implementation Plan
 
-**Status:** IN PROGRESS (implementation started on branch `vs-022-mixed-cart`)
+**Status:** DONE (implemented on branch `vs-022-mixed-cart`; full suite green)
 **Date:** 2026-10-16
 **Planned against alembic head:** `75ad58ebd9e5` (ip_hash_salts_and_retention_settings,
 VS-046). Derived statically from `revision`/`down_revision` in `migrations/versions/`:
