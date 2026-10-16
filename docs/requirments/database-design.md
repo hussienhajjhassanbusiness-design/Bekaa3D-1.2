@@ -802,6 +802,10 @@ Products referencing a material prevent destructive removal.
 UNIQUE(slug) WHERE deleted_at IS NULL
 ```
 
+```text
+UNIQUE(id, type)   -- uq_products_id_type: target of cart_items' composite FK (VS-022, ADR-029)
+```
+
 ### Type Integrity
 
 For `physical`:
@@ -914,6 +918,7 @@ Removed by ADR-019 (2026-10-06). The platform stores no STL files, so `asset_ver
 | `id` | UUID | No | PK |
 | `cart_id` | UUID | No | FK → `carts.id` |
 | `product_id` | UUID | No | FK → `products.id` |
+| `product_type` | `product_type` | No | snapshot; composite FK `(product_id, product_type)` → `products (id, type)` (ADR-029) |
 | `quantity` | INTEGER | No | CHECK > 0 |
 | `price_snapshot_cents` | BIGINT | No | CHECK ≥ 0 |
 | `currency` | CHAR(3) | No | CHECK = `USD` |
@@ -943,7 +948,7 @@ The database can enforce:
 quantity > 0
 ```
 
-but determining whether the referenced product is STL is cross-table. The transaction service must enforce `quantity = 1` for STL. If product type is also snapshotted into the cart line, a local CHECK could be used, but that duplication is not required by the SRS.
+but determining whether the referenced product is STL is cross-table. VS-022 therefore snapshots the type onto the line (`product_type`), proves the snapshot with a composite FK to a new `UNIQUE (products.id, type)` (`ON UPDATE RESTRICT`), and adds `CHECK (product_type <> 'stl' OR quantity = 1)` (SRS §21.2, ADR-029). Lines are hard-deleted (ADR-029). The service also enforces the rule, for a readable error.
 
 ---
 
@@ -1899,7 +1904,8 @@ These are the most important constraints to express directly in PostgreSQL.
 - one cart per user;
 - one line per `(cart, product)`;
 - quantity > 0;
-- non-negative price snapshot.
+- non-negative price snapshot;
+- STL line quantity = 1 (`ck_cart_items_stl_quantity_one`), on a type snapshot proven by a composite FK (ADR-029).
 
 ## 15.4 Ordering
 
