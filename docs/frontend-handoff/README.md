@@ -13,7 +13,7 @@ The backend's answer to the three frontend request files in [`../frontend-reques
 
 1. **Field lists are in `openapi.json`, not in the prose.** A response block names a schema; look it up under `components.schemas`.
 2. **Two decisions removed parts of what you asked about.** ADR-019: the platform stores and serves no STL files, so there are no entitlements, library, downloads or asset uploads. ADR-024: the platform charges no shipping, so there are no shipping zones or free-shipping threshold. See [section 3 of the response](BACKEND-RESPONSE.md#3-removed-by-adr-019-and-adr-024).
-3. **The backend is built up to the public catalogue.** Cart, checkout, payments, orders, refunds and Bring Your Idea do not exist yet (the contact form and the address book do: VS-033, VS-026). Their answers are marked **provisional** in [section 4](BACKEND-RESPONSE.md#4-not-built-yet-provisional).
+3. **The backend is built up to the public catalogue.** Checkout, payments, orders, refunds and Bring Your Idea do not exist yet (the contact form, the address book and the cart do: VS-033, VS-026, VS-022). Their answers are marked **provisional** in [section 4](BACKEND-RESPONSE.md#4-not-built-yet-provisional).
 4. **Some items the request calls "confirmed" are not.** The list is in [section 6](BACKEND-RESPONSE.md#6-corrections-to-confirmed-items-in-the-request).
 
 ## Start the backend
@@ -47,7 +47,7 @@ The last command prints the seed accounts' credentials **once**. Keep them in a 
 | C2 | Cursor pagination | Built | VS-008 onward |
 | C3 | Address book | Built | VS-026 |
 | C4 | Shipping zones | **Removed (ADR-024)** | — |
-| C5 | Cart | Not built | VS-022 |
+| C5 | Cart | Built (incl. `over_cap`, `purchasable`) | VS-022 |
 | C6 | Checkout | Not built | VS-023, VS-028 |
 | C7 | Payment verification | Not built; parts undecided | VS-023 to VS-025 |
 | C8 | Order status and actions | Not built; admin `available_actions` decided (ADR-025) | VS-023, VS-025, VS-029 |

@@ -12,11 +12,22 @@ from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_session
-from app.catalog.application.ports import ProductStore
+from app.catalog.api.product_image_schemas import media_url
+from app.catalog.api.product_schemas import PriceRead
+from app.catalog.api.storefront_schemas import PublicImage
+from app.catalog.application.ports import CartProductReader, ProductStore
+from app.catalog.infrastructure.cart_product_reader import SqlCartProductReader
 from app.catalog.infrastructure.models import ProductModel
 from app.catalog.infrastructure.product_repository import ProductRepository
 
-__all__ = ["adjust_wishlist_count", "product_store"]
+__all__ = [
+    "PriceRead",
+    "PublicImage",
+    "adjust_wishlist_count",
+    "cart_product_reader",
+    "media_url",
+    "product_store",
+]
 
 
 async def adjust_wishlist_count(session: AsyncSession, product_id: UUID, delta: int) -> None:
@@ -39,3 +50,9 @@ async def product_store(session: AsyncSession = Depends(get_session)) -> Product
     another context to depend on - the same shape `identity.public.current_user`
     already uses to hand out Identity's own session-bound state."""
     return ProductRepository(session)
+
+
+async def cart_product_reader(session: AsyncSession = Depends(get_session)) -> CartProductReader:
+    """A `CartProductReader` bound to the request's session, for the cart (VS-022) and,
+    later, checkout's revalidation (VS-023)."""
+    return SqlCartProductReader(session)

@@ -199,6 +199,7 @@ These codes are implementation additions needed to give the frontend determinist
 | 422 | `CASH_AMOUNT_MISMATCH` | Cash entered at handover differs from the amount due (ADR-024) |
 | 422 | `UPLOAD_REJECTED` | Type/size/count/content validation failed |
 | 422 | `ADDRESS_LIMIT_REACHED` | The customer already has the maximum of 20 live saved addresses (VS-026, ADR-027) |
+| 422 | `CART_LINE_LIMIT_REACHED` | A new product would exceed the cart's 50 lines; body carries `limit` (VS-022, ADR-029) |
 | 422 | `MALWARE_DETECTED` | Uploaded content failed malware scan |
 | 422 | `SETTING_INVALID` | Setting value does not match its declared type/range |
 | 502 | `PAYMENT_PROVIDER_ERROR` | Provider call failed |
@@ -334,10 +335,10 @@ There is no normal “disable MFA” endpoint in V1 because the SRS treats admin
 
 | Method + Path | Auth / Authorization | Request | Success | Errors | Pagination / Filter / Sort | Side Effects / Notes |
 |---|---|---|---|---|---|---|
-| `GET /api/v1/cart` | Authenticated | — | `200 CartRead` | 401 | — | Shows snapshot price + current price + `price_changed`; may include fulfillment-relevant summary |
-| `POST /api/v1/cart/items` | Verified Customer | `CartItemAdd` | `200 CartRead` | 401, 403, 409 `PRODUCT_ALREADY_OWNED`, 422 `PRODUCT_NOT_PURCHASABLE` / `QUANTITY_EXCEEDS_LIMIT`, 429 | — | Existing product merges quantity; STL quantity forced to 1 |
-| `PATCH /api/v1/cart/items/{product_id}` | Verified Customer | `CartItemQuantityUpdate` | `200 CartRead` | 401, 403, 404, 422, 429 | — | Sets absolute physical quantity; STL remains exactly 1 |
-| `DELETE /api/v1/cart/items/{product_id}` | Verified Customer | — | `204` | 401, 403, 404 | — | Removes current cart line |
+| `GET /api/v1/cart` | Authenticated | — | `200 CartRead` | 401 | Hard-limited: at most 50 lines (ADR-029) | Shows snapshot price + current price + `price_changed`, `over_cap` and `purchasable`; never creates a cart (`id: null` until the first write) |
+| `POST /api/v1/cart/items` | Verified Customer | `CartItemAdd` | `200 CartRead` | 401, 403, 409 `PRODUCT_ALREADY_OWNED` (VS-023), 422 `PRODUCT_NOT_PURCHASABLE` (`reason`) / `QUANTITY_EXCEEDS_LIMIT` (`max_quantity`) / `CART_LINE_LIMIT_REACHED`, 429 | — | Existing product merges quantity, refused (never clamped) above the current cap; STL accepts only quantity 1, and re-adding an STL already in the cart is a no-op (VS-022) |
+| `PATCH /api/v1/cart/items/{product_id}` | Verified Customer | `CartItemQuantityUpdate` | `200 CartRead` | 401, 403, 404, 422, 429 | — | Sets absolute quantity; STL accepts only 1; refused on a line no longer purchasable |
+| `DELETE /api/v1/cart/items/{product_id}` | Verified Customer | — | `204` | 401, 403, 404, 429 | — | Removes (hard-deletes) the cart line; 404 when absent (ADR-029). One 300/hour per-user bucket covers `POST`, `PATCH` and `DELETE` |
 
 ## 10.2 Shipping Zones
 
@@ -799,8 +800,9 @@ product_id: UUID
 quantity: int = 1
 ```
 
-Physical: 1..max cap.  
-STL: server requires exactly 1.
+Physical: 1..current max cap, after merging with an existing line.  
+STL: server requires exactly 1 (`422 QUANTITY_EXCEEDS_LIMIT` otherwise).  
+`quantity` is a JSON integer, 1..2 147 483 647; unknown fields are refused (VS-022).
 
 ### `CartItemQuantityUpdate`
 
@@ -1232,20 +1234,26 @@ derived capabilities:
 ## `CartRead`
 
 ```text
-id
-items[]
+id                      # null until the first write
+items[]                 # in the order first added
 each item:
-  product summary
+  product_id, product_type, name
+  slug, cover_image      # null when the product is no longer listed
   quantity
-  snapshot_price
-  current_price
+  snapshot_price         # display only; checkout charges the live price
+  current_price          # null when the product is no longer listed
   price_changed
+  max_quantity           # current physical cap; null for STL / not listed
+  over_cap               # quantity above the current cap; checkout refuses it
+  purchasable
+  unpurchasable_reason   # not_listed | unavailable | whatsapp_only | null
 derived:
   contains_physical
   contains_digital
+updated_at
 ```
 
-No client-authoritative total is trusted for checkout.
+No client-authoritative total is trusted for checkout, so none is returned. Full contract: [`docs/cart.md`](../cart.md) (VS-022).
 
 ## `CheckoutRead`
 

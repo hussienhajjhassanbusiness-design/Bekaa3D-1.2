@@ -7,6 +7,7 @@ from app.catalog.api.reference_data import public_router as public_catalogue_rou
 from app.catalog.api.search import public_router as search_router
 from app.catalog.api.storefront import public_router as storefront_router
 from app.engagement.api.contact_messages import public_router as contact_router
+from app.ordering.api.cart import router as cart_router
 from app.platform.api.settings import public_router as public_settings_router
 
 router = APIRouter(prefix="/api/v1")
@@ -25,3 +26,5 @@ router.include_router(storefront_router)
 router.include_router(search_router)
 # VS-033. Guest contact form: captcha + rate limits, no auth cookies (api-endpoints.md 7.2).
 router.include_router(contact_router)
+# VS-022. The customer's cart: GET /api/v1/cart and /cart/items* (api-endpoints.md 10.1).
+router.include_router(cart_router)

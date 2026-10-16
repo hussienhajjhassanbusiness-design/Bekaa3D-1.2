@@ -353,7 +353,7 @@ None.
 - **[DB/Application]** Concurrent additions of the same Product must result in one row with a valid final quantity.
 
 **Deletion strategy:**
-Removed or consumed CartItems may be **soft deleted** according to the global deletion convention.
+Removed or consumed CartItems are **hard deleted**: cart lines are operational data with no history or audit dependency (ADR-029, an explicit exception to BR-018).
 
 ---
 

@@ -25,7 +25,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 | VS-019 | Protected STL download through nginx | — | Removed (ADR-019) |
 | VS-020 | Staging environment and deploy pipeline | VS-015 | Not started |
 | VS-021 | Production email delivery | VS-020 | Not started |
-| VS-022 | Mixed cart | VS-013 | Not started |
+| VS-022 | Mixed cart | VS-013 | Done |
 | VS-023 | Checkout and verified payment for digital orders | VS-022, VS-008, VS-007 | Not started |
 | VS-023b | STL delivery queue and mark-as-sent | VS-023 | Not started |
 | VS-024 | Payment recovery: reconciliation, stale checkouts, manual confirm | VS-023 | Not started |
@@ -471,7 +471,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - Provider keys never appear in logs.
 
 ## VS-022 — Mixed cart
-**Status:** Not started
+**Status:** Done
 **Depends on:** VS-013
 **Goal:** A verified customer keeps one persistent cart mixing physical and STL products.
 - **Model / migration:** `carts` (one per user) and `cart_items` (unique `(cart_id, product_id)`, a CHECK that STL quantity = 1, a price snapshot).
@@ -488,6 +488,12 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - An unverified user can read but not write.
 - **Done when:**
   - The cart can never hold duplicate lines, an STL quantity above 1, or a quantity over the cap.
+- **As built:**
+  - Migration `bde6135b2538` (`carts`, `cart_items`, `uq_products_id_type`); decisions in [ADR-029](adr/ADR-029-cart-decisions.md); contract in [`cart.md`](cart.md); plan in [`plans/VS-022-mixed-cart-plan.md`](plans/VS-022-mixed-cart-plan.md).
+  - STL quantity = 1 is enforced by a CHECK on a type snapshot that a composite FK `(product_id, product_type) → products (id, type)` proves; lines are hard-deleted.
+  - Every write takes the cart lock first (`INSERT … ON CONFLICT DO NOTHING`, then `SELECT … FOR UPDATE`); two concurrent first adds both succeed (`tests/concurrency/test_cart_races.py`, 20 runs plus a rollback variant).
+  - `CartRead` lines carry `over_cap` and `purchasable` / `unpurchasable_reason`; checkout (VS-023) must refuse such lines with 422 naming each one, never drop them (ADR-029 decision 6, owner question 14).
+  - Storefront visibility is one shared `listed_predicate()`, used by the storefront and the cart's `CartProductReader`.
 
 ## VS-023 — Checkout and verified payment for digital orders
 **Status:** Not started
@@ -1006,7 +1012,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 - **Done when:** A hide or restore updates public ratings in the same transaction.
 
 ## VS-038 — Wishlist and wishlist analytics
-**Status:** Not started
+**Status:** Done
 **Depends on:** VS-013
 **Goal:** Customers save products, and the administrator sees totals and the most-wishlisted products.
 - **Model / migration:** `wishlist_items` (soft delete; unique `(user_id, product_id)` among live rows).

@@ -34,6 +34,7 @@ Only expensive-to-reverse decisions belong here. Folder names and small refactor
 - [ADR-026: A refused captcha is `400 CAPTCHA_INVALID`, a Turnstile outage fails closed with `503`, and a coarse attempt limit runs before the captcha](ADR-026-captcha-refusal-and-outage.md)
 - [ADR-027: Address book - required landmark notes, E.164 phones in a shared normaliser, a per-user write lock, and a first-address default](ADR-027-address-book-decisions.md)
 - [ADR-028: Keyed, monthly-rotated IP hashes - a database salt plus an environment pepper, old salts deleted](ADR-028-keyed-monthly-rotated-ip-hashes.md)
+- [ADR-029: Cart - hard-deleted lines, a type snapshot behind a composite FK, a first-add price snapshot, one cart lock and no product locks, a 50-line cap](ADR-029-cart-decisions.md)
 
 ## Governance
 

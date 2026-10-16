@@ -3,7 +3,7 @@
 Answers every item in [`../frontend-requests/BACKEND-UNLOCK-HANDOFF.md`](../frontend-requests/BACKEND-UNLOCK-HANDOFF.md)
 by its ID, in the field order of [`../frontend-requests/BACKEND-RESPONSE-TEMPLATE.md`](../frontend-requests/BACKEND-RESPONSE-TEMPLATE.md).
 
-- **Backend state:** slices VS-001 to VS-016, VS-026 (address book) and VS-033 (contact form and captcha) are built. Nothing else exists yet: no cart, checkout, order, payment, refund or Bring Your Idea route.
+- **Backend state:** slices VS-001 to VS-016, VS-022 (cart), VS-026 (address book), VS-033 (contact form and captcha), VS-038 (wishlist) and VS-046 (security retention) are built. Nothing else exists yet: no checkout, order, payment, refund or Bring Your Idea route.
 - **Schemas are not retyped here.** Field lists live in [`openapi.json`](openapi.json), generated from the code and checked by a test. A block names the schema; open it at `components.schemas.<Name>`.
 - **Decisions since the first version:** three open questions were decided on 2026-10-14 and recorded in [ADR-025](../adr/ADR-025-frontend-contract-decisions.md): admin `available_actions` (C8, P1-11), the STL ownership check (C11) and Turnstile captcha on five forms (P2-1, P2-6, P2-7). Captcha is now built (VS-033, [ADR-026](../adr/ADR-026-captcha-refusal-and-outage.md)); the other two are provisional until their slices are built.
 - **Every example below is real**, captured from the application running against a database filled by [`scripts/dev_seed.py`](../../scripts/dev_seed.py). IDs and timestamps will differ on your machine.
@@ -13,7 +13,7 @@ by its ID, in the field order of [`../frontend-requests/BACKEND-RESPONSE-TEMPLAT
 1. [Shared conventions](#1-shared-conventions) — errors, cookies, CSRF, the admin boundary, rate limits
 2. [Built and confirmed](#2-built-and-confirmed) — A1, A2, A3, B1, B2, B3, B4, B5, C1, C2, P1-1 to P1-7, P2-5, P2-6, P2-8
 3. [Removed by ADR-019 and ADR-024](#3-removed-by-adr-019-and-adr-024) — C4, C9, C10, P1-8, P1-9
-4. [Not built yet (provisional)](#4-not-built-yet-provisional) — C5, C6, C7, C8, C11, C12, P1-10 to P1-13, P2-2; also P2-1, P2-3, P2-4 and P2-7, which VS-033 has since built, and C3, which VS-026 has since built
+4. [Not built yet (provisional)](#4-not-built-yet-provisional) — C5, C6, C7, C8, C11, C12, P1-10 to P1-13, P2-2; also P2-1, P2-3, P2-4 and P2-7, which VS-033 has since built, C3, which VS-026 has since built, and C5, which VS-022 has since built
 5. [Test accounts and fixtures](#5-test-accounts-and-fixtures) — items 1 to 9
 6. [Corrections to "confirmed" items in the request](#6-corrections-to-confirmed-items-in-the-request)
 7. [Open questions](#7-open-questions) — three decided by ADR-025, ten still open
@@ -1972,46 +1972,109 @@ Build order on the backend: VS-020 (staging) or VS-022 (cart) next, then VS-023 
 
 ### Domain / item: C5 — Cart contract
 
-**Status:** not built. PROVISIONAL. Slice: VS-022.
+**Status:** built (VS-022). Full contract: [`../cart.md`](../cart.md); decisions: [ADR-029](../adr/ADR-029-cart-decisions.md).
 
-**Confirmed endpoint:** none yet. Planned:
+**Confirmed endpoint:**
 - `GET /api/v1/cart`
 - `POST /api/v1/cart/items`
 - `PATCH /api/v1/cart/items/{product_id}`
 - `DELETE /api/v1/cart/items/{product_id}`
 
-**Request schema:** provisional; see api-endpoints.md section 29.4: `CartItemAdd` (`product_id`, `quantity` default 1), `CartItemQuantityUpdate` (`quantity`).
+**Request schema:** `CartItemAdd` (`product_id`, `quantity` default 1), `CartItemQuantityUpdate` (`quantity`). `quantity` is a JSON integer of at least 1.
 
-**Response schema:** provisional: `CartRead` (section 30): `id`, `items[]` each with a product summary, `quantity`, `snapshot_price`, `current_price`, `price_changed`; and derived `contains_physical`, `contains_digital`. Exact field names inside the product summary are not written yet.
+**Response schema:** `CartRead` and `CartLineRead` in `openapi.json`. Per line, besides the product summary and the two prices:
+- `price_changed` — the current price differs from the snapshot taken when the line was first added.
+- **`over_cap`** — the line's quantity is above the product's *current* `max_quantity_per_line` (an administrator lowered it). Show it as an error on the line; `PATCH` can lower the quantity, and checkout will refuse the line until then.
+- `purchasable` / `unpurchasable_reason` — `not_listed`, `unavailable` or `whatsapp_only` when the product can no longer be bought. The line stays; it can be deleted but not edited, and checkout refuses it.
+- `max_quantity` — the current physical cap (null for STL and for a line that is not listed).
 
-**Enums/statuses/actions:** none planned.
+There is no total: compute one for display if you need it; checkout recomputes it from live prices.
 
-**Errors:** provisional:
-- `409 PRODUCT_ALREADY_OWNED` — adding an STL the customer already owns (arrives with VS-023, not VS-022).
-- `422 PRODUCT_NOT_PURCHASABLE` — WhatsApp-only, hidden, deleted or unavailable product.
-- `422 QUANTITY_EXCEEDS_LIMIT` — above the product's `max_quantity_per_line`.
-- `403 EMAIL_VERIFICATION_REQUIRED` — a write by an unverified account.
+**Enums/statuses/actions:** `unpurchasable_reason`: `not_listed`, `unavailable`, `whatsapp_only`.
+
+**Errors:**
+- `422 PRODUCT_NOT_PURCHASABLE` with `reason` — the same three values. An unknown, deleted, hidden or inactive-category product answers identically (`not_listed`).
+- `422 QUANTITY_EXCEEDS_LIMIT` with `max_quantity`, `requested`, `current_quantity` — over the cap after merging, or an STL quantity other than 1. Nothing is clamped and the cart is unchanged.
+- `422 CART_LINE_LIMIT_REACHED` with `limit` (50) — a new product in a full cart.
+- `403 EMAIL_VERIFICATION_REQUIRED`, `403 CSRF_INVALID`, `429 RATE_LIMITED` (300 writes per hour per user).
 - `404 NOT_FOUND` — `PATCH` or `DELETE` of a product not in the cart.
+- `409 PRODUCT_ALREADY_OWNED` arrives with VS-023, not VS-022.
 
-**Auth/CSRF/MFA:** `GET`: any signed-in user. Writes: verified customer plus `X-CSRF-Token`. There is no anonymous or guest cart on the server.
+**Auth/CSRF/MFA:** `GET`: any signed-in user (an unverified one gets an empty cart, `id: null`). Writes: verified customer plus `X-CSRF-Token`. There is no anonymous or guest cart on the server.
 
-**Concurrency/idempotency:** no version field is planned. Adds are merged under a lock, so two simultaneous adds of one product produce one line.
+**Concurrency/idempotency:** no version field. Every write locks the cart first, so two simultaneous adds of one product produce one line within the cap. Re-adding an STL already in the cart is a `200` no-op.
 
-**Example success JSON:** none; not built.
+**Example success JSON** (`GET /api/v1/cart` after the administrator raised the physical product's price from 25.00 to 28.00 and lowered its cap from 5 to 3; captured from the application against a test database, so ids differ):
 
-**Example error JSON:** none; not built.
+```json
+{
+  "id": "23fc133e-3b12-4bc9-aab7-e582a76d9f36",
+  "items": [
+    {
+      "product_id": "31914788-f904-4529-92c8-025a05f96d46",
+      "product_type": "physical",
+      "name": "Dragon",
+      "slug": "p-e082a5c2276f",
+      "cover_image": null,
+      "quantity": 4,
+      "snapshot_price": {"amount_cents": 2500, "currency": "USD"},
+      "current_price": {"amount_cents": 2800, "currency": "USD"},
+      "price_changed": true,
+      "max_quantity": 3,
+      "over_cap": true,
+      "purchasable": true,
+      "unpurchasable_reason": null
+    },
+    {
+      "product_id": "a3b29c43-a479-492a-b360-57ae389602e6",
+      "product_type": "stl",
+      "name": "Dragon (STL)",
+      "slug": "p-1cfd8f64c04d",
+      "cover_image": null,
+      "quantity": 1,
+      "snapshot_price": {"amount_cents": 900, "currency": "USD"},
+      "current_price": {"amount_cents": 900, "currency": "USD"},
+      "price_changed": false,
+      "max_quantity": null,
+      "over_cap": false,
+      "purchasable": true,
+      "unpurchasable_reason": null
+    }
+  ],
+  "contains_physical": true,
+  "contains_digital": true,
+  "updated_at": "2026-10-16T20:10:32.118211Z"
+}
+```
 
-**Fixture/test account:** none possible yet.
+**Example error JSON** (`POST /api/v1/cart/items` with `quantity: 2` for an STL):
 
-**Authoritative source/OpenAPI file:** none yet. Plan: VS-022; api-endpoints.md sections 10.1, 29.4, 30.
+```json
+{
+  "type": "http://localhost:8000/problems/QUANTITY_EXCEEDS_LIMIT",
+  "title": "Quantity exceeds the limit",
+  "status": 422,
+  "detail": "At most 1 of this product fit in one cart line.",
+  "instance": "/api/v1/cart/items",
+  "code": "QUANTITY_EXCEEDS_LIMIT",
+  "request_id": "req_04240eb351aa41dbb8a3bde69f9cca4e",
+  "errors": [],
+  "max_quantity": 1,
+  "requested": 2,
+  "current_quantity": 1
+}
+```
+
+**Fixture/test account:** the seeded verified customer can fill a mixed cart with `dragon` and `dragon-stl`.
+
+**Authoritative source/OpenAPI file:** `openapi.json` (`/api/v1/cart*`, `CartRead`, `CartLineRead`); [`../cart.md`](../cart.md).
 
 **Notes:**
-- **Lines are addressed by `product_id`, not by an item id.** Your placeholders used `{item_id}`. A cart holds at most one line per product.
-- **Adding a product already in the cart merges the quantities** and re-checks the cap.
-- An STL line is always quantity 1; `PATCH` cannot change it.
-- `PATCH` sets the absolute quantity; it is not an increment.
+- **Lines are addressed by `product_id`, not by an item id.** A cart holds at most one line per product.
+- **Adding a product already in the cart merges the quantities** and re-checks the current cap.
+- `PATCH` sets the absolute quantity; it is not an increment. An STL line accepts only 1.
 - Mutations return the whole `CartRead` (`DELETE` returns `204`).
-- The cart shows both the price when the line was added (`snapshot_price`) and the price now (`current_price`), with `price_changed`. Checkout refuses a changed price until the customer accepts it ([C6](#domain--item-c6--checkout-contract)).
+- The snapshot price is display-only: checkout charges the live price and refuses a changed one until the customer accepts it ([C6](#domain--item-c6--checkout-contract)).
 - Your wiring gap about `EntitlementModel.productId` disappears with the entitlement model. See [C11](#domain--item-c11--per-product-ownership-check).
 
 ### Domain / item: C6 — Checkout contract
@@ -2620,7 +2683,7 @@ Your nine items, in order. "Seed" means [`scripts/dev_seed.py`](../../scripts/de
 | 5 | One STL entitlement granted to the test customer | **Removed by ADR-019.** Entitlements do not exist. Ownership will be a paid STL order line, which cannot exist before VS-023. No fixture is possible today. |
 | 6 | One seeded shipping zone | **Removed by ADR-024.** There are no shipping zones and no free-shipping threshold. |
 | 7 | A way to trigger each mock-payment outcome | **Not possible yet.** No payment code exists. A mock provider covering every verification outcome is part of VS-023; how a tester selects an outcome has not been designed. Provisional. |
-| 8 | A mixed cart (one physical, one STL) | **Not possible yet.** The products exist in the seed (`dragon` and `dragon-stl`), but there is no cart until VS-022 and no mixed checkout until VS-028. |
+| 8 | A mixed cart (one physical, one STL) | **Possible (VS-022).** Sign in as the seeded verified customer and add `dragon` and `dragon-stl`. Checking it out waits for VS-028. |
 | 9 | Seeded orders in several fulfillment states | **Not possible yet.** There are no order tables until VS-023, so nothing can be seeded even directly in the database. The seed will grow with each slice. |
 
 What you can test end to end today, against a real backend: registration, email verification, resend, login, the administrator MFA login, refresh, logout, `/me`, password reset, notifications, the whole public storefront (settings, lists, filters, search, suggestions, product pages), and the admin screens for settings, users, categories, materials, colours, products and product images.
