@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from app.core.config import get_settings
 from app.integrations.captcha.fake import FAKE_CAPTCHA_PASS
 from app.jobs import outbox as outbox_job
+from app.jobs.purge_unverified import purge_unverified_accounts
 from app.jobs.registry import CRON_JOBS, FUNCTIONS
 from app.platform.domain.entities import REDACTED
 from app.platform.domain.enums import OutboxStatus
@@ -222,7 +223,8 @@ def test_dispatch_outbox_runs_every_minute_and_at_startup() -> None:
 
 
 def test_the_purge_runs_once_a_day() -> None:
-    [job] = [j for j in CRON_JOBS if "purge" in j.name]
+    # By coroutine, not a "purge" substring: VS-046 added a second purge job.
+    [job] = [j for j in CRON_JOBS if j.coroutine is purge_unverified_accounts]
     assert job.hour is not None and job.minute is not None and job.second == 0
 
 
