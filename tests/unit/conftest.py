@@ -11,6 +11,7 @@ environment already sets it; none of them is ever used to reach a real service.
 import os
 import time
 from collections.abc import Iterator
+from contextlib import contextmanager
 from uuid import UUID
 
 import pytest
@@ -42,9 +43,18 @@ def placeholder_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     get_settings.cache_clear()
 
 
+@contextmanager
+def installed_ip_hash_test_key() -> Iterator[None]:
+    """A known IP-hash key for the duration; then the key is None and the guard reset."""
+    install_ip_hash_key(salt_id=UUID(int=1), salt=b"\x01" * 32, now=time.monotonic())
+    try:
+        yield
+    finally:
+        reset_ip_hash_keyring()
+
+
 @pytest.fixture(autouse=True)
 def ip_hash_test_key(placeholder_settings: None) -> Iterator[None]:
-    """A known IP-hash key for every unit test (VS-046); reset to None afterwards."""
-    install_ip_hash_key(salt_id=UUID(int=1), salt=b"\x01" * 32, now=time.monotonic())
-    yield
-    reset_ip_hash_keyring()
+    """Every unit test runs with the known key (VS-046, amendment G)."""
+    with installed_ip_hash_test_key():
+        yield

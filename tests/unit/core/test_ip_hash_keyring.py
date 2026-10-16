@@ -15,6 +15,7 @@ import pytest
 from app.core import ip_hash_keyring as keyring
 from app.core.security import clear_ip_hash_key, hash_ip, ip_hash_key_loaded_at
 from app.platform.public import IpHashSalt
+from tests.unit.conftest import installed_ip_hash_test_key
 
 
 class _FakeFactory:
@@ -175,4 +176,37 @@ def test_reset_clears_the_key_and_the_guard() -> None:
     assert keyring.claim_refresh_attempt(10.0) is False
     keyring.reset_ip_hash_keyring()
     assert ip_hash_key_loaded_at() is None
+    assert keyring.claim_refresh_attempt(10.0) is True
+
+
+def test_the_guard_works_on_successive_event_loops_in_one_thread(clock: list[float]) -> None:
+    """Amendment C: pytest-asyncio and each TestClient may run a new loop; none is captured."""
+    clear_ip_hash_key()
+    factory = _FakeFactory(None)
+    asyncio.run(keyring.maybe_refresh_ip_hash_key(factory))  # type: ignore[arg-type]
+    clock[0] += keyring.REFRESH_SECONDS
+    asyncio.run(keyring.maybe_refresh_ip_hash_key(factory))  # type: ignore[arg-type]
+    assert factory.calls == 2
+
+
+async def test_cancellation_propagates_and_is_not_logged_as_a_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`except Exception` leaves CancelledError (a BaseException) to cancel the request."""
+    recorder = _RecordingLogger()
+    monkeypatch.setattr(keyring, "logger", recorder)
+    with pytest.raises(asyncio.CancelledError):
+        await keyring.refresh_ip_hash_key(_FakeFactory(error=asyncio.CancelledError()))  # type: ignore[arg-type]
+    assert recorder.events == []
+
+
+def test_the_unit_fixture_leaves_no_key_and_no_guard_behind() -> None:
+    """Amendment G, on the fixture's own context manager."""
+    keyring.reset_ip_hash_keyring()
+    with installed_ip_hash_test_key():
+        assert ip_hash_key_loaded_at() is not None
+        assert hash_ip("192.0.2.1") is not None
+        assert keyring.claim_refresh_attempt(10.0) is True
+    assert ip_hash_key_loaded_at() is None
+    assert hash_ip("192.0.2.1") is None
     assert keyring.claim_refresh_attempt(10.0) is True

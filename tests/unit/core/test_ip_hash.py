@@ -73,3 +73,9 @@ def test_neither_the_key_nor_the_salt_nor_the_pepper_appears_in_a_repr() -> None
     settings_text = repr(get_settings()) + str(get_settings().model_dump())
     assert PLACEHOLDER_PEPPER not in settings_text
     assert "**********" in repr(get_settings())
+
+
+def test_each_unit_test_starts_with_the_fixture_key() -> None:
+    """Amendment G: the autouse fixture installed UUID(int=1)'s key for this test."""
+    assert security._current_ip_hash_key is not None
+    assert security._current_ip_hash_key.salt_id == UUID(int=1)
