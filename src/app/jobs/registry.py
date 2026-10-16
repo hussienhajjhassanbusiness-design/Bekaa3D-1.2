@@ -4,6 +4,7 @@ from arq.typing import WorkerCoroutine
 
 from app.jobs.outbox import dispatch_outbox
 from app.jobs.partitions import ensure_partitions
+from app.jobs.purge_security_records import purge_expired_security_records
 from app.jobs.purge_unverified import purge_unverified_accounts
 from app.jobs.reap_orphan_files import reap_orphan_files
 from app.jobs.rotate_ip_salt import rotate_ip_salt
@@ -14,6 +15,7 @@ FUNCTIONS: list[WorkerCoroutine] = [
     ensure_partitions,
     reap_orphan_files,
     rotate_ip_salt,
+    purge_expired_security_records,
 ]
 
 CRON_JOBS: list[CronJob] = [
@@ -30,4 +32,6 @@ CRON_JOBS: list[CronJob] = [
     cron(reap_orphan_files, hour=3, minute=41, second=0),
     # SRS 23 / ADR-028: daily check plus at worker start; rotates once per UTC month.
     cron(rotate_ip_salt, hour=0, minute=23, second=0, run_at_startup=True),
+    # VS-046: daily; a missed day is harmless, the next run takes the backlog.
+    cron(purge_expired_security_records, hour=3, minute=29, second=0),
 ]
