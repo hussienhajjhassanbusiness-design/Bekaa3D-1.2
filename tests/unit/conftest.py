@@ -9,11 +9,16 @@ environment already sets it; none of them is ever used to reach a real service.
 """
 
 import os
+import time
 from collections.abc import Iterator
+from contextlib import contextmanager
+from uuid import UUID
 
 import pytest
 
 from app.core.config import get_settings
+from app.core.ip_hash_keyring import reset_ip_hash_keyring
+from app.core.security import install_ip_hash_key
 
 # Dead ports: a unit test that accidentally touches the network fails fast
 # instead of reaching a real database or Redis.
@@ -36,3 +41,20 @@ def placeholder_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     yield
     # Settings read under the placeholders must not outlive the test.
     get_settings.cache_clear()
+
+
+@contextmanager
+def installed_ip_hash_test_key() -> Iterator[None]:
+    """A known IP-hash key for the duration; then the key is None and the guard reset."""
+    install_ip_hash_key(salt_id=UUID(int=1), salt=b"\x01" * 32, now=time.monotonic())
+    try:
+        yield
+    finally:
+        reset_ip_hash_keyring()
+
+
+@pytest.fixture(autouse=True)
+def ip_hash_test_key(placeholder_settings: None) -> Iterator[None]:
+    """Every unit test runs with the known key (VS-046, amendment G)."""
+    with installed_ip_hash_test_key():
+        yield

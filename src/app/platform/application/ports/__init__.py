@@ -15,6 +15,6 @@ The rest are Platform's own repository ports.
 
 from app.platform.application.ports.audit_writer import AuditWriter
 from app.platform.application.ports.outbox_writer import OutboxWriter
-from app.platform.application.ports.repositories import AuditLog, SettingStore
+from app.platform.application.ports.repositories import AuditLog, IpHashSaltStore, SettingStore
 
-__all__ = ["AuditLog", "AuditWriter", "OutboxWriter", "SettingStore"]
+__all__ = ["AuditLog", "AuditWriter", "IpHashSaltStore", "OutboxWriter", "SettingStore"]

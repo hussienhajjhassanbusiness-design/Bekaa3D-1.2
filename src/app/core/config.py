@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,7 +24,9 @@ class Settings(BaseSettings):
     csrf_secret: str
     access_token_minutes: int = 15
     refresh_token_days: int = 30
-    ip_hash_salt: str
+    # The IP-hash pepper (ADR-028); the env name predates the rotating DB salt.
+    # Read only by `install_ip_hash_key`; a change needs a restart (lru_cache).
+    ip_hash_salt: SecretStr
     # Encrypts the stored TOTP secret (database-design.md 5.6 requires
     # `secret_ciphertext`). Distinct from jwt_signing_key and csrf_secret on
     # purpose: one key, one job, so rotating or leaking one does not widen

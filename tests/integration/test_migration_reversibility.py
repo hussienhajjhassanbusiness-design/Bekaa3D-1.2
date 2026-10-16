@@ -44,6 +44,17 @@ def test_full_downgrade_and_upgrade_round_trips() -> None:
         command.upgrade(config, "head")
         assert asyncio.run(fetch(enum_query)) >= EXPECTED_ENUMS
 
+        # VS-046: stepping back over 75ad58ebd9e5 drops its table and its two settings.
+        retention_keys = (
+            "SELECT key FROM settings WHERE key IN "
+            "('security_token_retention_period', 'session_retention_period')"
+        )
+        assert len(asyncio.run(fetch(retention_keys))) == 2
+        command.downgrade(config, "75ad58ebd9e5-1")
+        assert "ip_hash_salts" not in asyncio.run(fetch(table_query))
+        assert asyncio.run(fetch(retention_keys)) == set()
+        command.upgrade(config, "head")
+
         command.downgrade(config, "base")
 
         # The actual defect: tables went, the enum types stayed, and the next
@@ -55,6 +66,7 @@ def test_full_downgrade_and_upgrade_round_trips() -> None:
         leftover_tables = asyncio.run(fetch(table_query))
         assert "users" not in leftover_tables
         assert "email_outbox" not in leftover_tables
+        assert "ip_hash_salts" not in leftover_tables
 
         # This is the call that used to raise.
         command.upgrade(config, "head")

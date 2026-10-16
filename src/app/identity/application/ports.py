@@ -82,6 +82,8 @@ class SessionStore(Protocol):
 
     async def revoke_all_for_user(self, *, user_id: UUID, at: datetime) -> int: ...
 
+    async def delete_ended_batch(self, *, cutoff: datetime, limit: int) -> int: ...
+
 
 class VerificationTokenStore(Protocol):
     """Implemented by `app.identity.infrastructure.repositories.VerificationTokenRepository`."""
@@ -95,6 +97,8 @@ class VerificationTokenStore(Protocol):
     async def add(
         self, *, user_id: UUID, token_hash: str, expires_at: datetime
     ) -> VerificationToken: ...
+
+    async def delete_expired_batch(self, *, cutoff: datetime, limit: int) -> int: ...
 
     async def save(self, token: VerificationToken) -> None: ...
 
@@ -147,6 +151,8 @@ class PasswordResetTokenStore(Protocol):
     async def save(self, token: PasswordResetToken) -> None: ...
 
     async def consume_outstanding_for_user(self, *, user_id: UUID, at: datetime) -> int: ...
+
+    async def delete_expired_batch(self, *, cutoff: datetime, limit: int) -> int: ...
 
 
 class AddressStore(Protocol):

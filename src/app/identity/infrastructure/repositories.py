@@ -4,11 +4,13 @@ from typing import Any, cast
 from uuid import UUID
 
 from sqlalchemy import (
+    ColumnElement,
     CursorResult,
     DateTime,
     delete,
     func,
     literal,
+    or_,
     select,
     tuple_,
     update,
@@ -35,6 +37,24 @@ from app.identity.infrastructure.models import (
     UserModel,
     VerificationTokenModel,
 )
+
+
+async def _delete_batch_skip_locked(
+    session: AsyncSession, model: Any, predicate: ColumnElement[bool], limit: int
+) -> int:
+    """Delete up to `limit` matching rows, skipping any another transaction holds (VS-046).
+    It never waits on a row lock, so it cannot join a deadlock cycle (ADR-018 lock order)."""
+    victims = (
+        select(model.id).where(predicate).limit(limit).with_for_update(skip_locked=True)
+    ).scalar_subquery()
+    stmt = (
+        delete(model)
+        .where(model.id.in_(victims))
+        .returning(model.id)
+        .execution_options(synchronize_session=False)
+    )
+    return len((await session.scalars(stmt)).all())
+
 
 # Naming note: `self._session` throughout this module is the SQLAlchemy
 # AsyncSession (the unit of work). `Session` is our own login-session entity.
@@ -478,6 +498,12 @@ class SessionRepository:
         await self._session.flush()
         return len(revoked_ids)
 
+    async def delete_ended_batch(self, *, cutoff: datetime, limit: int) -> int:
+        """Sessions that ended (expired or revoked, whichever came first) before `cutoff`.
+        A live row has revoked_at NULL and expires_at in the future, so cannot match."""
+        ended = or_(SessionModel.expires_at < cutoff, SessionModel.revoked_at < cutoff)
+        return await _delete_batch_skip_locked(self._session, SessionModel, ended, limit)
+
 
 class VerificationTokenRepository:
     def __init__(self, session: AsyncSession) -> None:
@@ -521,6 +547,13 @@ class VerificationTokenRepository:
         await self._session.flush()
         await self._session.refresh(model)
         return _token_to_domain(model)
+
+    async def delete_expired_batch(self, *, cutoff: datetime, limit: int) -> int:
+        """Verification tokens, used or not, that expired before `cutoff` (VS-046)."""
+        expired = VerificationTokenModel.expires_at < cutoff
+        return await _delete_batch_skip_locked(
+            self._session, VerificationTokenModel, expired, limit
+        )
 
     async def save(self, token: VerificationToken) -> None:
         model = await self._session.get(VerificationTokenModel, token.id)
@@ -760,3 +793,10 @@ class PasswordResetTokenRepository:
         consumed_ids = (await self._session.scalars(stmt)).all()
         await self._session.flush()
         return len(consumed_ids)
+
+    async def delete_expired_batch(self, *, cutoff: datetime, limit: int) -> int:
+        """Reset tokens, used or not, that expired before `cutoff` (VS-046)."""
+        expired = PasswordResetTokenModel.expires_at < cutoff
+        return await _delete_batch_skip_locked(
+            self._session, PasswordResetTokenModel, expired, limit
+        )

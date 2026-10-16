@@ -26,7 +26,7 @@ rather than inferred from the specification. Changing one is a migration if you
 want the new value to apply to a fresh deployment, or a `PATCH` if you want it
 to apply now.
 
-## The twelve settings
+## The fourteen settings
 
 | Key | Type | Unit | Default | Range | Public |
 |---|---|---|---|---|:-:|
@@ -42,6 +42,8 @@ to apply now.
 | `pickup_address` | string | — | `null` | ≤ 500 chars | ✅ |
 | `pickup_hours` | string | — | `null` | ≤ 200 chars | ✅ |
 | `whatsapp_number` | string | — | `null` | E.164, ≤ 15 digits | ✅ |
+| `security_token_retention_period` | duration | seconds | `604800` (7 d) | 86 400 – 7 776 000 | ❌ |
+| `session_retention_period` | duration | seconds | `2592000` (30 d) | 86 400 – 7 776 000 | ❌ |
 
 ### Notes on individual settings
 
@@ -59,6 +61,11 @@ durations its minimum is not bounded away from zero.
 exactly what the purge job did from a source-code constant before VS-007.
 Deployment therefore changes no behaviour; it only moves the control from code
 into the database.
+
+**The two retention periods (VS-046)** drive `purge_expired_security_records`.
+Tokens are deleted 7 days past `expires_at`, which keeps the `410` link-expired
+answer for a week. Sessions are deleted 30 days after they end (the earlier of
+expiry and revocation). See [`security-retention.md`](security-retention.md).
 
 **`free_shipping_threshold` defaults to JSON `null`.** BR-076 called the
 threshold optional, so "off" had to be representable. ADR-024 removed BR-076:
@@ -128,7 +135,7 @@ accepting_orders, cash_payment_enabled, cash_max_order_total, pickup_address, pi
 Both changes go through the registry and `PublicSettingsRead` together, as
 described above.
 
-Of today's twelve seeded keys, the seven not in today's five-key list are internal. `daily_download_cap` was deliberately private
+Of today's fourteen seeded keys, the nine not in today's five-key list are internal. `daily_download_cap` was deliberately private
 (publishing an abuse limit tells an abuser how to pace themselves); it is now
 obsolete, because ADR-019 removed downloads, and VS-023b deletes it.
 

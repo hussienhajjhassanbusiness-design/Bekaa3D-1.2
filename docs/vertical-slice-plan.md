@@ -51,7 +51,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 | VS-043 | Business analytics | VS-029, VS-030, VS-031, VS-036, VS-039 | Not started |
 | VS-044 | Customer data export | VS-023b, VS-025, VS-026, VS-036, VS-039 | Not started |
 | VS-045 | Account deletion by anonymisation | VS-026, VS-031, VS-036, VS-038, VS-039 | Not started |
-| VS-046 | Security data retention and IP-salt rotation | VS-004 | Not started |
+| VS-046 | Security data retention and IP-salt rotation | VS-004 | Done |
 | VS-047 | Backups, restore drill and monitoring | VS-020 | Not started |
 | VS-048 | Launch readiness | VS-011 – VS-047 | Not started |
 
@@ -93,7 +93,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 - **Tests:** `tests/integration/identity/test_registration.py`, `test_verify_email.py`, `test_resend_verification.py`, `test_purge_unverified.py`; `tests/integration/platform/test_outbox_*.py`.
 - **Done when:**
   - Responses are identical for new, unverified and verified addresses.
-  - A used token returns 400 and an expired one 410.
+  - A used token returns 400 and an expired one 410. Once VS-046 purges the expired token (7 days past expiry by default), the link returns 400 `INVALID_TOKEN`.
   - Two workers never send the same outbox row.
 
 ## VS-003 — Login, logout, rotating refresh sessions, CSRF
@@ -1151,12 +1151,12 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - The email can be registered again.
 
 ## VS-046 — Security data retention and IP-salt rotation
-**Status:** Not started
+**Status:** Done
 **Depends on:** VS-004
 **Goal:** Expired security records stop accumulating, and old IP hashes can no longer be linked to new ones.
-- **Model / migration:** A small `ip_hash_salts` table (versioned salts; exactly one current) replacing the static `IP_HASH_SALT` for new hashes.
-- **Endpoints / jobs:** New `purge_expired_security_records` job (daily: expired verification and reset tokens, expired or revoked sessions past retention) and new `rotate_ip_salt` job (monthly).
-- **Logic:** `core.security.hash_ip` reads the current salt; rotating inserts a new salt. The purge deletes only rows past their retention.
+- **Model / migration:** `75ad58ebd9e5` adds a small `ip_hash_salts` table holding one current salt; old salts are deleted on rotation. `IP_HASH_SALT` is kept, now as the pepper ([ADR-028](adr/ADR-028-keyed-monthly-rotated-ip-hashes.md)). It also seeds `security_token_retention_period` and `session_retention_period`.
+- **Endpoints / jobs:** New `purge_expired_security_records` job (daily: expired verification and reset tokens, expired or revoked sessions past retention) and new `rotate_ip_salt` job (daily check, rotates once per UTC month).
+- **Logic:** `core.security.hash_ip` is an HMAC under a key derived from the pepper and the current salt; rotating replaces the salt. The purge deletes only rows past their retention. Operator notes: [`security-retention.md`](security-retention.md).
 - **Tests:**
   - After rotation, the same IP produces a new hash, and audit and session writes keep working.
   - The purge is idempotent and never touches live tokens or sessions.

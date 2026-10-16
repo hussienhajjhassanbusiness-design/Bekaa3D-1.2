@@ -6,6 +6,9 @@ import structlog
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
+from starlette.types import ASGIApp, Receive, Scope, Send
+
+from app.core.ip_hash_keyring import maybe_refresh_ip_hash_key
 
 REQUEST_ID_HEADER = "X-Request-ID"
 
@@ -35,3 +38,18 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         response.headers[REQUEST_ID_HEADER] = request_id
         return response
+
+
+class IpHashKeyRefreshMiddleware:
+    """Refreshes the IP-hash key before the handler when it is stale or missing (VS-046).
+    Inside RequestID, so a refresh warning carries the request's id."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http":
+            factory = getattr(scope["app"].state, "db_session_factory", None)
+            if factory is not None:
+                await maybe_refresh_ip_hash_key(factory)
+        await self.app(scope, receive, send)

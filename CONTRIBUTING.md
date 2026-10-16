@@ -112,7 +112,7 @@ uv pip compile pyproject.toml --extra dev --universal --python-version 3.13 --ge
 
 `.env` is git-ignored and must never be committed. Copying `.env.example` is not enough: replace every placeholder with a locally generated value before the stack is trusted with anything but throwaway data.
 
-`IP_HASH_SALT` matters most. It salts the IP addresses stored in `audit_logs` and `sessions`, and the IPv4 space is small enough (about 4 billion addresses) that anyone who knows the salt can reverse those hashes by brute force. Generate it, and the other secrets, locally:
+`IP_HASH_SALT` matters most. It is the pepper of the keyed hash of the IP addresses stored in `audit_logs` and `sessions` ([ADR-028](docs/adr/ADR-028-keyed-monthly-rotated-ip-hashes.md)). The IPv4 space is small (about 4 billion addresses), so reversing those hashes by brute force needs both the pepper and the database salt, which is replaced and deleted every month. Changing the pepper needs a restart. Generate it, and the other secrets, locally:
 
 ```bash
 python -c "import secrets; print(secrets.token_hex(16))"   # IP_HASH_SALT

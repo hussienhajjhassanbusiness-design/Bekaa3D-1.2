@@ -309,7 +309,7 @@ def test_email_normalisation_is_idempotent(raw: str) -> None:
 @given(st.ip_addresses().map(str))
 def test_ip_hashes_are_deterministic_opaque_and_fixed_width(ip: str) -> None:
     digest = hash_ip(ip)
-    assert digest == hash_ip(ip)
+    assert digest is not None and digest == hash_ip(ip)
     assert len(digest) == 64 and ip not in digest
 
 

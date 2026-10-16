@@ -26,6 +26,7 @@ from tests.smoke.test_vs016_smoke import SMOKE_ELSEWHERE as VS016_SMOKE
 from tests.smoke.test_vs026_smoke import SMOKE_ELSEWHERE as VS026_SMOKE
 from tests.smoke.test_vs033_smoke import SMOKE_ELSEWHERE as VS033_SMOKE
 from tests.smoke.test_vs038_smoke import SMOKE_ELSEWHERE as VS038_SMOKE
+from tests.smoke.test_vs046_smoke import SMOKE_ELSEWHERE as VS046_SMOKE
 
 # Tests never call Cloudflare; a local .env predating VS-033 may not set this.
 os.environ.setdefault("CAPTCHA_PROVIDER", "fake")
@@ -41,6 +42,7 @@ _SMOKE_NODE_IDS = frozenset(
         VS026_SMOKE,
         VS033_SMOKE,
         VS038_SMOKE,
+        VS046_SMOKE,
     )
     for ids in suite.values()
     for node_id in ids
@@ -132,7 +134,7 @@ def make_app() -> Callable[[], FastAPI]:
         from app.api.errors import register_exception_handlers
         from app.api.head import HeadAsGetMiddleware
         from app.api.health import router as health_router
-        from app.api.middleware import RequestIDMiddleware
+        from app.api.middleware import IpHashKeyRefreshMiddleware, RequestIDMiddleware
         from app.api.request_target import RequestTargetMiddleware
         from app.api.v1.router import router as v1_router
         from app.main import lifespan
@@ -140,6 +142,7 @@ def make_app() -> Callable[[], FastAPI]:
         app = FastAPI(title="Bekaa3D API", version="0.1.0", lifespan=lifespan)
         app.add_middleware(HeadAsGetMiddleware)
         app.add_middleware(RequestTargetMiddleware)
+        app.add_middleware(IpHashKeyRefreshMiddleware)
         app.add_middleware(RequestIDMiddleware)
         app.add_middleware(EnumerationFloorMiddleware)
         register_exception_handlers(app)

@@ -213,6 +213,32 @@ _DEFINITIONS: Final[tuple[SettingDefinition, ...]] = (
         max_length=16,  # '+' plus at most 15 digits
         text_format=_FORMAT_E164,
     ),
+    SettingDefinition(
+        key="security_token_retention_period",
+        type=SettingType.DURATION,
+        description=(
+            "Age past expires_at at which a verification or password-reset token is deleted "
+            "by purge_expired_security_records."
+        ),
+        # 7 days: an expired link keeps answering 410 for a week, then 400 (VS-046).
+        default=604_800,
+        unit="seconds",
+        minimum=86_400,  # 1 day
+        maximum=7_776_000,  # 90 days
+    ),
+    SettingDefinition(
+        key="session_retention_period",
+        type=SettingType.DURATION,
+        description=(
+            "Age past a session's end (expiry or revocation, whichever came first) at which "
+            "the row is deleted by purge_expired_security_records."
+        ),
+        # 30 days: the row holds ip_hash and user_agent; the audit log keeps the events.
+        default=2_592_000,
+        unit="seconds",
+        minimum=86_400,  # 1 day
+        maximum=7_776_000,  # 90 days
+    ),
 )
 
 REGISTRY: Final[dict[str, SettingDefinition]] = {d.key: d for d in _DEFINITIONS}

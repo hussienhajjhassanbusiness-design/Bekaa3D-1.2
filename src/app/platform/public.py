@@ -9,12 +9,31 @@ adapters; callers type against the ports.
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.platform.application.services.settings_reader import SettingsReader
+from app.platform.domain.entities import IpHashSalt
 from app.platform.infrastructure.audit_writer import SqlAuditWriter, SqlOutboxWriter
-from app.platform.infrastructure.repositories import SettingRepository
+from app.platform.infrastructure.repositories import SettingRepository, SqlIpHashSaltStore
 
-__all__ = ["SettingsReader", "SqlAuditWriter", "SqlOutboxWriter", "settings_reader"]
+__all__ = [
+    "IpHashSalt",
+    "SettingsReader",
+    "SqlAuditWriter",
+    "SqlOutboxWriter",
+    "current_ip_hash_salt",
+    "ip_hash_salt_store",
+    "settings_reader",
+]
 
 
 def settings_reader(session: AsyncSession) -> SettingsReader:
     """Validated setting reads on the caller's session (and so its snapshot)."""
     return SettingsReader(SettingRepository(session))
+
+
+def ip_hash_salt_store(session: AsyncSession) -> SqlIpHashSaltStore:
+    """The salt store on the caller's session, for the rotation job (VS-046)."""
+    return SqlIpHashSaltStore(session)
+
+
+async def current_ip_hash_salt(session: AsyncSession) -> IpHashSalt | None:
+    """The current IP-hash salt, for the keyring in `app.core` (VS-046)."""
+    return await SqlIpHashSaltStore(session).load_current()

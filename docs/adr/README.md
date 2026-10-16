@@ -33,6 +33,7 @@ Only expensive-to-reverse decisions belong here. Folder names and small refactor
 - [ADR-025: Admin order lines list their legal next actions; customers can check STL ownership; Turnstile captcha on five public forms](ADR-025-frontend-contract-decisions.md)
 - [ADR-026: A refused captcha is `400 CAPTCHA_INVALID`, a Turnstile outage fails closed with `503`, and a coarse attempt limit runs before the captcha](ADR-026-captcha-refusal-and-outage.md)
 - [ADR-027: Address book - required landmark notes, E.164 phones in a shared normaliser, a per-user write lock, and a first-address default](ADR-027-address-book-decisions.md)
+- [ADR-028: Keyed, monthly-rotated IP hashes - a database salt plus an environment pepper, old salts deleted](ADR-028-keyed-monthly-rotated-ip-hashes.md)
 
 ## Governance
 
