@@ -299,9 +299,11 @@ class PurchaseRefusal(StrEnum):
     UNAVAILABLE = "unavailable"
     WHATSAPP_ONLY = "whatsapp_only"
 
+
 @dataclass(frozen=True)
 class CartProduct:
     """What a cart line needs from Catalog, read in one batched query."""
+
     id: UUID
     type: ProductType
     name: str
@@ -311,8 +313,9 @@ class CartProduct:
     purchase_mode: PurchaseMode | None
     is_available: bool
     max_quantity_per_line: int | None
-    listed: bool                      # live AND is_visible AND category live and active
+    listed: bool  # live AND is_visible AND category live and active
     cover: ProductImage | None
+
 
 def purchase_refusal(p: CartProduct) -> PurchaseRefusal | None:
     """None iff the product can go in a cart now; built on `capabilities()` (ADR-022)."""
@@ -387,12 +390,14 @@ Ordering never imports `app.catalog.infrastructure`. That is enforced by
 ```python
 MAX_CART_LINES = 50
 
+
 @dataclass(frozen=True)
 class Cart:
     id: UUID
     user_id: UUID
     created_at: datetime
     updated_at: datetime
+
 
 @dataclass(frozen=True)
 class CartLine:
@@ -451,18 +456,25 @@ class CartStore(Protocol):
         """Row-lock the user's cart (`FOR UPDATE`), creating it first if `create`;
         None only when `create` is False and no cart exists."""
         ...
-    async def get(self, user_id: UUID) -> Cart | None: ...                     # no lock
-    async def lines(self, cart_id: UUID) -> list[CartLine]: ...                # (created_at, id)
+
+    async def get(self, user_id: UUID) -> Cart | None: ...  # no lock
+    async def lines(self, cart_id: UUID) -> list[CartLine]: ...  # (created_at, id)
     async def line(self, cart_id: UUID, product_id: UUID) -> CartLine | None: ...
     async def count_lines(self, cart_id: UUID) -> int: ...
     async def insert_line(
-        self, *, cart_id: UUID, product_id: UUID, product_type: ProductType,
-        quantity: int, price_snapshot_cents: int, currency: str,
+        self,
+        *,
+        cart_id: UUID,
+        product_id: UUID,
+        product_type: ProductType,
+        quantity: int,
+        price_snapshot_cents: int,
+        currency: str,
     ) -> CartLine: ...
     async def set_quantity(self, line_id: UUID, quantity: int) -> CartLine: ...
     async def delete_line(self, cart_id: UUID, product_id: UUID) -> bool: ...
     async def clear(self, cart_id: UUID) -> int: ...
-    async def touch(self, cart_id: UUID) -> None: ...                          # updated_at = now()
+    async def touch(self, cart_id: UUID) -> None: ...  # updated_at = now()
 ```
 
 **Invariant:** every method that writes `cart_items` is called only while the caller
@@ -567,11 +579,13 @@ service directly. No `public.py` export is needed until another context needs th
 @dataclass(frozen=True)
 class LockedCart:
     cart: Cart
-    lines: tuple[CartLine, ...]     # (created_at, id) ascending
+    lines: tuple[CartLine, ...]  # (created_at, id) ascending
+
 
 async def lock_cart_for_checkout(carts: CartStore, *, user_id: UUID) -> LockedCart | None:
     """Lock the cart and load its lines. None means no cart (VS-023: 409 CART_EMPTY);
     an empty `lines` is also CART_EMPTY. Never creates a cart."""
+
 
 async def clear_cart(carts: CartStore, locked: LockedCart) -> None:
     """Delete every line of a cart the caller still holds locked (SRS §7.3 step 12)."""
