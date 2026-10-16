@@ -19,6 +19,7 @@ __all__ = [
     "SqlAuditWriter",
     "SqlOutboxWriter",
     "current_ip_hash_salt",
+    "ip_hash_salt_store",
     "settings_reader",
 ]
 
@@ -26,6 +27,11 @@ __all__ = [
 def settings_reader(session: AsyncSession) -> SettingsReader:
     """Validated setting reads on the caller's session (and so its snapshot)."""
     return SettingsReader(SettingRepository(session))
+
+
+def ip_hash_salt_store(session: AsyncSession) -> SqlIpHashSaltStore:
+    """The salt store on the caller's session, for the rotation job (VS-046)."""
+    return SqlIpHashSaltStore(session)
 
 
 async def current_ip_hash_salt(session: AsyncSession) -> IpHashSalt | None:
