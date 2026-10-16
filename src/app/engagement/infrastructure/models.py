@@ -131,3 +131,54 @@ class ContactMessageModel(Base):
         # Queue order (VS-033 Q9): new first, oldest first; the enum sorts by declaration.
         Index("ix_contact_messages_queue", "status", "created_at", "id"),
     )
+
+
+class WishlistItemModel(Base):
+    """database-design.md 12.2. Soft delete; a removed row is never reused -
+    re-adding inserts a fresh row (VS-038 plan §3)."""
+
+    __tablename__ = "wishlist_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    # CASCADE: same reasoning as notifications/addresses - moot in practice,
+    # since only a verified user can ever write a row, but kept consistent.
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    # RESTRICT: products are never hard-deleted (BR-018), same as product_images.
+    product_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("products.id", ondelete="RESTRICT"), nullable=False
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        # The load-bearing constraint: at most one active row per user and
+        # product (CLAUDE.md - application checks lose races).
+        Index(
+            "uq_wishlist_items_user_product_live",
+            "user_id",
+            "product_id",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "ix_wishlist_items_user_live",
+            "user_id",
+            text("created_at DESC"),
+            text("id DESC"),
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "ix_wishlist_items_product_live",
+            "product_id",
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+    )

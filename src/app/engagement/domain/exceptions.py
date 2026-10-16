@@ -51,6 +51,14 @@ class ContactMessageNotFoundError(EngagementDomainError):
         self.message_id = message_id
 
 
+class WishlistProductUnavailableError(EngagementDomainError):
+    """The product for a wishlist add is unknown, deleted, or not visible (VS-038)."""
+
+    def __init__(self, product_id: object) -> None:
+        super().__init__(f"Product {product_id!r} is not available to wishlist.")
+        self.product_id = product_id
+
+
 class InvalidContactDetailsError(EngagementDomainError):
     """Names the offending fields only; never their values, which are visitor PII."""
 

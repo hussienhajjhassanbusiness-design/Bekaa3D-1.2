@@ -43,7 +43,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 | VS-035 | Bring Your Idea pipeline and funnel | VS-034, VS-020 | Not started |
 | VS-036 | Reviews and Verified Purchase badge | VS-015, VS-028, VS-030, VS-031 | Not started |
 | VS-037 | Review moderation | VS-036 | Not started |
-| VS-038 | Wishlist and wishlist analytics | VS-013 | Not started |
+| VS-038 | Wishlist and wishlist analytics | VS-013 | Done |
 | VS-039 | Offer submission and inactivity expiry | VS-023, VS-007 | Not started |
 | VS-040 | Offer counter, accept, reject, withdraw | VS-039 | Not started |
 | VS-041 | Accepted-offer checkout and auto-close | VS-040, VS-023, VS-024 | Not started |

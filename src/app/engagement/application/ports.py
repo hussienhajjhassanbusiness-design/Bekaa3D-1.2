@@ -6,7 +6,7 @@ from typing import Any, Protocol
 from uuid import UUID
 
 from app.engagement.domain.contact_message import ContactDetails, ContactMessage
-from app.engagement.domain.entities import Notification
+from app.engagement.domain.entities import Notification, WishlistItem
 from app.engagement.domain.enums import ContactMessageStatus, NotificationType
 
 
@@ -41,3 +41,29 @@ class ContactMessageStore(Protocol):
         created_before: datetime | None,
         email: str | None,
     ) -> list[ContactMessage]: ...
+
+
+class WishlistStore(Protocol):
+    async def add(self, *, user_id: UUID, product_id: UUID) -> bool:
+        """True if this call inserted a new active row; False if one already
+        existed. Never reactivates a soft-deleted row (VS-038 plan §3)."""
+        ...
+
+    async def remove(self, *, user_id: UUID, product_id: UUID) -> bool:
+        """True if an active row was soft-deleted; False if there was none."""
+        ...
+
+    async def list_page(
+        self, *, user_id: UUID, after: tuple[datetime, UUID] | None, limit: int
+    ) -> list[WishlistItem]: ...
+
+    async def count_active(self) -> int: ...
+
+
+class WishlistCounter(Protocol):
+    async def adjust(self, product_id: UUID, delta: int) -> None:
+        """`delta` is +1 or -1, from a caller that already confirmed a real
+        state change on `wishlist_items`. Framework-free port so the
+        application layer can call it without importing a session
+        (VS-038 plan §3 refactor) - the adapter binds it to one."""
+        ...

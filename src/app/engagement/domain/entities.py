@@ -35,3 +35,19 @@ class Notification:
         alongside a timestamp eventually would.
         """
         return self.read_at is not None
+
+
+@dataclass
+class WishlistItem:
+    """One saved product (VS-038). Presence/absence only - no state machine."""
+
+    id: UUID
+    user_id: UUID
+    product_id: UUID
+    created_at: datetime
+    updated_at: datetime
+    deleted_at: datetime | None = None
+
+    @property
+    def is_deleted(self) -> bool:
+        return self.deleted_at is not None

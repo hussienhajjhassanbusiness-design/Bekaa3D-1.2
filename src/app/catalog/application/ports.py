@@ -6,7 +6,9 @@ from typing import Protocol
 from uuid import UUID
 
 from app.catalog.domain.entities import Category
-from app.catalog.domain.product import Product, ProductDraft
+from app.catalog.domain.enums import ProductType as ProductType  # re-exported (VS-038)
+from app.catalog.domain.product import Product as Product  # re-exported (VS-038)
+from app.catalog.domain.product import ProductDraft
 from app.catalog.domain.product_image import ProductImage
 
 
@@ -33,6 +35,15 @@ class ProductStore(Protocol):
 
     async def get_for_update(self, product_id: UUID) -> Product | None:
         """Row-locks the product: image changes serialise on it (docs/product-images.md)."""
+        ...
+
+    async def get_many(self, product_ids: list[UUID]) -> list[Product]:
+        """One `WHERE id IN (...)` query; no visibility filter (VS-038 plan §3) -
+        a caller computing "available" needs a non-public product's own status."""
+        ...
+
+    async def top_by_wishlist_count(self, limit: int) -> list[Product]:
+        """Highest `wishlist_count` first, id tie-broken; no visibility filter."""
         ...
 
 
