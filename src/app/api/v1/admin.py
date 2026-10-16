@@ -37,6 +37,7 @@ from app.catalog.api.product_images import upload_router as product_image_upload
 from app.catalog.api.products import admin_router as products_router
 from app.catalog.api.reference_data import admin_router as catalogue_router
 from app.core.rate_limit import enforce_rate_limit
+from app.engagement.api.admin_analytics import admin_router as wishlist_analytics_router
 from app.engagement.api.contact_messages import admin_router as contact_messages_router
 from app.identity.api.admin_users import router as admin_users_router
 from app.identity.public import (
@@ -98,6 +99,8 @@ router.include_router(audit_logs_router)
 router.include_router(admin_users_router)
 # VS-033. The contact message queue.
 router.include_router(contact_messages_router)
+# VS-038. Wishlist totals and most-wishlisted products.
+router.include_router(wishlist_analytics_router)
 
 
 def _allowed_methods(request: Request) -> list[str]:

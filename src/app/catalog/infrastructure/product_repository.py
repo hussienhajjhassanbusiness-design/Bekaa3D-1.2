@@ -132,6 +132,26 @@ class ProductRepository:
         stmt = select(ProductModel.version).where(ProductModel.id == product_id)
         return await self._session.scalar(stmt)
 
+    async def get_many(self, product_ids: list[UUID]) -> list[Product]:
+        """One `WHERE id IN (...)` query; no visibility filter (VS-038 plan §3) -
+        the caller needs a non-public product's own status, not its absence."""
+        if not product_ids:
+            return []
+        stmt = select(ProductModel).where(ProductModel.id.in_(product_ids))
+        models = (await self._session.scalars(stmt)).all()
+        return [_to_domain(m) for m in models]
+
+    async def top_by_wishlist_count(self, limit: int) -> list[Product]:
+        """Highest `wishlist_count` first, id tie-broken; no visibility filter -
+        admin analytics counts interest in non-public products too (plan §10 Q6)."""
+        stmt = (
+            select(ProductModel)
+            .order_by(ProductModel.wishlist_count.desc(), ProductModel.id)
+            .limit(limit)
+        )
+        models = (await self._session.scalars(stmt)).all()
+        return [_to_domain(m) for m in models]
+
     async def list_page(
         self,
         *,

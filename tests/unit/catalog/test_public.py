@@ -5,7 +5,8 @@
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
-from app.catalog.public import adjust_wishlist_count
+from app.catalog.infrastructure.product_repository import ProductRepository
+from app.catalog.public import adjust_wishlist_count, product_store
 
 
 async def test_adjust_wishlist_count_executes_once_and_never_commits() -> None:
@@ -15,3 +16,12 @@ async def test_adjust_wishlist_count_executes_once_and_never_commits() -> None:
 
     session.execute.assert_awaited_once()
     session.commit.assert_not_awaited()
+
+
+async def test_product_store_binds_a_product_repository_to_the_given_session() -> None:
+    session = AsyncMock()
+
+    store = await product_store(session)
+
+    assert isinstance(store, ProductRepository)
+    assert store._session is session
