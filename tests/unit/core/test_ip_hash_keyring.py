@@ -210,3 +210,29 @@ def test_the_unit_fixture_leaves_no_key_and_no_guard_behind() -> None:
     assert ip_hash_key_loaded_at() is None
     assert hash_ip("192.0.2.1") is None
     assert keyring.claim_refresh_attempt(10.0) is True
+
+
+async def test_a_hung_database_read_times_out_and_keeps_the_previous_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A refresh never holds the attempt slot longer than REFRESH_TIMEOUT_SECONDS."""
+    assert await keyring.refresh_ip_hash_key(_FakeFactory(_salt(5)), now=1.0) is True  # type: ignore[arg-type]
+    before = hash_ip("192.0.2.1")
+
+    async def hung_read(session: Any) -> IpHashSalt | None:
+        await asyncio.sleep(60)
+        raise AssertionError("the timeout should have cancelled this read")
+
+    recorder = _RecordingLogger()
+    monkeypatch.setattr(keyring, "logger", recorder)
+    monkeypatch.setattr(keyring, "REFRESH_TIMEOUT_SECONDS", 0.01)
+    monkeypatch.setattr(keyring, "current_ip_hash_salt", hung_read)
+
+    refreshed = await asyncio.wait_for(
+        keyring.refresh_ip_hash_key(_FakeFactory(_salt(6))),  # type: ignore[arg-type]
+        timeout=5,
+    )
+    assert refreshed is False
+    assert hash_ip("192.0.2.1") == before
+    assert ip_hash_key_loaded_at() == 1.0
+    assert recorder.events == [("ip_hash_key_refresh_failed", {"error": "TimeoutError"})]

@@ -1,8 +1,8 @@
 """Keeps the in-process IP-hash key in step with `ip_hash_salts` (VS-046, ADR-028).
-
 Single-flight is an attempt-timestamp guard, not an asyncio.Lock: no lock bound to
 one event loop, and with no key loaded the database is still asked at most once a minute."""
 
+import asyncio
 import threading
 import time
 
@@ -15,6 +15,7 @@ from app.platform.public import current_ip_hash_salt
 logger = structlog.get_logger()
 
 REFRESH_SECONDS = 60.0
+REFRESH_TIMEOUT_SECONDS = 2.0
 
 _attempt_guard = threading.Lock()  # held for a comparison only, never across an await
 _next_attempt_at = float("-inf")
@@ -46,7 +47,8 @@ async def refresh_ip_hash_key(
     """Reload the current salt. On any failure keep the old key and log the error class only."""
     moment = monotonic() if now is None else now
     try:
-        async with session_factory() as session:
+        # A hung database must not hold the one refresh attempt; TimeoutError lands below.
+        async with asyncio.timeout(REFRESH_TIMEOUT_SECONDS), session_factory() as session:
             salt = await current_ip_hash_salt(session)
     except Exception as exc:  # a refresh must never fail the request that triggered it
         await logger.awarning("ip_hash_key_refresh_failed", error=type(exc).__name__)
