@@ -11,6 +11,7 @@ from uuid import UUID
 from app.catalog.domain.enums import ProductType, PurchaseMode
 from app.catalog.domain.exceptions import ProductValidationError
 from app.catalog.domain.product import Product
+from app.catalog.domain.product_image import ProductImage
 from app.core.text import CONTROL_CHARACTER_MESSAGE, has_control_characters
 
 StorefrontSort = Literal["price", "-price", "-average_rating", "-created_at", "-relevance"]
@@ -149,6 +150,43 @@ def capabilities(
         can_offer=is_available and not physical,
         whatsapp_available=physical and purchase_mode in _WHATSAPP_MODES,
     )
+
+
+class PurchaseRefusal(StrEnum):
+    """Why a product cannot go in a cart now (VS-022). `not_listed` is whatever 404s."""
+
+    NOT_LISTED = "not_listed"
+    UNAVAILABLE = "unavailable"
+    WHATSAPP_ONLY = "whatsapp_only"
+
+
+@dataclass(frozen=True)
+class CartProduct:
+    """What a cart line needs from Catalog, read in one batched query (VS-022)."""
+
+    id: UUID
+    type: ProductType
+    name: str
+    slug: str
+    price_cents: int
+    currency: str
+    purchase_mode: PurchaseMode | None
+    is_available: bool
+    max_quantity_per_line: int | None
+    listed: bool
+    cover: ProductImage | None = None
+
+
+def purchase_refusal(product: CartProduct) -> PurchaseRefusal | None:
+    """None iff the product can go in a cart now. Built on `capabilities()`, so the
+    cart is never looser than `can_add_to_cart` (ADR-022)."""
+    if not product.listed:
+        return PurchaseRefusal.NOT_LISTED
+    if capabilities(product.type, product.purchase_mode, product.is_available).can_add_to_cart:
+        return None
+    if not product.is_available:
+        return PurchaseRefusal.UNAVAILABLE
+    return PurchaseRefusal.WHATSAPP_ONLY
 
 
 @dataclass(frozen=True)
