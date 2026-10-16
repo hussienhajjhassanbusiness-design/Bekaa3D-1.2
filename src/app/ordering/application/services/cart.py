@@ -53,6 +53,9 @@ async def add_item(
         await carts.set_quantity(existing.id, new_quantity)
     else:
         check_line_capacity(await carts.count_lines(cart.id))
+        # The stored type and price come from `product`, the read made above under the
+        # cart lock - never from the request - so the snapshot matches the row the
+        # composite FK (product_id, product_type) checks.
         await carts.insert_line(
             cart_id=cart.id,
             product_id=product_id,

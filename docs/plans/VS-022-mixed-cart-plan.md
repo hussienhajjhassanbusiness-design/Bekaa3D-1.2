@@ -774,6 +774,10 @@ cart. A cart has no `deleted_at`: it is retained and emptied, never removed
     rewrite every cart line's type, and any line with quantity > 1 would fail the CHECK
     and abort the admin's update. That is why CASCADE is rejected.
   - **Decision: keep the FK** (Q2), on that evidence.
+  - **Two layers (verified in step 6):** a bare `SET type = 'stl'` is stopped first by
+    `ck_products_type_integrity` (23514), because CHECKs fire before the RI trigger. The
+    composite FK is the backstop for a change that is otherwise a valid STL row (23503,
+    `fk_cart_items_product_type`). With the FK dropped, that row change succeeds.
   - VS-023's `order_items.product_type`, on which the ownership index depends, can
     reuse the same unique key.
   - If the owner rejects Q2, drop the composite FK and keep the plain
@@ -1166,6 +1170,8 @@ Branch: `vs-022-mixed-cart` from an up-to-date `main` (CONTRIBUTING).
    - `ON UPDATE RESTRICT` blocks any future change rather than cascading, so the CHECK
      can never fail as a side effect.
    - Keeping the FK costs nothing on any existing path.
+   - A bare type change is stopped first by `ck_products_type_integrity`; the
+     composite FK is the backstop for an otherwise valid STL row (proven in step 6).
 3. **Should the price snapshot be refreshed when a merge or `PATCH` changes the
    quantity?** *Recommend no: the snapshot is set once, when the line is created.*
    Refreshing on a re-add would silently accept a price rise without the explicit
