@@ -167,11 +167,31 @@ async def test_add_remove_three_cycles_then_add_leaves_one_active_row(
 # --------------------------------------------------------------------------
 
 
+def _catalogue_not_found_body(client: TestClient) -> dict[str, Any]:
+    """The public catalogue's own 404 for an unknown slug - the body a
+    wishlist 404 must agree with, since both call `not_found_error()`."""
+    response = client.get("/api/v1/products/does-not-exist-anywhere")
+    assert response.status_code == 404, response.text
+    body: dict[str, Any] = response.json()
+    return body
+
+
+def _assert_same_not_found_body(response: Any, reference: dict[str, Any]) -> None:
+    """Equal on every field except `instance` (the request path) and
+    `request_id` (unique per request) - everything a client would see as
+    "the same kind of 404" must still match exactly."""
+    body = response.json()
+    for key in ("type", "title", "status", "detail", "code", "errors"):
+        assert body[key] == reference[key], (key, body, reference)
+
+
 async def test_put_on_a_nonexistent_product_is_404(db_session: AsyncSession) -> None:
     with client_for(main_app) as client:
         await _signed_in(client, db_session)
+        reference = _catalogue_not_found_body(client)
         response = client.put(f"{PATH}/{uuid.uuid4()}", headers=csrf(client))
-    assert_problem(response, 404)
+    assert_problem(response, 404, "NOT_FOUND")
+    _assert_same_not_found_body(response, reference)
 
 
 async def test_put_on_a_hidden_product_is_404(db_session: AsyncSession) -> None:
@@ -179,8 +199,10 @@ async def test_put_on_a_hidden_product_is_404(db_session: AsyncSession) -> None:
     product = await _product(db_session, refs, is_visible=False)
     with client_for(main_app) as client:
         await _signed_in(client, db_session)
+        reference = _catalogue_not_found_body(client)
         response = client.put(f"{PATH}/{product.id}", headers=csrf(client))
-    assert_problem(response, 404)
+    assert_problem(response, 404, "NOT_FOUND")
+    _assert_same_not_found_body(response, reference)
 
 
 async def test_put_by_an_unverified_user_is_403(db_session: AsyncSession) -> None:
