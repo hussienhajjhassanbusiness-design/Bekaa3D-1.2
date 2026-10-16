@@ -70,6 +70,25 @@ async def _active_rows(db: AsyncSession, product_id: UUID) -> list[WishlistItemM
 # --------------------------------------------------------------------------
 
 
+async def test_add_list_remove_list_round_trip(db_session: AsyncSession) -> None:
+    """The slice's smoke test: add a product, see it listed, remove it, see
+    the list empty again - the shallow "does it work at all" level."""
+    refs = await seed_refs(db_session)
+    product = await _product(db_session, refs)
+    with client_for(main_app) as client:
+        await _signed_in(client, db_session)
+
+        added = client.put(f"{PATH}/{product.id}", headers=csrf(client))
+        listed = client.get(PATH)
+        removed = client.delete(f"{PATH}/{product.id}", headers=csrf(client))
+        emptied = client.get(PATH)
+
+    assert added.status_code == 204
+    assert [item["product_id"] for item in listed.json()["items"]] == [str(product.id)]
+    assert removed.status_code == 204
+    assert emptied.json()["items"] == []
+
+
 async def test_put_on_a_visible_product_adds_one_row_and_increments_the_counter(
     db_session: AsyncSession,
 ) -> None:
