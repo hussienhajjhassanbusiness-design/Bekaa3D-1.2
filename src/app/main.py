@@ -8,13 +8,14 @@ from app.api.enumeration import EnumerationFloorMiddleware
 from app.api.errors import register_exception_handlers
 from app.api.head import HeadAsGetMiddleware
 from app.api.health import router as health_router
-from app.api.middleware import RequestIDMiddleware
+from app.api.middleware import IpHashKeyRefreshMiddleware, RequestIDMiddleware
 from app.api.openapi import custom_openapi
 from app.api.request_target import RequestTargetMiddleware
 from app.api.v1.router import router as v1_router
 from app.core import models as _models  # noqa: F401 - registers models onto Base.metadata
 from app.core.config import get_settings
 from app.core.database import CONNECT_TIMEOUT_SECONDS, make_engine, make_session_factory
+from app.core.ip_hash_keyring import refresh_ip_hash_key
 from app.core.logging import configure_logging
 from app.integrations.captcha.factory import captcha_verifier
 
@@ -27,6 +28,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     captcha_verifier(settings)
     app.state.db_engine = make_engine(settings.database_url)
     app.state.db_session_factory = make_session_factory(app.state.db_engine)
+    # Best-effort: a database outage at boot leaves hash_ip returning None until
+    # IpHashKeyRefreshMiddleware's next attempt (ADR-028).
+    await refresh_ip_hash_key(app.state.db_session_factory)
     # redis-py ships py.typed but Redis.from_url itself isn't fully annotated upstream.
     # A connect timeout, so a Redis that accepts but never answers cannot hang a
     # request forever (BUG-14); the default is to wait indefinitely.
@@ -45,6 +49,8 @@ app = FastAPI(title="Bekaa3D API", version="0.1.0", lifespan=lifespan)
 # problem response carries the request's id.
 app.add_middleware(HeadAsGetMiddleware)
 app.add_middleware(RequestTargetMiddleware)
+# VS-046: reload the IP-hash key before any handler can hash, inside RequestID.
+app.add_middleware(IpHashKeyRefreshMiddleware)
 app.add_middleware(RequestIDMiddleware)
 # SEC-06: equal response time on register / resend / reset-request (BUG-04/05/45).
 app.add_middleware(EnumerationFloorMiddleware)

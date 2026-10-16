@@ -132,7 +132,7 @@ def make_app() -> Callable[[], FastAPI]:
         from app.api.errors import register_exception_handlers
         from app.api.head import HeadAsGetMiddleware
         from app.api.health import router as health_router
-        from app.api.middleware import RequestIDMiddleware
+        from app.api.middleware import IpHashKeyRefreshMiddleware, RequestIDMiddleware
         from app.api.request_target import RequestTargetMiddleware
         from app.api.v1.router import router as v1_router
         from app.main import lifespan
@@ -140,6 +140,7 @@ def make_app() -> Callable[[], FastAPI]:
         app = FastAPI(title="Bekaa3D API", version="0.1.0", lifespan=lifespan)
         app.add_middleware(HeadAsGetMiddleware)
         app.add_middleware(RequestTargetMiddleware)
+        app.add_middleware(IpHashKeyRefreshMiddleware)
         app.add_middleware(RequestIDMiddleware)
         app.add_middleware(EnumerationFloorMiddleware)
         register_exception_handlers(app)

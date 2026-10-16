@@ -6,9 +6,14 @@ from uuid import UUID
 from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.platform.domain.entities import AuditLogEntry, EmailOutboxMessage, Setting
+from app.platform.domain.entities import AuditLogEntry, EmailOutboxMessage, IpHashSalt, Setting
 from app.platform.domain.enums import OutboxStatus, SettingType
-from app.platform.infrastructure.models import AuditLogModel, EmailOutboxModel, SettingModel
+from app.platform.infrastructure.models import (
+    AuditLogModel,
+    EmailOutboxModel,
+    IpHashSaltModel,
+    SettingModel,
+)
 
 
 def _outbox_to_domain(model: EmailOutboxModel) -> EmailOutboxMessage:
@@ -184,6 +189,23 @@ class AuditLogRepository:
             stmt = stmt.where(AuditLogModel.created_at < created_before)
         models = (await self._session.scalars(stmt)).all()
         return [_audit_to_domain(model) for model in models]
+
+
+class SqlIpHashSaltStore:
+    """The `ip_hash_salts` table (VS-046, ADR-028). Salt bytes are only ever read here."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def load_current(self) -> IpHashSalt | None:
+        row = (
+            await self._session.execute(
+                select(IpHashSaltModel.id, IpHashSaltModel.created_at, IpHashSaltModel.salt).where(
+                    IpHashSaltModel.is_current
+                )
+            )
+        ).one_or_none()
+        return IpHashSalt(id=row.id, created_at=row.created_at, salt=row.salt) if row else None
 
 
 def _setting_to_domain(model: SettingModel) -> Setting:

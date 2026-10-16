@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -90,6 +90,15 @@ class AuditLogEntry:
     request_id: str | None
     ip_hash: str | None
     created_at: datetime
+
+
+@dataclass(frozen=True)
+class IpHashSalt:
+    """The current IP-hash salt (SEC-25, ADR-028). The bytes never print or compare."""
+
+    id: UUID
+    created_at: datetime
+    salt: bytes = field(repr=False, compare=False)
 
 
 @dataclass

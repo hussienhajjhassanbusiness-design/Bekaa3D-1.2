@@ -33,6 +33,11 @@ _SENSITIVE_KEYS = frozenset(
         "set-cookie",
         "verification_url",
         "reset_url",
+        # VS-046 (ADR-028): the IP-hash pepper, the database salt and the derived key.
+        "ip_hash_salt",
+        "salt",
+        "pepper",
+        "ip_hash_key",
     }
 )
 

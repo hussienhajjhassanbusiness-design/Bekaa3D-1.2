@@ -84,3 +84,18 @@ def test_sensitive_keys_are_blanked_at_any_depth() -> None:
     assert out["context"]["user_id"] == "u-1"
     assert "bob@example.com" not in str(out)
     assert out["event"] == "login"
+
+
+def test_the_ip_hash_pepper_salt_and_key_are_redacted_by_key() -> None:
+    """VS-046: whatever these hold, their values never reach a log line."""
+    event = {
+        "event": "x",
+        "ip_hash_salt": "pepper-value",
+        "Salt": b"\x01" * 32,
+        "pepper": "pepper-value",
+        "ip_hash_key": b"\x02" * 32,
+        "nested": {"salt": "abc"},
+    }
+    out = redact_sensitive(None, "info", event)
+    assert out["ip_hash_salt"] == out["Salt"] == out["pepper"] == out["ip_hash_key"] == REDACTED
+    assert out["nested"] == {"salt": REDACTED}
