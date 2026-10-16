@@ -217,9 +217,9 @@ def rotation_due(current_created_at: datetime | None, now: datetime) -> bool:
 **Platform ports** (`platform/application/ports/repositories.py`):
 ```python
 class IpHashSaltStore(Protocol):
-    async def lock_rotation(self) -> None: ...                 # pg_advisory_xact_lock
+    async def lock_rotation(self) -> None: ...  # pg_advisory_xact_lock
     async def current_created_at(self) -> tuple[UUID, datetime] | None: ...  # no salt bytes
-    async def replace_current(self) -> UUID: ...               # delete all, insert server-generated
+    async def replace_current(self) -> UUID: ...  # delete all, insert server-generated
     async def load_current(self) -> IpHashSalt | None: ...
 ```
 
@@ -233,10 +233,15 @@ class RotateIpHashSalt:
         if not rotation_due(current[1] if current else None, now):
             return None
         new_id = await self._salts.replace_current()
-        await self._audit.record(actor_user_id=None, action="ip_hash_salt.rotated",
-                                 entity_type="IpHashSalt", entity_id=new_id,
-                                 before_data={"previous_salt_id": str(current[0]) if current else None},
-                                 request_id=None, ip_hash=None)
+        await self._audit.record(
+            actor_user_id=None,
+            action="ip_hash_salt.rotated",
+            entity_type="IpHashSalt",
+            entity_id=new_id,
+            before_data={"previous_salt_id": str(current[0]) if current else None},
+            request_id=None,
+            ip_hash=None,
+        )
         return new_id
 ```
 Verified: `AuditWriter.record` takes `actor_user_id: UUID | None`, `before_data` and `after_data` as optional dicts, and `request_id` and `ip_hash` defaulting to None (`platform/application/ports/audit_writer.py:14-25`).
@@ -254,9 +259,11 @@ class PurgeBatchResult:
     password_reset_tokens: int
     sessions: int
 
+
 class PurgeExpiredSecurityRecords:
-    async def execute_batch(self, *, token_cutoff: datetime, session_cutoff: datetime,
-                            limit: int) -> PurgeBatchResult:
+    async def execute_batch(
+        self, *, token_cutoff: datetime, session_cutoff: datetime, limit: int
+    ) -> PurgeBatchResult:
         """One batch per table; the caller loops and owns each transaction."""
         if token_cutoff >= self._now() or session_cutoff >= self._now():
             raise ValueError("cutoff must be in the past")  # guards live rows (SEC-07)
@@ -293,10 +300,12 @@ DELETE FROM verification_tokens WHERE id IN (
 @dataclass(frozen=True)
 class _IpHashKey:
     salt_id: UUID
-    loaded_at: float                       # time.monotonic()
-    material: bytes = field(repr=False)    # derived key; never printed
+    loaded_at: float  # time.monotonic()
+    material: bytes = field(repr=False)  # derived key; never printed
+
 
 _current_key: _IpHashKey | None = None
+
 
 def install_ip_hash_key(*, salt_id: UUID, salt: bytes, now: float) -> None:
     """Derive K = HMAC(pepper, label || salt); either secret alone reveals nothing."""
@@ -304,6 +313,7 @@ def install_ip_hash_key(*, salt_id: UUID, salt: bytes, now: float) -> None:
     material = hmac.new(pepper, b"bekaa3d/ip-hash/v2:" + salt, hashlib.sha256).digest()
     global _current_key
     _current_key = _IpHashKey(salt_id=salt_id, loaded_at=now, material=material)
+
 
 def hash_ip(ip_address: str) -> str | None:
     """Keyed hash for audit and session rows; None until a key is loaded (SEC-25)."""
@@ -318,6 +328,7 @@ def hash_ip(ip_address: str) -> str | None:
 **New `core/ip_hash_keyring.py`** (composition root; reads through `platform.public`):
 ```python
 REFRESH_SECONDS = 60
+
 
 async def refresh_ip_hash_key(session_factory: async_sessionmaker[AsyncSession]) -> None:
     """Reload the current salt; on failure keep the old key and log the error class only."""
@@ -340,9 +351,9 @@ async def refresh_ip_hash_key(session_factory: async_sessionmaker[AsyncSession])
 async def rotate_ip_salt(ctx: dict[str, Any], *, now: datetime | None = None) -> bool:
     """arq job: rotates at most once per UTC month; safe on any number of workers."""
     async with ctx["session_factory"]() as session, session.begin():
-        new_id = await RotateIpHashSalt(platform_public.ip_hash_salt_store(session),
-                                        platform_public.SqlAuditWriter(session)
-                                        ).execute(now=now or datetime.now(UTC))
+        new_id = await RotateIpHashSalt(
+            platform_public.ip_hash_salt_store(session), platform_public.SqlAuditWriter(session)
+        ).execute(now=now or datetime.now(UTC))
     ...  # log ids only
 ```
 Add `ip_hash_salt_store(session)` and `current_ip_hash_salt(session)` to `platform/public.py`.
