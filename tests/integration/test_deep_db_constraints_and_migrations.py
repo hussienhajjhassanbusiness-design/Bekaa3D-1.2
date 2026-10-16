@@ -384,6 +384,7 @@ _SEED = [
     "INSERT INTO categories (name, slug) VALUES ('Seed', 'seed')",
     "INSERT INTO materials (name) VALUES ('Seed')",
     "INSERT INTO colours (name) VALUES ('Seed')",
+    "INSERT INTO carts (user_id) VALUES ('11111111-1111-1111-1111-111111111111')",
 ]
 
 

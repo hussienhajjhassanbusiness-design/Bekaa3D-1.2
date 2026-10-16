@@ -13,12 +13,14 @@ import os
 import pytest
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from testcontainers.postgres import PostgresContainer
 
 from app.core.config import get_settings
 
+CART_REVISION = "bde6135b2538"
 EXPECTED_ENUMS = {"user_role", "outbox_status", "setting_type", "notification_type"}
 
 
@@ -44,6 +46,24 @@ def test_full_downgrade_and_upgrade_round_trips() -> None:
         command.upgrade(config, "head")
         assert asyncio.run(fetch(enum_query)) >= EXPECTED_ENUMS
 
+        # VS-022: the single head is the cart migration, and stepping back over it
+        # drops cart_items before the products unique key its composite FK needs.
+        scripts = ScriptDirectory.from_config(config)
+        assert scripts.get_heads() == [CART_REVISION]
+        cart_script = scripts.get_revision(CART_REVISION)
+        assert cart_script is not None
+        assert cart_script.down_revision == "75ad58ebd9e5"
+        cart_tables = {"carts", "cart_items"}
+        id_type_key = "SELECT conname FROM pg_constraint WHERE conname = 'uq_products_id_type'"
+        assert cart_tables <= asyncio.run(fetch(table_query))
+        assert asyncio.run(fetch(id_type_key)) == {"uq_products_id_type"}
+        command.downgrade(config, "-1")
+        assert cart_tables.isdisjoint(asyncio.run(fetch(table_query)))
+        assert asyncio.run(fetch(id_type_key)) == set()
+        assert "product_type" in asyncio.run(fetch(enum_query)), "products still owns it"
+        command.upgrade(config, "head")
+        assert cart_tables <= asyncio.run(fetch(table_query))
+
         # VS-046: stepping back over 75ad58ebd9e5 drops its table and its two settings.
         retention_keys = (
             "SELECT key FROM settings WHERE key IN "
@@ -67,6 +87,7 @@ def test_full_downgrade_and_upgrade_round_trips() -> None:
         assert "users" not in leftover_tables
         assert "email_outbox" not in leftover_tables
         assert "ip_hash_salts" not in leftover_tables
+        assert "cart_items" not in leftover_tables
 
         # This is the call that used to raise.
         command.upgrade(config, "head")

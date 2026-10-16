@@ -244,6 +244,8 @@ class ProductModel(Base):
 
     __table_args__ = (
         CheckConstraint(TYPE_INTEGRITY, name="ck_products_type_integrity"),
+        # VS-022: the target of cart_items' (product_id, product_type) foreign key.
+        UniqueConstraint("id", "type", name="uq_products_id_type"),
         CheckConstraint("price_cents >= 0", name="ck_products_price_non_negative"),
         CheckConstraint("currency = 'USD'", name="ck_products_currency_usd"),
         CheckConstraint("btrim(name) <> ''", name="ck_products_name_not_blank"),
