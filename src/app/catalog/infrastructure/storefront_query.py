@@ -39,6 +39,7 @@ from app.catalog.infrastructure.models import (
     ProductModel,
 )
 from app.catalog.infrastructure.product_repository import _to_domain
+from app.catalog.infrastructure.visibility import listed_predicate
 
 _Page = Select[ProductModel, CategoryModel, MaterialModel, ColourModel]
 _KeyedPage = Select[ProductModel, CategoryModel, MaterialModel, ColourModel, Any]
@@ -55,14 +56,6 @@ _ENGLISH: ColumnElement[Any] = literal_column("'english'::regconfig")
 # A quoted lexeme in tsquery text, with '' as an escaped quote.
 _LEXEME = re.compile(r"'(?:[^']|'')*'")
 
-# SRS 6.5. Bare `is_visible`, not `IS TRUE`, so the planner matches the partial indexes.
-_VISIBLE: tuple[ColumnElement[bool], ...] = (
-    ProductModel.deleted_at.is_(None),
-    ProductModel.is_visible.expression,
-    CategoryModel.deleted_at.is_(None),
-    CategoryModel.is_active.expression,
-)
-
 
 def _base() -> _Page:
     return (
@@ -70,7 +63,7 @@ def _base() -> _Page:
         .join(CategoryModel, CategoryModel.id == ProductModel.category_id)
         .outerjoin(MaterialModel, MaterialModel.id == ProductModel.material_id)
         .outerjoin(ColourModel, ColourModel.id == ProductModel.colour_id)
-        .where(*_VISIBLE)
+        .where(listed_predicate())
         .options(defer(ProductModel.search_vector))
     )
 
@@ -177,7 +170,7 @@ def full_text_hits_statement(filters: StorefrontFilter) -> Select[int]:
     hits = (
         select(ProductModel.id)
         .join(CategoryModel, CategoryModel.id == ProductModel.category_id)
-        .where(*_VISIBLE, *_conditions(filters, SearchMode.FULL_TEXT))
+        .where(listed_predicate(), *_conditions(filters, SearchMode.FULL_TEXT))
     )
     return select(func.count()).select_from(hits.limit(MIN_FULL_TEXT_HITS).subquery())
 
@@ -195,7 +188,7 @@ def suggestions_statement(term: str, limit: int) -> Select[UUID, str, str, Produ
     stmt = (
         select(ProductModel.id, ProductModel.name, ProductModel.slug, ProductModel.type)
         .join(CategoryModel, CategoryModel.id == ProductModel.category_id)
-        .where(*_VISIBLE, _fuzzy(term))
+        .where(listed_predicate(), _fuzzy(term))
     )
     score = func.word_similarity(_term(term), ProductModel.name)
     return stmt.order_by(score.desc(), ProductModel.name, ProductModel.id).limit(limit)
