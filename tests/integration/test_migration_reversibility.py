@@ -46,18 +46,19 @@ def test_full_downgrade_and_upgrade_round_trips() -> None:
         command.upgrade(config, "head")
         assert asyncio.run(fetch(enum_query)) >= EXPECTED_ENUMS
 
-        # VS-022: the single head is the cart migration, and stepping back over it
-        # drops cart_items before the products unique key its composite FK needs.
+        # VS-022: one head, with the cart migration in its chain (later migrations need no
+        # edit here). Stepping back over it drops cart_items before the products unique
+        # key its composite FK needs.
         scripts = ScriptDirectory.from_config(config)
-        assert scripts.get_heads() == [CART_REVISION]
-        cart_script = scripts.get_revision(CART_REVISION)
-        assert cart_script is not None
-        assert cart_script.down_revision == "75ad58ebd9e5"
+        assert len(scripts.get_heads()) == 1, scripts.get_heads()
+        chain = {script.revision: script for script in scripts.walk_revisions()}
+        assert CART_REVISION in chain
+        assert chain[CART_REVISION].down_revision == "75ad58ebd9e5"
         cart_tables = {"carts", "cart_items"}
         id_type_key = "SELECT conname FROM pg_constraint WHERE conname = 'uq_products_id_type'"
         assert cart_tables <= asyncio.run(fetch(table_query))
         assert asyncio.run(fetch(id_type_key)) == {"uq_products_id_type"}
-        command.downgrade(config, "-1")
+        command.downgrade(config, f"{CART_REVISION}-1")
         assert cart_tables.isdisjoint(asyncio.run(fetch(table_query)))
         assert asyncio.run(fetch(id_type_key)) == set()
         assert "product_type" in asyncio.run(fetch(enum_query)), "products still owns it"
