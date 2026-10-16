@@ -1402,7 +1402,8 @@ Admin routes are mounted on a separate router with separate authentication and r
 | `reap_orphan_files`         | Daily   | Reconciles filesystem against database. Filesystem writes are not transactional with Postgres, so orphans occur.                                             |
 | `backup_verify`             | Daily   | Confirms backup integrity. A silently failing backup looks identical to a working one until the day it matters.                                              |
 | `ensure_partitions`         | Monthly | Creates audit-log partitions three months ahead. If they run out, every audited action fails.                                                                |
-| `rotate_ip_salt`            | Monthly | Makes historical IP hashes unlinkable.                                                                                                                       |
+| `purge_expired_security_records` | Daily | Deletes expired verification and reset tokens and ended sessions past their retention (VS-046). |
+| `rotate_ip_salt`            | Daily check; rotates once per calendar month | Makes historical IP hashes unlinkable (ADR-028). |
 
 ---
 
@@ -1422,7 +1423,7 @@ None on the server (ADR-019). The STL files live on the administrator's own driv
 
 ### 24.4 Secrets
 
-Never committed. Environment file with restricted permissions or Docker secrets. Required: database URL, Redis URL, JWT signing key, CSRF secret, IP hash salt, phone hash salt (never rotated; cash blocks match on it), online payment provider credentials, webhook IP allowlist, email provider key, captcha secret, Sentry DSN, backup repository URL and encryption key.
+Never committed. Environment file with restricted permissions or Docker secrets. Required: database URL, Redis URL, JWT signing key, CSRF secret, IP hash pepper (env; the rotating salts live in the database, ADR-028), phone hash salt (never rotated; cash blocks match on it), online payment provider credentials, webhook IP allowlist, email provider key, captcha secret, Sentry DSN, backup repository URL and encryption key.
 
 **The backup encryption key must also be stored off the server.** An encrypted backup whose only key lives on the failed host is not a backup.
 

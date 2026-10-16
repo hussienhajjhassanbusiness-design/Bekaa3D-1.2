@@ -1,6 +1,6 @@
 # VS-046 — Security data retention and IP-salt rotation: implementation plan
 
-- **Status:** APPROVED by the owner with amendments A–G (see "Owner decisions" below); in implementation
+- **Status:** APPROVED by the owner with amendments A–G (see "Owner decisions" below); implemented on branch `vs-046-security-retention`
 - **Date:** 2026-10-16
 - **Planned against:** `main` = `origin/main` = `a859066` (VS-026), alembic head `2e89860f5274`. **Re-pointed at implementation:** `main` = `c86a788` (VS-038 merged), `alembic heads` = **`58aac63240fc`** (wishlist_items), 17 revision files. VS-038 touched no settings files, so the seed count still moves 12 → 14.
 - **Slice entry:** `docs/vertical-slice-plan.md:1153-1163`. Depends on VS-004 (Done).

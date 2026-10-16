@@ -1,4 +1,4 @@
-"""The CLAUDE.md architecture rules, checked statically over every module.
+"""The ADR-005 architecture rules, checked statically over every module.
 
 - domain        -> no framework, database or infrastructure imports
 - application   -> depends on domain only (never infrastructure)

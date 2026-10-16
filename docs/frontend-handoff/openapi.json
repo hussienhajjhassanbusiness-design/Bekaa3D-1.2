@@ -1217,7 +1217,7 @@
         "type": "object"
       },
       "AuditLogRead": {
-        "description": "One audit entry, as the viewer shows it (api-endpoints.md 26).\n\n`ip_hash` is deliberately absent. It is a salted SHA-256 of an address, and\nthe IPv4 space is small enough that anyone holding the salt can reverse it\nby brute force (CLAUDE.md, local secrets) - while a person reading the log\nlearns nothing from 64 hex characters. It stays in the table for\ncorrelation in the database, not on the API. `before_data`/`after_data`\nare returned as written: sensitive values are redacted at write time.",
+        "description": "One audit entry, as the viewer shows it (api-endpoints.md 26). `ip_hash` is absent:\na keyed hash tells a reader nothing (CONTRIBUTING.md \"Secrets\", ADR-028).\n`before_data`/`after_data` are returned as written, redacted at write time.",
         "properties": {
           "action": {
             "title": "Action",

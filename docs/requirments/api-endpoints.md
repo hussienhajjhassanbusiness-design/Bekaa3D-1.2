@@ -266,10 +266,10 @@ These are intentionally outside `/api/v1`.
 | `POST /api/v1/auth/login` | Public | `LoginRequest` | Customer: `200 SessionRead`; Admin needing MFA: `202 MfaChallengeRead` | 400, 401, 403, 429 | Progressive delay/lockout; successful customer login sets auth + CSRF cookies |
 | `POST /api/v1/auth/logout` | Authenticated | — | `204` | 401, 403 CSRF | Revokes current session; clears cookies |
 | `POST /api/v1/auth/refresh` | Authenticated refresh cookie | — | `204` | 401, 403 CSRF, 429 | Rotates refresh token/hash/version and CSRF cookie; detects token reuse |
-| `POST /api/v1/auth/verify-email` | Public | `VerifyEmailRequest` | `204` | 400 `INVALID_TOKEN`, 410 `RESOURCE_EXPIRED`, 429 | Single-use token; audits account event |
+| `POST /api/v1/auth/verify-email` | Public | `VerifyEmailRequest` | `204` | 400 `INVALID_TOKEN`, 410 `RESOURCE_EXPIRED`, 429 | Single-use token; audits account event. An expired token answers 410 until VS-046 purges it (7 d past expiry by default), then 400 |
 | `POST /api/v1/auth/resend-verification` | Public or authenticated; Turnstile captcha from VS-033 (ADR-025) | `ResendVerificationRequest` | `202` | 429 | Uniform response regardless of account existence/state; outbox email if eligible |
 | `POST /api/v1/auth/password-reset/request` | Public; Turnstile captcha from VS-033 (ADR-025) | `PasswordResetRequest` | `202` | 429 | Uniform response; enqueue reset email only when appropriate |
-| `POST /api/v1/auth/password-reset/confirm` | Public | `PasswordResetConfirm` | `204` | 400, 410, 429 | Replaces password hash; revokes all sessions; audits security event |
+| `POST /api/v1/auth/password-reset/confirm` | Public | `PasswordResetConfirm` | `204` | 400, 410, 429 | Replaces password hash; revokes all sessions; audits security event. 410 becomes 400 once VS-046 purges the token |
 
 ## 8.2 Admin MFA
 
@@ -1520,6 +1520,7 @@ reap_orphan_files
 backup_verify
 ensure_partitions
 rotate_ip_salt
+purge_expired_security_records
 ```
 
 Admin manual reconcile/confirm endpoints exist for operational intervention, but the scheduled jobs themselves are not exposed as public “run job” routes.

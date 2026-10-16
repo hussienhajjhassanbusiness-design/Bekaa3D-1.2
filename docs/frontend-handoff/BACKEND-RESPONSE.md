@@ -1147,7 +1147,7 @@ Set-Cookie: csrf_token=<redacted>; Max-Age=2592000; Path=/; SameSite=lax
 }
 ```
 
-**Fixture/test account:** the seeded administrator. A fresh database has twelve settings.
+**Fixture/test account:** the seeded administrator. A fresh database has fourteen settings.
 
 **Authoritative source/OpenAPI file:** [`openapi.json`](openapi.json). **The authoritative key registry is [`../settings-registry.md`](../settings-registry.md)** (code: `src/app/platform/domain/settings_registry.py`).
 
@@ -1624,7 +1624,7 @@ Set-Cookie: csrf_token=<redacted>; Max-Age=2592000; Path=/; SameSite=lax
 
 **Errors:**
 - `400 INVALID_TOKEN` — `confirm`: the token is unknown, already used, or belongs to a deactivated account.
-- `410 RESOURCE_EXPIRED` — `confirm`: the token is more than one hour old.
+- `410 RESOURCE_EXPIRED` — `confirm`: the token is more than one hour old. Once the token is purged (VS-046: 7 days past expiry by default), the same link answers `400 INVALID_TOKEN`.
 - `422 VALIDATION_ERROR` — bad email format, or a password that breaks the policy.
 - `429 RATE_LIMITED` — `request` 5 per hour, `confirm` 20 per hour, per IP.
 

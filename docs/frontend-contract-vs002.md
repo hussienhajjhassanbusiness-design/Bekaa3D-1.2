@@ -1216,6 +1216,7 @@ http://localhost:3000/verify-email#token=<TOKEN>
 | token already used | `400` | `INVALID_TOKEN` |
 | unused, unexpired token, but the account is **already verified** (e.g. an older link from before a resend) | `400` | `INVALID_TOKEN` |
 | token past its 24 h window | `410` | `RESOURCE_EXPIRED` |
+| token purged by retention (VS-046: 7 days past expiry by default) | `400` | `INVALID_TOKEN` |
 | missing / too-long / non-string `token` | `422` | `VALIDATION_ERROR` |
 | over 20 requests/hour from this IP | `429` | `RATE_LIMITED` |
 

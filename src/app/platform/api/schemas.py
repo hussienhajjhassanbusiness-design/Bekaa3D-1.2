@@ -85,15 +85,9 @@ class SettingPage(BaseModel):
 
 
 class AuditLogRead(BaseModel):
-    """One audit entry, as the viewer shows it (api-endpoints.md 26).
-
-    `ip_hash` is deliberately absent. It is a salted SHA-256 of an address, and
-    the IPv4 space is small enough that anyone holding the salt can reverse it
-    by brute force (CLAUDE.md, local secrets) - while a person reading the log
-    learns nothing from 64 hex characters. It stays in the table for
-    correlation in the database, not on the API. `before_data`/`after_data`
-    are returned as written: sensitive values are redacted at write time.
-    """
+    """One audit entry, as the viewer shows it (api-endpoints.md 26). `ip_hash` is absent:
+    a keyed hash tells a reader nothing (CONTRIBUTING.md "Secrets", ADR-028).
+    `before_data`/`after_data` are returned as written, redacted at write time."""
 
     id: UUID
     actor_user_id: UUID | None
