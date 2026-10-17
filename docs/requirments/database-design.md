@@ -984,6 +984,7 @@ but determining whether the referenced product is STL is cross-table. VS-022 the
 | `estimated_dispatch_at` | TIMESTAMPTZ | Yes | physical orders |
 | `terms_accepted_at` | TIMESTAMPTZ | No | consent |
 | `digital_terms_accepted_at` | TIMESTAMPTZ | Yes | required when digital lines exist |
+| `digital_terms_version` | TEXT | Yes | which digital-terms text was accepted; set exactly when `digital_terms_accepted_at` is (VS-023, ADR-031) |
 | `cash_terms_accepted_at` | TIMESTAMPTZ | Yes | required when `payment_method = cash` |
 | `placed_at` | TIMESTAMPTZ | No |  |
 | `completed_at` | TIMESTAMPTZ | Yes |  |
@@ -1019,6 +1020,14 @@ fulfillment_method IS NOT NULL → contact_phone_snapshot IS NOT NULL
 fulfillment_method IS NULL     → payment_method = 'online'
 payment_method = 'cash'        → cash_terms_accepted_at IS NOT NULL
 UNIQUE(id, payment_method)     -- target of the composite FKs below
+```
+
+As built (VS-023, migration `03a4730dd046`): the delivery fields required are those NOT NULL on `addresses` (`recipient_name`, `governorate`, `city`, `landmark_notes`), and two pair rules hold:
+
+```text
+fulfillment_method = 'delivery' → recipient_name, governorate, city, landmark_notes IS NOT NULL
+(contact_phone_snapshot IS NULL) = (contact_phone_hash IS NULL)
+(digital_terms_accepted_at IS NULL) = (digital_terms_version IS NULL)
 ```
 
 The fact that an order actually contains physical/digital lines is cross-row and must be validated transactionally; a `cash` order having only physical lines is enforced by the database through the copied `order_items.payment_method` (§8.4).
@@ -1097,6 +1106,8 @@ fulfillment_status = 'delivered' AND product_type = 'stl' → fulfilled_at IS NO
 product_type = 'physical' → delivered_by IS NULL
 ```
 
+Line states by type (VS-023): an STL line is only ever `pending`, `awaiting_delivery`, `delivered`, `refunded` or `cancelled`; a physical line is never `awaiting_delivery`.
+
 For STL snapshots:
 
 ```text
@@ -1159,7 +1170,7 @@ batch_size_snapshot IS NULL
 | `order_item_id` | UUID | Yes | FK → `order_items.id` |
 | `from_status` | TEXT | Yes | NULL for initial state |
 | `to_status` | TEXT | No |  |
-| `actor_user_id` | UUID | Yes | FK → `users.id`; NULL = system |
+| `actor_user_id` | UUID | Yes | FK → `users.id` ON DELETE SET NULL (VS-023, ADR-031); NULL = system |
 | `reason` | TEXT | Yes |  |
 | `created_at` | TIMESTAMPTZ | No | append-only |
 
@@ -1247,6 +1258,16 @@ late_captured_at IS NOT NULL → status IN ('failed', 'expired') AND provider <>
 provider <> 'cash' → recorded_by IS NULL
 ```
 
+Added by VS-023 (migration `03a4730dd046`):
+
+```text
+status IN ('paid', 'partially_refunded', 'refunded') → verified_at IS NOT NULL   -- paid only through verification
+status = 'failed' → failed_at IS NOT NULL;  status = 'expired' → expired_at IS NOT NULL
+UNIQUE(provider, provider_payment_id)   -- NULLs distinct; one capture never matches two attempts
+```
+
+The cash index is created before the live-payment index, so a second cash payment reports INV-22 by name.
+
 ### Rules
 
 - callback/webhook is not proof;
@@ -1261,7 +1282,9 @@ provider <> 'cash' → recorded_by IS NULL
 
 ```text
 (status, initiated_at)
-WHERE status = 'processing'
+WHERE status IN ('pending', 'processing')   -- VS-023: reconciliation covers both (VS-024)
+(order_id)
+(late_captured_at) WHERE late_captured_at IS NOT NULL   -- late captures visible before VS-030
 ```
 
 ---
@@ -1278,6 +1301,8 @@ WHERE status = 'processing'
 | `event_type` | TEXT | Yes |  |
 | `payload` | JSONB | No | raw/normalised provider event |
 | `signature_valid` | BOOLEAN | Yes | if provider supports signature |
+| `provider_payment_id` | TEXT | Yes | the provider reference the event names (VS-023) |
+| `payment_id` | UUID | Yes | FK → `payments.id`; resolved at receipt (VS-023, ADR-024 appendix) |
 | `received_at` | TIMESTAMPTZ | No |  |
 | `processed_at` | TIMESTAMPTZ | Yes |  |
 | `processing_error` | TEXT | Yes |  |
@@ -1289,6 +1314,8 @@ UNIQUE(provider, provider_event_id)
 ```
 
 Duplicate webhook delivery must not apply a payment twice or repeat state transitions.
+
+As built (VS-023): `provider` is the `payment_provider` enum; `octet_length(payload::text) <= 65536`; indexes `(received_at) WHERE processed_at IS NULL` and `(payment_id) WHERE processed_at IS NULL`. An event that is ignored (unknown payment, provider mismatch) or definitively verified gets `processed_at`; only a provider outage leaves it unprocessed.
 
 ---
 
@@ -1783,6 +1810,8 @@ The outbox row is inserted **inside the same business transaction** that creates
 | `scope` | TEXT | No | e.g. checkout |
 | `key` | TEXT | No | client idempotency key |
 | `request_hash` | CHAR(64) | No | hash of canonical request |
+| `state` | TEXT | No | `in_progress` (first transaction) or `done` (response stored); VS-023 |
+| `resource_id` | UUID | Yes | what the claim created, e.g. the order id; no FK, the table is scope-generic (VS-023) |
 | `status_code` | INTEGER | Yes | stored HTTP result |
 | `response_body` | JSONB | Yes | stored response |
 | `expires_at` | TIMESTAMPTZ | No | retention |
@@ -1802,7 +1831,10 @@ For checkout, `user_id` is non-null in practice because guest checkout is forbid
 
 - same key + same request hash → return stored response;
 - same key + different request hash → conflict (`409`);
-- record creation and order/payment creation must be coordinated transactionally.
+- record creation and order/payment creation must be coordinated transactionally;
+- same key + same request hash while `in_progress` → `409 IDEMPOTENCY_REQUEST_IN_PROGRESS` naming `resource_id`, never a second order or provider call (VS-023).
+
+As built (VS-023): `state IN ('in_progress', 'done')`; `(state = 'done') = (status_code IS NOT NULL AND response_body IS NOT NULL)`; `status_code` within 100–599; `char_length(key)` within 1–255; records expire 24 h after creation.
 
 ### Index
 
@@ -2195,7 +2227,7 @@ WHERE status = 'pending'
 
 ```text
 (status, initiated_at)
-WHERE status = 'processing'
+WHERE status IN ('pending', 'processing')
 ```
 
 ## 19.9 Pending Refunds

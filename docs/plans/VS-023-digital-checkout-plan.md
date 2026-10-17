@@ -11,6 +11,27 @@
 - Re-derive the head immediately before `alembic revision`, because VS-023b or another
   slice may merge first.
 
+## Revision 3 (2026-10-17): RESTRICT foreign keys to users (owner, option 1)
+
+The PR A suite run found `test_no_foreign_key_to_users_can_block_the_purge` requiring every
+FK to `users` to be CASCADE or SET NULL. That contradicts database-design §14. The owner
+chose to keep the spec. Recorded in ADR-031 decisions 1-2.
+
+- **RESTRICT is intentional** on `orders.user_id` (DD `:1878`), `order_items.user_id`
+  (`:1889`), `order_items.delivered_by` (`:1890`) and `payments.recorded_by` (`:1891`).
+  - Users who own money records are anonymised, never deleted (ADR-009).
+  - The purge cannot reach these rows: it deletes only `email_verified_at IS NULL`
+    accounts (`src/app/identity/infrastructure/repositories.py:368-390`), and checkout
+    requires a verified account (BR-030).
+- **The test now allowlists exactly those four (table, column) pairs.** Any other
+  RESTRICT key to `users` fails it, and so does a stale allowlist entry.
+- **`order_status_history.actor_user_id` is ON DELETE SET NULL** (was RESTRICT). It is
+  nullable, no CHECK reads it, and NULL already means "the system".
+- **New database tests:**
+  - a never-verified user without orders is deleted (its idempotency claim cascades);
+  - deleting an order owner is refused with `23503` / `orders_user_id_fkey`;
+  - deleting an acting user leaves the history row with a NULL actor.
+
 ## Revision 2 (2026-10-17): main moved; owner decisions before PR A
 
 1. **`main` moved to `ae93c2a` (VS-034).** The head is now `26d5d039d72c`, and
@@ -175,7 +196,7 @@ section named. Earlier decisions that changed are marked **CHANGED**.
      Production + mock fails in both.
 10. **Consent** (§3.3, Q4, new Q18).
     - Stored: `orders.terms_accepted_at` and `digital_terms_accepted_at` (and
-      `cash_terms_accepted_at`, NULL online). database-design `:985-987`.
+      `cash_terms_accepted_at`, NULL online). database-design `:985-988`.
     - All three are set to one `now` in the `orders` INSERT inside Tx1, the same
       statement as the order (functional-requirements.md:344 requires one transaction).
     - **No terms version is stored.** The spec defines none (`SRS.md:666` "with
@@ -375,7 +396,7 @@ Both are thin entrypoints calling application use cases (ADR-011 `:13`).
 | `app.ordering` | `orders`, `order_items`, `order_status_history`; checkout; `derive_order_status`; STL ownership query + `/me/stl-ownership`; the order-side half of payment apply | database-design §4 "Ordering" lists 18–22 (`database-design.md:415-422`); the cart and its lock already live here |
 | `app.payments` | `payments`, `webhook_events`; provider port + mock adapter; webhook route; verify-and-apply orchestration | ADR-005 `:13` (Payments is a context); ADR-012 `:13` "Payments-owned provider port"; ADR-013 `:13` "Payment remains Payments-owned"; database-design §4 "Payments" (`:424`) |
 | `app.platform` | `idempotency_records` + `IdempotencyStore` + purge use case | database-design §4 "Platform" item 39 (`:454`) |
-| `app.fulfillment` | **nothing in VS-023** | ADR-019 d8 (`ADR-019…md:23`) puts STL *delivery state transitions* in Fulfillment → VS-023b. Fulfillment "owns no tables of its own: line state lives on `order_items`" (`database-design.md:433`, `:1380`). The `pending → awaiting_delivery` move is part of payment apply "in the same transaction" (ADR-019 d2 `:17`), so it runs through `ordering.public` inside the Payments apply transaction. |
+| `app.fulfillment` | **nothing in VS-023** | ADR-019 d8 (`ADR-019…md:23`) puts STL *delivery state transitions* in Fulfillment → VS-023b. Fulfillment "owns no tables of its own: line state lives on `order_items`" (`database-design.md:433`, `:1407`). The `pending → awaiting_delivery` move is part of payment apply "in the same transaction" (ADR-019 d2 `:17`), so it runs through `ordering.public` inside the Payments apply transaction. |
 
 **Dependency direction (no import cycle):**
 - `app.payments.application` → `app.ordering.public` (lock order, mark lines paid,
@@ -406,14 +427,16 @@ database-design §3.4–3.7).
 class LineState:
     status: OrderItemStatus
 
+
 @dataclass(frozen=True)
 class OrderStatusInputs:
     payment_method: PaymentMethod
-    cancelled_at_set: bool              # orders.cancelled_at IS NOT NULL
-    payment_reached_paid: bool          # a payment in paid / partially_refunded / refunded
+    cancelled_at_set: bool  # orders.cancelled_at IS NOT NULL
+    payment_reached_paid: bool  # a payment in paid / partially_refunded / refunded
     lines: tuple[LineState, ...]
-    refunds_cover_paid: bool = False    # non-failed, non-late_capture refunds ≥ paid amount
-    refund_present: bool = False        # a non-failed or owed (failed, not reissued) refund
+    refunds_cover_paid: bool = False  # non-failed, non-late_capture refunds ≥ paid amount
+    refund_present: bool = False  # a non-failed or owed (failed, not reissued) refund
+
 
 def derive_order_status(i: OrderStatusInputs) -> OrderStatus:
     """SRS §20.2 exactly as written (SRS.md:1172-1186). The only writer of orders.status."""
@@ -569,21 +592,27 @@ The service never calls the provider.
 OrderStatus, OrderItemStatus, PaymentMethod, FulfillmentMethod, CancelReason
 derive_order_status, OrderStatusInputs, LineState
 
+
 @dataclass(frozen=True)
 class LockedOrder:
     order: Order
-    lines: tuple[OrderLine, ...]            # locked FOR UPDATE, ascending id
+    lines: tuple[OrderLine, ...]  # locked FOR UPDATE, ascending id
+
 
 async def lock_order_for_change(session: AsyncSession, order_id: UUID) -> LockedOrder | None:
     """ADR-024 d9 steps 1-2: orders FOR UPDATE, then every line FOR UPDATE by id."""
+
 
 async def mark_order_paid(session: AsyncSession, locked: LockedOrder, *, at: datetime) -> PaidOrder:
     """STL lines pending → awaiting_delivery; physical stay pending; history rows;
     recomputes status. The caller holds the payment lock (step 3) already."""
 
-async def recompute_order_status(session: AsyncSession, locked: LockedOrder,
-                                 inputs: OrderStatusInputs) -> OrderStatus:
+
+async def recompute_order_status(
+    session: AsyncSession, locked: LockedOrder, inputs: OrderStatusInputs
+) -> OrderStatus:
     """Writes orders.status and a history row only on change."""
+
 
 async def stl_owned(session: AsyncSession, *, user_id: UUID, product_id: UUID) -> bool: ...
 ```
@@ -659,23 +688,34 @@ class WebhookEventStore(Protocol):
 **`application/services/payments.py`:**
 
 ```python
-async def start_online_payment(session_factory, providers, *, payment_id, return_url) -> StartResult:
+async def start_online_payment(
+    session_factory, providers, *, payment_id, return_url
+) -> StartResult:
     """Called by the checkout route after COMMIT. Holds no transaction during the
     provider call; then one short tx stores the reference or marks the attempt failed."""
+
 
 async def receive_webhook(session, providers, *, provider: str, headers, body) -> None:
     """Parse (signature) → resolve payment by reference → INSERT ON CONFLICT DO NOTHING.
     A provider mismatch is stored already processed with error and alerted."""
 
+
 async def verify_event(session_factory, providers, event_id: UUID) -> Outcome | None:
     """Tx A read → provider query outside any tx → apply_provider_result + mark processed."""
+
 
 async def verify_payment(session_factory, providers, payment_id: UUID) -> Outcome:
     """Same without an event: VS-024's reconciliation entrypoint."""
 
-async def apply_provider_result(session, payment_id: UUID, result: ProviderResult, *,
-                                source: Literal["webhook", "reconcile", "manual"],
-                                actor_user_id: UUID | None) -> Outcome:
+
+async def apply_provider_result(
+    session,
+    payment_id: UUID,
+    result: ProviderResult,
+    *,
+    source: Literal["webhook", "reconcile", "manual"],
+    actor_user_id: UUID | None,
+) -> Outcome:
     """Tx B, ADR-024 order: ordering.lock_order_for_change → payments.lock → decide →
     write. VS-024's manual confirm calls this with its own ProviderResult."""
 ```
@@ -764,8 +804,9 @@ It is exported through `app.payments.public`. Tests register a stub adapter in `
 
 ```python
 class IdempotencyStore(Protocol):
-    async def claim(self, *, scope: str, user_id: UUID | None, key: str,
-                    request_hash: str, expires_at: datetime) -> Claim: ...
+    async def claim(
+        self, *, scope: str, user_id: UUID | None, key: str, request_hash: str, expires_at: datetime
+    ) -> Claim: ...
     async def attach(self, record_id: UUID, *, resource_id: UUID) -> None: ...
     async def complete(self, record_id: UUID, *, status_code: int, body: dict) -> None: ...
     async def purge_expired(self, *, now: datetime, limit: int) -> int: ...
@@ -861,7 +902,7 @@ Q5) and `MOCK_WEBHOOK_SECRET`.
 
 ## 4. Database (one migration, `down_revision = "26d5d039d72c"`)
 
-File: `migrations/versions/<rev>_orders_payments_webhooks_idempotency.py`. Additive only:
+File: `migrations/versions/03a4730dd046_orders_payments_webhooks_idempotency.py`. Additive only:
 new types, tables, constraints and indexes. Nothing existing is altered. It follows the
 `bde6135b2538` (VS-022) style: `_PRODUCT_TYPE = postgresql.ENUM(..., create_type=False)`, a
 `_timestamps()` helper, explicit constraint names, and a downgrade that drops tables then
@@ -942,7 +983,8 @@ appendix, VS-029b).
 
 `id`; `order_id` FK orders `RESTRICT`; `order_item_id` FK order_items `RESTRICT` NULL;
 `from_status` TEXT NULL; `to_status` TEXT NOT NULL; `actor_user_id` FK users NULL;
-`reason` TEXT NULL; `created_at`. Index `ix_order_status_history_order` (order_id,
+`reason` TEXT NULL; `created_at`. `actor_user_id` is **ON DELETE SET NULL** (Revision 3).
+Index `ix_order_status_history_order` (order_id,
 created_at).
 
 ### 4.5 `payments` (§9.1, every column) — resolves Q3
@@ -957,13 +999,13 @@ NULL; `provider_metadata` JSONB NULL; `recorded_by` FK users NULL; timestamps.
 | `fk_payments_order_payment_method` | (order_id, order_payment_method) → orders(id, payment_method) | INV-21 |
 | `ck_payments_amount_currency` | amount ≥ 0, currency = 'USD' | §9.1 |
 | `ck_payments_cash_iff_cash_order` | (provider = 'cash') = (order_payment_method = 'cash') | INV-21 |
-| `ck_payments_cash_shape` | provider <> 'cash' OR (status IN ('paid','partially_refunded','refunded') AND recorded_by IS NOT NULL AND **verified_at IS NOT NULL** AND amount_cents > 0) | `database-design.md:1245` (**appendix item: verified_at**) |
-| `ck_payments_late_capture` | late_captured_at IS NULL OR (status IN ('failed','expired') AND provider <> 'cash') | `:1246` (**appendix item**) |
-| `ck_payments_online_not_recorded` | provider = 'cash' OR recorded_by IS NULL | `:1247` (**appendix item**) |
+| `ck_payments_cash_shape` | provider <> 'cash' OR (status IN ('paid','partially_refunded','refunded') AND recorded_by IS NOT NULL AND **verified_at IS NOT NULL** AND amount_cents > 0) | `database-design.md:1256` (**appendix item: verified_at**) |
+| `ck_payments_late_capture` | late_captured_at IS NULL OR (status IN ('failed','expired') AND provider <> 'cash') | `:1257` (**appendix item**) |
+| `ck_payments_online_not_recorded` | provider = 'cash' OR recorded_by IS NULL | `:1258` (**appendix item**) |
 | `ck_payments_paid_verified` *(new guard)* | status NOT IN ('paid','partially_refunded','refunded') OR verified_at IS NOT NULL ("paid only through verification" in the database) | Done-when |
 | `ck_payments_terminal_timestamps` *(new guard)* | status <> 'failed' OR failed_at IS NOT NULL; status <> 'expired' OR expired_at IS NOT NULL | — |
 | `uq_payments_one_live` | UNIQUE(order_id) WHERE status NOT IN ('failed','expired') | §9.4 |
-| `uq_payments_one_cash` | UNIQUE(order_id) WHERE provider = 'cash' | INV-22 |
+| `uq_payments_one_cash` | UNIQUE(order_id) WHERE provider = 'cash'; **created before `uq_payments_one_live`** so a second cash payment reports this name (PostgreSQL checks unique indexes in creation order; a cash payment is always live, so otherwise one-live always fired first) | INV-22 |
 | `uq_payments_provider_reference` | UNIQUE(provider, provider_payment_id) (NULLs distinct) | Q13 (ADR-024 appendix, VS-032 item, brought forward) |
 | `ix_payments_order` | (order_id) | lookups |
 | `ix_payments_unsettled` | (status, initiated_at) WHERE status IN ('pending','processing') | §19.8 widened to cover VS-024's "pending or processing" (`vertical-slice-plan.md:609`); doc update |
@@ -989,7 +1031,7 @@ leaves it unprocessed (`processing_error` set) for the next run.
 
 ### 4.7 `idempotency_records` (§13.4)
 
-Columns: `id`; `user_id` FK users `ON DELETE CASCADE` NULL (database-design.md:1879);
+Columns: `id`; `user_id` FK users `ON DELETE CASCADE` NULL (database-design.md:1911);
 `scope` TEXT; `key` TEXT; `request_hash` CHAR(64); **`state` TEXT NOT NULL**
 *(plan addition)*; **`resource_id` UUID NULL** *(plan addition: the order id, no FK,
 because the record is scope-generic)*; `status_code` INT NULL; `response_body` JSONB
@@ -1007,7 +1049,7 @@ Constraints and indexes:
 - `ix_idempotency_records_expires_at`.
 
 `state` is TEXT with a CHECK rather than a new enum, so VS-030 can reuse the table with
-no enum migration. database-design §13.4 (`:1775-1813`) gains both columns in PR A.
+no enum migration. database-design §13.4 (`:1802-1845`) gains both columns in PR A.
 
 ### 4.8 Models and registration
 
@@ -1043,51 +1085,51 @@ one **accepted** row, so no constraint is too tight for its future slice.
 | `orders.contact_phone_snapshot`, `contact_phone_hash` | VS-028 | `:975-976` |
 | `orders.admin_note` | VS-029 | `:983` |
 | `orders.estimated_dispatch_at` | VS-028 | `:984` |
-| `orders.cash_terms_accepted_at` | VS-028 | `:987` |
+| `orders.cash_terms_accepted_at` | VS-028 | `:988` |
 | `orders.digital_terms_version` | VS-023 (PR B writes it) | *plan addition* (Q18), beside `:986` |
-| `orders.completed_at` | VS-023b/029 | `:989` |
-| `orders.cancelled_at` | VS-024 | `:990` |
-| `order_items.offer_id` (no FK yet) | VS-041 | `:1058` |
-| `order_items.lead_time_days_snapshot`, `batch_size_snapshot` | VS-028 | `:1067-1068` |
-| `order_items.cancelled_at` | VS-024/029 | `:1069` |
-| `order_items.fulfilled_at`, `delivered_by` | **VS-023b** | `:1070-1071` |
-| `order_items.payment_method` | VS-028 | `:1072` |
-| `order_items.cancel_reason` | VS-029 | `:1073` |
-| `order_items.receipt_confirmed_at`, `problem_reported_at` | VS-029b | `:1074-1075` |
-| `payments.order_payment_method` | VS-028/029 | `:1214` |
-| `payments.late_captured_at` | VS-024/030 (VS-023 also writes it) | `:1221` |
-| `payments.recorded_by` | VS-029 | `:1225` |
+| `orders.completed_at` | VS-023b/029 | `:990` |
+| `orders.cancelled_at` | VS-024 | `:991` |
+| `order_items.offer_id` (no FK yet) | VS-041 | `:1067` |
+| `order_items.lead_time_days_snapshot`, `batch_size_snapshot` | VS-028 | `:1076-1077` |
+| `order_items.cancelled_at` | VS-024/029 | `:1078` |
+| `order_items.fulfilled_at`, `delivered_by` | **VS-023b** | `:1079-1080` |
+| `order_items.payment_method` | VS-028 | `:1081` |
+| `order_items.cancel_reason` | VS-029 | `:1082` |
+| `order_items.receipt_confirmed_at`, `problem_reported_at` | VS-029b | `:1083-1084` |
+| `payments.order_payment_method` | VS-028/029 | `:1225` |
+| `payments.late_captured_at` | VS-024/030 (VS-023 also writes it) | `:1232` |
+| `payments.recorded_by` | VS-029 | `:1236` |
 
 **CHECKs, keys and indexes for unbuilt behaviour, with their database tests:**
 
 | Constraint | For | DD line | Refused row in the test | Accepted row in the test |
 |---|---|---|---|---|
-| `uq_orders_id_payment_method` + `fk_order_items_order_payment_method` + `fk_payments_order_payment_method` | VS-028/029 | `:1021`, `:1072`, `:1214` | line with `payment_method='cash'` on an online order (23503); payment with `order_payment_method='cash'` on an online order (23503) | matching values |
-| `ck_orders_physical_has_phone` | VS-028 | `:1018` | `fulfillment_method='pickup'`, phone NULL | pickup + phone + hash |
-| `ck_orders_digital_only_online` | VS-028 | `:1019` | `fulfillment_method NULL`, `payment_method='cash'` | NULL + online |
-| `ck_orders_cash_terms` | VS-028 | `:1020` | cash order, `cash_terms_accepted_at NULL` | cash + terms |
-| `ck_orders_delivery_address` | VS-028 | `:1004` (fields from `addresses` NOT NULLs, `2e89860f5274…:41-47`) | delivery with `city NULL` | delivery with recipient, governorate, city, landmark, phone |
+| `uq_orders_id_payment_method` + `fk_order_items_order_payment_method` + `fk_payments_order_payment_method` | VS-028/029 | `:1022`, `:1081`, `:1225` | line with `payment_method='cash'` on an online order (23503); payment with `order_payment_method='cash'` on an online order (23503) | matching values |
+| `ck_orders_physical_has_phone` | VS-028 | `:1019` | `fulfillment_method='pickup'`, phone NULL | pickup + phone + hash |
+| `ck_orders_digital_only_online` | VS-028 | `:1020` | `fulfillment_method NULL`, `payment_method='cash'` | NULL + online |
+| `ck_orders_cash_terms` | VS-028 | `:1021` | cash order, `cash_terms_accepted_at NULL` | cash + terms |
+| `ck_orders_delivery_address` | VS-028 | `:1005` (fields from `addresses` NOT NULLs, `2e89860f5274…:41-47`) | delivery with `city NULL` | delivery with recipient, governorate, city, landmark, phone |
 | `ck_orders_phone_hash_pair` | VS-028 | `:976` "set with `contact_phone_snapshot`" | phone without hash | both set |
 | `ck_orders_digital_terms_version` | VS-023 PR B | *plan addition* (Q18) | version without `digital_terms_accepted_at`; timestamp without version | both set; both NULL |
-| `ck_order_items_cash_is_physical` | VS-028 | `:1109` | STL line on a cash order (**plan test bullet**) | physical line on a cash order |
-| `ck_order_items_cancel_reason_state` | VS-029 | `:1110` | `cancel_reason='refused'` on a `pending` line | on a `cancelled` line |
-| `ck_order_items_snapshots_by_type` | VS-028 | `:1116-1117`, `:1123-1124` | physical line without lead time; physical `batch_size=0`; STL with a batch size | physical with both; STL with neither |
-| `ck_order_items_stl_delivery_record` | **VS-023b** | `:1096` | STL `delivered` without `delivered_by` | STL `delivered` with `fulfilled_at` + `delivered_by` |
-| `ck_order_items_physical_no_delivered_by` | **VS-023b**/029 | `:1097` | physical line with `delivered_by` | physical `delivered` without it |
+| `ck_order_items_cash_is_physical` | VS-028 | `:1120` | STL line on a cash order (**plan test bullet**) | physical line on a cash order |
+| `ck_order_items_cancel_reason_state` | VS-029 | `:1121` | `cancel_reason='refused'` on a `pending` line | on a `cancelled` line |
+| `ck_order_items_snapshots_by_type` | VS-028 | `:1127-1128`, `:1134-1135` | physical line without lead time; physical `batch_size=0`; STL with a batch size | physical with both; STL with neither |
+| `ck_order_items_stl_delivery_record` | **VS-023b** | `:1105` | STL `delivered` without `delivered_by` | STL `delivered` with `fulfilled_at` + `delivered_by` |
+| `ck_order_items_physical_no_delivered_by` | **VS-023b**/029 | `:1106` | physical line with `delivered_by` | physical `delivered` without it |
 | `ck_order_items_status_by_type` | VS-023b/029 | *plan addition* (DD §3.7 `:209-225` transition sets) | physical `awaiting_delivery`; STL `shipped` | STL `awaiting_delivery`; physical `in_production` |
-| `ix_order_items_physical_status` | VS-029 | `:1145` | — (index; existence asserted) | — |
-| `ck_payments_cash_iff_cash_order` | VS-029 | `:1244` | cash payment on an online order; online payment on a cash order (**plan test bullets**) | cash payment on a cash order (paid, verified, recorded, > 0) |
-| `uq_payments_one_cash` | VS-029 | `:1243` | second cash payment on one order (**plan test bullet**), 23505 | first one |
-| `ck_payments_cash_shape` | VS-029 | `:1245` | cash `pending`; cash without `recorded_by`; cash without `verified_at` (**appendix**); cash amount 0 | full cash row |
-| `ck_payments_late_capture` | VS-024/030 | `:1246` | `late_captured_at` on a `paid` row; on a cash row (**appendix**) | on a `failed` online row |
-| `ck_payments_online_not_recorded` | VS-029 | `:1247` | online payment with `recorded_by` (**appendix**) | online without |
+| `ix_order_items_physical_status` | VS-029 | `:1156` | — (index; existence asserted) | — |
+| `ck_payments_cash_iff_cash_order` | VS-029 | `:1255` | cash payment on an online order; online payment on a cash order (**plan test bullets**) | cash payment on a cash order (paid, verified, recorded, > 0) |
+| `uq_payments_one_cash` | VS-029 | `:1254` | second cash payment on one order (**plan test bullet**), 23505 | first one |
+| `ck_payments_cash_shape` | VS-029 | `:1256` | cash `pending`; cash without `recorded_by`; cash without `verified_at` (**appendix**); cash amount 0 | full cash row |
+| `ck_payments_late_capture` | VS-024/030 | `:1257` | `late_captured_at` on a `paid` row; on a cash row (**appendix**) | on a `failed` online row |
+| `ck_payments_online_not_recorded` | VS-029 | `:1258` | online payment with `recorded_by` (**appendix**) | online without |
 | `ck_payments_paid_verified`, `ck_payments_terminal_timestamps` | all | *plan additions* | `paid` without `verified_at`; `failed` without `failed_at` | with them |
 
 The only database objects VS-023 deliberately does **not** build for later slices:
-- the STL queue index (VS-023b, DD `:1146`);
-- `order_items.offer_id`'s FK (VS-039, DD `:1058`);
+- the STL queue index (VS-023b, DD `:1157`);
+- `order_items.offer_id`'s FK (VS-039, DD `:1067`);
 - the open-cash index `(contact_phone_hash) WHERE payment_method='cash'` (VS-028, DD
-  `:1044`, "if `EXPLAIN` shows the need").
+  `:1053`, "if `EXPLAIN` shows the need").
 
 ---
 
@@ -1447,7 +1489,7 @@ migration lock")**
 
 | File | Change |
 |---|---|
-| `migrations/versions/<rev>_orders_payments_webhooks_idempotency.py` | new; `down_revision = "26d5d039d72c"` |
+| `migrations/versions/03a4730dd046_orders_payments_webhooks_idempotency.py` | new; `down_revision = "26d5d039d72c"` |
 | `src/app/ordering/domain/enums.py` | new: pure `StrEnum`s the models use (no logic) |
 | `src/app/payments/domain/enums.py` | new: `PaymentStatus`, `PaymentProvider` |
 | `src/app/ordering/infrastructure/models.py` | + `OrderModel`, `OrderItemModel`, `OrderStatusHistoryModel` |
@@ -1457,6 +1499,8 @@ migration lock")**
 | `tests/integration/ordering/test_order_payment_schema.py` | new: every §4.10 refused/accepted pair + VS-023's own constraints |
 | `tests/integration/test_model_migration_parity.py` | new: after `upgrade head`, Alembic `compare_metadata(MigrationContext, Base.metadata)` restricted to the six new tables must be empty (columns, types, nullability, indexes, uniques, FKs) |
 | `tests/integration/test_migration_reversibility.py` | + an orders block: the new revision is in the chain with `down_revision == "26d5d039d72c"`, the six tables and eight enums exist after upgrade and are gone after `downgrade` to its own parent (`26d5d039d72c`), then `upgrade head` again. VS-034's `BYI_REVISION` block is left untouched. The existing **`assert len(scripts.get_heads()) == 1`** (`:53`) stays and still pins no head revision, so VS-023b's next migration needs no edit here |
+| `tests/integration/test_deep_db_constraints_and_migrations.py` | Revision 3: the purge test allowlists the four §14 RESTRICT pairs |
+| `docs/adr/ADR-031-checkout-idempotency-and-payment-verification.md`, `docs/adr/README.md` | Revision 3: ADR-031 with the schema decisions; PR B adds the rest |
 | `docs/requirments/database-design.md` | the §7 schema edits (plan additions: `webhook_events` link, idempotency `state`/`resource_id`, new guards and indexes) |
 
 **`main` stays green with PR A alone:**
@@ -1637,14 +1681,14 @@ Race 7 and races 1–6 exercise it.
    - Payments → `ordering.public` only; Ordering reaches Payments only through its own
      `PaymentAttempts` port wired in the API layer.
    - Evidence: ADR-005 `:13`, ADR-012 `:13`, ADR-013 `:13`, ADR-019 d8 `:23`,
-     database-design §4 `:415-454`, `:433`, `:1380`.
+     database-design §4 `:415-454`, `:433`, `:1407`.
 2. **`webhook_events` has no payment link (ADR-024 appendix `:94`).** *Recommendation:*
    add nullable `provider_payment_id` and `payment_id` (FK `RESTRICT`), resolved at
    receipt, plus the partial index `(payment_id) WHERE processed_at IS NULL`. Ignored
    and definitively verified events get `processed_at`; only a provider outage leaves
    one unprocessed.
 3. **The three cash CHECKs missing from VS-023's list (ADR-024 appendix `:95`;
-   database-design `:1245-1247`).** *Recommendation:* create all three:
+   database-design `:1256-1258`).** *Recommendation:* create all three:
    - `verified_at IS NOT NULL` inside the cash shape;
    - `late_captured_at → status IN (failed, expired) AND provider <> 'cash'`;
    - `provider <> 'cash' → recorded_by IS NULL`.
@@ -1752,7 +1796,7 @@ Race 7 and races 1–6 exercise it.
 18. **DECIDED (owner, Revision 2):** add nullable `orders.digital_terms_version` in PR A;
     PR B writes a constant until a settings value exists; recorded in ADR-031. The
     original question follows. **Store a terms version with consent?** (new, Revision 1 item 10). The spec stores
-    only timestamps (`SRS.md:666`; database-design `:985-987`; api-endpoints.md:1596),
+    only timestamps (`SRS.md:666`; database-design `:985-988`; api-endpoints.md:1596),
     and no versioned terms document exists to point at.
     - *Recommendation:* store none in VS-023.
     - If the owner wants evidence of which text was accepted (useful against chargebacks,
