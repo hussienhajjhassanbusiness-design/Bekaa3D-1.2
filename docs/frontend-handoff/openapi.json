@@ -1,6 +1,34 @@
 {
   "components": {
     "schemas": {
+      "AcceptedPriceIn": {
+        "additionalProperties": false,
+        "properties": {
+          "amount_cents": {
+            "minimum": 0.0,
+            "title": "Amount Cents",
+            "type": "integer"
+          },
+          "currency": {
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Currency",
+            "type": "string"
+          },
+          "product_id": {
+            "format": "uuid",
+            "title": "Product Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_id",
+          "amount_cents",
+          "currency"
+        ],
+        "title": "AcceptedPriceIn",
+        "type": "object"
+      },
       "AddressCreate": {
         "additionalProperties": false,
         "description": "api-endpoints.md 29.3; `landmark_notes` is required (SRS 14.4, VS-026 Q1).",
@@ -1840,6 +1868,293 @@
         "title": "CategoryUpdate",
         "type": "object"
       },
+      "CheckoutLineRead": {
+        "properties": {
+          "fulfillment_status": {
+            "$ref": "#/components/schemas/OrderItemStatus"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "line_total": {
+            "$ref": "#/components/schemas/PriceRead"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "product_id": {
+            "format": "uuid",
+            "title": "Product Id",
+            "type": "string"
+          },
+          "product_type": {
+            "$ref": "#/components/schemas/ProductType"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "unit_price": {
+            "$ref": "#/components/schemas/PriceRead"
+          }
+        },
+        "required": [
+          "id",
+          "product_id",
+          "product_type",
+          "name",
+          "unit_price",
+          "quantity",
+          "line_total",
+          "fulfillment_status"
+        ],
+        "title": "CheckoutLineRead",
+        "type": "object"
+      },
+      "CheckoutOrderRead": {
+        "properties": {
+          "fulfillment_method": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FulfillmentMethod"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/CheckoutLineRead"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "order_number": {
+            "title": "Order Number",
+            "type": "string"
+          },
+          "payment_method": {
+            "$ref": "#/components/schemas/PaymentMethod"
+          },
+          "placed_at": {
+            "format": "date-time",
+            "title": "Placed At",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/OrderSource"
+          },
+          "status": {
+            "$ref": "#/components/schemas/OrderStatus"
+          },
+          "subtotal": {
+            "$ref": "#/components/schemas/PriceRead"
+          },
+          "tax": {
+            "$ref": "#/components/schemas/PriceRead"
+          },
+          "total": {
+            "$ref": "#/components/schemas/PriceRead"
+          }
+        },
+        "required": [
+          "id",
+          "order_number",
+          "source",
+          "status",
+          "payment_method",
+          "fulfillment_method",
+          "subtotal",
+          "tax",
+          "total",
+          "placed_at",
+          "lines"
+        ],
+        "title": "CheckoutOrderRead",
+        "type": "object"
+      },
+      "CheckoutPaymentRead": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "redirect_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The provider's payment page; null if none.",
+            "title": "Redirect Url"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "provider",
+          "redirect_url"
+        ],
+        "title": "CheckoutPaymentRead",
+        "type": "object"
+      },
+      "CheckoutRead": {
+        "properties": {
+          "dropped_lines": {
+            "description": "STL lines bought since they were added: not charged (SRS 7.3 step 5).",
+            "items": {
+              "$ref": "#/components/schemas/DroppedLineRead"
+            },
+            "title": "Dropped Lines",
+            "type": "array"
+          },
+          "order": {
+            "$ref": "#/components/schemas/CheckoutOrderRead"
+          },
+          "payment": {
+            "$ref": "#/components/schemas/CheckoutPaymentRead"
+          }
+        },
+        "required": [
+          "order",
+          "payment",
+          "dropped_lines"
+        ],
+        "title": "CheckoutRead",
+        "type": "object"
+      },
+      "CheckoutRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "accept_cash_terms": {
+            "anyOf": [
+              {
+                "const": true,
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Accepted and ignored for online orders (VS-028 uses it).",
+            "title": "Accept Cash Terms"
+          },
+          "accept_digital_final_sale": {
+            "anyOf": [
+              {
+                "const": true,
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accept Digital Final Sale"
+          },
+          "accept_terms": {
+            "const": true,
+            "title": "Accept Terms",
+            "type": "boolean"
+          },
+          "accepted_price_changes": {
+            "items": {
+              "$ref": "#/components/schemas/AcceptedPriceIn"
+            },
+            "maxItems": 50,
+            "title": "Accepted Price Changes",
+            "type": "array"
+          },
+          "address_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address Id"
+          },
+          "contact_phone": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contact Phone"
+          },
+          "customer_note": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Note"
+          },
+          "fulfillment_method": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FulfillmentMethod"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "payment_method": {
+            "$ref": "#/components/schemas/PaymentMethod"
+          },
+          "payment_provider": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment Provider"
+          }
+        },
+        "required": [
+          "payment_method",
+          "accept_terms"
+        ],
+        "title": "CheckoutRequest",
+        "type": "object"
+      },
       "ColourCreate": {
         "additionalProperties": false,
         "description": "Identical to MaterialCreate; named separately because it is a distinct\npart of the public API contract and should not silently change if one of\nthem gains a field.",
@@ -2748,6 +3063,26 @@
         "title": "DimensionsRead",
         "type": "object"
       },
+      "DroppedLineRead": {
+        "properties": {
+          "product_id": {
+            "format": "uuid",
+            "title": "Product Id",
+            "type": "string"
+          },
+          "reason": {
+            "const": "already_owned",
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_id",
+          "reason"
+        ],
+        "title": "DroppedLineRead",
+        "type": "object"
+      },
       "FacetSummary": {
         "properties": {
           "id": {
@@ -2766,6 +3101,15 @@
         ],
         "title": "FacetSummary",
         "type": "object"
+      },
+      "FulfillmentMethod": {
+        "description": "NULL on the order means digital-only (3.4).",
+        "enum": [
+          "delivery",
+          "pickup"
+        ],
+        "title": "FulfillmentMethod",
+        "type": "string"
       },
       "Governorate": {
         "description": "Lebanon's nine governorates (VS-026 Q2); addresses are Lebanese only (BR-071).",
@@ -3237,6 +3581,45 @@
         "title": "NotificationUpdate",
         "type": "object"
       },
+      "OrderItemStatus": {
+        "description": "One storage enum for STL and physical line states (3.7).",
+        "enum": [
+          "pending",
+          "awaiting_delivery",
+          "in_production",
+          "ready_to_ship",
+          "shipped",
+          "delivered",
+          "returned",
+          "ready_for_pickup",
+          "picked_up",
+          "cancelled",
+          "refunded"
+        ],
+        "title": "OrderItemStatus",
+        "type": "string"
+      },
+      "OrderSource": {
+        "enum": [
+          "cart",
+          "offer"
+        ],
+        "title": "OrderSource",
+        "type": "string"
+      },
+      "OrderStatus": {
+        "description": "A derived projection (SRS 20.2); never set as business input.",
+        "enum": [
+          "pending_payment",
+          "cancelled",
+          "refunded",
+          "partially_refunded",
+          "completed",
+          "in_progress"
+        ],
+        "title": "OrderStatus",
+        "type": "string"
+      },
       "PasswordResetAccepted": {
         "description": "Separate from RegistrationAccepted despite the same shape: the message is\nthe only thing a caller ever learns from this endpoint, so it must not start\ntalking about verification if the registration copy is ever reworded.",
         "properties": {
@@ -3292,6 +3675,15 @@
         ],
         "title": "PasswordResetRequest",
         "type": "object"
+      },
+      "PaymentMethod": {
+        "description": "Chosen at checkout and immutable; cash requires every line physical (ADR-024).",
+        "enum": [
+          "online",
+          "cash"
+        ],
+        "title": "PaymentMethod",
+        "type": "string"
       },
       "PriceIn": {
         "additionalProperties": false,
@@ -4273,6 +4665,25 @@
           "value"
         ],
         "title": "SettingUpdate",
+        "type": "object"
+      },
+      "StlOwnershipRead": {
+        "properties": {
+          "owned": {
+            "title": "Owned",
+            "type": "boolean"
+          },
+          "product_id": {
+            "format": "uuid",
+            "title": "Product Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_id",
+          "owned"
+        ],
+        "title": "StlOwnershipRead",
         "type": "object"
       },
       "UserProfileRead": {
@@ -11389,6 +11800,148 @@
         ]
       }
     },
+    "/api/v1/checkout": {
+      "post": {
+        "description": "Tx1: claim, place the order, attach it to the claim, COMMIT. Then the provider call\nwith no transaction open. Tx2: store the reference or fail the attempt, and the\nresponse. A crash between them leaves the claim `in_progress` naming the order.",
+        "operationId": "checkout_api_v1_checkout_post",
+        "parameters": [
+          {
+            "description": "8-255 characters of [A-Za-z0-9._:-]; one key per checkout attempt.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "description": "8-255 characters of [A-Za-z0-9._:-]; one key per checkout attempt.",
+              "pattern": "^[A-Za-z0-9._:-]{8,255}$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckoutRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckoutRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "MALFORMED_REQUEST: the body is not valid JSON."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No valid session cookie was presented."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "CSRF token missing or invalid, or EMAIL_VERIFICATION_REQUIRED."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "CART_EMPTY (with `dropped_lines`), CART_PRICE_CHANGED (with `price_changes`), PRODUCT_ALREADY_OWNED, IDEMPOTENCY_KEY_CONFLICT, or IDEMPOTENCY_REQUEST_IN_PROGRESS (with `order_id`, `order_number`)."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "PRODUCT_NOT_PURCHASABLE or QUANTITY_EXCEEDS_LIMIT (with `lines`), INVALID_FULFILLMENT, PAYMENT_METHOD_NOT_ALLOWED (with `reason`), or VALIDATION_ERROR."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "RATE_LIMITED: too many checkouts this hour."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "PAYMENT_PROVIDER_UNAVAILABLE: the order exists unpaid (with `order_id`, `order_number`); replayed for the same key."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "ORDERS_PAUSED, or ONLINE_PAYMENT_UNAVAILABLE."
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Place an order from the cart and start its online payment",
+        "tags": [
+          "checkout"
+        ]
+      }
+    },
     "/api/v1/colours": {
       "get": {
         "operationId": "list_public_colours_api_v1_colours_get",
@@ -12581,6 +13134,84 @@
         "summary": "Mark one notification read or unread",
         "tags": [
           "notifications"
+        ]
+      }
+    },
+    "/api/v1/me/stl-ownership": {
+      "get": {
+        "operationId": "get_stl_ownership_api_v1_me_stl_ownership_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "product_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Product Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StlOwnershipRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No valid session cookie was presented."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the database or Redis is unreachable; retry later."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Whether the caller owns this STL (paid and not refunded)",
+        "tags": [
+          "checkout"
         ]
       }
     },
