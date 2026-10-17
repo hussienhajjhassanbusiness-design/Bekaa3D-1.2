@@ -1588,7 +1588,8 @@ OR (quoted_amount_cents >= 0 AND currency = 'USD')
 - guest allowed;
 - captcha/rate-limit handled outside DB;
 - status follows approved pipeline;
-- quote is for lead/funnel reporting;
+- quote is for lead/funnel reporting: 1 to 100,000,000 cents, set only by the move to `quoted` (ADR-031);
+- the server sets `outcome` (`won` at `in_progress`, `lost` at `lost`) and `closed_at` on `closed` or `lost`;
 - commercial agreement remains off-platform.
 
 ---

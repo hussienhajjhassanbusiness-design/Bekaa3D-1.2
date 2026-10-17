@@ -91,3 +91,32 @@ class AttachmentMalwareError(EngagementDomainError):
         super().__init__(f"Attachment {index} failed the malware scan.")
         self.index = index
         self.signature = signature
+
+
+class CustomRequestNotFoundError(EngagementDomainError):
+    def __init__(self, request_id: object) -> None:
+        super().__init__(f"No custom request {request_id!r}.")
+        self.request_id = request_id
+
+
+class CustomRequestAttachmentNotFoundError(EngagementDomainError):
+    """Unknown, of another request, expired or its file gone: one 404 for all (ADR-031)."""
+
+    def __init__(self, attachment_id: object) -> None:
+        super().__init__(f"No downloadable attachment {attachment_id!r}.")
+        self.attachment_id = attachment_id
+
+
+class InvalidCustomRequestTransitionError(EngagementDomainError):
+    """Not an edge of the SRS 20.7 pipeline, staying put included."""
+
+    def __init__(self, current: object, target: object) -> None:
+        super().__init__(f"Custom request cannot move from {current!s} to {target!s}.")
+        self.current = current
+        self.target = target
+
+
+class InvalidQuoteError(EngagementDomainError):
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason

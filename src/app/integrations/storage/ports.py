@@ -1,10 +1,23 @@
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import datetime
 
 
 class InvalidStorageKeyError(ValueError):
     """A key that is absolute, empty or climbs out of the storage root."""
+
+
+class ObjectNotFoundError(LookupError):
+    """No object under this key."""
+
+
+@dataclass(frozen=True)
+class ObjectStream:
+    """An opened object: its size is known before the first chunk is read."""
+
+    size: int
+    chunks: AsyncIterator[bytes]
 
 
 @dataclass(frozen=True)
@@ -24,6 +37,12 @@ class StoragePort(ABC):
 
     @abstractmethod
     async def exists(self, key: str) -> bool: ...
+
+    @abstractmethod
+    async def open(self, key: str) -> ObjectStream:
+        """Raises `ObjectNotFoundError` now, before any header is sent; the bytes are read
+        only as `chunks` is iterated, so an unsent response holds no open file."""
+        raise NotImplementedError
 
     @abstractmethod
     async def delete(self, key: str) -> None:

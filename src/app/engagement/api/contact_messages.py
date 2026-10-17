@@ -1,16 +1,13 @@
 """Contact form and admin queue (VS-033, FR-16). Public POST order: attempt limit, body,
 captcha, then per-IP and per-email limits, so a refused captcha spends neither quota."""
 
-import base64
-import binascii
 import hashlib
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
 import structlog
 from fastapi import APIRouter, Depends, Query, Request, Response, status
-from fastapi.exceptions import RequestValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.captcha import CAPTCHA_RESPONSES, require_captcha
@@ -25,6 +22,7 @@ from app.engagement.api.contact_message_schemas import (
     ContactMessagePage,
     ContactMessageReceipt,
 )
+from app.engagement.api.queue_cursor import check_range, decode_cursor, encode_cursor
 from app.engagement.application.commands.change_contact_message_status import (
     ENTITY_TYPE,
     ChangeContactMessageStatus,
@@ -62,7 +60,6 @@ _ATTEMPT_LIMIT = rate_limiter(
 
 _DEFAULT_PAGE_SIZE = 20
 _MAX_PAGE_SIZE = 100
-_CURSOR_SEPARATOR = "|"
 
 _ADMIN_RESPONSES: dict[int | str, dict[str, Any]] = {
     401: {"description": "No session, or MFA not completed."},
@@ -114,58 +111,6 @@ async def submit_contact_message(
     return ContactMessageReceipt(id=message.id, created_at=message.created_at)
 
 
-def _encode_cursor(state: ContactMessageStatus, created_at: datetime, message_id: UUID) -> str:
-    raw = _CURSOR_SEPARATOR.join((state.value, created_at.isoformat(), str(message_id)))
-    return base64.urlsafe_b64encode(raw.encode("utf-8")).decode("ascii").rstrip("=")
-
-
-def _parse_cursor(raw: str) -> tuple[ContactMessageStatus, datetime, UUID]:
-    padding = "=" * (-len(raw) % 4)
-    try:
-        decoded = base64.urlsafe_b64decode(raw + padding).decode("utf-8")
-        state_raw, created_raw, id_raw = decoded.split(_CURSOR_SEPARATOR)
-        parsed = ContactMessageStatus(state_raw), datetime.fromisoformat(created_raw), UUID(id_raw)
-    except (ValueError, binascii.Error) as exc:
-        raise ValueError("cursor is not a valid pagination cursor") from exc
-    if not _is_utc_representable(parsed[1]):
-        raise ValueError("cursor is not a valid pagination cursor")
-    return parsed
-
-
-def _is_utc_representable(moment: datetime) -> bool:
-    """Aware and convertible to UTC; asyncpg overflowed on the rest (BUG-36)."""
-    if moment.tzinfo is None:
-        return False
-    try:
-        moment.astimezone(UTC)
-    except OverflowError:
-        return False
-    return True
-
-
-def _invalid(field: str, message: str) -> RequestValidationError:
-    return RequestValidationError(
-        [{"loc": ("query", field), "msg": message, "type": "value_error"}]
-    )
-
-
-def _decode_cursor(raw: str | None) -> tuple[ContactMessageStatus, datetime, UUID] | None:
-    if raw is None:
-        return None
-    try:
-        return _parse_cursor(raw)
-    except ValueError as exc:
-        raise _invalid("cursor", str(exc)) from exc
-
-
-def _check_range(created_after: datetime | None, created_before: datetime | None) -> None:
-    for field, moment in (("created_after", created_after), ("created_before", created_before)):
-        if moment is not None and not _is_utc_representable(moment):
-            raise _invalid(field, "must be a timestamp with a UTC offset, e.g. 2026-10-01T00:00Z")
-    if created_after is not None and created_before is not None and created_before <= created_after:
-        raise _invalid("created_before", "must be later than created_after")
-
-
 def _audit_context(request: Request) -> tuple[str | None, str | None]:
     ip = client_ip(request)
     return getattr(request.state, "request_id", None), hash_ip(ip) if ip else None
@@ -198,8 +143,8 @@ async def list_contact_messages(
     session: AsyncSession = Depends(get_session),
 ) -> ContactMessagePage:
     """New first, then oldest first. Audited like the user list, since it shows PII."""
-    after = _decode_cursor(cursor)
-    _check_range(created_after, created_before)
+    after = decode_cursor(cursor, ContactMessageStatus)
+    check_range(created_after, created_before)
     rows = await SqlContactMessageRepository(session).list_page(
         limit=limit + 1,
         after=after,
@@ -231,7 +176,7 @@ async def list_contact_messages(
     last = page[-1] if has_more and page else None
     return ContactMessagePage(
         items=[ContactMessageDetail.of(row) for row in page],
-        next_cursor=_encode_cursor(last.status, last.created_at, last.id) if last else None,
+        next_cursor=encode_cursor(last.status, last.created_at, last.id) if last else None,
     )
 
 

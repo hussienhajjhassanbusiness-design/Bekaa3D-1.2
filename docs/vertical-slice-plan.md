@@ -23,8 +23,6 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 | VS-017 | STL bundle upload and version publishing | — | Removed (ADR-019) |
 | VS-018 | Entitlements: admin grant and STL library | — | Removed (ADR-019) |
 | VS-019 | Protected STL download through nginx | — | Removed (ADR-019) |
-| VS-020 | Staging environment and deploy pipeline | VS-015 | Not started |
-| VS-021 | Production email delivery | VS-020 | Not started |
 | VS-022 | Mixed cart | VS-013 | Done |
 | VS-023 | Checkout and verified payment for digital orders | VS-022, VS-008, VS-007 | Not started |
 | VS-023b | STL delivery queue and mark-as-sent | VS-023 | Not started |
@@ -36,11 +34,10 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 | VS-029 | Admin order queue, fulfillment and cash handover | VS-028, VS-023b, VS-024, VS-025 | Not started |
 | VS-030 | Refunds and settlement | VS-029, VS-024 | Not started |
 | VS-031 | Cancellation and returns | VS-030 | Not started |
-| VS-032 | Live online payment provider | VS-020, VS-024, VS-030 | Not started |
 | VS-033 | Contact form and captcha | VS-005 | Done |
 | VS-029b | Receipt confirmation and problem report | VS-029, VS-033 | Not started |
 | VS-034 | Bring Your Idea submission | VS-014, VS-033 | Done |
-| VS-035 | Bring Your Idea pipeline and funnel | VS-034, VS-020 | Not started |
+| VS-035 | Bring Your Idea pipeline and funnel | VS-034 | Done |
 | VS-036 | Reviews and Verified Purchase badge | VS-015, VS-028, VS-030, VS-031 | Not started |
 | VS-037 | Review moderation | VS-036 | Not started |
 | VS-038 | Wishlist and wishlist analytics | VS-013 | Done |
@@ -52,8 +49,14 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 | VS-044 | Customer data export | VS-023b, VS-025, VS-026, VS-036, VS-039 | Not started |
 | VS-045 | Account deletion by anonymisation | VS-026, VS-031, VS-036, VS-038, VS-039 | Not started |
 | VS-046 | Security data retention and IP-salt rotation | VS-004 | Done |
+| **Final phase** | **Needs a server; built after everything above is finished and tested locally** | | |
+| VS-020 | Staging environment and deploy pipeline | VS-015 | Not started |
+| VS-021 | Production email delivery | VS-020 | Not started |
+| VS-032 | Live online payment provider | VS-020, VS-024, VS-030 | Not started |
 | VS-047 | Backups, restore drill and monitoring | VS-020 | Not started |
 | VS-048 | Launch readiness | VS-011 – VS-047 | Not started |
+
+**Final phase (owner decision, 2026-10-17):** no server is set up until the project is finished and tested locally. VS-020, VS-021, VS-032, VS-047 and VS-048 come last, in that order. Nothing before them may depend on them; where an earlier slice would have used nginx, it uses the API instead and records how VS-020 may take over (VS-035, ADR-031).
 
 ---
 
@@ -417,10 +420,10 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 
 ## VS-019 — Protected STL download through nginx
 **Status:** Removed by ADR-019 (STL files are emailed manually; the platform stores none).
-**Was:** downloads through nginx `X-Accel-Redirect`. Its nginx service and client-IP fix move to VS-020; its internal-location pattern is first built by VS-035.
+**Was:** downloads through nginx `X-Accel-Redirect`. Its nginx service and client-IP fix move to VS-020. The only protected files left, Bring Your Idea attachments, are streamed by the API (VS-035, ADR-031); VS-020 may move them to an nginx `internal` location.
 
 ## VS-020 — Staging environment and deploy pipeline
-**Status:** Not started
+**Status:** Not started (final phase: needs a server)
 **Depends on:** VS-015
 **Goal:** Any `main` build can be deployed to a production-shaped staging host with a health gate, and rolled back in one command.
 - **Model / migration:** None. `alembic upgrade head` becomes a deploy step.
@@ -429,6 +432,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - A deploy job gates on `/health/ready` and rolls back automatically on failure.
 - **Logic:**
   - Adds the nginx service in front of `api` (moved from the removed VS-019).
+  - May switch the VS-035 attachment download (`GET /api/v1/admin/custom-requests/{id}/attachments/{attachment_id}/download`) to `X-Accel-Redirect` on an nginx `internal` location over `uploads_private`. The API keeps the admin check, the expiry check, the audit row and the response headers; nginx only sends the bytes (ADR-031).
   - Fixes client IPs behind the proxy: uvicorn runs with `--proxy-headers` and `--forwarded-allow-ips` limited to nginx. Otherwise the rate limiter, login throttle and IP hashes would all see nginx's IP.
   - Production Compose: nginx with TLS and automatic renewal, HSTS/CSP/security headers, body-size limits, and an allowlisted webhook location.
     - Body-size limits: `POST /api/v1/custom-requests` needs about 51 MB (5 × 10 MB images plus framing, ADR-030); admin image uploads about 10 MB; everything else can stay small.
@@ -455,7 +459,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - The public reference lists are cacheable, and the login and registration limits have been rechecked and recorded.
 
 ## VS-021 — Production email delivery
-**Status:** Not started
+**Status:** Not started (final phase: needs a server)
 **Depends on:** VS-020
 **Goal:** Verification and reset emails, and every later email, actually reach inboxes.
 - **Model / migration:** None.
@@ -875,7 +879,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - An unpaid cash line is never refunded, and only a whole-order refusal or no-show blocks cash, whatever the cancel order.
 
 ## VS-032 — Live online payment provider
-**Status:** Not started
+**Status:** Not started (final phase: needs a server)
 **Depends on:** VS-020, VS-024, VS-030 (and the SRS §30.4 provider decision and merchant credentials)
 **Goal:** Real online revenue: configuring the chosen provider(s) runs the same checkout, verification and recovery flows against them. Refunds stay manual (ADR-024).
 - **Model / migration:** Adds the chosen provider value(s) to `payment_provider`; provider metadata only if needed.
@@ -961,13 +965,13 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 - **Built:** migration `26d5d039d72c`; ADR-030 (0–5 images at 10 MB, a 20/hour attempt limit and body cap before parsing, 90-day retention stamped at submission, no `user_id`, an in-app notification of new type `custom_request` to every active administrator); `docs/custom-requests.md`. Tests: `tests/integration/engagement/test_custom_requests_api.py`, `test_custom_request_schema.py`, `test_purge_expired_attachments.py`, `test_reap_private_attachments.py`; `tests/concurrency/test_attachment_purge_race.py`; `tests/unit/engagement/test_custom_request_*.py`, `test_submit_custom_request.py`.
 
 ## VS-035 — Bring Your Idea pipeline and funnel
-**Status:** Not started
-**Depends on:** VS-034, VS-020
+**Status:** Done
+**Depends on:** VS-034 (VS-020 dropped on 2026-10-17: the download is streamed by the API, ADR-031)
 **Goal:** The administrator works each lead through the pipeline, records the quote and outcome, and measures conversion.
 - **Model / migration:** None.
 - **Endpoints / jobs:** `GET /api/v1/admin/custom-requests`, `GET/PATCH /api/v1/admin/custom-requests/{id}`, `POST …/{id}/transition`, `GET …/{id}/attachments/{attachment_id}/download`, `GET /api/v1/admin/analytics/custom-requests/funnel`.
 - **Logic:**
-  - Adds an nginx `internal` location on `uploads_private` (the first protected-file location since VS-019 was removed), served with `X-Accel-Redirect` after the admin check.
+  - The admin-only download is streamed by the API: `Cache-Control: no-store`, `Content-Disposition: attachment`, `X-Content-Type-Options: nosniff`. VS-020 may later switch it to nginx `X-Accel-Redirect` (ADR-031).
   - Pipeline: `new → contacted → quoted → in_progress → completed → closed`, with `lost` reachable from `contacted` or `quoted`.
   - `quoted` requires an amount in cents.
   - The funnel counts submissions by cohort (submission date).
@@ -977,6 +981,13 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - An expired attachment cannot be downloaded.
   - Funnel counts match seeded data.
 - **Done when:** Every lead follows the state machine, and the funnel shows won and lost counts.
+- **Built:** no migration. Decisions in [ADR-031](adr/ADR-031-bring-your-idea-pipeline-and-api-streamed-download.md), which amends ADR-030 decision 3; contract in [`custom-requests.md`](custom-requests.md#admin-pipeline-vs-035).
+  - The server derives the outcome (`won` at `in_progress`, `lost` at `lost`, which also stamps `closed_at`). A quote of 1 to 100,000,000 cents is required on `quoted` and refused elsewhere, in USD. A same-state move is 409.
+  - The download sends a sandboxed CSP and `same-origin` CORP too, renames the file to its stored type, and has no Range support. Expired, purged, missing and another request's attachments are all 404.
+  - The funnel takes `[from, to)` (default the last 90 days, at most 366, errors 422) and counts a stage once reached.
+  - List, view, transition, notes and download are audited, notes without their text.
+  - New `StoragePort.open` streams an object.
+  - Tests: `tests/unit/engagement/test_custom_request_pipeline.py`, `tests/unit/integrations/test_local_storage.py`; `tests/integration/engagement/test_custom_request_admin_api.py`, `test_custom_request_attachment_download.py`, `test_custom_request_funnel.py`; `tests/concurrency/test_custom_request_transition_race.py`; `tests/smoke/test_vs035_smoke.py`.
 
 ## VS-036 — Reviews and Verified Purchase badge
 **Status:** Not started
@@ -1171,7 +1182,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 - **Done when:** Both jobs run on schedule and are safe to run twice.
 
 ## VS-047 — Backups, restore drill and monitoring
-**Status:** Not started
+**Status:** Not started (final phase: needs a server)
 **Depends on:** VS-020
 **Goal:** The single-host system survives data loss through verified off-server backups, and silent failures alert a person.
 - **Model / migration:** None.
@@ -1193,7 +1204,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 - **Done when:** The restore drill meets RPO ≤ 5 min for the database and ≤ 24 h for files, and RTO ≤ 4 h, and the result is recorded.
 
 ## VS-048 — Launch readiness
-**Status:** Not started
+**Status:** Not started (final phase: needs a server)
 **Depends on:** VS-011 – VS-047
 **Goal:** Prove that the finished system meets its performance and security targets, and switch the shop on deliberately.
 - **Model / migration:** None.

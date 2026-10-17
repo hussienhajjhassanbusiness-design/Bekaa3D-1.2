@@ -36,6 +36,7 @@ Only expensive-to-reverse decisions belong here. Folder names and small refactor
 - [ADR-028: Keyed, monthly-rotated IP hashes - a database salt plus an environment pepper, old salts deleted](ADR-028-keyed-monthly-rotated-ip-hashes.md)
 - [ADR-029: Cart - hard-deleted lines, a type snapshot behind a composite FK, a first-add price snapshot, one cart lock and no product locks, a 50-line cap](ADR-029-cart-decisions.md)
 - [ADR-030: Bring Your Idea submission - optional images under code-constant caps, a pre-parse attempt limit, private storage, expiry stamped at submission, and an admin notification category](ADR-030-bring-your-idea-submission.md)
+- [ADR-031: Bring Your Idea pipeline - an API-streamed admin download until a server exists, a server-derived outcome, a bounded quote, and a cohort funnel](ADR-031-bring-your-idea-pipeline-and-api-streamed-download.md)
 
 ## Governance
 
