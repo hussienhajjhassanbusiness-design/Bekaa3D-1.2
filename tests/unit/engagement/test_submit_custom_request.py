@@ -27,7 +27,7 @@ from app.engagement.domain.exceptions import AttachmentMalwareError, AttachmentR
 from app.integrations.images.pillow import PillowImageSanitizer
 from app.integrations.scanning.fake import EICAR, FakeScanner
 from app.integrations.scanning.ports import ScannerUnavailableError
-from app.integrations.storage.ports import StoragePort, StoredObject
+from app.integrations.storage.ports import ObjectStream, StoragePort, StoredObject
 from tests.image_samples import sample
 
 DETAILS = CustomRequestDetails.of(
@@ -61,6 +61,9 @@ class MemoryStorage(StoragePort):
         now = datetime.now(UTC)
         return [StoredObject(k, now) for k in self.files if k.startswith(prefix)]
 
+    async def open(self, key: str) -> ObjectStream:
+        raise NotImplementedError
+
 
 class MemoryRequests:
     def __init__(self, *, fail: bool = False) -> None:
@@ -91,9 +94,18 @@ class MemoryRequests:
         )
         return CustomRequest(
             id=request_id,
-            project_title=details.project_title,
+            **vars(details),
             status=CustomRequestStatus.NEW,
+            quoted_amount_cents=None,
+            currency=None,
+            outcome=None,
+            admin_notes=None,
+            contacted_at=None,
+            quoted_at=None,
+            completed_at=None,
+            closed_at=None,
             created_at=submitted_at,
+            updated_at=submitted_at,
             attachments=rows,
         )
 

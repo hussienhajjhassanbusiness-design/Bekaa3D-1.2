@@ -984,7 +984,7 @@ but determining whether the referenced product is STL is cross-table. VS-022 the
 | `estimated_dispatch_at` | TIMESTAMPTZ | Yes | physical orders |
 | `terms_accepted_at` | TIMESTAMPTZ | No | consent |
 | `digital_terms_accepted_at` | TIMESTAMPTZ | Yes | required when digital lines exist |
-| `digital_terms_version` | TEXT | Yes | which digital-terms text was accepted; set exactly when `digital_terms_accepted_at` is (VS-023, ADR-031) |
+| `digital_terms_version` | TEXT | Yes | which digital-terms text was accepted; set exactly when `digital_terms_accepted_at` is (VS-023, ADR-032) |
 | `cash_terms_accepted_at` | TIMESTAMPTZ | Yes | required when `payment_method = cash` |
 | `placed_at` | TIMESTAMPTZ | No |  |
 | `completed_at` | TIMESTAMPTZ | Yes |  |
@@ -1170,7 +1170,7 @@ batch_size_snapshot IS NULL
 | `order_item_id` | UUID | Yes | FK → `order_items.id` |
 | `from_status` | TEXT | Yes | NULL for initial state |
 | `to_status` | TEXT | No |  |
-| `actor_user_id` | UUID | Yes | FK → `users.id` ON DELETE SET NULL (VS-023, ADR-031); NULL = system |
+| `actor_user_id` | UUID | Yes | FK → `users.id` ON DELETE SET NULL (VS-023, ADR-032); NULL = system |
 | `reason` | TEXT | Yes |  |
 | `created_at` | TIMESTAMPTZ | No | append-only |
 
@@ -1615,7 +1615,8 @@ OR (quoted_amount_cents >= 0 AND currency = 'USD')
 - guest allowed;
 - captcha/rate-limit handled outside DB;
 - status follows approved pipeline;
-- quote is for lead/funnel reporting;
+- quote is for lead/funnel reporting: 1 to 100,000,000 cents, set only by the move to `quoted` (ADR-031);
+- the server sets `outcome` (`won` at `in_progress`, `lost` at `lost`) and `closed_at` on `closed` or `lost`;
 - commercial agreement remains off-platform.
 
 ---

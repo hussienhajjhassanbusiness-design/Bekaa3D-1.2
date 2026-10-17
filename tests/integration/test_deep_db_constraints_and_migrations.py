@@ -311,10 +311,10 @@ async def test_every_primary_key_is_a_uuid(conn: AsyncConnection) -> None:
 # Financial rows keep their owner: database-design.md 14 mandates RESTRICT, and the purge
 # never reaches them because it deletes only never-verified users, who cannot check out.
 RESTRICT_TO_USERS_ALLOWED = {
-    ("orders", "user_id"),  # database-design.md:1878
-    ("order_items", "user_id"),  # database-design.md:1889
-    ("order_items", "delivered_by"),  # database-design.md:1890
-    ("payments", "recorded_by"),  # database-design.md:1891
+    ("orders", "user_id"),  # database-design.md:1879
+    ("order_items", "user_id"),  # database-design.md:1890
+    ("order_items", "delivered_by"),  # database-design.md:1891
+    ("payments", "recorded_by"),  # database-design.md:1892
 }
 
 _FKS_TO_USERS = (

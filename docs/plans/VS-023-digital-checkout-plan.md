@@ -11,14 +11,21 @@
 - Re-derive the head immediately before `alembic revision`, because VS-023b or another
   slice may merge first.
 
+## Revision 4 (2026-10-17): merged `origin/main` (VS-035)
+
+- VS-035 (`902cde2`) took ADR-031, so VS-023's ADR is now **ADR-032**: the file,
+  `docs/adr/README.md`, this plan, the migration comment and database-design.
+- VS-035 adds no migration. The head stays `03a4730dd046` (parent `26d5d039d72c`).
+- The only conflict was the ADR index in `docs/adr/README.md`; both lines are kept.
+
 ## Revision 3 (2026-10-17): RESTRICT foreign keys to users (owner, option 1)
 
 The PR A suite run found `test_no_foreign_key_to_users_can_block_the_purge` requiring every
 FK to `users` to be CASCADE or SET NULL. That contradicts database-design §14. The owner
-chose to keep the spec. Recorded in ADR-031 decisions 1-2.
+chose to keep the spec. Recorded in ADR-032 decisions 1-2.
 
-- **RESTRICT is intentional** on `orders.user_id` (DD `:1878`), `order_items.user_id`
-  (`:1889`), `order_items.delivered_by` (`:1890`) and `payments.recorded_by` (`:1891`).
+- **RESTRICT is intentional** on `orders.user_id` (DD `:1879`), `order_items.user_id`
+  (`:1890`), `order_items.delivered_by` (`:1891`) and `payments.recorded_by` (`:1892`).
   - Users who own money records are anonymised, never deleted (ADR-009).
   - The purge cannot reach these rows: it deletes only `email_verified_at IS NULL`
     accounts (`src/app/identity/infrastructure/repositories.py:368-390`), and checkout
@@ -36,13 +43,13 @@ chose to keep the spec. Recorded in ADR-031 decisions 1-2.
 
 1. **`main` moved to `ae93c2a` (VS-034).** The head is now `26d5d039d72c`, and
    `ADR-030-bring-your-idea-submission.md` took ADR-030.
-   - VS-023's ADR is **ADR-031**, renamed everywhere in this plan. ADR-031 is the next
-     free number on `origin/main`; no remote branch adds `ADR-03x`.
+   - VS-023's ADR was renamed ADR-031 here, then **ADR-032** in Revision 4 once VS-035
+     merged its own ADR-031; it is renamed everywhere in this plan.
    - VS-034 also added one line at database-design `:346` (and further lines in
      §12.4/§12.5), so every citation below that line moved. The old → new references
      are in the commit message of this revision.
 2. **Q18 decided (owner):** PR A adds nullable **`orders.digital_terms_version` TEXT**,
-   a plan addition to be recorded in ADR-031.
+   a plan addition to be recorded in ADR-032.
    - PR B writes a constant (`DIGITAL_TERMS_VERSION`) until a settings value exists.
    - It is NULL for orders without STL lines, and set whenever
      `digital_terms_accepted_at` is set (`ck_orders_digital_terms_version`).
@@ -66,7 +73,7 @@ chose to keep the spec. Recorded in ADR-031 decisions 1-2.
    - **Go-live gate:** no real online provider may be configured in production before
      VS-024 (retry, reconciliation, hold release) **and** VS-030 (late-capture refund
      obligations) are merged, unless an operational alert on late captures and stuck
-     payments exists. ADR-031 records it, and the VS-032 entry in the slice plan
+     payments exists. ADR-032 records it, and the VS-032 entry in the slice plan
      references it.
 
 **Preflight (2026-10-16, `main` at `d727793`, tree clean):**
@@ -75,8 +82,8 @@ chose to keep the spec. Recorded in ADR-031 decisions 1-2.
 - Commits naming VS-023 are VS-022's prepared interface (`dd76d2c`, "incl. the VS-023
   lock interface") and ADR-025 (`8b16928`); both are merged and are inputs, not VS-023
   work. No VS-023 plan exists in `docs/plans/` or on any branch.
-- Next free ADR number on `origin/main` and every remote branch: **ADR-031**
-  (Revision 2: `docs/adr/` now ends at ADR-030, VS-034's; no branch adds ADR-03x).
+- Next free ADR number on `origin/main` and every remote branch: **ADR-032**
+  (Revision 4: `docs/adr/` now ends at ADR-031, VS-035's; no branch adds ADR-032).
 - Code evidence: no `orders`, `order_items`, `payments`, `webhook_events` or
   `idempotency_records` model, table or migration exists. `src/app/payments/` and
   `src/app/fulfillment/` are empty layer packages. No payment port or adapter exists;
@@ -101,7 +108,7 @@ section named. Earlier decisions that changed are marked **CHANGED**.
      ```
      and `:1188`: "a failed refund never counts toward `refunded`, but an owed (not
      reissued) one counts as a refund present".
-   - The VS-030 bug (`docs/vertical-slice-plan.md:815`): "on a single-line order (or one
+   - The VS-030 bug (`docs/vertical-slice-plan.md:820`): "on a single-line order (or one
      where every line is fully refunded) a full refund that later fails leaves the line
      `refunded`. The order then reads `refunded` while money is still owed, which breaks
      ADR-024 decision 11 … Separately, 'all lines cancelled → cancelled' is checked
@@ -200,7 +207,7 @@ section named. Earlier decisions that changed are marked **CHANGED**.
     - All three are set to one `now` in the `orders` INSERT inside Tx1, the same
       statement as the order (functional-requirements.md:344 requires one transaction).
     - **No terms version is stored.** The spec defines none (`SRS.md:666` "with
-      timestamp"; api-endpoints.md:1596 "immutable order timestamps"). Q18 asks whether
+      timestamp"; api-endpoints.md:1594 "immutable order timestamps"). Q18 asks whether
       to add one.
 11. **PR A** (§8). The exact file list, the main-stays-green argument and the five
     checkpoints with their reports are in §8.
@@ -239,15 +246,15 @@ section named. Earlier decisions that changed are marked **CHANGED**.
     (daily).
 11. Startup refusal of `ENVIRONMENT=production` with the `mock` provider (API and
     worker).
-12. Docs: ADR-031, `docs/checkout.md`, spec updates (§7).
+12. Docs: ADR-032, `docs/checkout.md`, spec updates (§7).
 
 ### Non-goals, and exactly who owns them
 
 | Left to | What | Why it is not here |
 |---|---|---|
-| **VS-023b** (co-developer) | `GET /admin/stl-deliveries`; `POST /admin/orders/{id}/items/{item_id}/transition` (`awaiting_delivery → delivered`); the queue index `order_items(created_at) WHERE product_type='stl' AND fulfillment_status='awaiting_delivery'`; deleting `daily_download_cap`; removing `src/app/digital_assets`; the "your STL file has been sent" email/notification. | Separate slice. VS-023 **does** create `order_items.delivered_by`, `fulfilled_at` and both delivery CHECKs (§4.2), so VS-023b's migration is index + setting delete only (`docs/vertical-slice-plan.md:562` "unless VS-023 already created them"). |
-| **VS-024** | Retry (`POST /me/orders/{id}/payments`), `reconcile_payments`, `release_stale_checkouts` (which sets `orders.cancelled_at` and cancels lines), manual confirm, the admin payments views, and its two "Must resolve before build" items (`docs/vertical-slice-plan.md:617+`). | VS-023 leaves a failed/expired attempt `pending_payment` (BR-058); nothing in VS-023 cancels an order. VS-024 reuses `verify_payment()` / `apply_provider_result()` (§3.6). |
-| **VS-028** | Physical and mixed carts, delivery/pickup, address `FOR SHARE`, phone normalisation + `contact_phone_hash` (`PHONE_HASH_SALT`), cash eligibility and limits, the phone advisory lock, dispatch estimate, the three cash settings, deleting `free_shipping_threshold`. | VS-023 answers `422 INVALID_FULFILLMENT` for any physical line and `422 PAYMENT_METHOD_NOT_ALLOWED` for `cash` (`docs/vertical-slice-plan.md:532`). All order columns VS-028 needs already exist (`:679` "No order columns (they come from VS-023)"). |
+| **VS-023b** (co-developer) | `GET /admin/stl-deliveries`; `POST /admin/orders/{id}/items/{item_id}/transition` (`awaiting_delivery → delivered`); the queue index `order_items(created_at) WHERE product_type='stl' AND fulfillment_status='awaiting_delivery'`; deleting `daily_download_cap`; removing `src/app/digital_assets`; the "your STL file has been sent" email/notification. | Separate slice. VS-023 **does** create `order_items.delivered_by`, `fulfilled_at` and both delivery CHECKs (§4.2), so VS-023b's migration is index + setting delete only (`docs/vertical-slice-plan.md:567` "unless VS-023 already created them"). |
+| **VS-024** | Retry (`POST /me/orders/{id}/payments`), `reconcile_payments`, `release_stale_checkouts` (which sets `orders.cancelled_at` and cancels lines), manual confirm, the admin payments views, and its two "Must resolve before build" items (`docs/vertical-slice-plan.md:637+`). | VS-023 leaves a failed/expired attempt `pending_payment` (BR-058); nothing in VS-023 cancels an order. VS-024 reuses `verify_payment()` / `apply_provider_result()` (§3.6). |
+| **VS-028** | Physical and mixed carts, delivery/pickup, address `FOR SHARE`, phone normalisation + `contact_phone_hash` (`PHONE_HASH_SALT`), cash eligibility and limits, the phone advisory lock, dispatch estimate, the three cash settings, deleting `free_shipping_threshold`. | VS-023 answers `422 INVALID_FULFILLMENT` for any physical line and `422 PAYMENT_METHOD_NOT_ALLOWED` for `cash` (`docs/vertical-slice-plan.md:538`). All order columns VS-028 needs already exist (`:684` "No order columns (they come from VS-023)"). |
 | VS-025 | `GET /me/orders*`, `OrderDetail`, `payment_due`/`can_cancel`. | VS-023 returns only a minimal `CheckoutRead`. |
 | VS-030 | `refunds`, `refund_items`, the automatic `late_capture` refund obligation. | VS-023 records `late_captured_at` + an alert only; VS-030 must also create obligations for rows already late-captured (§9 R7). |
 | VS-032 | Real provider value(s), adapter, list-of-providers setting, `whish_*` rename. | ADR-024 d13; SRS §30.4 open. |
@@ -456,7 +463,7 @@ Rule order: **SRS §20.2 verbatim** (Revision 1 item 1; `docs/SRS.md:1172-1186`)
 
 - The refund inputs default to "none" until VS-030 supplies them.
 - **Note for VS-030** (not decided here): the PR #8 review case
-  (`vertical-slice-plan.md:815`) gives `refunded` for case A and `cancelled` for case B
+  (`vertical-slice-plan.md:820`) gives `refunded` for case A and `cancelled` for case B
   (Revision 1 item 1 table), while ADR-024 d11 wants `partially_refunded`.
 - Changing the rule order needs an ADR and the co-developer's confirmation, and must
   change this function, SRS §20.2, database-design §17.2 and the pinned unit tests
@@ -724,7 +731,7 @@ async def apply_provider_result(
 - **`APPLY_PAID`:** payment `paid` + `verified_at`; `ordering.public.mark_order_paid`;
   audit `payment.verified` (lines moved in `after_data`); outbox template
   `order_payment_confirmed` to `orders.customer_email_snapshot` ("the administrator will
-  email your file to …", `docs/vertical-slice-plan.md:529`); `create_notification(type=
+  email your file to …", `docs/vertical-slice-plan.md:534`); `create_notification(type=
   PAYMENT, payload={"event": "payment.confirmed", "order_id", "order_number"})`.
 - **`MARK_*`:** status + `failed_at`/`expired_at`; audit `payment.failed`/`payment.expired`;
   recompute (stays `pending_payment`).
@@ -1008,7 +1015,7 @@ NULL; `provider_metadata` JSONB NULL; `recorded_by` FK users NULL; timestamps.
 | `uq_payments_one_cash` | UNIQUE(order_id) WHERE provider = 'cash'; **created before `uq_payments_one_live`** so a second cash payment reports this name (PostgreSQL checks unique indexes in creation order; a cash payment is always live, so otherwise one-live always fired first) | INV-22 |
 | `uq_payments_provider_reference` | UNIQUE(provider, provider_payment_id) (NULLs distinct) | Q13 (ADR-024 appendix, VS-032 item, brought forward) |
 | `ix_payments_order` | (order_id) | lookups |
-| `ix_payments_unsettled` | (status, initiated_at) WHERE status IN ('pending','processing') | §19.8 widened to cover VS-024's "pending or processing" (`vertical-slice-plan.md:609`); doc update |
+| `ix_payments_unsettled` | (status, initiated_at) WHERE status IN ('pending','processing') | §19.8 widened to cover VS-024's "pending or processing" (`vertical-slice-plan.md:610`); doc update |
 | `ix_payments_late_captured` *(new)* | (late_captured_at) WHERE late_captured_at IS NOT NULL | the late-capture listing until VS-030 and its backfill (Revision 1 item 8); doc update |
 
 ### 4.6 `webhook_events` (§9.2 + link) — resolves Q2
@@ -1031,7 +1038,7 @@ leaves it unprocessed (`processing_error` set) for the next run.
 
 ### 4.7 `idempotency_records` (§13.4)
 
-Columns: `id`; `user_id` FK users `ON DELETE CASCADE` NULL (database-design.md:1911);
+Columns: `id`; `user_id` FK users `ON DELETE CASCADE` NULL (database-design.md:1912);
 `scope` TEXT; `key` TEXT; `request_hash` CHAR(64); **`state` TEXT NOT NULL**
 *(plan addition)*; **`resource_id` UUID NULL** *(plan addition: the order id, no FK,
 because the record is scope-generic)*; `status_code` INT NULL; `response_body` JSONB
@@ -1049,7 +1056,7 @@ Constraints and indexes:
 - `ix_idempotency_records_expires_at`.
 
 `state` is TEXT with a CHECK rather than a new enum, so VS-030 can reuse the table with
-no enum migration. database-design §13.4 (`:1802-1845`) gains both columns in PR A.
+no enum migration. database-design §13.4 (`:1803-1846`) gains both columns in PR A.
 
 ### 4.8 Models and registration
 
@@ -1413,7 +1420,7 @@ state must be the same instance for both (R9).
 
 ## 7. Docs and ADRs
 
-- **ADR-031 "Checkout, idempotency and payment verification"** (next free number,
+- **ADR-032 "Checkout, idempotency and payment verification"** (next free number,
   verified on origin). It records:
   - package ownership (Q1);
   - the two-transaction checkout with provider-after-commit and which responses are
@@ -1500,7 +1507,7 @@ migration lock")**
 | `tests/integration/test_model_migration_parity.py` | new: after `upgrade head`, Alembic `compare_metadata(MigrationContext, Base.metadata)` restricted to the six new tables must be empty (columns, types, nullability, indexes, uniques, FKs) |
 | `tests/integration/test_migration_reversibility.py` | + an orders block: the new revision is in the chain with `down_revision == "26d5d039d72c"`, the six tables and eight enums exist after upgrade and are gone after `downgrade` to its own parent (`26d5d039d72c`), then `upgrade head` again. VS-034's `BYI_REVISION` block is left untouched. The existing **`assert len(scripts.get_heads()) == 1`** (`:53`) stays and still pins no head revision, so VS-023b's next migration needs no edit here |
 | `tests/integration/test_deep_db_constraints_and_migrations.py` | Revision 3: the purge test allowlists the four §14 RESTRICT pairs |
-| `docs/adr/ADR-031-checkout-idempotency-and-payment-verification.md`, `docs/adr/README.md` | Revision 3: ADR-031 with the schema decisions; PR B adds the rest |
+| `docs/adr/ADR-032-checkout-idempotency-and-payment-verification.md`, `docs/adr/README.md` | Revision 3: ADR-032 with the schema decisions; PR B adds the rest |
 | `docs/requirments/database-design.md` | the §7 schema edits (plan additions: `webhook_events` link, idempotency `state`/`resource_id`, new guards and indexes) |
 
 **`main` stays green with PR A alone:**
@@ -1571,7 +1578,7 @@ migration lock")**
 > - the contract suite green.
 
 15. Smoke + e2e; `scripts/mock_pay.py`.
-16. Docs and ADR-031 (§7); OpenAPI regeneration.
+16. Docs and ADR-032 (§7); OpenAPI regeneration.
 17. Full suite in the five chunks + ruff + mypy; open PR B.
 
 > **Checkpoint 5 — PR B ready.** Reports:
@@ -1624,7 +1631,7 @@ Race 7 and races 1–6 exercise it.
 ## 9. Risks
 
 - **R1 — The `derive_order_status` rule order differs from SRS §20.2 text** (Q10). If not
-  accepted, VS-030 inherits the known failed-refund bug (`vertical-slice-plan.md:815`).
+  accepted, VS-030 inherits the known failed-refund bug (`vertical-slice-plan.md:820`).
 - **R2 — The provider call fails after commit.** The order exists, cart cleared, attempt
   `failed`, 502. Recovery is VS-024's retry. Until VS-024 merges there is no retry
   endpoint, so the customer cannot pay that order; they must re-add and check out again
@@ -1699,7 +1706,7 @@ Race 7 and races 1–6 exercise it.
    transaction. Validate consent before any write, write the timestamps in the `orders`
    INSERT, clear the cart last. Reword the plan row to match SRS ("recorded on the order
    row; cart cleared last"). Evidence: `SRS.md:665-666`,
-   `vertical-slice-plan.md:525-526`, database-design §25 steps 12–13.
+   `vertical-slice-plan.md:530-531`, database-design §25 steps 12–13.
 5. **Where does startup refuse production + mock, and what does production run before
    VS-032?** *Recommendation:* `configured_payment_providers(settings)` called at
    `main.py:28` (beside `captcha_verifier`) and `worker.py:39` (beside
@@ -1747,7 +1754,7 @@ Race 7 and races 1–6 exercise it.
    `recompute_order_status`, `derive_order_status`, `stl_owned`) and `payments.public`
    (`verify_payment`, `apply_provider_result`, `PaymentProviderPort`,
    `configured_payment_providers`, `idempotency_store` via Platform) at Checkpoint 2.
-10. **`derive_order_status` rule order (VS-030 review, `vertical-slice-plan.md:815`).**
+10. **`derive_order_status` rule order (VS-030 review, `vertical-slice-plan.md:820`).**
     *Recommendation (Revision 1, CHANGED):* VS-023 implements SRS §20.2 **as written**
     (`SRS.md:1172-1186`), because the SRS does not provably contradict itself (Revision
     1 item 1). The tests pin case A → `refunded` and case B → `cancelled`. The
@@ -1794,9 +1801,9 @@ Race 7 and races 1–6 exercise it.
       bucket (30/min), so it cannot exhaust the legitimate one;
     - `/me/stl-ownership`: unlimited, like other reads.
 18. **DECIDED (owner, Revision 2):** add nullable `orders.digital_terms_version` in PR A;
-    PR B writes a constant until a settings value exists; recorded in ADR-031. The
+    PR B writes a constant until a settings value exists; recorded in ADR-032. The
     original question follows. **Store a terms version with consent?** (new, Revision 1 item 10). The spec stores
-    only timestamps (`SRS.md:666`; database-design `:985-988`; api-endpoints.md:1596),
+    only timestamps (`SRS.md:666`; database-design `:985-988`; api-endpoints.md:1594),
     and no versioned terms document exists to point at.
     - *Recommendation:* store none in VS-023.
     - If the owner wants evidence of which text was accepted (useful against chargebacks,

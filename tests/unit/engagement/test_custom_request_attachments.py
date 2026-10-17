@@ -72,11 +72,28 @@ def test_expiry_is_submission_time_plus_retention() -> None:
 
 
 def test_the_admin_payload_names_the_request_and_title_only() -> None:
+    now = datetime.now(UTC)
     request = CustomRequest(
         id=uuid.uuid4(),
+        name="Rima",
+        email="rima@example.com",
+        phone="+961 3 123 456",
         project_title="Cedar lamp",
+        description="A lamp.",
+        preferred_material=None,
+        preferred_colour=None,
+        dimensions=None,
         status=CustomRequestStatus.NEW,
-        created_at=datetime.now(UTC),
+        quoted_amount_cents=None,
+        currency=None,
+        outcome=None,
+        admin_notes=None,
+        contacted_at=None,
+        quoted_at=None,
+        completed_at=None,
+        closed_at=None,
+        created_at=now,
+        updated_at=now,
         attachments=(),
     )
     payload = admin_notification_payload(request)

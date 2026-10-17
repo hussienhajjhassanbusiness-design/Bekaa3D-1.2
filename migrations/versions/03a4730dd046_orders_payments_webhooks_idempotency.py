@@ -116,7 +116,7 @@ def upgrade() -> None:
         _moment("estimated_dispatch_at"),
         _moment("terms_accepted_at", nullable=False),
         _moment("digital_terms_accepted_at"),
-        # Plan addition (Q18, ADR-031): which digital-terms text was accepted.
+        # Plan addition (Q18, ADR-032): which digital-terms text was accepted.
         sa.Column("digital_terms_version", sa.Text(), nullable=True),
         _moment("cash_terms_accepted_at"),
         _moment("placed_at", nullable=False),

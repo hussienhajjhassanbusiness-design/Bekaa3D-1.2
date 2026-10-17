@@ -1,4 +1,4 @@
-# ADR-031: Checkout, idempotency and payment verification - schema decisions (VS-023)
+# ADR-032: Checkout, idempotency and payment verification - schema decisions (VS-023)
 
 **Status:** Accepted for the schema (VS-023 PR A). The checkout, idempotency and verification decisions are added by VS-023 PR B, per [the VS-023 plan](../plans/VS-023-digital-checkout-plan.md).
 **Date:** 2026-10-17
@@ -16,7 +16,7 @@ VS-023 creates the order and payment tables with every frozen column, so VS-023b
 
 ## Decision
 
-1. **Foreign keys to `users` on financial rows are `RESTRICT`, as database-design §14 mandates.** These are `orders.user_id` (`:1878`), `order_items.user_id` (`:1889`), `order_items.delivered_by` (`:1890`) and `payments.recorded_by` (`:1891`).
+1. **Foreign keys to `users` on financial rows are `RESTRICT`, as database-design §14 mandates.** These are `orders.user_id` (`:1879`), `order_items.user_id` (`:1890`), `order_items.delivered_by` (`:1891`) and `payments.recorded_by` (`:1892`).
    - A customer or administrator who owns money records is anonymised, never deleted (ADR-009).
    - The daily purge cannot reach these rows: it deletes only accounts with `email_verified_at IS NULL`, and checkout requires a verified account (BR-030).
    - `test_no_foreign_key_to_users_can_block_the_purge` allows `RESTRICT` only for these exact four (table, column) pairs. Any other `RESTRICT` key to `users` fails it.

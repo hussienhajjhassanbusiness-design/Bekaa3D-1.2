@@ -2,6 +2,7 @@
 depends on this, never on `app.engagement.infrastructure` (BUG-41)."""
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Protocol
 from uuid import UUID
@@ -12,9 +13,14 @@ from app.engagement.domain.custom_request import (
     CustomRequestAttachment,
     CustomRequestDetails,
     NewAttachment,
+    PipelineChange,
 )
 from app.engagement.domain.entities import Notification, WishlistItem
-from app.engagement.domain.enums import ContactMessageStatus, NotificationType
+from app.engagement.domain.enums import (
+    ContactMessageStatus,
+    CustomRequestStatus,
+    NotificationType,
+)
 
 
 class NotificationStore(Protocol):
@@ -67,6 +73,55 @@ class CustomRequestStore(Protocol):
         ...
 
     async def delete_attachments(self, attachment_ids: Sequence[UUID]) -> int: ...
+
+
+@dataclass(frozen=True)
+class CustomRequestFunnel:
+    """One submission-date cohort; a stage counts every lead that ever reached it."""
+
+    submitted: int
+    contacted: int
+    quoted: int
+    won: int
+    lost: int
+    quoted_total_cents: int
+    won_total_cents: int
+
+
+class CustomRequestPipelineStore(Protocol):
+    """The admin side of Bring Your Idea (VS-035); attachments listed are unexpired."""
+
+    async def get(self, request_id: UUID, *, now: datetime) -> CustomRequest | None: ...
+
+    async def get_for_update(self, request_id: UUID, *, now: datetime) -> CustomRequest | None: ...
+
+    async def apply(
+        self, request_id: UUID, change: PipelineChange, *, now: datetime
+    ) -> CustomRequest: ...
+
+    async def set_admin_notes(
+        self, request_id: UUID, notes: str | None, *, now: datetime
+    ) -> CustomRequest: ...
+
+    async def list_page(
+        self,
+        *,
+        limit: int,
+        after: tuple[CustomRequestStatus, datetime, UUID] | None,
+        status: CustomRequestStatus | None,
+        created_after: datetime | None,
+        created_before: datetime | None,
+        email: str | None,
+        now: datetime,
+    ) -> list[CustomRequest]: ...
+
+    async def get_attachment(
+        self, request_id: UUID, attachment_id: UUID
+    ) -> CustomRequestAttachment | None: ...
+
+    async def funnel(self, *, created_from: datetime, created_to: datetime) -> CustomRequestFunnel:
+        """Leads with `created_from <= created_at < created_to`."""
+        ...
 
 
 class AdministratorDirectory(Protocol):

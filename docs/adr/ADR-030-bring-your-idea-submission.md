@@ -4,6 +4,7 @@
 **Date:** 2026-10-17
 **Source basis:** Owner decisions of 2026-10-17 on the VS-034 open questions (Q1 to Q11, plus the admin notification); SRS 13.2-13.4, BR-110-BR-115, SEC-11-SEC-16, FR-15; [ADR-021](ADR-021-image-upload-pipeline.md); [ADR-026](ADR-026-captcha-refusal-and-outage.md); SRS §30.3 (retention period, a design-time decision)
 **Applies first to:** `POST /api/v1/custom-requests` (VS-034). VS-035 builds the admin pipeline on these tables.
+**Amended by:** [ADR-031](ADR-031-bring-your-idea-pipeline-and-api-streamed-download.md): the admin download is streamed by the API until VS-020, not served with `X-Accel-Redirect` (decision 3).
 
 ## Context
 
