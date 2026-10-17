@@ -48,6 +48,8 @@ async def seed_online_order(
         "line_total_cents": total_cents,
         "fulfillment_status": line_status,
     }
+    if line_status == "delivered":
+        line |= {"fulfilled_at": NOW, "delivered_by": user_id}
     for table, row in (("orders", order), ("order_items", line)):
         await db.execute(
             text(

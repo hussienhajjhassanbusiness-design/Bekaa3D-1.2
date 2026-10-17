@@ -9,6 +9,7 @@ from app.catalog.api.storefront import public_router as storefront_router
 from app.engagement.api.contact_messages import public_router as contact_router
 from app.engagement.api.custom_requests import public_router as custom_request_router
 from app.ordering.api.cart import router as cart_router
+from app.ordering.api.checkout import router as checkout_router
 from app.platform.api.settings import public_router as public_settings_router
 
 router = APIRouter(prefix="/api/v1")
@@ -29,5 +30,7 @@ router.include_router(search_router)
 router.include_router(contact_router)
 # VS-022. The customer's cart: GET /api/v1/cart and /cart/items* (api-endpoints.md 10.1).
 router.include_router(cart_router)
+# VS-023. Checkout: POST /api/v1/checkout (two transactions; api-endpoints.md 10.2).
+router.include_router(checkout_router)
 # VS-034. Bring Your Idea: guest multipart form, captcha + rate limits (api-endpoints.md 7.2).
 router.include_router(custom_request_router)

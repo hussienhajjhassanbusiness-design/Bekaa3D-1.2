@@ -76,7 +76,7 @@ async def place_order(
     customer: CheckoutCustomer,
     command: CheckoutCommand,
     now: datetime,
-    number: Callable[[], str] = new_order_number,
+    number: Callable[[], str] | None = None,
 ) -> PlacedOrder:
     """Locks: the cart row only. Every order, line and payment row is a new INSERT, so
     no existing `orders` row is locked while the cart lock is held (ADR-029 d4)."""
@@ -131,7 +131,7 @@ async def place_order(
             digital_terms_version=DIGITAL_TERMS_VERSION if has_stl else None,
             placed_at=now,
         ),
-        number,
+        number or new_order_number,
     )
     lines = await orders.insert_lines(order, new_lines, status=OrderItemStatus.PENDING)
     payment = await attempts.open_attempt(

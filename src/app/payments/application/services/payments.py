@@ -1,6 +1,7 @@
 """Starting an online payment (VS-023 plan 3.6, 3.8). The checkout route commits Tx1,
 calls `start_online_payment` with no transaction open, then records the answer in Tx2."""
 
+import asyncio
 from datetime import datetime
 from uuid import UUID
 
@@ -10,14 +11,22 @@ from app.payments.application.ports import (
     PaymentProviderPort,
     PaymentStore,
 )
+from app.payments.domain.exceptions import ProviderUnavailableError
 from app.platform.application.ports import AuditWriter
+
+PROVIDER_TIMEOUT_SECONDS = 10.0
 
 
 async def start_online_payment(
     provider: PaymentProviderPort, request: CreatePayment
 ) -> CreatedPayment:
-    """The provider call; raises ProviderUnavailableError. No session, so no lock."""
-    return await provider.create_payment(request)
+    """The provider call, bounded at 10 s; raises ProviderUnavailableError. It takes no
+    session, so it can hold no transaction and no lock."""
+    try:
+        async with asyncio.timeout(PROVIDER_TIMEOUT_SECONDS):
+            return await provider.create_payment(request)
+    except TimeoutError as exc:
+        raise ProviderUnavailableError("The payment provider timed out.") from exc
 
 
 async def record_provider_reference(
