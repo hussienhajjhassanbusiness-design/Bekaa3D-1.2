@@ -1,6 +1,6 @@
 # VS-023 — Checkout and Verified Payment for Digital Orders: Implementation Plan
 
-**Status:** IN PROGRESS: PR A (schema only) on branch `vs-023-schema`; PR B not started
+**Status:** IN PROGRESS: PR A (schema) merged in `62586d1`; PR B (code) on branch `vs-023-checkout`
 **Date:** 2026-10-16 (Revision 2: 2026-10-17)
 **Planned against alembic head:** `26d5d039d72c` (custom_requests, VS-034, merged in
 `ae93c2a` after Revision 1).
@@ -10,6 +10,49 @@
 - This slice's migration therefore has `down_revision = "26d5d039d72c"`.
 - Re-derive the head immediately before `alembic revision`, because VS-023b or another
   slice may merge first.
+
+## Revision 5 (2026-10-17): PR B requirements (owner)
+
+PR B starts from `main` at `62586d1` (PR A merged; head `03a4730dd046`). These bind PR B in
+addition to Revisions 1-4:
+
+1. **Provider succeeded, Tx2 failed:** the payment is matched by **lookup of the payment
+   row**, not by order metadata.
+   - `create_payment` passes our `payments.id` as the merchant reference. The mock echoes
+     it as `payment_reference` in every event.
+   - `receive_webhook` resolves the payment by `(provider, provider_payment_id)` first,
+     then by `payment_reference` → `payments.id` with the same `provider`.
+   - Verification stores a missing `provider_payment_id` under the ADR-024 lock order
+     when it applies the result.
+   - Test: the Tx2 crash after the provider call, then a webhook carrying only the
+     reference resolves, verifies and marks the order paid.
+2. **Client IP and body cap:**
+   - The invalid-signature bucket keys on `client_ip(request)`
+     (`src/app/api/dependencies.py:39`), the same source as every other per-IP limiter.
+     VS-020 makes it the real client by running uvicorn with `--proxy-headers` and
+     `--forwarded-allow-ips` limited to nginx (`docs/vertical-slice-plan.md:436`).
+   - The app never parses `X-Forwarded-For` itself.
+   - The body is read through a 64 KiB bounded stream **before** `parse_webhook`. A
+     larger body is refused unread past the cap (`400 VALIDATION_ERROR`) and spends no
+     bucket.
+3. **Go-live gate:** no real online provider may be configured in production before
+   VS-024 and VS-030 are merged, unless an operational alert on late captures and stuck
+   payments exists.
+   - PR B enforces what it can: production accepts only `none` (no real adapter exists
+     until VS-032).
+   - ADR-032 records the gate, and VS-032's entry in the slice plan must cite it.
+4. **A stuck `in_progress` claim** (crash between Tx1 and Tx2):
+   - The order stays `pending_payment`, so order history (VS-025) shows it unpaid with
+     its pending attempt.
+   - For 24 h the key answers `409 IDEMPOTENCY_REQUEST_IN_PROGRESS` naming the order.
+   - After the daily purge removes the expired claim, the same key is a new request; the
+     cart is already empty, so it gets `409 CART_EMPTY`.
+   - Recovery is VS-024's reconciliation and retry. Documented in `docs/checkout.md`.
+5. **Delay from webhook receipt to `paid`** (§2.4):
+   - typical: one provider status query after the 200 (background task);
+   - worst case: about 60 s (the next `verify_payments` tick), up to about 560 s with a
+     slow provider (a 50-event batch at a 10 s timeout each). Documented in
+     `docs/checkout.md`.
 
 ## Revision 4 (2026-10-17): merged `origin/main` (VS-035)
 
