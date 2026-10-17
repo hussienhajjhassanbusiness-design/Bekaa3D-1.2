@@ -251,6 +251,20 @@ test.describe("Login real-browser accessibility & responsive check (FVS-003 BATC
     const skipLink = page.getByRole("link", { name: /skip to main content/i });
     await expect(skipLink).toBeFocused();
 
+    // The real Header (FVS-022 follow-up) now contributes its own tab
+    // stops before main content: the brand link, then Home/Shop/About.
+    // The mobile menu toggle is `tablet:hidden` and genuinely not in the
+    // tab order at this (desktop) viewport, so it's not listed here.
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("link", { name: "Bekaa3D" })).toBeFocused();
+    const mainNav = page.getByRole("navigation", { name: "Main" });
+    await page.keyboard.press("Tab");
+    await expect(mainNav.getByRole("link", { name: "Home" })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(mainNav.getByRole("link", { name: "Shop" })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(mainNav.getByRole("link", { name: "About" })).toBeFocused();
+
     await page.keyboard.press("Tab");
     const emailInput = page.getByLabel(/email/i);
     await expect(emailInput).toBeFocused();

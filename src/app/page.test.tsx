@@ -1,15 +1,68 @@
-import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api/apiClient";
 import Home from "./page";
 
-// FVS-022 follow-up: Home now renders the real Bekaa3D home surface
-// (HeroSection only) instead of the FVS-001 placeholder. The
-// AppLayout/Header/Footer shell is owned by the root layout (see
-// src/app/layout.test.tsx) — this file tests only Home's own page
-// content, not shell ownership it never had.
+// REAL STOREFRONT INTEGRATION — PHASE 1: Home now composes HeroSection
+// (with real /shop, /about CTAs), FeaturedProductsSection,
+// CategoryShowcaseSection, and WhyChooseSection, instead of the
+// Hero-only placeholder. The AppLayout/Header/Footer shell is owned by
+// the root layout (see src/app/layout.test.tsx) — this file tests only
+// Home's own page content.
+
+function renderHome() {
+  const queryClient = new QueryClient();
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <Home />
+    </QueryClientProvider>
+  );
+}
+
+function mockApi({ hasFeatured = true, hasCategories = true } = {}) {
+  vi.spyOn(apiClient, "get").mockImplementation(async (path: unknown) => {
+    const p = path as string;
+    if (p.startsWith("/api/v1/categories")) {
+      return { items: hasCategories ? [{ id: "cat-1", name: "Toys", slug: "toys" }] : [] };
+    }
+    if (p.startsWith("/api/v1/products")) {
+      return {
+        items: hasFeatured
+          ? [
+              {
+                id: "p1",
+                type: "physical",
+                name: "Articulated Dragon",
+                slug: "dragon",
+                cover_image: null,
+                price: { amount_cents: 1800, currency: "USD" },
+                category: { id: "cat-1", name: "Toys", slug: "toys" },
+                material: null,
+                colour: null,
+                is_available: true,
+                purchase_mode: "both",
+                average_rating: 0,
+                review_count: 0,
+                is_featured: true,
+              },
+            ]
+          : [],
+        next_cursor: null,
+      };
+    }
+    throw new Error(`unexpected path: ${p}`);
+  });
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 describe("Home (root route /)", () => {
   it("renders the approved Bekaa3D heading via HeroSection", () => {
-    render(<Home />);
+    mockApi();
+    renderHome();
 
     expect(
       screen.getByRole("heading", { level: 1, name: /Bekaa3D — Engineered Grade 3D Solutions/i })
@@ -17,36 +70,63 @@ describe("Home (root route /)", () => {
   });
 
   it("no longer renders the retired FVS-001 placeholder paragraph", () => {
-    render(<Home />);
+    mockApi();
+    renderHome();
 
     expect(screen.queryByText(/foundation slice/i)).not.toBeInTheDocument();
   });
 
-  it("contains no CTA links to routes that don't exist yet (no fabricated destinations)", () => {
-    render(<Home />);
+  it("renders real CTAs to the now-mounted /shop and /about routes", () => {
+    mockApi();
+    renderHome();
 
-    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Shop Now" })).toHaveAttribute("href", "/shop");
+    expect(screen.getByRole("link", { name: "Learn More" })).toHaveAttribute("href", "/about");
   });
 
-  it("contains no fabricated product, commerce, or secondary-section content", () => {
-    render(<Home />);
+  it("renders the Why Choose Bekaa3D static brand section", () => {
+    mockApi();
+    renderHome();
 
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
-    expect(screen.getAllByRole("heading")).toHaveLength(1);
+    expect(screen.getByRole("heading", { name: "Why Choose Bekaa3D" })).toBeInTheDocument();
   });
 
-  it("confines all decorative markup to exactly one aria-hidden wrapper, separate from the real heading", () => {
-    const { container } = render(<Home />);
+  it("renders real featured products when the backend returns some", async () => {
+    mockApi({ hasFeatured: true });
+    renderHome();
 
-    const wrappers = container.querySelectorAll('[aria-hidden="true"]');
+    expect(await screen.findByRole("link", { name: /Articulated Dragon/ })).toBeInTheDocument();
+  });
+
+  it("omits the featured-products section entirely when there are none — never a fake placeholder grid", async () => {
+    mockApi({ hasFeatured: false });
+    renderHome();
+
+    await waitFor(() => expect(apiClient.get).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByRole("heading", { name: "Featured Products" })).not.toBeInTheDocument());
+  });
+
+  it("omits the category showcase entirely when there are no categories", async () => {
+    mockApi({ hasCategories: false });
+    renderHome();
+
+    await waitFor(() => expect(apiClient.get).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByRole("heading", { name: "Shop by Category" })).not.toBeInTheDocument());
+  });
+
+  it("confines the hero's decorative markup to exactly one aria-hidden wrapper, separate from the real heading", () => {
+    mockApi();
+    const { container } = renderHome();
+
+    const heroWrapper = container.querySelector(".relative.overflow-hidden");
+    expect(heroWrapper).not.toBeNull();
+    const wrappers = heroWrapper!.querySelectorAll(':scope > [aria-hidden="true"]');
     expect(wrappers).toHaveLength(1);
     const wrapper = wrappers[0]!;
 
     const heading = screen.getByRole("heading", { level: 1 });
     expect(wrapper.contains(heading)).toBe(false);
 
-    // Every decorative child element lives inside that one wrapper — none
-    // sits outside it, unhidden, where assistive tech would read it.
     const decorativeChildren = wrapper.querySelectorAll("div");
     expect(decorativeChildren.length).toBeGreaterThan(0);
   });

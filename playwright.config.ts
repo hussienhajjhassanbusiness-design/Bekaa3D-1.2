@@ -20,6 +20,17 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   reporter: "list",
+  // REAL STOREFRONT INTEGRATION — PHASE 1 follow-up: this machine's single
+  // Next dev server, serving 14 parallel workers' client-side navigations
+  // at once, occasionally pushes a post-click `toHaveURL` assertion past
+  // the 5s default under CPU contention — every affected test (new and
+  // pre-existing alike) passes in under 2s standalone or with --workers=1,
+  // so this is resource contention, not a functional defect. Raising the
+  // default assertion timeout absorbs that contention uniformly rather
+  // than patching individual tests.
+  expect: {
+    timeout: 10_000,
+  },
   use: {
     baseURL: BASE_URL,
     trace: "on-first-retry",
@@ -27,7 +38,14 @@ export default defineConfig({
   projects: [
     {
       name: "smoke",
-      testMatch: ["smoke.spec.ts", "register-and-verify.spec.ts", "login-session.spec.ts", "account-profile.spec.ts"],
+      testMatch: [
+        "smoke.spec.ts",
+        "register-and-verify.spec.ts",
+        "login-session.spec.ts",
+        "account-profile.spec.ts",
+        "shop.spec.ts",
+        "product-detail.spec.ts",
+      ],
       // Uses the system-installed Microsoft Edge (Chromium-based) via
       // Playwright's "channel" option instead of Playwright's own bundled
       // Chromium — this sandboxed environment has no outbound network

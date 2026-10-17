@@ -6,6 +6,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { BackendUnreachableBanner } from "@/components/feedback/BackendUnreachableBanner";
+import { GlobalWhatsAppButton } from "@/components/layout/GlobalWhatsAppButton";
 import { AuthProvider } from "@/lib/auth/AuthProvider";
 
 export const metadata: Metadata = {
@@ -36,6 +37,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               <AppLayout header={<Header />} footer={<Footer />}>
                 {process.env.NODE_ENV === "development" ? <BackendUnreachableBanner /> : null}
                 {children}
+                <GlobalWhatsAppButton />
               </AppLayout>
             </ToastProvider>
           </AuthProvider>

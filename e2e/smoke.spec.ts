@@ -54,23 +54,20 @@ test.describe("Frontend smoke (FVS001-T16)", () => {
     await expect(page.getByText(/FVS-001 frontend foundation slice/i)).toHaveCount(0);
   });
 
-  test("/ exposes no dead Shop/Bring Your Idea/Contact call-to-action — those routes don't exist yet", async ({
+  test("/ links to the now-real /shop and /about routes, and still exposes no dead Bring Your Idea/Contact CTA — those routes don't exist yet", async ({
     page,
   }) => {
     await page.goto("/");
-    await expect(page.getByRole("link", { name: /shop/i })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Shop Now" })).toHaveAttribute("href", "/shop");
+    await expect(page.getByRole("link", { name: "Learn More" })).toHaveAttribute("href", "/about");
     await expect(page.getByRole("link", { name: /bring your idea/i })).toHaveCount(0);
-    await expect(page.getByRole("link", { name: /contact/i })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /^contact$/i })).toHaveCount(0);
   });
 
-  test("/ shows no fabricated featured-product content — FeaturedProductsSection remains unbuilt", async ({
-    page,
-  }) => {
+  test("/ renders the static Why Choose Bekaa3D section alongside the Hero heading", async ({ page }) => {
     await page.goto("/");
-    // Hero-only composition: exactly one heading (the h1) exists anywhere
-    // on the page — no second section's heading (e.g. a featured-products
-    // heading) has been added.
-    await expect(page.getByRole("heading")).toHaveCount(1);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+    await expect(page.getByRole("heading", { name: "Why Choose Bekaa3D" })).toBeVisible();
   });
 
   test("the readiness banner, whatever it shows, never breaks the shell — no specific backend state is required", async ({
@@ -86,20 +83,35 @@ test.describe("Frontend smoke (FVS001-T16)", () => {
     // Tolerant per §23/§27 risk #11: the dev-only banner may be in any of
     // T13a's valid states (initial loading, ready/no banner, not-ready,
     // unreachable, timeout) depending on real backend availability at test
-    // time. This never asserts which one — only that at most one status
-    // region and at most one alert region exist (no duplicate live
-    // regions), and that if either is present, its text is one of the
-    // known, valid copies rather than an unexpected/broken render.
-    const statusCount = await page.getByRole("status").count();
-    const alertCount = await page.getByRole("alert").count();
-    expect(statusCount).toBeLessThanOrEqual(1);
+    // time. This never asserts which one. FVS-022 follow-up: the home
+    // page's own FeaturedProductsSection can legitimately show a second,
+    // independent `role="status"` region (its loading skeleton,
+    // LoadingSpinner's shared "Loading…" text) at the same time as the
+    // banner — so the cap is 2 status regions, not 1, but every matched
+    // status/alert region's text must still be one of the known, valid
+    // copies, never an unexpected/broken render.
+    // Next.js itself always renders a hidden `#__next-route-announcer__`
+    // live region with role="alert" for its own client-navigation
+    // announcements — a framework internal, not app content, and often
+    // empty — so it's excluded here rather than asserted against; this
+    // test only cares about regions this app's own code renders.
+    const status = page.getByRole("status");
+    // `.filter({ hasNot })` only excludes an element whose OWN subtree
+    // contains a match — the announcer div matches `getByRole("alert")`
+    // itself (not as a descendant), so `hasNot` never excludes it. A CSS
+    // `:not()` on the same locator excludes the element itself instead.
+    const alert = page.locator('[role="alert"]:not(#__next-route-announcer__)');
+    const statusCount = await status.count();
+    const alertCount = await alert.count();
+    expect(statusCount).toBeLessThanOrEqual(2);
     expect(alertCount).toBeLessThanOrEqual(1);
 
-    if (statusCount + alertCount > 0) {
-      const region = statusCount > 0 ? page.getByRole("status").first() : page.getByRole("alert").first();
-      await expect(region).toHaveText(
-        /Loading…|reachable but not ready yet|could not be reached|readiness check timed out/
-      );
+    const validText = /Loading…|reachable but not ready yet|could not be reached|readiness check timed out/;
+    for (let i = 0; i < statusCount; i++) {
+      await expect(status.nth(i)).toHaveText(validText);
+    }
+    for (let i = 0; i < alertCount; i++) {
+      await expect(alert.nth(i)).toHaveText(validText);
     }
   });
 });

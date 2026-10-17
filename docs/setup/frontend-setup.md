@@ -54,6 +54,54 @@ Examples: a frontend call to `/api/health/ready` reaches the backend's `GET /hea
 
 **If `API_PROXY_TARGET` is unset:** `rewrites()` registers no rewrite rule at all — not a hardcoded fallback, not an invalid `undefined/...` destination. The app still builds and runs; any `/api/...` request just falls through to Next's normal routing (effectively unmatched) until you configure the variable.
 
+## Local Media Proxy (`/media`)
+
+**Gap, per `docs/backend-handoff/BACKEND-RESPONSE.md` B4:** the backend API
+process does not serve `/media/*` locally (nginx does this in
+production/staging; it arrives in local dev only once backend VS-020 is
+built). Product image URLs returned by the catalogue (`cover_image.url`,
+`images[].url`) are root-relative paths like
+`/media/products/<uuid>.png` — ready to use as-is, never parsed or
+rebuilt — but until something serves that prefix locally, every image
+404s against a local backend.
+
+The backend's own documented workaround: serve the backend checkout's
+`storage/media_public/` folder yourself, then add a third Next.js rewrite
+alongside the two in `next.config.ts` so `/media/*` forwards to that local
+file server instead of the real backend (which doesn't serve it either).
+
+**This frontend workspace does not have the backend checkout available**
+(no sibling backend repo, no Docker on this machine — see "Real backend
+acceptance" below), so the commands below are **documented, not executed**
+in this engagement. From the backend repository root, once it's checked
+out alongside this frontend:
+
+```powershell
+# PowerShell — run from the backend repository's root directory
+npx serve storage/media_public -l 8001
+```
+
+```sh
+# POSIX equivalent
+npx serve storage/media_public -l 8001
+```
+
+Then add a third rewrite to `next.config.ts`'s `rewrites()` array (ordered
+after the two existing rules — all three are still tried specific-first,
+and `/media/:path*` never collides with `/api/:path*`):
+
+```ts
+{
+  source: "/media/:path*",
+  destination: "http://localhost:8001/:path*",
+},
+```
+
+This is a **development-only** workaround. Production/staging URL
+semantics are unchanged — the same root-relative `/media/...` path is
+served by nginx there, per B4 — so nothing about this rewrite is ever
+shipped as a production configuration change.
+
 ## Running the App
 
 ```bash
@@ -801,6 +849,75 @@ The living list of unconfirmed backend contract items is `docs/plans/frontend-sl
 - No endpoint or response-body contract beyond the two confirmed health paths (`GET /health/ready`; `GET /health/live`, unused by this slice) exists yet for this frontend to consume.
 
 Do not guess at any of these — confirm with the backend team and update `docs/plans/frontend-slices/FRONTEND-VERTICAL-SLICE-PLAN.md` §17 first.
+
+## FVS-013/FVS-014/FVS-022 — Real Public Storefront (Catalogue, Product Detail, Home, About)
+
+REAL STOREFRONT INTEGRATION PHASE 1 wires the public storefront against
+the BUILT backend contract (`docs/backend-handoff/openapi.json` + `BACKEND-RESPONSE.md`
+B1–B5), superseding every earlier `NEEDS BACKEND CONFIRMATION` placeholder
+those sections named. This section documents only what is actually
+committed.
+
+### Contract adapters (new)
+
+- `src/lib/catalog/productTypes.ts` — raw wire types (`ProductListItem`,
+  `ProductDetail`, `ProductPage`, etc.), transcribed field-for-field from
+  `openapi.json`.
+- `src/lib/catalog/productAdapters.ts` — `toProductCardModel` /
+  `toProductDetailModel`, the only place the wire contract is converted to
+  the camelCase UI model. Every `null` in the wire contract (STL's
+  material/colour/dimensions/etc.) is preserved as `null`, never defaulted.
+- `src/lib/catalog/referenceDataApi.ts` + `useReferenceData.ts` —
+  categories/materials/colours.
+- `src/lib/catalog/productsApi.ts` + `useProducts.ts`/`useProduct.ts` —
+  list (cursor-paginated, `useInfiniteQuery`) and detail queries.
+- `src/lib/catalog/shopQueryAdapter.ts` — maps `/shop`'s URL state
+  (`shopUrlState.ts`, unchanged) to the real `category_id`/`material_id`/
+  `colour_id` query parameters. The URL stores each facet's real `id`
+  directly (materials/colours have no public slug, so this keeps one
+  consistent encoding across all three facets rather than slug-for-
+  category-only).
+- `src/lib/search/searchSuggestionsApi.ts` + `useSearchSuggestions.ts` —
+  300ms-debounced (`useDebouncedValue`, `src/lib/shared/`), 3-character
+  minimum, keyed by the debounced term so a stale response can never
+  overwrite a newer one (TanStack's own per-key cache, not a manual
+  sequence counter).
+- `src/lib/settings/publicSettingsModel.ts` — `PublicSettingsRead` (the
+  real, confirmed flat shape) + `toPublicSettingsModel`, which also
+  normalizes the E.164 `whatsapp_number` (`"+961..."`) to the digits-only
+  form `buildWhatsAppHref` requires.
+
+### Routes mounted
+
+- `/shop` (`src/app/shop/page.tsx` + `ShopView`) — filters, search,
+  sort, cursor "load more" pagination, loading/empty/error states.
+- `/shop/[slug]` (`src/app/shop/[slug]/page.tsx` + `ProductDetailView`) —
+  real product detail; a 404 renders `NotFoundContent` directly (this page
+  is client-rendered, matching this app's established architecture where
+  `apiClient` is a same-origin browser fetch never usable server-side —
+  Next's own `notFound()` is documented as Server-Component/Server-
+  Function/Route-Handler only, not Client Components, so it is not used
+  here).
+- `/about` — static brand content (FVS-022's own "approved V1 scope — no
+  CMS" line).
+- `/` — Hero (unchanged heading) + real featured products + real category
+  showcase + static "Why Choose Bekaa3D" — each data-backed section omits
+  itself entirely when the backend returns nothing, never a placeholder.
+- Global: `Header`/`Footer` now carry real navigation to `/`, `/shop`,
+  `/about` (previously intentionally link-free during FVS-001).
+  `GlobalWhatsAppButton` is mounted once in the root layout, reading the
+  one shared `usePublicSettings()` query also used by the product page.
+
+### Real backend acceptance — not attempted
+
+No backend checkout or Docker runtime is available in this frontend
+workspace (no sibling backend repository; `docker` is not installed on
+this machine) — matching FVS-001/002/003/006's own already-documented
+"real backend acceptance — still pending" gate. The backend was not
+started, no migrations/seed were run, and the local media proxy above was
+documented but not executed. This phase is contract-correct against
+`openapi.json` and covered by mocked-contract unit/component/E2E tests
+only; it has not been exercised against a live backend.
 
 ## Current FVS-001 Verification Status
 

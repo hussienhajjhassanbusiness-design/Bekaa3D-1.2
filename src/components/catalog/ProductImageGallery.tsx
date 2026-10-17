@@ -44,11 +44,13 @@ export function ProductImageGallery({ images }: ProductImageGalleryProps) {
 
   return (
     <div>
-      {/* Plain <img>, not next/image: same open gap as FVS-012's admin
-          ImageGallery — the real image host/URL format is still
-          unconfirmed (FRONTEND-VERTICAL-SLICE-PLAN.md §17's "Image/
-          asset URL format" item), so next/image's remote-pattern
-          allowlist can't be configured safely yet. */}
+      {/* Plain <img>, not next/image: the URL format itself IS confirmed
+          (B4 — opaque, ready-to-use root-relative paths), but the actual
+          HOST serving `/media` differs per environment (missing locally
+          until the dev proxy workaround, nginx in prod) and isn't
+          statically knowable here, so next/image's remote-pattern
+          allowlist can't be configured — same gap as FVS-012's admin
+          ImageGallery and ProductCard. */}
       <img
         data-testid="product-gallery-main-image"
         src={activeImage.src}

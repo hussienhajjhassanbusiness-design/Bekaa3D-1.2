@@ -1,9 +1,15 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AppLayout } from "./AppLayout";
 import { Header } from "./Header";
 import { Footer } from "./Footer";
+
+// The real Header (FVS-022 follow-up: real nav) reads the current route via
+// usePathname() — mocked here the same way every other test that renders a
+// next/navigation-hook-using component does (ProtectedRoute.test.tsx,
+// AccountLayout.test.tsx precedent).
+vi.mock("next/navigation", () => ({ usePathname: () => "/" }));
 
 describe("AppLayout", () => {
   it("renders exactly one header, one main, and one footer landmark", () => {
@@ -101,7 +107,13 @@ describe("AppLayout", () => {
     expect(screen.getByRole("contentinfo")).toHaveTextContent("Bekaa3D");
   });
 
-  it("keeps SkipLink as the first tab stop with the real Header/Footer composed in (neither contributes a tab stop yet, so main's own content is reached next)", async () => {
+  it("keeps SkipLink as the first tab stop with the real Header/Footer composed in, and main's own content is still reachable by keyboard", async () => {
+    // The real Header now has its own navigation (FVS-022 follow-up), so it
+    // genuinely contributes tab stops — this no longer asserts SkipLink is
+    // immediately followed by main's content, only that SkipLink remains
+    // first and that tabbing through the rest of the shell eventually
+    // reaches it (keyboard operability, not an exact stop count that would
+    // make this test brittle against future nav changes).
     const user = userEvent.setup();
     render(
       <AppLayout header={<Header />} footer={<Footer />}>
@@ -112,7 +124,10 @@ describe("AppLayout", () => {
     await user.tab();
     expect(screen.getByRole("link", { name: "Skip to main content" })).toHaveFocus();
 
-    await user.tab();
-    expect(screen.getByRole("button", { name: "Main action" })).toHaveFocus();
+    const mainActionButton = screen.getByRole("button", { name: "Main action" });
+    for (let i = 0; i < 10 && document.activeElement !== mainActionButton; i++) {
+      await user.tab();
+    }
+    expect(mainActionButton).toHaveFocus();
   });
 });
