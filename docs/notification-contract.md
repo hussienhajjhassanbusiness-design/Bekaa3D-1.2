@@ -11,11 +11,11 @@ the "STL file sent" event (`payload.event = "stl.delivered"`, VS-023b).
 
 ## Type: a stable high-level category
 
-`notification_type` is a PostgreSQL enum with exactly six values, from
-`database-design.md` §12.3:
+`notification_type` is a PostgreSQL enum with seven values: the six from
+`database-design.md` §12.3, plus `custom_request`, which VS-034 added (ADR-030):
 
 ```
-account   order   payment   refund   offer   download
+account   order   payment   refund   offer   download   custom_request
 ```
 
 The design is explicit that this enum stays a *category*: "The specific event is
@@ -41,6 +41,13 @@ Rules enforced by `app.engagement.domain.payload`:
 | `event` values are open in V1 | No enum, no registry. Producer slices define them. |
 | Maximum 16 KiB | Measured after deterministic compact UTF-8 serialisation. |
 | No secrets or sensitive data | FR-17: "Sensitive data must not be exposed in notification payloads." |
+
+### Events in use
+
+| `payload.event` | Type | Recipient | Other keys | Slice |
+| --- | --- | --- | --- | --- |
+| `custom_request.submitted` | `custom_request` | every active administrator | `custom_request_id`, `project_title`, `title` | VS-034 |
+| `stl.delivered` (planned) | `download` | the customer | provisional | VS-023b |
 
 ### On `event`
 

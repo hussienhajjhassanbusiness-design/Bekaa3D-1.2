@@ -252,7 +252,7 @@ These are intentionally outside `/api/v1`.
 
 | Method + Path | Auth / Authorization | Request | Success | Errors | Pagination / Filter / Sort | Side Effects / Notes |
 |---|---|---|---|---|---|---|
-| `POST /api/v1/custom-requests` | Public; Turnstile captcha (ADR-025) + rate limit | `multipart/form-data CustomRequestCreate` | `201 CustomRequestReceipt` | 400, 422 `UPLOAD_REJECTED` / `MALWARE_DETECTED`, 429 | — | Validates/re-encodes/scans private attachments; creates lead; admin-only attachments; no transaction/payment |
+| `POST /api/v1/custom-requests` | Public; no auth cookies or CSRF; Turnstile captcha (ADR-025) + rate limit | `multipart/form-data CustomRequestCreate` | `201 CustomRequestReceipt` (`id`, `created_at`) | 400 `CAPTCHA_INVALID`, 422 `VALIDATION_ERROR` / `UPLOAD_REJECTED` / `MALWARE_DETECTED`, 429, 503 | — | Order (ADR-030): 20/hour attempts per IP and a `Content-Length` cap before parsing, fields, count and sizes, captcha, then 5/hour per IP and per email, then scan, re-encode, private store and insert. 0-5 images, 10 MB each. Notifies every active administrator in-app. No transaction or payment (VS-034, `docs/custom-requests.md`) |
 | `POST /api/v1/contact-messages` | Public; no auth cookies or CSRF; Turnstile captcha (ADR-025) + rate limit | `ContactMessageCreate` | `201 ContactMessageReceipt` | 400 `CAPTCHA_INVALID`, 422, 429, 503 | — | Order (ADR-026): 60/hour attempts per IP, body, captcha, then 5/hour per IP and 5/hour per email, then insert as `new`. Repeated submissions are separate messages. The body and sender are never logged (VS-033) |
 
 ---
@@ -978,16 +978,16 @@ reason?: str
 ### `CustomRequestCreate` — multipart
 
 ```text
-name
-email
-phone
-project_title
-description
-preferred_material?
-preferred_colour?
-dimensions?
-captcha_token
-attachments[]  # bounded image count/size, private
+name: str                 # 1-100 after trimming
+email: Email
+phone: str                # up to 32; digits, spaces, + ( ) . -; at least 6 digits
+project_title: str        # 1-200 after trimming
+description: str          # 1-5000 after trimming; line breaks allowed
+preferred_material?: str  # up to 100; blank means none
+preferred_colour?: str    # up to 100; blank means none
+dimensions?: str          # up to 200; blank means none
+captcha_token: str        # VS-033 (ADR-025, ADR-026); an empty part is 422 (ADR-030)
+attachments[]: file       # 0-5 JPEG/PNG/WebP, 10 MB each; omit when none (VS-034)
 ```
 
 ### `ContactMessageCreate`
