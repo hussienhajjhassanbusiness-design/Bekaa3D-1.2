@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
+    CHAR,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -11,6 +12,7 @@ from sqlalchemy import (
     Index,
     Integer,
     Text,
+    UniqueConstraint,
     func,
     text,
 )
@@ -182,4 +184,52 @@ class SettingModel(Base):
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class IdempotencyRecordModel(Base):
+    """database-design.md 13.4 plus `state` and `resource_id` (VS-023 plan 4.7). A claim is
+    `in_progress` from the first transaction and `done` once its response is stored."""
+
+    __tablename__ = "idempotency_records"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE")
+    )
+    scope: Mapped[str] = mapped_column(Text, nullable=False)
+    key: Mapped[str] = mapped_column(Text, nullable=False)
+    request_hash: Mapped[str] = mapped_column(CHAR(64), nullable=False)
+    state: Mapped[str] = mapped_column(Text, nullable=False)
+    resource_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    status_code: Mapped[int | None] = mapped_column(Integer)
+    response_body: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "scope",
+            "user_id",
+            "key",
+            name="uq_idempotency_records_scope_user_key",
+            postgresql_nulls_not_distinct=True,
+        ),
+        CheckConstraint(
+            "char_length(key) BETWEEN 1 AND 255", name="ck_idempotency_records_key_length"
+        ),
+        CheckConstraint("state IN ('in_progress', 'done')", name="ck_idempotency_records_state"),
+        CheckConstraint(
+            "(state = 'done') = (status_code IS NOT NULL AND response_body IS NOT NULL)",
+            name="ck_idempotency_records_done_has_response",
+        ),
+        CheckConstraint(
+            "status_code IS NULL OR status_code BETWEEN 100 AND 599",
+            name="ck_idempotency_records_status_code",
+        ),
+        Index("ix_idempotency_records_expires_at", "expires_at"),
     )

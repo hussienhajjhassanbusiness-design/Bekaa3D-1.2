@@ -308,19 +308,36 @@ async def test_every_primary_key_is_a_uuid(conn: AsyncConnection) -> None:
     assert keyed and all(dtype == "uuid" for _, _, dtype in keyed), rows
 
 
+# Financial rows keep their owner: database-design.md 14 mandates RESTRICT, and the purge
+# never reaches them because it deletes only never-verified users, who cannot check out.
+RESTRICT_TO_USERS_ALLOWED = {
+    ("orders", "user_id"),  # database-design.md:1879
+    ("order_items", "user_id"),  # database-design.md:1890
+    ("order_items", "delivered_by"),  # database-design.md:1891
+    ("payments", "recorded_by"),  # database-design.md:1892
+}
+
+_FKS_TO_USERS = (
+    "SELECT c.conrelid::regclass::text, a.attname, c.confdeltype::text FROM pg_constraint c "
+    "JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey) "
+    "WHERE c.contype = 'f' AND c.confrelid = 'users'::regclass"
+)
+
+
 @pytest.mark.integration
 async def test_no_foreign_key_to_users_can_block_the_purge(conn: AsyncConnection) -> None:
-    rules = (
-        await conn.execute(
-            text(
-                "SELECT conrelid::regclass::text, confdeltype::text FROM pg_constraint "
-                "WHERE contype = 'f' AND confrelid = 'users'::regclass"
-            )
-        )
-    ).all()
-    # c = CASCADE, n = SET NULL. a (NO ACTION) or r (RESTRICT) would make the
-    # daily purge fail on the first account that owned such a row.
-    assert rules and all(rule in ("c", "n") for _, rule in rules), rules
+    rules = (await conn.execute(text(_FKS_TO_USERS))).all()
+    # c = CASCADE, n = SET NULL. a (NO ACTION) or r (RESTRICT) would make the daily purge
+    # fail on the first account that owned such a row, unless the pair is allowlisted.
+    blocking = {
+        (table, column, rule)
+        for table, column, rule in rules
+        if rule not in ("c", "n")
+        and not (rule == "r" and (table, column) in RESTRICT_TO_USERS_ALLOWED)
+    }
+    assert rules and blocking == set(), blocking
+    restrict = {(table, column) for table, column, rule in rules if rule == "r"}
+    assert restrict == RESTRICT_TO_USERS_ALLOWED, restrict
 
 
 NON_MONEY_NUMERIC = {"products.average_rating"}

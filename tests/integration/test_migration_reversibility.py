@@ -22,6 +22,7 @@ from app.core.config import get_settings
 
 CART_REVISION = "bde6135b2538"
 BYI_REVISION = "26d5d039d72c"
+ORDERS_REVISION = "03a4730dd046"
 EXPECTED_ENUMS = {"user_role", "outbox_status", "setting_type", "notification_type"}
 
 
@@ -94,6 +95,37 @@ def test_full_downgrade_and_upgrade_round_trips() -> None:
         )
         command.upgrade(config, "head")
 
+        # VS-023 PR A: stepping back to its own parent drops the six tables and eight enum
+        # types; product_type stays with products. The head itself is never pinned here.
+        assert chain[ORDERS_REVISION].down_revision == BYI_REVISION
+        order_tables = {
+            "orders",
+            "order_items",
+            "order_status_history",
+            "payments",
+            "webhook_events",
+            "idempotency_records",
+        }
+        order_enums = {
+            "fulfillment_method",
+            "payment_method",
+            "cancel_reason",
+            "order_source",
+            "order_status",
+            "order_item_status",
+            "payment_status",
+            "payment_provider",
+        }
+        assert order_tables <= asyncio.run(fetch(table_query))
+        assert order_enums <= asyncio.run(fetch(enum_query))
+        command.downgrade(config, f"{ORDERS_REVISION}-1")
+        assert order_tables.isdisjoint(asyncio.run(fetch(table_query)))
+        assert order_enums.isdisjoint(asyncio.run(fetch(enum_query)))
+        assert "product_type" in asyncio.run(fetch(enum_query)), "products still owns it"
+        assert byi_tables <= asyncio.run(fetch(table_query)), "the parent is untouched"
+        command.upgrade(config, "head")
+        assert order_tables <= asyncio.run(fetch(table_query))
+
         command.downgrade(config, "base")
 
         # The actual defect: tables went, the enum types stayed, and the next
@@ -107,6 +139,7 @@ def test_full_downgrade_and_upgrade_round_trips() -> None:
         assert "email_outbox" not in leftover_tables
         assert "ip_hash_salts" not in leftover_tables
         assert "cart_items" not in leftover_tables
+        assert "orders" not in leftover_tables
 
         # This is the call that used to raise.
         command.upgrade(config, "head")
