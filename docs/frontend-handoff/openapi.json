@@ -14100,7 +14100,7 @@
                 }
               }
             },
-            "description": "RATE_LIMITED: per IP for unverified traffic, per provider otherwise."
+            "description": "RATE_LIMITED: per IP for bad signatures, per provider otherwise."
           },
           "500": {
             "content": {
