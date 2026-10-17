@@ -24,7 +24,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 | VS-018 | Entitlements: admin grant and STL library | — | Removed (ADR-019) |
 | VS-019 | Protected STL download through nginx | — | Removed (ADR-019) |
 | VS-022 | Mixed cart | VS-013 | Done |
-| VS-023 | Checkout and verified payment for digital orders | VS-022, VS-008, VS-007 | In progress |
+| VS-023 | Checkout and verified payment for digital orders | VS-022, VS-008, VS-007 | Done |
 | VS-023b | STL delivery queue and mark-as-sent | VS-023 | Not started |
 | VS-024 | Payment recovery: reconciliation, stale checkouts, manual confirm | VS-023 | Not started |
 | VS-025 | Customer order history | VS-023 | Not started |
@@ -501,7 +501,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - Storefront visibility is one shared `listed_predicate()`, used by the storefront and the cart's `CartProductReader`.
 
 ## VS-023 — Checkout and verified payment for digital orders
-**Status:** In progress
+**Status:** Done
 **Depends on:** VS-022, VS-008, VS-007
 **Goal:** A customer buys an STL end to end on the mock provider, and the line enters the STL delivery queue (`awaiting_delivery`) only after independent server-side verification.
 - **Model / migration:**

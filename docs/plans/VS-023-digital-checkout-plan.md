@@ -1,6 +1,6 @@
 # VS-023 — Checkout and Verified Payment for Digital Orders: Implementation Plan
 
-**Status:** IN PROGRESS: PR A (schema) merged in `62586d1`; PR B (code) on branch `vs-023-checkout`
+**Status:** DONE: PR A (schema) merged in `62586d1`; PR B (code) complete on branch `vs-023-checkout`, all five suite chunks green (Checkpoint 5)
 **Date:** 2026-10-16 (Revision 2: 2026-10-17)
 **Planned against alembic head:** `26d5d039d72c` (custom_requests, VS-034, merged in
 `ae93c2a` after Revision 1).
