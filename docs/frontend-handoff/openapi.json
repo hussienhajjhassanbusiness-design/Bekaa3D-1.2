@@ -11035,6 +11035,16 @@
             },
             "description": "CSRF token missing or invalid, or EMAIL_VERIFICATION_REQUIRED."
           },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "PRODUCT_ALREADY_OWNED: the caller already owns this STL (VS-023)."
+          },
           "422": {
             "content": {
               "application/problem+json": {
