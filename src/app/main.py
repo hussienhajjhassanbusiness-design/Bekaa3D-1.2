@@ -18,6 +18,7 @@ from app.core.database import CONNECT_TIMEOUT_SECONDS, make_engine, make_session
 from app.core.ip_hash_keyring import refresh_ip_hash_key
 from app.core.logging import configure_logging
 from app.integrations.captcha.factory import captcha_verifier
+from app.payments.public import configured_payment_providers
 
 
 @asynccontextmanager
@@ -26,6 +27,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     settings = get_settings()
     # Fail at boot, not on the first form, when captcha is misconfigured (ADR-026).
     captcha_verifier(settings)
+    # VS-023: production + mock, or an unknown provider, refuses to boot (plan 3.9).
+    app.state.payment_providers = configured_payment_providers(settings)
     app.state.db_engine = make_engine(settings.database_url)
     app.state.db_session_factory = make_session_factory(app.state.db_engine)
     # Best-effort: a database outage at boot leaves hash_ip returning None until
@@ -38,6 +41,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         settings.redis_url, socket_connect_timeout=CONNECT_TIMEOUT_SECONDS
     )
     yield
+    for provider in app.state.payment_providers.values():
+        await provider.aclose()
     await app.state.redis.aclose()
     await app.state.db_engine.dispose()
 

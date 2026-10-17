@@ -33,6 +33,8 @@ from tests.smoke.test_vs046_smoke import SMOKE_ELSEWHERE as VS046_SMOKE
 
 # Tests never call Cloudflare; a local .env predating VS-033 may not set this.
 os.environ.setdefault("CAPTCHA_PROVIDER", "fake")
+# VS-023: the mock payment provider; boot refuses it outside development/test/staging.
+os.environ.setdefault("PAYMENT_PROVIDER", "mock")
 
 _SMOKE_NODE_IDS = frozenset(
     node_id
