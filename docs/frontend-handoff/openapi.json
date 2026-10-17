@@ -11802,7 +11802,7 @@
     },
     "/api/v1/checkout": {
       "post": {
-        "description": "Tx1: claim, place the order, attach it to the claim, COMMIT. Then the provider call\nwith no transaction open. Tx2: store the reference or fail the attempt, and the\nresponse. A crash between them leaves the claim `in_progress` naming the order.",
+        "description": "Tx1: claim, place the order, attach it to the claim, COMMIT. Then the provider call\nwith no transaction open. Tx2: store the reference or fail the attempt, and the\nresponse. A crash between them leaves the claim `in_progress` naming the order.\nNo dependency holds a session: the user is read in its own short transaction.",
         "operationId": "checkout_api_v1_checkout_post",
         "parameters": [
           {
