@@ -32,7 +32,7 @@ _RESPONSES: dict[int | str, dict[str, Any]] = {
     400: {"description": "VALIDATION_ERROR: body over 64 KiB, or a signed body unreadable."},
     401: {"description": "WEBHOOK_SIGNATURE_INVALID: not stored."},
     404: {"description": "The provider is not configured here (never `cash`)."},
-    429: {"description": "RATE_LIMITED: per IP for unverified traffic, per provider otherwise."},
+    429: {"description": "RATE_LIMITED: per IP for bad signatures, per provider otherwise."},
 }
 
 
@@ -118,10 +118,7 @@ async def receive_payment_webhook(
     except MalformedEventError as exc:
         await _spend(request, response, prefix="webhook", subject=provider, limit=VERIFIED_LIMIT)
         raise _invalid("The signed body is not a readable event.") from exc
-    if adapter.signs_webhooks:
-        await _spend(request, response, prefix="webhook", subject=provider, limit=VERIFIED_LIMIT)
-    else:
-        await _spend(request, response, **unverified, limit=UNVERIFIED_LIMIT)
+    await _spend(request, response, prefix="webhook", subject=provider, limit=VERIFIED_LIMIT)
     if _stored_size(event.payload) > MAX_BODY_BYTES:
         raise _invalid("The event is larger than 64 KiB once stored.")
     event_id = await receive_webhook(
@@ -129,7 +126,7 @@ async def receive_payment_webhook(
         events=SqlWebhookEventStore(session),
         provider=PaymentProvider(provider),
         event=event,
-        signature_valid=adapter.signs_webhooks,
+        signature_valid=True,
         at=datetime.now(UTC),
     )
     if event_id is not None:

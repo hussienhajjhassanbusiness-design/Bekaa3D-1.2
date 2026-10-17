@@ -56,8 +56,6 @@ class ParsedEvent:
 class PaymentProviderPort(Protocol):
     name: str
     supports_status_query: bool
-    # False: events are stored unverified, on the per-IP bucket (plan 2.2 step 4).
-    signs_webhooks: bool
 
     async def create_payment(self, request: CreatePayment) -> CreatedPayment:
         """Raises ProviderUnavailableError when the outcome is unknown."""

@@ -43,7 +43,6 @@ def _key(payment_id: UUID) -> str:
 class MockPaymentProvider:
     name = "mock"
     supports_status_query = True
-    signs_webhooks = True
 
     def __init__(self, *, redis_url: str, webhook_secret: str, frontend_base_url: str) -> None:
         self._redis_url = redis_url

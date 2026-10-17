@@ -164,6 +164,9 @@ class SqlOrderStore:
         return _order(row) if row is not None else None
 
     async def lock_lines(self, order_id: UUID) -> list[OrderLine]:
+        # Redundant today: every writer of existing lines already holds the orders lock
+        # (test_order_item_writers.py). Kept, per ADR-024 d9, for the future writers in
+        # VS-023b, VS-024, VS-028 and VS-030.
         result = await self._session.execute(
             select(*_LINE_COLUMNS).where(_I.order_id == order_id).order_by(_I.id).with_for_update()
         )

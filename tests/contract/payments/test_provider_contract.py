@@ -130,6 +130,6 @@ def test_a_signed_but_unreadable_event_is_malformed(adapter: PaymentProviderPort
         adapter.parse_webhook(headers, body)
 
 
-def test_the_adapter_declares_its_webhook_trust(adapter: PaymentProviderPort) -> None:
-    assert adapter.signs_webhooks is True
+def test_the_adapter_answers_status_queries(adapter: PaymentProviderPort) -> None:
+    """Verification relies on asking the provider; an adapter that cannot is refused."""
     assert adapter.supports_status_query is True

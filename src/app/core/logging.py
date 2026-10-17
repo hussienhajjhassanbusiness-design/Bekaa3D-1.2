@@ -38,6 +38,12 @@ _SENSITIVE_KEYS = frozenset(
         "salt",
         "pepper",
         "ip_hash_key",
+        # VS-023: webhook signing material and raw provider bodies.
+        "mock_webhook_secret",
+        "webhook_secret",
+        "signature",
+        "x-mock-signature",
+        "webhook_body",
     }
 )
 
