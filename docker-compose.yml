@@ -99,6 +99,8 @@ services:
       - ./src:/app/src
       # reap_orphan_files (VS-014) reconciles this directory against product_images.
       - ./storage/media_public:/data/media_public
+      # purge_expired_attachments and reap_orphan_files (VS-034) work on BYI attachments.
+      - ./storage/uploads_private:/data/uploads_private
     depends_on:
       postgres:
         condition: service_healthy

@@ -21,6 +21,7 @@ from testcontainers.postgres import PostgresContainer
 from app.core.config import get_settings
 
 CART_REVISION = "bde6135b2538"
+BYI_REVISION = "26d5d039d72c"
 EXPECTED_ENUMS = {"user_role", "outbox_status", "setting_type", "notification_type"}
 
 
@@ -74,6 +75,23 @@ def test_full_downgrade_and_upgrade_round_trips() -> None:
         command.downgrade(config, "75ad58ebd9e5-1")
         assert "ip_hash_salts" not in asyncio.run(fetch(table_query))
         assert asyncio.run(fetch(retention_keys)) == set()
+        command.upgrade(config, "head")
+
+        # VS-034: stepping back over 26d5d039d72c drops both tables, the setting, its enum
+        # types, and rebuilds notification_type without `custom_request`.
+        byi_tables = {"custom_requests", "custom_request_attachments"}
+        notification_values = (
+            "SELECT e.enumlabel FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid "
+            "WHERE t.typname = 'notification_type'"
+        )
+        assert byi_tables <= asyncio.run(fetch(table_query))
+        assert "custom_request" in asyncio.run(fetch(notification_values))
+        command.downgrade(config, f"{BYI_REVISION}-1")
+        assert byi_tables.isdisjoint(asyncio.run(fetch(table_query)))
+        assert "custom_request" not in asyncio.run(fetch(notification_values))
+        assert {"custom_request_status", "upload_scan_status"}.isdisjoint(
+            asyncio.run(fetch(enum_query))
+        )
         command.upgrade(config, "head")
 
         command.downgrade(config, "base")

@@ -286,6 +286,20 @@ class UserRepository:
         )
         return int(count or 0)
 
+    async def active_administrator_ids(self) -> list[UUID]:
+        """Who receives an administrator notification (VS-034); oldest first, for stable tests."""
+        stmt = (
+            select(UserModel.id)
+            .where(
+                UserModel.role == UserRole.ADMIN,
+                UserModel.is_active.is_(True),
+                UserModel.anonymized_at.is_(None),
+                UserModel.deleted_at.is_(None),
+            )
+            .order_by(UserModel.created_at, UserModel.id)
+        )
+        return list((await self._session.scalars(stmt)).all())
+
     async def get_by_id_for_update(self, user_id: UUID) -> User | None:
         """Read one user and hold a row lock on them until the transaction ends.
 

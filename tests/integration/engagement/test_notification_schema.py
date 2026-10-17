@@ -14,7 +14,16 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-DOCUMENTED_TYPES = ["account", "order", "payment", "refund", "offer", "download"]
+# database-design.md 12.3's six plus `custom_request` (ADR-030).
+DOCUMENTED_TYPES = [
+    "account",
+    "order",
+    "payment",
+    "refund",
+    "offer",
+    "download",
+    "custom_request",
+]
 
 
 @pytest.mark.integration
@@ -69,7 +78,7 @@ async def test_the_table_has_no_columns_the_design_does_not_define(
 
 
 @pytest.mark.integration
-async def test_the_notification_type_enum_holds_exactly_the_six_categories(
+async def test_the_notification_type_enum_holds_exactly_the_documented_categories(
     db_engine: AsyncEngine,
 ) -> None:
     async with db_engine.connect() as conn:

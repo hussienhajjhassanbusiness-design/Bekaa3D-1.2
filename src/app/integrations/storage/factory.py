@@ -11,3 +11,13 @@ def public_media_storage(settings: Settings) -> StoragePort:
 def get_public_media_storage() -> StoragePort:
     """FastAPI dependency; tests override it with a temporary directory."""
     return public_media_storage(get_settings())
+
+
+def private_upload_storage(settings: Settings) -> StoragePort:
+    """Bring Your Idea attachments: never under the web root (SEC-16, BR-111)."""
+    return LocalStorage(settings.uploads_private_dir)
+
+
+def get_private_upload_storage() -> StoragePort:
+    """FastAPI dependency; tests override it with a temporary directory."""
+    return private_upload_storage(get_settings())

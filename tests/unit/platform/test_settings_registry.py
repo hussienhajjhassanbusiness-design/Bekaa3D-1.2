@@ -37,6 +37,7 @@ REQUIRED_KEYS = (
     "whatsapp_number",
     "security_token_retention_period",
     "session_retention_period",
+    "custom_request_attachment_retention",
 )
 
 
@@ -79,6 +80,7 @@ def test_no_internal_setting_is_marked_public() -> None:
         "daily_download_cap",
         "security_token_retention_period",
         "session_retention_period",
+        "custom_request_attachment_retention",
     }
     for key in internal:
         assert REGISTRY[key].is_public is False, f"{key} must not be public"
@@ -334,5 +336,17 @@ def test_each_setting_declares_the_type_its_consumers_expect() -> None:
         "whatsapp_number": SettingType.STRING,
         "security_token_retention_period": SettingType.DURATION,
         "session_retention_period": SettingType.DURATION,
+        "custom_request_attachment_retention": SettingType.DURATION,
     }
     assert {key: definition.type for key, definition in REGISTRY.items()} == expected
+
+
+def test_attachment_retention_is_ninety_days_editable_from_one_to_365() -> None:
+    """VS-034 owner decision on SRS 30.3."""
+    key = "custom_request_attachment_retention"
+    assert REGISTRY[key].default == 7_776_000
+    assert validate_value(key, 86_400) == 86_400
+    assert validate_value(key, 31_536_000) == 31_536_000
+    for refused in (86_399, 31_536_001):
+        with pytest.raises(InvalidSettingValueError):
+            validate_value(key, refused)

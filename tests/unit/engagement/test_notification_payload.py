@@ -17,10 +17,17 @@ from app.engagement.domain.enums import NotificationType
 from app.engagement.domain.exceptions import InvalidNotificationPayloadError
 from app.engagement.domain.payload import MAX_PAYLOAD_BYTES, compact_json, validate_payload
 
-# The six from database-design.md 12.3, written out rather than derived from the
-# enum: a test that builds its expectation from the thing under test would pass
-# just as happily if a value were deleted.
-DOCUMENTED_TYPES = ("account", "order", "payment", "refund", "offer", "download")
+# database-design.md 12.3's six plus ADR-030's, written out: an expectation derived
+# from the enum would pass just as happily if a value were deleted.
+DOCUMENTED_TYPES = (
+    "account",
+    "order",
+    "payment",
+    "refund",
+    "offer",
+    "download",
+    "custom_request",
+)
 
 
 # --------------------------------------------------------------------------
@@ -28,17 +35,16 @@ DOCUMENTED_TYPES = ("account", "order", "payment", "refund", "offer", "download"
 # --------------------------------------------------------------------------
 
 
-def test_the_enum_holds_exactly_the_six_documented_categories() -> None:
+def test_the_enum_holds_exactly_the_documented_categories() -> None:
     assert tuple(member.value for member in NotificationType) == DOCUMENTED_TYPES
 
 
 def test_no_concrete_event_has_leaked_into_the_category_enum() -> None:
-    """The enum is a *high-level category*; the specific event rides in the
-    payload. Stated from the other direction so the assertion still bites if
-    someone adds `order_shipped` alongside a matching entry above."""
-    for member in NotificationType:
-        assert "." not in member.value
-        assert "_" not in member.value
+    """Categories are entity nouns; an event such as `order_shipped` rides in the payload."""
+    values = [member.value for member in NotificationType]
+    for value in values:
+        assert "." not in value
+        assert not any(value.startswith(f"{other}_") for other in values if other != value)
 
 
 # --------------------------------------------------------------------------
@@ -129,7 +135,7 @@ def test_a_payload_one_byte_over_the_limit_is_rejected() -> None:
 def test_size_is_measured_in_utf8_bytes_not_characters() -> None:
     """A multi-byte character costs what it actually costs on disk. Measuring
     `len(str)` would let a payload roughly three times the limit through."""
-    payload = {"event": "a", "d": "é" * MAX_PAYLOAD_BYTES}
+    payload = {"event": "a", "d": "Ã©" * MAX_PAYLOAD_BYTES}
     with pytest.raises(InvalidNotificationPayloadError):
         validate_payload(payload)
 

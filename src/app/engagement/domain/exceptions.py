@@ -65,3 +65,29 @@ class InvalidContactDetailsError(EngagementDomainError):
     def __init__(self, fields: list[str]) -> None:
         super().__init__(f"Invalid contact details: {', '.join(fields)}")
         self.fields = fields
+
+
+class InvalidCustomRequestError(EngagementDomainError):
+    """Names the offending fields only; never their values, which are visitor PII."""
+
+    def __init__(self, fields: list[str]) -> None:
+        super().__init__(f"Invalid custom request: {', '.join(fields)}")
+        self.fields = fields
+
+
+class AttachmentRejectedError(EngagementDomainError):
+    """A reference image failed the count, size or content rules (`UPLOAD_REJECTED`)."""
+
+    def __init__(self, reason: str, *, index: int | None = None) -> None:
+        super().__init__(reason)
+        self.reason = reason
+        self.index = index
+
+
+class AttachmentMalwareError(EngagementDomainError):
+    """A reference image failed the malware scan (`MALWARE_DETECTED`)."""
+
+    def __init__(self, index: int, signature: str | None) -> None:
+        super().__init__(f"Attachment {index} failed the malware scan.")
+        self.index = index
+        self.signature = signature
