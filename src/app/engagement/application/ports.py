@@ -1,11 +1,18 @@
 """Engagement's repository ports. A pure `Protocol`: the application layer
 depends on this, never on `app.engagement.infrastructure` (BUG-41)."""
 
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Any, Protocol
 from uuid import UUID
 
 from app.engagement.domain.contact_message import ContactDetails, ContactMessage
+from app.engagement.domain.custom_request import (
+    CustomRequest,
+    CustomRequestAttachment,
+    CustomRequestDetails,
+    NewAttachment,
+)
 from app.engagement.domain.entities import Notification, WishlistItem
 from app.engagement.domain.enums import ContactMessageStatus, NotificationType
 
@@ -41,6 +48,29 @@ class ContactMessageStore(Protocol):
         created_before: datetime | None,
         email: str | None,
     ) -> list[ContactMessage]: ...
+
+
+class CustomRequestStore(Protocol):
+    async def add(
+        self,
+        details: CustomRequestDetails,
+        attachments: Sequence[NewAttachment],
+        *,
+        submitted_at: datetime,
+        expires_at: datetime,
+    ) -> CustomRequest: ...
+
+    async def lock_expired_attachments(
+        self, *, now: datetime, limit: int
+    ) -> list[CustomRequestAttachment]:
+        """`expires_at <= now`, row-locked with SKIP LOCKED so two purges never share a row."""
+        ...
+
+    async def delete_attachments(self, attachment_ids: Sequence[UUID]) -> int: ...
+
+
+class AdministratorDirectory(Protocol):
+    async def active_administrator_ids(self) -> list[UUID]: ...
 
 
 class WishlistStore(Protocol):

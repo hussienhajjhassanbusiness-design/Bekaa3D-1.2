@@ -163,3 +163,19 @@ class NotificationRepository:
         )
         row = (await self._session.execute(stmt)).one_or_none()
         return _row_to_domain(row) if row is not None else None
+
+
+class SavepointNotificationRepository(NotificationRepository):
+    """Each insert in its own savepoint, so one failure rolls back alone (FR-15, VS-034)."""
+
+    async def add(
+        self,
+        *,
+        user_id: UUID,
+        notification_type: NotificationType,
+        payload: dict[str, Any],
+    ) -> Notification:
+        async with self._session.begin_nested():
+            return await super().add(
+                user_id=user_id, notification_type=notification_type, payload=payload
+            )

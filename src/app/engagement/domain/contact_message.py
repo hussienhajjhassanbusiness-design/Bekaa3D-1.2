@@ -51,7 +51,7 @@ class ContactDetails:
             problems.append("name")
         if not 3 <= len(self.email) <= EMAIL_MAX or "@" not in self.email[1:]:
             problems.append("email")
-        if self.phone is not None and not _phone_shaped(self.phone):
+        if self.phone is not None and not phone_shaped(self.phone):
             problems.append("phone")
         if self.subject is not None and len(self.subject) > SUBJECT_MAX:
             problems.append("subject")
@@ -86,6 +86,6 @@ def check_transition(current: ContactMessageStatus, target: ContactMessageStatus
         raise InvalidContactMessageTransitionError(current, target)
 
 
-def _phone_shaped(phone: str) -> bool:
+def phone_shaped(phone: str) -> bool:
     digits = sum(char in "0123456789" for char in phone)
     return PHONE_PATTERN.fullmatch(phone) is not None and digits >= PHONE_MIN_DIGITS

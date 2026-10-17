@@ -2,17 +2,8 @@ from enum import StrEnum
 
 
 class NotificationType(StrEnum):
-    """The high-level category of an in-app notification (`notification_type`).
-
-    Exactly the six values database-design.md 12.3 defines, and deliberately no
-    more. The design is explicit that this enum stays a *stable high-level
-    category* while "the specific event is carried in the JSON payload" - so a
-    new business event does not need a migration, only a new `payload.event`
-    value from the slice that emits it.
-
-    Adding a value here is a migration in its own right (PostgreSQL enums are
-    schema objects), which is exactly the friction the split is meant to create.
-    """
+    """`notification_type`: database-design.md 12.3's six plus `custom_request` (ADR-030).
+    A category, not an event: the event is `payload.event`, and a new category is DDL."""
 
     ACCOUNT = "account"
     ORDER = "order"
@@ -20,6 +11,7 @@ class NotificationType(StrEnum):
     REFUND = "refund"
     OFFER = "offer"
     DOWNLOAD = "download"
+    CUSTOM_REQUEST = "custom_request"
 
 
 class ContactMessageStatus(StrEnum):
@@ -29,3 +21,26 @@ class ContactMessageStatus(StrEnum):
     READ = "read"
     REPLIED = "replied"
     ARCHIVED = "archived"
+
+
+class CustomRequestStatus(StrEnum):
+    """`custom_request_status`, database-design.md 3.11 (SRS 20.7)."""
+
+    NEW = "new"
+    CONTACTED = "contacted"
+    QUOTED = "quoted"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    CLOSED = "closed"
+    LOST = "lost"
+
+
+class CustomRequestOutcome(StrEnum):
+    WON = "won"
+    LOST = "lost"
+
+
+class UploadScanStatus(StrEnum):
+    """Only `clean`: scanning is synchronous, so no other verdict is ever stored (ADR-030)."""
+
+    CLEAN = "clean"

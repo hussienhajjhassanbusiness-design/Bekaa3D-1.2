@@ -3,7 +3,7 @@
 Answers every item in [`../frontend-requests/BACKEND-UNLOCK-HANDOFF.md`](../frontend-requests/BACKEND-UNLOCK-HANDOFF.md)
 by its ID, in the field order of [`../frontend-requests/BACKEND-RESPONSE-TEMPLATE.md`](../frontend-requests/BACKEND-RESPONSE-TEMPLATE.md).
 
-- **Backend state:** slices VS-001 to VS-016, VS-022 (cart), VS-026 (address book), VS-033 (contact form and captcha), VS-038 (wishlist) and VS-046 (security retention) are built. Nothing else exists yet: no checkout, order, payment, refund or Bring Your Idea route.
+- **Backend state:** slices VS-001 to VS-016, VS-022 (cart), VS-026 (address book), VS-033 (contact form and captcha), VS-034 (Bring Your Idea submission), VS-038 (wishlist) and VS-046 (security retention) are built. Nothing else exists yet: no checkout, order, payment or refund route, and no admin Bring Your Idea pipeline (VS-035).
 - **Schemas are not retyped here.** Field lists live in [`openapi.json`](openapi.json), generated from the code and checked by a test. A block names the schema; open it at `components.schemas.<Name>`.
 - **Decisions since the first version:** three open questions were decided on 2026-10-14 and recorded in [ADR-025](../adr/ADR-025-frontend-contract-decisions.md): admin `available_actions` (C8, P1-11), the STL ownership check (C11) and Turnstile captcha on five forms (P2-1, P2-6, P2-7). Captcha is now built (VS-033, [ADR-026](../adr/ADR-026-captcha-refusal-and-outage.md)); the other two are provisional until their slices are built.
 - **Every example below is real**, captured from the application running against a database filled by [`scripts/dev_seed.py`](../../scripts/dev_seed.py). IDs and timestamps will differ on your machine.
@@ -1544,7 +1544,7 @@ Set-Cookie: csrf_token=<redacted>; Max-Age=2592000; Path=/; SameSite=lax
 
 ### Domain / item: P2-5 — Notifications
 
-**Status:** built (the channel). No business event writes to it yet.
+**Status:** built (the channel). One business event writes to it so far: `custom_request.submitted` (VS-034), sent to administrators.
 
 **Confirmed endpoint:**
 - `GET /api/v1/me/notifications`
@@ -1554,7 +1554,7 @@ Set-Cookie: csrf_token=<redacted>; Max-Age=2592000; Path=/; SameSite=lax
 
 **Response schema:** see `openapi.json`: `NotificationPage`, `NotificationRead` (`id`, `type`, `payload`, `read`, `created_at`).
 
-**Enums/statuses/actions:** `type`: `"account" | "order" | "payment" | "refund" | "offer" | "download"`. This is a category. The specific event is the string `payload.event`.
+**Enums/statuses/actions:** `type`: `"account" | "order" | "payment" | "refund" | "offer" | "download" | "custom_request"`. This is a category. The specific event is the string `payload.event`.
 
 **Errors:**
 - `401 AUTH_REQUIRED`.
@@ -1603,7 +1603,7 @@ Set-Cookie: csrf_token=<redacted>; Max-Age=2592000; Path=/; SameSite=lax
 **Notes:**
 - Pagination is [C2](#domain--item-c2--cursor-pagination-response-shape); newest first.
 - **There is no unread-count endpoint.** To show a badge, request `?read=false&limit=N` and count; show "N+" when `next_cursor` is not `null`.
-- **The registry of `payload.event` values lives in [`../notification-contract.md`](../notification-contract.md).** No production event exists yet, so the registry is empty apart from one planned value: `stl.delivered` under type `download` (VS-023b). Each slice that adds an event records it there.
+- **The registry of `payload.event` values lives in [`../notification-contract.md`](../notification-contract.md).** Today it holds `custom_request.submitted` under type `custom_request` (VS-034, administrators only; payload `custom_request_id`, `project_title`, `title`) and one planned value: `stl.delivered` under type `download` (VS-023b). Each slice that adds an event records it there.
 - `payload` is an object that always has `event`. Its other keys depend on the event. Render an unknown `event` with a generic fallback and never fail on one.
 - The `download` category name is historical. It now means "your STL file was sent".
 - There is no "mark all read" and no delete.
@@ -1712,7 +1712,8 @@ Set-Cookie: csrf_token=<redacted>; Max-Age=2592000; Path=/; SameSite=lax
 - **Yes, the shape is universal today.** Every limit in the API goes through one function, so `Retry-After` is whole seconds everywhere, never an HTTP date. `ApiError.retryAfterSeconds` needs no per-route case.
 - The login lockout (10th failed attempt for one email and IP) is also `429 RATE_LIMITED` with `Retry-After: 900`.
 - Current limits per IP: register 5/hour, resend 5/hour, verify-email 20/hour, login 20/hour, refresh 60/hour, reset request 5/hour, reset confirm 20/hour, public reads 600/hour per route, suggestions 3,000/hour. Admin: 300/minute per administrator.
-- **Provisional:** contact, Bring Your Idea and offer routes are not built. They are planned to use the same limiter, so the same headers are expected, but that is confirmed only when each slice lands.
+- Contact form: 60 attempts/hour, then 5/hour per IP and per email. Bring Your Idea: 20 attempts/hour, then 5/hour per IP and per email ([P2-2](#domain--item-p2-2--bring-your-idea-submission)). Both use the same limiter and headers.
+- **Provisional:** offer routes are not built. They are planned to use the same limiter.
 - Until VS-020, a server-rendering frontend sends every visitor's request from one IP and all visitors share one budget. VS-020 adds a trusted forwarded-IP header.
 
 ---
@@ -2431,9 +2432,9 @@ There is no total: compute one for display if you need it; checkout recomputes i
 
 ### Domain / item: P2-1 — Captcha provider (BYI/contact)
 
-**Status:** **built** (VS-033) for register, resend verification, the password-reset request and the contact form. Bring Your Idea gets it with VS-034. Decisions: [ADR-025](../adr/ADR-025-frontend-contract-decisions.md), [ADR-026](../adr/ADR-026-captcha-refusal-and-outage.md).
+**Status:** **built** (VS-033) for register, resend verification, the password-reset request and the contact form, and (VS-034) Bring Your Idea. Decisions: [ADR-025](../adr/ADR-025-frontend-contract-decisions.md), [ADR-026](../adr/ADR-026-captcha-refusal-and-outage.md).
 
-**Confirmed endpoint:** `POST /api/v1/auth/register`, `/auth/resend-verification`, `/auth/password-reset/request`, `POST /api/v1/contact-messages`.
+**Confirmed endpoint:** `POST /api/v1/auth/register`, `/auth/resend-verification`, `/auth/password-reset/request`, `POST /api/v1/contact-messages`, `POST /api/v1/custom-requests`.
 
 **Request schema:** a required `captcha_token` string (at most 2048 characters) in each body; see `openapi.json`.
 
@@ -2493,36 +2494,75 @@ Turnstile unreachable (`POST /api/v1/contact-messages`; header `Retry-After: 30`
 
 ### Domain / item: P2-2 — Bring-Your-Idea submission
 
-**Status:** not built. PROVISIONAL. Slice: VS-034.
+**Status:** **built** (VS-034). Decisions: [ADR-030](../adr/ADR-030-bring-your-idea-submission.md); behaviour: [`../custom-requests.md`](../custom-requests.md).
 
-**Confirmed endpoint:** none yet. Planned: `POST /api/v1/custom-requests`
+**Confirmed endpoint:** `POST /api/v1/custom-requests`
 
-**Request schema:** provisional; `multipart/form-data`; see api-endpoints.md section 29.9 (`CustomRequestCreate`): `name`, `email`, `phone`, `project_title`, `description`, optional `preferred_material`, `preferred_colour`, `dimensions`, plus `captcha_token` and the files under `attachments[]`.
+**Request schema:** one `multipart/form-data` request (`openapi.json`, the request body of `POST /api/v1/custom-requests`):
+- `name`: 1-100 characters after trimming.
+- `email`.
+- `phone` (required): up to 32 characters of digits, spaces and `+ ( ) . -`, with at least 6 digits.
+- `project_title`: 1-200 characters after trimming.
+- `description`: 1-5000 characters after trimming; line breaks allowed.
+- `preferred_material`, `preferred_colour` (optional): up to 100 characters, free text.
+- `dimensions` (optional): up to 200 characters, free text.
+- `captcha_token` (required).
+- `attachments`: the file part name, **without brackets**, repeated once per image. Parts under any other name (`attachments[]` included) are ignored, so the images would be silently lost. 0 to 5 images, each a JPEG, PNG or WebP of at most 10 MB (40 MP). The type is read from the content; the filename and `Content-Type` are ignored. **Leave the part out when there are no images**: a blank file part is `422`.
 
-**Response schema:** provisional: `201 CustomRequestReceipt`. Fields not written yet.
+An empty text part counts as absent: an empty optional field is stored as none, an empty required field is `422 VALIDATION_ERROR`. That includes an empty `captcha_token`, which here is `422`, not `400` as on the JSON forms.
+
+**Response schema:** `201 CustomRequestReceipt`: `id` and `created_at`. No attachment URL is ever returned: attachments are administrator-only.
 
 **Enums/statuses/actions:** none on the public side.
 
-**Errors:** provisional: `422 UPLOAD_REJECTED`, `422 MALWARE_DETECTED`, `422 VALIDATION_ERROR`, `429 RATE_LIMITED`.
+**Errors**, in the order they are checked:
+1. `429 RATE_LIMITED` with `Retry-After`: 20 attempts per hour per IP, counted before the body is read.
+2. `422 UPLOAD_REJECTED`: the request is over 5 × 10 MB + 64 KiB or has no `Content-Length`.
+3. `422 VALIDATION_ERROR` for a field; `422 UPLOAD_REJECTED` for more than 5 files or a file over 10 MB. Nothing is verified or counted yet, so the captcha token is not spent.
+4. `400 CAPTCHA_INVALID` and `503 SERVICE_UNAVAILABLE` ([P2-1](#domain--item-p2-1--captcha-provider-byicontact)).
+5. `429 RATE_LIMITED`: 5 accepted requests per hour per IP and 5 per hour per email address.
+6. Per file: `422 MALWARE_DETECTED`, then `422 UPLOAD_REJECTED` (not a real image). A scanner outage is `503 SERVICE_UNAVAILABLE`.
 
-**Auth/CSRF/MFA:** public; captcha and rate limit. No cookie, no CSRF.
+`UPLOAD_REJECTED` and `MALWARE_DETECTED` from a file name it in `errors[0].loc` as `["body", "attachments", <index>]`, counting from 0. Any refusal keeps nothing: no request, no file.
 
-**Concurrency/idempotency:** none planned.
+**Auth/CSRF/MFA:** public; no cookie, no CSRF. A signed-in user may use it too; the request is not linked to their account.
 
-**Example success JSON:** none; not built.
+**Concurrency/idempotency:** none. Sending the same form twice stores two requests.
 
-**Example error JSON:** none; not built.
+**Example success JSON:**
 
-**Fixture/test account:** none.
+```json
+{
+  "id": "0b6f3c1e-5e2a-4f4e-9a57-3f8d2c1b7a90",
+  "created_at": "2026-10-17T09:12:44.018231Z"
+}
+```
 
-**Authoritative source/OpenAPI file:** none yet. Plan: VS-034; api-endpoints.md sections 7.2 and 29.9.
+**Example error JSON:** a PDF sent as the second file:
 
-**Notes:** your questions, provisionally.
-- **One bundled multipart request** is still the plan.
-- **File field name:** written as `attachments[]` in the specification. Whether the wire name keeps the brackets is not final.
-- **Limits (types, size, count): not chosen.** The plan says only "bounded image count and size". Expect images only, checked by content, as for product images (JPEG, PNG, WebP, 10 MB each), but that is an expectation.
-- **Scanning is expected to be synchronous**, like product images: the `201` arrives after every file is scanned and stored, and any rejected file rejects the whole request with nothing kept.
-- **Rejection:** the `code` (`UPLOAD_REJECTED` or `MALWARE_DETECTED`) is the status field; the reason is in `detail`.
+```json
+{
+  "type": "http://localhost:8000/problems/UPLOAD_REJECTED",
+  "title": "Upload rejected",
+  "status": 422,
+  "detail": "not a JPEG, PNG or WebP image",
+  "instance": "/api/v1/custom-requests",
+  "code": "UPLOAD_REJECTED",
+  "request_id": "req_6c5da7aa03be4e2d889c824b709aa50d",
+  "errors": [
+    {"loc": ["body", "attachments", 1], "msg": "not a JPEG, PNG or WebP image", "type": "value_error"}
+  ]
+}
+```
+
+**Fixture/test account:** use the fake captcha token from P2-1. Locally `SCANNER=fake` accepts anything but the EICAR test string.
+
+**Authoritative source/OpenAPI file:** [`openapi.json`](openapi.json); [`../custom-requests.md`](../custom-requests.md); api-endpoints.md sections 7.2 and 29.9.
+
+**Notes:**
+- **Scanning is synchronous.** The `201` arrives after every file is scanned, re-encoded and stored.
+- Each active administrator gets an in-app notification of type `custom_request` ([P2-5](#domain--item-p2-5--notifications)).
+- Reference images are deleted 90 days after submission (the `custom_request_attachment_retention` setting).
 
 ### Domain / item: P2-3 — Contact form
 

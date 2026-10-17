@@ -348,6 +348,7 @@ async def test_every_notification_type_round_trips_and_nothing_else_is_accepted(
         "refund",
         "offer",
         "download",
+        "custom_request",
     }
 
 

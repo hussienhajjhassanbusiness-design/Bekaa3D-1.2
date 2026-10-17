@@ -343,9 +343,10 @@ payment
 refund
 offer
 download
+custom_request
 ```
 
-The specific event is carried in the JSON payload; the enum remains a stable high-level category. Since ADR-019, `download` is the category for the "STL file sent" event (`payload.event = "stl.delivered"`); the value is kept because renaming a PostgreSQL enum value is a migration for no behavioural gain.
+`custom_request` was added by VS-034 for the administrator's "new Bring Your Idea request" notification (ADR-030). The specific event is carried in the JSON payload; the enum remains a stable high-level category. Since ADR-019, `download` is the category for the "STL file sent" event (`payload.event = "stl.delivered"`); the value is kept because renaming a PostgreSQL enum value is a migration for no behavioural gain.
 
 ### `setting_type`
 
@@ -1549,6 +1550,8 @@ The payload is supporting presentation data, not the source of truth for orders/
 
 **Purpose:** Bring Your Idea lead workflow; not an online transaction.
 
+VS-034 built this table without `user_id` (the public form ignores auth cookies, so nothing writes it; ADR-030), and with `admin_notes` ≤ 5000 and a currency-with-quote CHECK. See [`docs/custom-requests.md`](../custom-requests.md).
+
 | Column | Type | Null | Constraint |
 |---|---|---:|---|
 | `id` | UUID | No | PK |
@@ -1591,6 +1594,8 @@ OR (quoted_amount_cents >= 0 AND currency = 'USD')
 ---
 
 ## 12.5 `custom_request_attachments`
+
+As built by VS-034 (ADR-030): `scan_status` is the enum `upload_scan_status`, whose only value is `clean` (scanning is synchronous); `storage_key` is a generated `custom-requests/<uuid4>.<ext>` key, unique; `expires_at` is stamped at submission from `custom_request_attachment_retention`.
 
 | Column | Type | Null | Constraint |
 |---|---|---:|---|

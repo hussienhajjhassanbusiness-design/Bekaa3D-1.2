@@ -239,6 +239,19 @@ _DEFINITIONS: Final[tuple[SettingDefinition, ...]] = (
         minimum=86_400,  # 1 day
         maximum=7_776_000,  # 90 days
     ),
+    SettingDefinition(
+        key="custom_request_attachment_retention",
+        type=SettingType.DURATION,
+        description=(
+            "Age at which a Bring Your Idea reference image is purged by "
+            "purge_expired_attachments; stamped on each attachment when it is submitted."
+        ),
+        # 90 days (VS-034, SRS 30.3 design-time decision); a change affects new uploads only.
+        default=7_776_000,
+        unit="seconds",
+        minimum=86_400,  # 1 day
+        maximum=31_536_000,  # 365 days
+    ),
 )
 
 REGISTRY: Final[dict[str, SettingDefinition]] = {d.key: d for d in _DEFINITIONS}

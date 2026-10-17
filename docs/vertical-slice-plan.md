@@ -39,7 +39,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 | VS-032 | Live online payment provider | VS-020, VS-024, VS-030 | Not started |
 | VS-033 | Contact form and captcha | VS-005 | Done |
 | VS-029b | Receipt confirmation and problem report | VS-029, VS-033 | Not started |
-| VS-034 | Bring Your Idea submission | VS-014, VS-033 | Not started |
+| VS-034 | Bring Your Idea submission | VS-014, VS-033 | Done |
 | VS-035 | Bring Your Idea pipeline and funnel | VS-034, VS-020 | Not started |
 | VS-036 | Reviews and Verified Purchase badge | VS-015, VS-028, VS-030, VS-031 | Not started |
 | VS-037 | Review moderation | VS-036 | Not started |
@@ -431,6 +431,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - Adds the nginx service in front of `api` (moved from the removed VS-019).
   - Fixes client IPs behind the proxy: uvicorn runs with `--proxy-headers` and `--forwarded-allow-ips` limited to nginx. Otherwise the rate limiter, login throttle and IP hashes would all see nginx's IP.
   - Production Compose: nginx with TLS and automatic renewal, HSTS/CSP/security headers, body-size limits, and an allowlisted webhook location.
+    - Body-size limits: `POST /api/v1/custom-requests` needs about 51 MB (5 × 10 MB images plus framing, ADR-030); admin image uploads about 10 MB; everything else can stay small.
   - Containers run as non-root with CPU and memory limits.
   - Secrets live outside the repository.
   - **Required: shared-IP rate limiting** (found in the VS-016 audit, PR #6). The SRS rules out a plain client-side storefront, so catalogue pages are server-rendered. Without this, every visitor's API calls arrive from the frontend server's IP and share one 600/hour bucket. Carrier-grade NAT also puts many Lebanese mobile customers behind one IP. Record the design in an ADR.
@@ -937,7 +938,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 - **Done when:** Receipt confirmation and problem reports are recorded on the order and never block completion.
 
 ## VS-034 — Bring Your Idea submission
-**Status:** Not started
+**Status:** Done
 **Depends on:** VS-014, VS-033
 **Goal:** A guest submits a custom-print request with reference images, which are stored privately and safely.
 - **Model / migration:**
@@ -957,6 +958,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 - **Done when:**
   - Guest uploads are validated, re-encoded, scanned and private.
   - They expire on schedule.
+- **Built:** migration `26d5d039d72c`; ADR-030 (0–5 images at 10 MB, a 20/hour attempt limit and body cap before parsing, 90-day retention stamped at submission, no `user_id`, an in-app notification of new type `custom_request` to every active administrator); `docs/custom-requests.md`. Tests: `tests/integration/engagement/test_custom_requests_api.py`, `test_custom_request_schema.py`, `test_purge_expired_attachments.py`, `test_reap_private_attachments.py`; `tests/concurrency/test_attachment_purge_race.py`; `tests/unit/engagement/test_custom_request_*.py`, `test_submit_custom_request.py`.
 
 ## VS-035 — Bring Your Idea pipeline and funnel
 **Status:** Not started

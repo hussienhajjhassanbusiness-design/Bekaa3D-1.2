@@ -2,7 +2,19 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Index, Text, func, text
+from sqlalchemy import (
+    CHAR,
+    BigInteger,
+    CheckConstraint,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import CITEXT, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -14,7 +26,13 @@ from app.engagement.domain.contact_message import (
     PHONE_MAX,
     SUBJECT_MAX,
 )
-from app.engagement.domain.enums import ContactMessageStatus, NotificationType
+from app.engagement.domain.enums import (
+    ContactMessageStatus,
+    CustomRequestOutcome,
+    CustomRequestStatus,
+    NotificationType,
+    UploadScanStatus,
+)
 
 
 class NotificationModel(Base):
@@ -181,4 +199,74 @@ class WishlistItemModel(Base):
             "product_id",
             postgresql_where=text("deleted_at IS NULL"),
         ),
+    )
+
+
+def _enum(enum: type[Any], name: str) -> Enum:
+    return Enum(enum, name=name, values_callable=lambda members: [m.value for m in members])
+
+
+class CustomRequestModel(Base):
+    """database-design.md 12.4 without `user_id` (ADR-030); CHECKs live in 26d5d039d72c."""
+
+    __tablename__ = "custom_requests"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    email: Mapped[str] = mapped_column(CITEXT, nullable=False)
+    phone: Mapped[str] = mapped_column(Text, nullable=False)
+    project_title: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    preferred_material: Mapped[str | None] = mapped_column(Text)
+    preferred_colour: Mapped[str | None] = mapped_column(Text)
+    dimensions: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[CustomRequestStatus] = mapped_column(
+        _enum(CustomRequestStatus, "custom_request_status"),
+        nullable=False,
+        server_default=CustomRequestStatus.NEW.value,
+    )
+    quoted_amount_cents: Mapped[int | None] = mapped_column(BigInteger)
+    currency: Mapped[str | None] = mapped_column(CHAR(3))
+    outcome: Mapped[CustomRequestOutcome | None] = mapped_column(
+        _enum(CustomRequestOutcome, "custom_request_outcome")
+    )
+    admin_notes: Mapped[str | None] = mapped_column(Text)
+    contacted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    quoted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (Index("ix_custom_requests_queue", "status", "created_at", "id"),)
+
+
+class CustomRequestAttachmentModel(Base):
+    """database-design.md 12.5; hard-purged at `expires_at` (SRS 13.4)."""
+
+    __tablename__ = "custom_request_attachments"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    custom_request_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("custom_requests.id", ondelete="CASCADE"), nullable=False
+    )
+    storage_key: Mapped[str] = mapped_column(Text, nullable=False)
+    original_filename: Mapped[str] = mapped_column(Text, nullable=False)
+    mime_type: Mapped[str] = mapped_column(Text, nullable=False)
+    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    checksum: Mapped[str] = mapped_column(Text, nullable=False)
+    scan_status: Mapped[UploadScanStatus] = mapped_column(
+        _enum(UploadScanStatus, "upload_scan_status"), nullable=False
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("storage_key", name="uq_custom_request_attachments_storage_key"),
+        Index("ix_custom_request_attachments_expires_at", "expires_at"),
+        Index("ix_custom_request_attachments_request", "custom_request_id"),
     )

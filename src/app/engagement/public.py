@@ -5,17 +5,29 @@ and from nowhere else in Engagement (enforced by
 `tests/unit/test_deep_architecture.py`).
 """
 
+from collections.abc import Sequence
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.engagement.application.commands.purge_expired_attachments import (
+    PurgeExpiredAttachments,
+)
 from app.engagement.application.services.notification_writer import write_notification
 from app.engagement.domain.entities import Notification
 from app.engagement.domain.enums import NotificationType
+from app.engagement.infrastructure.custom_requests import SqlCustomRequestRepository
 from app.engagement.infrastructure.repositories import NotificationRepository
+from app.integrations.storage.ports import StoragePort
 
-__all__ = ["NotificationType", "create_notification"]
+__all__ = [
+    "NotificationType",
+    "create_notification",
+    "purge_expired_attachments_batch",
+    "referenced_attachment_keys",
+]
 
 
 async def create_notification(
@@ -53,3 +65,17 @@ async def create_notification(
         notification_type=notification_type,
         payload=payload,
     )
+
+
+async def purge_expired_attachments_batch(
+    session: AsyncSession, storage: StoragePort, *, now: datetime, limit: int
+) -> int:
+    """One `purge_expired_attachments` batch in the caller's transaction (VS-034)."""
+    return await PurgeExpiredAttachments(
+        SqlCustomRequestRepository(session), storage
+    ).execute_batch(now=now, limit=limit)
+
+
+async def referenced_attachment_keys(session: AsyncSession, keys: Sequence[str]) -> set[str]:
+    """Which private attachment keys a row still names, for `reap_orphan_files`."""
+    return await SqlCustomRequestRepository(session).referenced_keys(keys)
