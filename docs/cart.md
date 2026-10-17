@@ -15,7 +15,7 @@ The verified customer's one persistent cart, mixing physical and STL products. D
 - Lines are addressed by `product_id`; a cart holds at most one line per product.
 - `GET` never creates a cart. A user who has never written one gets `id: null` and no items.
 - `404 NOT_FOUND`: `PATCH` or `DELETE` of a product that is not in the caller's cart, including when the caller has no cart. Unlike the wishlist, `DELETE` of an absent line is a 404.
-- `VS-023` adds `409 PRODUCT_ALREADY_OWNED` to `POST` for an STL the customer already owns.
+- `409 PRODUCT_ALREADY_OWNED` (`product_ids`) on `POST` for an STL the customer already owns: a paid, unrefunded line (VS-023). The customer's own unpaid order does not block the add; checkout then refuses it the same way.
 
 ## Requests
 
@@ -48,7 +48,7 @@ The verified customer's one persistent cart, mixing physical and STL products. D
 
 There is no total: checkout recomputes it from live prices.
 
-## Checkout contract (for VS-023)
+## Checkout contract (built in VS-023, [`checkout.md`](checkout.md))
 
 - Checkout locks the cart (`lock_cart_for_checkout`), revalidates every line against live Catalog state and the current caps, charges live prices, and clears the cart (`clear_cart`) in the same transaction.
 - **No silent drops.** Any `not_listed`, `unavailable`, `whatsapp_only` or `over_cap` line makes checkout answer 422 naming every offending line. The only exception is SRS §7.3 step 5: an STL bought since it was added is dropped from the order, and the response names it.

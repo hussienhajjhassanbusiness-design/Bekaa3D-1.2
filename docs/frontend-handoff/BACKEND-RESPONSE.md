@@ -1903,6 +1903,8 @@ These items will never be built. Remove the frontend work that depends on them.
 
 > **Everything in this section is PROVISIONAL.** No code exists for it. The answers come from the specification ([`../requirments/api-endpoints.md`](../requirments/api-endpoints.md), [`../SRS.md`](../SRS.md), the ADRs and [`../vertical-slice-plan.md`](../vertical-slice-plan.md)) and can change when the slice is built. Build models and screens against them if you want a head start, but do not treat a field name as final until the slice is merged and the route appears in `openapi.json`. Each block names the slice to watch.
 
+> **Built since this section was written:** C3 (VS-026), C5 (VS-022), and from VS-023 C6 (STL-only checkout), C11 (ownership check), C12 (idempotency) and the server side of C7. Each block's status line says so; their contracts are in `openapi.json`.
+
 Build order on the backend: VS-020 (staging) or VS-022 (cart) next, then VS-023 (digital checkout), VS-023b, VS-024, VS-025, VS-026, VS-028 (physical checkout and cash), VS-029, VS-030, VS-031, VS-033, VS-034.
 
 ### Domain / item: C3 — Address book contract
@@ -2080,54 +2082,47 @@ There is no total: compute one for display if you need it; checkout recomputes i
 
 ### Domain / item: C6 — Checkout contract
 
-**Status:** not built. PROVISIONAL. Slices: VS-023 (STL-only carts), VS-028 (physical, mixed, pickup, cash).
+**Status:** **built for STL-only carts paid online** (VS-023). Physical, mixed, pickup and cash: PROVISIONAL, VS-028.
 
-**Confirmed endpoint:** none yet. Planned: `POST /api/v1/checkout`
+**Confirmed endpoint:** `POST /api/v1/checkout`. Full contract: [`../checkout.md`](../checkout.md).
 
-**Request schema:** provisional; see api-endpoints.md section 29.5 (`CheckoutRequest`). Planned fields: `fulfillment_method` (`delivery` or `pickup`), `address_id`, `contact_phone` (pickup only), `payment_method` (`online` or `cash`), `payment_provider` (only if more than one online provider exists), `customer_note`, `accept_terms`, `accept_digital_final_sale`, `accept_cash_terms`, `accepted_price_changes[]`.
+**Request schema:** `CheckoutRequest` in `openapi.json`: `payment_method` (`"online"`; `"cash"` is refused until VS-028), `payment_provider` (optional; defaults to the one configured), `customer_note` (≤ 1000), `accept_terms: true`, `accept_digital_final_sale: true` (required with an STL), `accept_cash_terms` (accepted, ignored online), `accepted_price_changes[]` (≤ 50). `fulfillment_method`, `address_id` and `contact_phone` exist but any of them is `422 INVALID_FULFILLMENT` until VS-028. Any other field, including a total or a price, is `422 VALIDATION_ERROR`.
 
-**Response schema:** provisional: `201 CheckoutRead`: the order, plus `payment` (`id`, `status`, `provider`, `redirect_url`) for an online order. A cash order has no payment and returns the order with `payment_due`.
+**Response schema:** `201 CheckoutRead`: `order` (`pending_payment`, live prices, lines `pending`), `payment` (`{id, status: "pending", provider, redirect_url}`) and `dropped_lines` (`[{product_id, reason: "already_owned"}]`: STLs bought since they were added, not charged). Send the customer to `payment.redirect_url`.
 
-**Enums/statuses/actions:** provisional. `fulfillment_method`: `"delivery" | "pickup"`. `payment_method`: `"online" | "cash"`.
+**Enums/statuses/actions:** `payment_method`: `"online" | "cash"`; `fulfillment_method`: `"delivery" | "pickup"` (VS-028).
 
-**Errors:** provisional:
-- `409 CART_EMPTY`.
-- `409 CART_PRICE_CHANGED` — body has an extra member `price_changes: [{product_id, old_amount_cents, new_amount_cents, currency}]`.
-- `409 IDEMPOTENCY_KEY_CONFLICT` — the key was used with a different body.
-- `409 PAYMENT_ALREADY_ACTIVE`, `409 PRODUCT_ALREADY_OWNED`.
-- `422 INVALID_FULFILLMENT` — address, phone or method does not fit the cart.
-- `422 PRODUCT_NOT_PURCHASABLE`, `422 QUANTITY_EXCEEDS_LIMIT`.
-- `422 PAYMENT_METHOD_NOT_ALLOWED`, `422 CASH_PAYMENT_LIMIT_REACHED` — cash rules.
-- `503 ORDERS_PAUSED` — `accepting_orders` is `false`.
-- `502 PAYMENT_PROVIDER_ERROR`.
+**Errors:**
+- `409 CART_EMPTY` (with `dropped_lines`), `409 CART_PRICE_CHANGED` (with `price_changes: [{product_id, old_amount_cents, new_amount_cents, currency}]`; nothing is charged), `409 PRODUCT_ALREADY_OWNED` (with `product_ids`), `409 IDEMPOTENCY_KEY_CONFLICT`, `409 IDEMPOTENCY_REQUEST_IN_PROGRESS` (with `order_id`, `order_number`, `Retry-After: 2`).
+- `422 PRODUCT_NOT_PURCHASABLE` / `QUANTITY_EXCEEDS_LIMIT` (with `lines: [{product_id, reason, max_quantity?}]`, every offending line), `422 INVALID_FULFILLMENT`, `422 PAYMENT_METHOD_NOT_ALLOWED` (with `reason`), `422 VALIDATION_ERROR` (a missing `accept_digital_final_sale` points at that field).
+- `429 RATE_LIMITED` (30 per user per hour; a replay counts).
+- `502 PAYMENT_PROVIDER_UNAVAILABLE`: **the order exists**, unpaid (`order_id`, `order_number`); payment retry arrives with VS-024.
+- `503 ORDERS_PAUSED`, `503 ONLINE_PAYMENT_UNAVAILABLE` (no online provider configured).
 
-**Auth/CSRF/MFA:** verified customer, `X-CSRF-Token`, and the `Idempotency-Key` header.
+**Auth/CSRF/MFA:** verified customer, `X-CSRF-Token`, and the `Idempotency-Key` header ([C12](#domain--item-c12--idempotency-key-mechanism)).
 
-**Concurrency/idempotency:** see [C12](#domain--item-c12--idempotency-key-mechanism). The server recomputes every price and total; the client never sends an amount, except to confirm a price change it has shown the user.
+**Concurrency/idempotency:** see C12. The server recomputes every price and total; the client never sends an amount, except to confirm a price change it has shown the user.
 
-**Example success JSON:** none; not built.
+**Example success JSON:** see `CheckoutRead` in `openapi.json`; the price-change body is shown under Errors.
 
-**Example error JSON:** none; not built. The planned `price_changes` member is shown under Errors.
+**Example error JSON:** the RFC 9457 problem shape, with the extension members listed under Errors.
 
-**Fixture/test account:** none possible yet.
+**Fixture/test account:** `scripts/dev_seed.py` (a verified customer and STL products), then `scripts/mock_pay.py` to pay ([`../checkout.md`](../checkout.md)).
 
-**Authoritative source/OpenAPI file:** none yet. Plan: VS-023, VS-028; api-endpoints.md sections 10.3 and 29.5; SRS section 7; ADR-024.
+**Authoritative source/OpenAPI file:** `openapi.json` (`POST /api/v1/checkout`); [ADR-032](../adr/ADR-032-checkout-idempotency-and-payment-verification.md).
 
-**Notes:** your questions, provisionally.
+**Notes:**
 - **No cart id and no cart version in the body.** The server checks out the signed-in user's own cart.
-- **No zone id.** Shipping zones are removed ([C4](#domain--item-c4--shipping-zones-public-read)).
-- **Pickup** is `fulfillment_method: "pickup"` with no `address_id` and a required `contact_phone`. Delivery is `fulfillment_method: "delivery"` with `address_id`. An STL-only cart sends neither.
-- **Price changed:** `409 CART_PRICE_CHANGED` with `price_changes`. Lines are identified by `product_id`. To continue, show the new prices and resend with `accepted_price_changes: [{product_id, amount_cents, currency}]` and a **new** idempotency key. If the price moves again, it fails again.
-- **Kill switch:** `accepting_orders` in public settings ([B1](#domain--item-b1--public-settings-response-shape)); checkout answers `503 ORDERS_PAUSED`.
-- **Threshold:** there is no free-shipping threshold ([section 3](#3-removed-by-adr-019-and-adr-024)).
-- **Consent fields:** `accept_terms: true` always; `accept_digital_final_sale: true` when the cart has an STL; `accept_cash_terms: true` for cash.
-- **Consent wording does not exist.** The terms text, the digital final-sale text and the cash terms text are all business decisions still open (SRS section 30.2). The backend will store that consent was given, not the wording. Do not ship invented copy.
-- **Cash on delivery is new** (ADR-024): allowed only when every line is physical, when `cash_payment_enabled` is true and the total is at most `cash_max_order_total` (both will be in public settings).
-- Until VS-028, a cart with a physical line will answer `422 INVALID_FULFILLMENT`; only STL-only carts check out.
+- **Price changed:** show the new prices and resend with `accepted_price_changes: [{product_id, amount_cents, currency}]` and a **new** idempotency key. If the price moves again, it fails again.
+- **Kill switch:** `accepting_orders` in public settings ([B1](#domain--item-b1--public-settings-response-shape)).
+- **Consent wording does not exist.** The terms and digital final-sale texts are business decisions still open (SRS section 30.2). The backend stores when consent was given (and the digital-terms version), not the wording. Do not ship invented copy.
+- **Cash on delivery** (ADR-024) and pickup arrive with VS-028; until then a cart with a physical line answers `422 INVALID_FULFILLMENT`.
 
 ### Domain / item: C7 — Payment verification
 
-**Status:** not built. PROVISIONAL. Slices: VS-023, VS-024, VS-025. Several parts are undecided, not merely unbuilt.
+**Status:** server-side verification **built** in VS-023 (webhook, verification after the 200, the `verify_payments` job). The customer-facing read is VS-025 and retry VS-024: PROVISIONAL.
+
+**Built in VS-023:** the order becomes paid only when the provider itself confirms the exact amount. Typical delay after the provider's webhook: under a second against the mock; at worst about a minute when a background task is lost. With the mock, the return page is `{frontend}/checkout/return?order=<order_number>`; a real provider's return parameters are still undecided (VS-032).
 
 **Confirmed endpoint:** none yet. **No dedicated payment-status endpoint is planned.** The planned read is `GET /api/v1/me/orders/{order_id}` (VS-025), which will carry the order status and a payment summary. Planned retry: `POST /api/v1/me/orders/{order_id}/payments` (VS-024).
 
@@ -2202,11 +2197,11 @@ There is no total: compute one for display if you need it; checkout recomputes i
 
 ### Domain / item: C11 — Per-product ownership check
 
-**Status:** partly built. The product-level signal exists. The per-customer check is **decided** ([ADR-025](../adr/ADR-025-frontend-contract-decisions.md)) but not built. PROVISIONAL. Slice: VS-023.
+**Status:** **built** (VS-023).
 
 **Confirmed endpoint:**
-- built today: `capabilities` on `GET /api/v1/products/{slug}` ([B3](#domain--item-b3--product-detail-contract));
-- decided, not built: `GET /api/v1/me/stl-ownership?product_id=<uuid>` (VS-023).
+- `capabilities` on `GET /api/v1/products/{slug}` ([B3](#domain--item-b3--product-detail-contract));
+- `GET /api/v1/me/stl-ownership?product_id=<uuid>` (VS-023), `StlOwnershipRead` in `openapi.json`.
 
 **Request schema:** ownership check: `product_id` query parameter, UUID, required.
 
@@ -2226,7 +2221,7 @@ There is no total: compute one for display if you need it; checkout recomputes i
 
 **Example error JSON:** none; not built.
 
-**Fixture/test account:** none possible until VS-023.
+**Fixture/test account:** buy an STL with the dev seed's customer and `scripts/mock_pay.py`.
 
 **Authoritative source/OpenAPI file:** ADR-019 decision 5; ADR-022; VS-023.
 
@@ -2774,7 +2769,7 @@ These are not backend gaps to be filled by reading code. Each needed a decision,
 |---|---|---|---|
 | 1 | Should admin order responses list the legal next actions for each line? (C8, P1-11) | FVS-030, FVS-031 | **Decided:** yes. Every line of `AdminOrderDetail` carries `available_actions` (`{target_status, cancel_reasons}`), built in VS-029. |
 | 2 | Should a signed-in customer be able to see "you own this STL" before pressing "add to cart"? (C11) | FVS-014, FVS-025 | **Decided:** yes, through `GET /api/v1/me/stl-ownership?product_id=` (`{product_id, owned}`), built in VS-023. The cart still refuses a second purchase. |
-| 3 | Payment return URL, its query parameters, and the polling interval, backoff, maximum duration and timeout (C7). | FVS-027 | Open. Depends on the online provider (SRS section 30.4) |
+| 3 | Payment return URL, its query parameters, and the polling interval, backoff, maximum duration and timeout (C7). | FVS-027 | Partly answered (VS-023): with the mock, `{frontend}/checkout/return?order=<order_number>`; verification typically completes within a second of the provider's webhook, at worst about a minute. A real provider's parameters stay open (SRS section 30.4) |
 | 4 | Which online payment provider: Whish, a card gateway, or both (SRS section 30.4). | FVS-026, FVS-027 | Open. Product owner, before VS-032 |
 | 5 | Idempotency key lifetime and required format (C12). | FVS-026, FVS-032 | **Answered (VS-023):** 24 hours; 8–255 characters of `[A-Za-z0-9._:-]`; a replay counts against the 30/hour checkout limit |
 | 6 | Where the refundable balance per line is returned (P1-13). | FVS-032 | Open. Backend, in VS-030 |

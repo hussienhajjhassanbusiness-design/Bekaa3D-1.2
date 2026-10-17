@@ -47,6 +47,7 @@ Rules enforced by `app.engagement.domain.payload`:
 | `payload.event` | Type | Recipient | Other keys | Slice |
 | --- | --- | --- | --- | --- |
 | `custom_request.submitted` | `custom_request` | every active administrator | `custom_request_id`, `project_title`, `title` | VS-034 |
+| `payment.confirmed` | `payment` | the customer | `order_id`, `order_number` | VS-023 |
 | `stl.delivered` (planned) | `download` | the customer | provisional | VS-023b |
 
 ### On `event`

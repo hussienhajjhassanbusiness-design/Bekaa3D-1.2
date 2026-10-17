@@ -1287,6 +1287,13 @@ WHERE status IN ('pending', 'processing')   -- VS-023: reconciliation covers bot
 (late_captured_at) WHERE late_captured_at IS NOT NULL   -- late captures visible before VS-030
 ```
 
+Until VS-030 builds refund obligations, the only supported view of late captures is this listing, served by `ix_payments_late_captured` (VS-023, ADR-032 decision 21). Each one also has a `payment.late_capture` audit row with its reason. The automatic refund in the `late_captured_at` row above is VS-030's.
+
+```sql
+SELECT id, order_id, provider, amount_cents, status, late_captured_at
+FROM payments WHERE late_captured_at IS NOT NULL ORDER BY late_captured_at;
+```
+
 ---
 
 ## 9.2 `webhook_events`
