@@ -135,7 +135,7 @@ def test_a_payload_one_byte_over_the_limit_is_rejected() -> None:
 def test_size_is_measured_in_utf8_bytes_not_characters() -> None:
     """A multi-byte character costs what it actually costs on disk. Measuring
     `len(str)` would let a payload roughly three times the limit through."""
-    payload = {"event": "a", "d": "Ã©" * MAX_PAYLOAD_BYTES}
+    payload = {"event": "a", "d": "é" * MAX_PAYLOAD_BYTES}
     with pytest.raises(InvalidNotificationPayloadError):
         validate_payload(payload)
 

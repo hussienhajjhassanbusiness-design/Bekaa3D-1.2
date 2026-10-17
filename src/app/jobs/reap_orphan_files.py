@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalog.infrastructure.product_image_repository import ProductImageRepository
 from app.core.config import get_settings
-from app.engagement.infrastructure.custom_requests import SqlCustomRequestRepository
+from app.engagement.public import referenced_attachment_keys
 from app.integrations.storage.factory import private_upload_storage, public_media_storage
 from app.integrations.storage.ports import StoragePort
 
@@ -32,12 +32,8 @@ async def _product_images(session: AsyncSession, keys: list[str]) -> set[str]:
     return await ProductImageRepository(session).referenced_keys(keys)
 
 
-async def _custom_request_attachments(session: AsyncSession, keys: list[str]) -> set[str]:
-    return await SqlCustomRequestRepository(session).referenced_keys(keys)
-
-
 PRODUCT_IMAGES = ReapTarget(PREFIX, _product_images)
-CUSTOM_REQUEST_ATTACHMENTS = ReapTarget("custom-requests/", _custom_request_attachments)
+CUSTOM_REQUEST_ATTACHMENTS = ReapTarget("custom-requests/", referenced_attachment_keys)
 
 
 async def reap(
@@ -62,12 +58,23 @@ async def reap(
 
 
 async def reap_orphan_files(ctx: dict[str, Any]) -> int:
-    """arq job, daily: public product media and private Bring Your Idea attachments."""
+    """arq job, daily: public product media and private Bring Your Idea attachments.
+    Each target runs even if the other fails; the first failure is re-raised afterwards."""
     settings, now = get_settings(), datetime.now(UTC)
-    reaped = await reap(public_media_storage(settings), ctx["session_factory"], now)
-    reaped += await reap(
-        private_upload_storage(settings), ctx["session_factory"], now, CUSTOM_REQUEST_ATTACHMENTS
+    targets = (
+        (public_media_storage(settings), PRODUCT_IMAGES),
+        (private_upload_storage(settings), CUSTOM_REQUEST_ATTACHMENTS),
     )
+    reaped: list[str] = []
+    failures: list[Exception] = []
+    for storage, target in targets:
+        try:
+            reaped += await reap(storage, ctx["session_factory"], now, target)
+        except Exception as exc:
+            await logger.aexception("orphan_reap_failed", prefix=target.prefix)
+            failures.append(exc)
     if reaped:
         await logger.ainfo("orphan_files_reaped", count=len(reaped), keys=reaped[:20])
+    if failures:
+        raise failures[0]
     return len(reaped)

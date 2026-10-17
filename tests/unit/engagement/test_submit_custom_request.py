@@ -11,6 +11,7 @@ import pytest
 
 from app.engagement.application.commands.submit_custom_request import (
     AttachmentUpload,
+    CustomRequestSubmission,
     SubmitCustomRequest,
 )
 from app.engagement.domain.custom_request import (
@@ -142,7 +143,7 @@ class Harness:
         self.notifications = MemoryNotifications(fail=kw.get("notify_fails", False))
         self.admins = Admins(kw.get("admins", [uuid.uuid4(), uuid.uuid4()]))
 
-    async def submit(self, *uploads: bytes) -> CustomRequest:
+    async def submit(self, *uploads: bytes) -> CustomRequestSubmission:
         command = SubmitCustomRequest(
             self.requests,
             self.notifications,
@@ -161,14 +162,15 @@ def _jpeg() -> bytes:
 
 async def test_a_clean_submission_stores_every_file_and_notifies_each_admin() -> None:
     harness = Harness()
-    request = await harness.submit(_jpeg(), sample("PNG"))
+    submission = await harness.submit(_jpeg(), sample("PNG"))
+    assert submission.failed_notifications == 0
     assert len(harness.storage.files) == 2
     [(_, attachments, _)] = harness.requests.added
     assert {a.storage_key for a in attachments} == set(harness.storage.files)
     assert [a.mime_type for a in attachments] == ["image/jpeg", "image/png"]
     assert [user for user, _, _ in harness.notifications.sent] == harness.admins.ids
     assert {kind for _, kind, _ in harness.notifications.sent} == {NotificationType.CUSTOM_REQUEST}
-    assert request.attachments[0].original_filename == "photo0.jpg"
+    assert submission.request.attachments[0].original_filename == "photo0.jpg"
 
 
 async def test_a_submission_without_images_is_a_lead_too() -> None:
@@ -227,10 +229,19 @@ async def test_a_storage_failure_on_the_second_file_deletes_the_first_and_insert
     assert harness.notifications.sent == []
 
 
-@pytest.mark.parametrize("failure", ["insert_fails", "notify_fails"])
-async def test_a_later_failure_deletes_every_stored_file(failure: str) -> None:
-    harness = Harness(**{failure: True})
+async def test_an_insert_failure_deletes_every_stored_file() -> None:
+    harness = Harness(insert_fails=True)
     with pytest.raises(RuntimeError):
         await harness.submit(_jpeg(), _jpeg())
     assert harness.storage.puts == 2
     assert harness.storage.files == {}
+    assert harness.notifications.sent == []
+
+
+async def test_a_notification_failure_keeps_the_request_and_its_files() -> None:
+    """FR-15: "Notification failure does not remove the submitted request"."""
+    harness = Harness(notify_fails=True)
+    submission = await harness.submit(_jpeg(), _jpeg())
+    assert submission.failed_notifications == len(harness.admins.ids)
+    assert len(harness.requests.added) == 1
+    assert len(harness.storage.files) == 2

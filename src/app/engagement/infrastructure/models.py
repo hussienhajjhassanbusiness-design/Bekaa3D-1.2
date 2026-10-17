@@ -153,7 +153,7 @@ class ContactMessageModel(Base):
 
 class WishlistItemModel(Base):
     """database-design.md 12.2. Soft delete; a removed row is never reused -
-    re-adding inserts a fresh row (VS-038 plan Â§3)."""
+    re-adding inserts a fresh row (VS-038 plan §3)."""
 
     __tablename__ = "wishlist_items"
 

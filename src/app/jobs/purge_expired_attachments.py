@@ -7,10 +7,7 @@ from typing import Any
 import structlog
 
 from app.core.config import get_settings
-from app.engagement.application.commands.purge_expired_attachments import (
-    PurgeExpiredAttachments,
-)
-from app.engagement.infrastructure.custom_requests import SqlCustomRequestRepository
+from app.engagement.public import purge_expired_attachments_batch
 from app.integrations.storage.factory import private_upload_storage
 from app.integrations.storage.ports import StoragePort
 
@@ -34,9 +31,9 @@ async def purge_expired_attachments(
     purged, truncated = 0, True
     for _ in range(max_batches):
         async with ctx["session_factory"]() as session, session.begin():
-            count = await PurgeExpiredAttachments(
-                SqlCustomRequestRepository(session), files
-            ).execute_batch(now=moment, limit=batch_size)
+            count = await purge_expired_attachments_batch(
+                session, files, now=moment, limit=batch_size
+            )
         purged += count
         if count < batch_size:
             truncated = False

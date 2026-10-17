@@ -46,7 +46,7 @@ async def _orphans_from_a_failed_commit(engine: AsyncEngine, storage: LocalStora
     written: list[str] = []
     with pytest.raises(_CommitFailedError):
         async with factory() as session, session.begin():
-            request = await SubmitCustomRequest(
+            submission = await SubmitCustomRequest(
                 SqlCustomRequestRepository(session),
                 NotificationRepository(session),
                 IdentityAdministratorDirectory(session),
@@ -61,7 +61,7 @@ async def _orphans_from_a_failed_commit(engine: AsyncEngine, storage: LocalStora
                 ],
                 retention_seconds=86_400,
             )
-            written += [a.storage_key for a in request.attachments]
+            written += [a.storage_key for a in submission.request.attachments]
             raise _CommitFailedError
     return written
 

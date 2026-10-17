@@ -31,7 +31,7 @@ from app.engagement.domain.custom_request import (
 from app.engagement.domain.exceptions import AttachmentMalwareError, AttachmentRejectedError
 from app.engagement.infrastructure.administrators import IdentityAdministratorDirectory
 from app.engagement.infrastructure.custom_requests import SqlCustomRequestRepository
-from app.engagement.infrastructure.repositories import NotificationRepository
+from app.engagement.infrastructure.repositories import SavepointNotificationRepository
 from app.integrations.captcha.factory import get_captcha_verifier
 from app.integrations.captcha.ports import CaptchaPort
 from app.integrations.images.factory import get_image_sanitizer
@@ -186,14 +186,14 @@ async def submit_custom_request(
     retention = await settings_reader(session).get_duration_seconds(RETENTION_KEY)
     command = SubmitCustomRequest(
         SqlCustomRequestRepository(session),
-        NotificationRepository(session),
+        SavepointNotificationRepository(session),
         IdentityAdministratorDirectory(session),
         storage=storage,
         scanner=scanner,
         sanitizer=sanitizer,
     )
     try:
-        created = await command.execute(details, uploads, retention_seconds=retention)
+        submission = await command.execute(details, uploads, retention_seconds=retention)
     except AttachmentRejectedError as exc:
         raise _upload_rejected(exc.reason, exc.index) from exc
     except AttachmentMalwareError as exc:
@@ -213,6 +213,13 @@ async def submit_custom_request(
             title="Malware scanner unavailable",
             detail="Uploads are refused until the scanner answers; retry later.",
         ) from exc
+    created = submission.request
+    if submission.failed_notifications:
+        await logger.aerror(
+            "custom_request_notification_failed",
+            custom_request_id=str(created.id),
+            failed=submission.failed_notifications,
+        )
     # Ids and a count only: the visitor's details are PII and are never logged.
     await logger.ainfo(
         "custom_request_received",

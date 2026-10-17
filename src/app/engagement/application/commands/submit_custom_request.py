@@ -1,5 +1,5 @@
 """Bring Your Idea submission (FR-15, ADR-021, ADR-030). Captcha and rate limits run before
-this; it screens every file before storing any, and removes stored files if anything fails."""
+this; it screens every file before storing any, and removes stored files if the lead fails."""
 
 import contextlib
 import hashlib
@@ -40,6 +40,12 @@ class AttachmentUpload:
     data: bytes
 
 
+@dataclass(frozen=True)
+class CustomRequestSubmission:
+    request: CustomRequest
+    failed_notifications: int
+
+
 class SubmitCustomRequest:
     def __init__(
         self,
@@ -64,7 +70,7 @@ class SubmitCustomRequest:
         uploads: Sequence[AttachmentUpload],
         *,
         retention_seconds: int,
-    ) -> CustomRequest:
+    ) -> CustomRequestSubmission:
         check_attachment_count(len(uploads))
         screened = [await self._screen(index, upload) for index, upload in enumerate(uploads)]
         submitted_at = datetime.now(UTC)
@@ -82,11 +88,10 @@ class SubmitCustomRequest:
                 submitted_at=submitted_at,
                 expires_at=attachment_expiry(submitted_at, retention_seconds),
             )
-            await self._notify_administrators(request)
         except Exception:
             await self._remove(stored)
             raise
-        return request
+        return CustomRequestSubmission(request, await self._notify_administrators(request))
 
     async def _screen(self, index: int, upload: AttachmentUpload) -> SanitizedImage:
         """ADR-021 order: size, scan the raw bytes, then sniff, decode and re-encode."""
@@ -99,15 +104,21 @@ class SubmitCustomRequest:
         except ImageRejectedError as exc:
             raise AttachmentRejectedError(exc.reason, index=index) from exc
 
-    async def _notify_administrators(self, request: CustomRequest) -> None:
-        payload = admin_notification_payload(request)
+    async def _notify_administrators(self, request: CustomRequest) -> int:
+        """FR-15: a failed notification never removes the request. Returns how many failed;
+        the store must isolate each insert (a savepoint) so the transaction stays usable."""
+        payload, failed = admin_notification_payload(request), 0
         for admin_id in await self._administrators.active_administrator_ids():
-            await write_notification(
-                self._notifications,
-                user_id=admin_id,
-                notification_type=NotificationType.CUSTOM_REQUEST,
-                payload=payload,
-            )
+            try:
+                await write_notification(
+                    self._notifications,
+                    user_id=admin_id,
+                    notification_type=NotificationType.CUSTOM_REQUEST,
+                    payload=payload,
+                )
+            except Exception:
+                failed += 1
+        return failed
 
     async def _remove(self, keys: list[str]) -> None:
         """Best effort: a file left behind is unreferenced, so `reap_orphan_files` takes it."""

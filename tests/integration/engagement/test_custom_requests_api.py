@@ -6,7 +6,7 @@ import io
 import logging
 import uuid
 from collections.abc import Iterator
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +18,7 @@ from starlette.requests import Request
 
 from app.engagement.api import custom_requests as module
 from app.engagement.domain.custom_request import MAX_ATTACHMENT_BYTES, MAX_ATTACHMENTS
+from app.engagement.infrastructure.administrators import IdentityAdministratorDirectory
 from app.engagement.infrastructure.models import (
     CustomRequestAttachmentModel,
     CustomRequestModel,
@@ -240,6 +241,11 @@ async def test_a_submission_notifies_every_active_admin_once_without_contact_det
 ) -> None:
     await create_user(db_session, role=UserRole.ADMIN)
     disabled = (await create_user(db_session, role=UserRole.ADMIN, active=False)).id
+    deleted = await create_user(db_session, role=UserRole.ADMIN)
+    anonymised = await create_user(db_session, role=UserRole.ADMIN)
+    deleted.deleted_at = anonymised.anonymized_at = datetime.now(UTC)
+    gone = {deleted.id, anonymised.id}
+    await db_session.commit()
     customer = (await create_user(db_session)).id
     admins = set(await active_administrator_ids(db_session))
     form = _form(project_title="Cedar lamp")
@@ -249,6 +255,7 @@ async def test_a_submission_notifies_every_active_admin_once_without_contact_det
     sent = await _notifications(db_session, request_id)
     assert sorted(n.user_id for n in sent) == sorted(admins)
     assert disabled not in admins and customer not in admins
+    assert gone.isdisjoint(admins)
     for notification in sent:
         assert notification.type == "custom_request"
         assert notification.payload == {
@@ -260,6 +267,27 @@ async def test_a_submission_notifies_every_active_admin_once_without_contact_det
         dumped = str(notification.payload)
         assert form["email"] not in dumped and form["phone"] not in dumped
         assert form["name"] not in dumped
+
+
+async def test_a_failed_notification_insert_keeps_the_request(
+    db_session: AsyncSession, uploads: Uploads, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """FR-15: the bogus recipient breaks its notification's FK; only its savepoint rolls back."""
+    real_admin = (await create_user(db_session, role=UserRole.ADMIN)).id
+    bogus = uuid.uuid4()
+
+    async def recipients(_self: object) -> list[uuid.UUID]:
+        return [bogus, real_admin]
+
+    monkeypatch.setattr(IdentityAdministratorDirectory, "active_administrator_ids", recipients)
+    form = _form()
+    with client_for(main_app) as client:
+        response = _submit(client, form, sample("JPEG"))
+    assert response.status_code == 201, response.text
+    assert len(await _requests_for(db_session, form["email"])) == 1
+    assert len(uploads.private_files()) == 1
+    sent = await _notifications(db_session, response.json()["id"])
+    assert [n.user_id for n in sent] == [real_admin]
 
 
 @pytest.mark.parametrize("failure", ["captcha", "malware", "fake_type", "scanner_down"])

@@ -76,7 +76,7 @@ class AdministratorDirectory(Protocol):
 class WishlistStore(Protocol):
     async def add(self, *, user_id: UUID, product_id: UUID) -> bool:
         """True if this call inserted a new active row; False if one already
-        existed. Never reactivates a soft-deleted row (VS-038 plan Â§3)."""
+        existed. Never reactivates a soft-deleted row (VS-038 plan §3)."""
         ...
 
     async def remove(self, *, user_id: UUID, product_id: UUID) -> bool:
@@ -95,5 +95,5 @@ class WishlistCounter(Protocol):
         """`delta` is +1 or -1, from a caller that already confirmed a real
         state change on `wishlist_items`. Framework-free port so the
         application layer can call it without importing a session
-        (VS-038 plan Â§3 refactor) - the adapter binds it to one."""
+        (VS-038 plan §3 refactor) - the adapter binds it to one."""
         ...
