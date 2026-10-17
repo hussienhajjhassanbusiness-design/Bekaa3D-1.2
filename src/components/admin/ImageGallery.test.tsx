@@ -125,6 +125,65 @@ describe("ImageGallery", () => {
     expect(onDelete).toHaveBeenCalledWith("img-1");
   });
 
+  it("does not render an alt-text editor when onUpdateAltText is not provided", () => {
+    render(<ImageGallery images={makeImages()} onReorder={vi.fn()} onSetCover={vi.fn()} onDelete={vi.fn()} />);
+    expect(screen.queryByLabelText(/alt text/i)).not.toBeInTheDocument();
+  });
+
+  it("renders an alt-text editor pre-filled with the image's current alt text, and saves the edited value", async () => {
+    const onUpdateAltText = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ImageGallery
+        images={makeImages([{ altText: "Front" }])}
+        onReorder={vi.fn()}
+        onSetCover={vi.fn()}
+        onDelete={vi.fn()}
+        onUpdateAltText={onUpdateAltText}
+      />
+    );
+
+    const firstItem = screen.getByRole("img", { name: "Front view" }).closest("li")!;
+    const altTextInput = within(firstItem).getByLabelText("Alt text (image 1)");
+    expect(altTextInput).toHaveValue("Front");
+
+    await user.clear(altTextInput);
+    await user.type(altTextInput, "Front view, angled");
+    await user.click(within(firstItem).getByRole("button", { name: /save alt text/i }));
+
+    expect(onUpdateAltText).toHaveBeenCalledWith("img-1", "Front view, angled");
+  });
+
+  it("gives each image a distinguishing alt-text label, never the same label repeated across rows", () => {
+    render(
+      <ImageGallery
+        images={makeImages()}
+        onReorder={vi.fn()}
+        onSetCover={vi.fn()}
+        onDelete={vi.fn()}
+        onUpdateAltText={vi.fn()}
+      />
+    );
+    expect(screen.getByLabelText("Alt text (image 1)")).toBeInTheDocument();
+    expect(screen.getByLabelText("Alt text (image 2)")).toBeInTheDocument();
+    expect(screen.getByLabelText("Alt text (image 3)")).toBeInTheDocument();
+  });
+
+  it("disables the alt-text save button while isUpdatingAltText", () => {
+    render(
+      <ImageGallery
+        images={makeImages()}
+        onReorder={vi.fn()}
+        onSetCover={vi.fn()}
+        onDelete={vi.fn()}
+        onUpdateAltText={vi.fn()}
+        isUpdatingAltText
+      />
+    );
+    const firstItem = screen.getByRole("img", { name: "Front view" }).closest("li")!;
+    expect(within(firstItem).getByRole("button", { name: /save alt text/i })).toBeDisabled();
+  });
+
   it("never makes a network/fetch call", () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     render(<ImageGallery images={makeImages()} onReorder={vi.fn()} onSetCover={vi.fn()} onDelete={vi.fn()} />);

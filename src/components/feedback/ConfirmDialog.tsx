@@ -11,6 +11,14 @@ export interface ConfirmDialogProps {
   confirmLabel?: string;
   cancelLabel?: string;
   isConfirming?: boolean;
+  // Phase 3 — bekaa3d-brand-ui: "destructive = solid danger". Defaults to
+  // false so every existing caller (reference-data archive, settings
+  // confirmation, etc.) keeps its current primary-green Confirm button
+  // unchanged — archive in particular is a deliberate, pre-existing "soft,
+  // reversible-sounding" UI choice (see ReferenceDataManager.tsx) even
+  // though it's backend-permanent. Only a genuinely irreversible "Delete"
+  // action (a product, an image) opts into this.
+  isDestructive?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -36,6 +44,7 @@ export function ConfirmDialog({
   confirmLabel = "Confirm",
   cancelLabel = "Cancel",
   isConfirming = false,
+  isDestructive = false,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -54,7 +63,7 @@ export function ConfirmDialog({
         <Button type="button" onClick={onCancel} disabled={isConfirming}>
           {cancelLabel}
         </Button>
-        <Button type="button" onClick={onConfirm} isLoading={isConfirming}>
+        <Button type="button" variant={isDestructive ? "destructive" : "primary"} onClick={onConfirm} isLoading={isConfirming}>
           {confirmLabel}
         </Button>
       </div>

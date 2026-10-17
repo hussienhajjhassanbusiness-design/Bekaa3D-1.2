@@ -16,9 +16,15 @@ export interface ReferenceDataManagerProps {
   entries: readonly ReferenceDataEntry[];
   onSave: (draft: ReferenceDataDraft, editingId: string | null) => void;
   onArchive: (id: string) => void;
+  // Reversible enable/disable (AGENTS.md: "PATCH is used for reversible
+  // enable/disable", distinct from the permanent DELETE/archive below).
+  // Optional: a caller with no such concept simply omits it, and this
+  // row-level action never renders (archive-only behavior, unchanged).
+  onToggleActive?: (id: string, nextIsActive: boolean) => void;
   isLoading?: boolean;
   isSaving?: boolean;
   isArchiving?: boolean;
+  isTogglingActive?: boolean;
   fieldErrors?: ReferenceDataFieldErrors;
 }
 
@@ -57,9 +63,11 @@ export function ReferenceDataManager({
   entries,
   onSave,
   onArchive,
+  onToggleActive,
   isLoading = false,
   isSaving = false,
   isArchiving = false,
+  isTogglingActive = false,
   fieldErrors,
 }: ReferenceDataManagerProps) {
   const [formMode, setFormMode] = useState<FormMode>({ kind: "closed" });
@@ -122,11 +130,25 @@ export function ReferenceDataManager({
                     Archived
                   </span>
                 )}
+                {!entry.isArchived && entry.isActive === false && (
+                  <span className="rounded-pill bg-warning-bg px-2 py-0.5 text-caption font-semibold text-warning">
+                    Disabled
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <Button type="button" onClick={() => openEdit(entry)}>
                   Edit
                 </Button>
+                {onToggleActive && !entry.isArchived && (
+                  <Button
+                    type="button"
+                    disabled={isTogglingActive}
+                    onClick={() => onToggleActive(entry.id, entry.isActive === false)}
+                  >
+                    {entry.isActive === false ? "Enable" : "Disable"}
+                  </Button>
+                )}
                 <Button type="button" onClick={() => setArchiveTargetId(entry.id)} disabled={entry.isArchived}>
                   Archive
                 </Button>

@@ -209,6 +209,66 @@ describe.each(CONFIGS)("ReferenceDataManager ($entityLabelPlural)", (config) => 
   });
 });
 
+describe("ReferenceDataManager (reversible enable/disable)", () => {
+  it("does not render a toggle action when onToggleActive is not provided", () => {
+    render(<ReferenceDataManager config={CATEGORY_CONFIG} entries={[makeEntry()]} onSave={vi.fn()} onArchive={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: /disable|enable/i })).not.toBeInTheDocument();
+  });
+
+  it("shows a Disable action for a live entry and calls onToggleActive(id, false)", async () => {
+    const onToggleActive = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ReferenceDataManager
+        config={CATEGORY_CONFIG}
+        entries={[makeEntry({ isActive: true })]}
+        onSave={vi.fn()}
+        onArchive={vi.fn()}
+        onToggleActive={onToggleActive}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "Disable" }));
+
+    expect(onToggleActive).toHaveBeenCalledWith("e-1", false);
+  });
+
+  it("shows an Enable action and a Disabled badge for a disabled entry, and calls onToggleActive(id, true)", async () => {
+    const onToggleActive = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ReferenceDataManager
+        config={CATEGORY_CONFIG}
+        entries={[makeEntry({ isActive: false })]}
+        onSave={vi.fn()}
+        onArchive={vi.fn()}
+        onToggleActive={onToggleActive}
+      />
+    );
+
+    expect(screen.getByText("Disabled")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Enable" }));
+
+    expect(onToggleActive).toHaveBeenCalledWith("e-1", true);
+  });
+
+  it("never shows the toggle action for an already-archived entry", () => {
+    render(
+      <ReferenceDataManager
+        config={CATEGORY_CONFIG}
+        entries={[makeEntry({ isArchived: true, isActive: false })]}
+        onSave={vi.fn()}
+        onArchive={vi.fn()}
+        onToggleActive={vi.fn()}
+      />
+    );
+    expect(screen.queryByRole("button", { name: /disable|enable/i })).not.toBeInTheDocument();
+    // Archived takes precedence over the disabled badge — archive already
+    // implies "not usable," so showing both would be redundant.
+    expect(screen.queryByText("Disabled")).not.toBeInTheDocument();
+  });
+});
+
 describe("ReferenceDataManager (safety)", () => {
   it("never makes a network/fetch call", () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");

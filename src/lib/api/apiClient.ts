@@ -27,6 +27,26 @@ export interface ApiClientRequestOptions {
   csrf?: boolean;
 }
 
+// Phase 3 — admin DELETE (e.g. product delete) sends its optimistic-
+// concurrency `version` as a query parameter, per the confirmed contract
+// (DELETE /api/v1/admin/products/{id}?version=N). Values are stringified
+// with String() — callers pass the real cents/int/string value, never a
+// pre-serialized query string.
+export interface ApiClientDeleteOptions extends ApiClientRequestOptions {
+  query?: Record<string, string | number>;
+}
+
+function appendQuery(path: string, query?: Record<string, string | number>): string {
+  if (!query || Object.keys(query).length === 0) {
+    return path;
+  }
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    params.set(key, String(value));
+  }
+  return `${path}?${params.toString()}`;
+}
+
 function fallbackHttpMessage(status: number): string {
   return status >= 500 ? MESSAGE_SERVER_ERROR : MESSAGE_CLIENT_ERROR;
 }
@@ -217,4 +237,79 @@ async function patch<T = unknown>(
   return request<T>(path, init, timeoutMs);
 }
 
-export const apiClient = { get, post, patch };
+// Phase 3 — admin product-image cover selection and reorder are
+// confirmed PUT routes (openapi.json: PUT .../images/{image_id}/cover,
+// PUT .../images/order), not PATCH — shares every other rule post()/
+// patch() already enforce.
+async function put<T = unknown>(path: string, body?: unknown, options: ApiClientRequestOptions = {}): Promise<T> {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+
+  const headers: Record<string, string> = {};
+  if (body !== undefined) {
+    headers["Content-Type"] = "application/json";
+  }
+  if (options.csrf) {
+    const csrfToken = readCsrfToken();
+    if (csrfToken === undefined) {
+      throw missingCsrfError();
+    }
+    headers[CSRF_HEADER_NAME] = csrfToken;
+  }
+
+  const hasHeaders = Object.keys(headers).length > 0;
+  const init: RequestInit = {
+    method: "PUT",
+    ...(hasHeaders ? { headers } : {}),
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  };
+  return request<T>(path, init, timeoutMs);
+}
+
+// Phase 3 — admin product delete: DELETE never carries a JSON body (the
+// version lives in the query string, per appendQuery above), but still
+// shares every other rule (path assertion, timeout, Problem parsing,
+// explicit-opt-in CSRF).
+async function del<T = unknown>(path: string, options: ApiClientDeleteOptions = {}): Promise<T> {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+
+  const headers: Record<string, string> = {};
+  if (options.csrf) {
+    const csrfToken = readCsrfToken();
+    if (csrfToken === undefined) {
+      throw missingCsrfError();
+    }
+    headers[CSRF_HEADER_NAME] = csrfToken;
+  }
+
+  const hasHeaders = Object.keys(headers).length > 0;
+  const init: RequestInit = { method: "DELETE", ...(hasHeaders ? { headers } : {}) };
+  return request<T>(appendQuery(path, options.query), init, timeoutMs);
+}
+
+// Phase 3 — admin product-image upload is multipart/form-data. The
+// caller builds the FormData (file + optional alt_text); this method
+// sends it as-is and deliberately never sets Content-Type itself — the
+// browser must supply its own multipart boundary, which it can only do
+// when Content-Type is left unset.
+async function postForm<T = unknown>(
+  path: string,
+  formData: FormData,
+  options: ApiClientRequestOptions = {}
+): Promise<T> {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+
+  const headers: Record<string, string> = {};
+  if (options.csrf) {
+    const csrfToken = readCsrfToken();
+    if (csrfToken === undefined) {
+      throw missingCsrfError();
+    }
+    headers[CSRF_HEADER_NAME] = csrfToken;
+  }
+
+  const hasHeaders = Object.keys(headers).length > 0;
+  const init: RequestInit = { method: "POST", ...(hasHeaders ? { headers } : {}), body: formData };
+  return request<T>(path, init, timeoutMs);
+}
+
+export const apiClient = { get, post, patch, put, del, postForm };

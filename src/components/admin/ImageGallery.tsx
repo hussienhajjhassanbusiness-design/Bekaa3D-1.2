@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/forms/Button";
+import { TextField } from "@/components/forms/TextField";
 import { ConfirmDialog } from "@/components/feedback/ConfirmDialog";
 
 // Frontend-normalized gallery presentation model — NOT a claim about any
@@ -12,7 +13,13 @@ import { ConfirmDialog } from "@/components/feedback/ConfirmDialog";
 export interface GalleryImageModel {
   id: string;
   src: string;
+  // Display/aria label — always non-empty (falls back to the product
+  // name when there is no alt text yet).
   accessibleLabel: string;
+  // The real, editable alt-text value — undefined/"" when unset,
+  // distinct from `accessibleLabel`'s display fallback so editing never
+  // silently "saves" the fallback text as if the admin had typed it.
+  altText?: string;
   isCover: boolean;
 }
 
@@ -21,7 +28,12 @@ export interface ImageGalleryProps {
   onReorder: (nextIds: string[]) => void;
   onSetCover: (imageId: string) => void;
   onDelete: (imageId: string) => void;
+  // Optional — a caller with no alt-text-editing concept simply omits
+  // it and no such control renders (e.g. a hypothetical read-only
+  // gallery view).
+  onUpdateAltText?: (imageId: string, nextAltText: string) => void;
   isDeleting?: boolean;
+  isUpdatingAltText?: boolean;
 }
 
 // #FVS012-UPLOAD
@@ -42,7 +54,15 @@ export interface ImageGalleryProps {
 // this component only exposes the presentation seam (onSetCover/
 // onDelete); the real mutation and the server's own race/conflict
 // handling are a future adapter's job (T06, blocked).
-export function ImageGallery({ images, onReorder, onSetCover, onDelete, isDeleting = false }: ImageGalleryProps) {
+export function ImageGallery({
+  images,
+  onReorder,
+  onSetCover,
+  onDelete,
+  onUpdateAltText,
+  isDeleting = false,
+  isUpdatingAltText = false,
+}: ImageGalleryProps) {
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
   function move(index: number, direction: -1 | 1) {
@@ -72,6 +92,14 @@ export function ImageGallery({ images, onReorder, onSetCover, onDelete, isDeleti
               Cover
             </span>
           )}
+          {onUpdateAltText && (
+            <AltTextEditor
+              label={`Alt text (image ${index + 1})`}
+              altText={image.altText ?? ""}
+              onSave={(next) => onUpdateAltText(image.id, next)}
+              isSaving={isUpdatingAltText}
+            />
+          )}
           <div className="ml-auto flex items-center gap-2">
             <Button type="button" onClick={() => move(index, -1)} disabled={index === 0}>
               Move up
@@ -97,6 +125,7 @@ export function ImageGallery({ images, onReorder, onSetCover, onDelete, isDeleti
         title="Delete image"
         description="This image will be removed from the gallery."
         confirmLabel="Delete"
+        isDestructive
         isConfirming={isDeleting}
         onConfirm={() => {
           if (deleteTargetId) {
@@ -106,5 +135,31 @@ export function ImageGallery({ images, onReorder, onSetCover, onDelete, isDeleti
         onCancel={() => setDeleteTargetId(null)}
       />
     </>
+  );
+}
+
+interface AltTextEditorProps {
+  label: string;
+  altText: string;
+  onSave: (next: string) => void;
+  isSaving: boolean;
+}
+
+// Owns only the ephemeral draft of its own row (same pattern as
+// SettingRow's draft value) — the real pending/persisted alt text lives
+// in the caller's own mutation hook, not here. `label` is per-row and
+// distinguishing (e.g. "Alt text (image 2)") — a shared "Alt text" label
+// repeated identically across every row in a multi-image gallery would be
+// ambiguous for a screen-reader user with no visual grouping cue.
+function AltTextEditor({ label, altText, onSave, isSaving }: AltTextEditorProps) {
+  const [draft, setDraft] = useState(altText);
+
+  return (
+    <div className="flex items-center gap-2">
+      <TextField label={label} value={draft} onChange={(event) => setDraft(event.target.value)} />
+      <Button type="button" isLoading={isSaving} onClick={() => onSave(draft)}>
+        Save alt text
+      </Button>
+    </div>
   );
 }

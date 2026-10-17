@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useState, type FormEvent } from "react";
 import { z } from "zod";
 import { useFormContext } from "react-hook-form";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -12,6 +12,8 @@ import { Button } from "@/components/forms/Button";
 import { Alert } from "@/components/feedback/Alert";
 import { LoadingSpinner } from "@/components/feedback/LoadingSpinner";
 import { useLogin, type LoginResult } from "@/lib/auth/useLogin";
+import { useMfaVerify } from "@/lib/auth/useMfaVerify";
+import { useCooldown } from "@/lib/auth/useCooldown";
 import { AUTH_SESSION_QUERY_KEY } from "@/lib/auth/authSession";
 import { resolveReturnTo } from "@/lib/auth/returnTo";
 
@@ -48,10 +50,128 @@ const RATE_LIMIT_MESSAGE_WITH_WAIT = (seconds: number) => `Too many attempts. Pl
 const NETWORK_MESSAGE = "We couldn't reach the server. Please try again.";
 const TIMEOUT_MESSAGE = "The server took too long to respond. Please try again.";
 const GENERIC_FAILURE_MESSAGE = "Something went wrong. Please try again.";
-// §2 row 5b — MFA is FVS-005's scope; this slice never builds MFA UI, never
-// exposes challenge_id, and never marks the session authenticated.
-const MFA_NOT_AVAILABLE_MESSAGE =
-  "Additional verification is required for this account. This verification step isn't available yet — please contact support.";
+// Phase 3 (FVS-005/P1-2) — real MFA verify-step copy. challenge_id is
+// never rendered anywhere, including in these messages. A wrong code or
+// an expired challenge both force a fresh login — never a retry against
+// the same (now-burned, or expired) challenge_id.
+const MFA_INVALID_MESSAGE = "That code didn't work. Please log in again to get a new verification code.";
+const MFA_EXPIRED_MESSAGE = "Your verification session expired. Please log in again.";
+const MFA_ACCOUNT_DISABLED_MESSAGE = "Unable to sign in to this account.";
+const MFA_GENERIC_FAILURE_MESSAGE = "Something went wrong verifying your code. Please try again.";
+
+interface MfaChallengeState {
+  challengeId: string;
+  deadline: number;
+}
+
+function mfaFailureMessage(error: unknown): { message: string; resetToLogin: boolean } {
+  if (isRecognizedError(error)) {
+    if (error.kind === "http" && error.code === "MFA_INVALID") {
+      return { message: MFA_INVALID_MESSAGE, resetToLogin: true };
+    }
+    if (error.kind === "http" && error.code === "RESOURCE_EXPIRED") {
+      return { message: MFA_EXPIRED_MESSAGE, resetToLogin: true };
+    }
+    if (error.kind === "http" && error.code === "ACCOUNT_DISABLED") {
+      return { message: MFA_ACCOUNT_DISABLED_MESSAGE, resetToLogin: true };
+    }
+    if (error.kind === "http" && error.code === "RATE_LIMITED") {
+      const message =
+        error.retryAfterSeconds !== undefined
+          ? RATE_LIMIT_MESSAGE_WITH_WAIT(error.retryAfterSeconds)
+          : RATE_LIMIT_MESSAGE_GENERIC;
+      return { message, resetToLogin: false };
+    }
+    if (error.kind === "network") {
+      return { message: NETWORK_MESSAGE, resetToLogin: false };
+    }
+    if (error.kind === "timeout") {
+      return { message: TIMEOUT_MESSAGE, resetToLogin: false };
+    }
+  }
+  return { message: MFA_GENERIC_FAILURE_MESSAGE, resetToLogin: false };
+}
+
+interface MfaVerifyStepProps {
+  challenge: MfaChallengeState;
+  onVerified: () => void;
+  onResetToLogin: (message: string) => void;
+}
+
+// #FVS005-MFA-LOGIN-VERIFY
+//
+// challenge_id lives only in this component's (and its parent's) React
+// state — never a URL param, never localStorage/sessionStorage, never
+// logged. A wrong code or an expired challenge both call onResetToLogin,
+// which discards this component (and the challenge_id with it) entirely
+// — there is no "try again" path that resubmits the same challenge_id,
+// matching the backend's single-use-challenge contract.
+function MfaVerifyStep({ challenge, onVerified, onResetToLogin }: MfaVerifyStepProps) {
+  const { mutateAsync } = useMfaVerify();
+  const [mode, setMode] = useState<"code" | "recovery">("code");
+  const [code, setCode] = useState("");
+  const [recoveryCode, setRecoveryCode] = useState("");
+  const [failure, setFailure] = useState<string | null>(null);
+  const { remainingSeconds, isActive } = useCooldown(challenge.deadline);
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    setFailure(null);
+    try {
+      if (mode === "code") {
+        await mutateAsync({ challenge_id: challenge.challengeId, code });
+      } else {
+        await mutateAsync({ challenge_id: challenge.challengeId, recovery_code: recoveryCode });
+      }
+      onVerified();
+    } catch (error) {
+      const { message, resetToLogin } = mfaFailureMessage(error);
+      if (resetToLogin) {
+        onResetToLogin(message);
+      } else {
+        setFailure(message);
+      }
+    }
+  }
+
+  return (
+    <>
+      <h1 className="text-h1 font-bold text-text-primary">Log in</h1>
+      {failure && <Alert variant="error" message={failure} />}
+      <form onSubmit={handleSubmit} className="mt-4 max-w-[420px] mx-auto">
+        {mode === "code" ? (
+          <TextField
+            label="Verification code"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            value={code}
+            onChange={(event) => setCode(event.target.value)}
+          />
+        ) : (
+          <TextField
+            label="Recovery code"
+            autoComplete="off"
+            value={recoveryCode}
+            onChange={(event) => setRecoveryCode(event.target.value)}
+          />
+        )}
+        <p className="mt-2 text-caption text-text-secondary" role="status">
+          {isActive ? `Code expires in ${remainingSeconds} seconds.` : "This code has expired."}
+        </p>
+        <Button type="submit" className="mt-4 w-full">
+          Verify
+        </Button>
+        <Button
+          type="button"
+          className="mt-2 w-full bg-transparent text-text-link"
+          onClick={() => setMode((current) => (current === "code" ? "recovery" : "code"))}
+        >
+          {mode === "code" ? "Use a recovery code instead" : "Use my verification code instead"}
+        </Button>
+      </form>
+    </>
+  );
+}
 
 interface RecognizedError {
   kind: string;
@@ -134,7 +254,18 @@ function LoginPage() {
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const [failure, setFailure] = useState<string | null>(null);
-  const [mfaPending, setMfaPending] = useState(false);
+  const [mfaChallenge, setMfaChallenge] = useState<MfaChallengeState | null>(null);
+
+  async function navigateAfterAuthentication() {
+    // §1/§9 — the login/verify response itself is never trusted as the
+    // ongoing auth source of truth; invalidate the canonical /me query so
+    // AuthProvider derives authenticated state for real before
+    // navigating, so the destination's ProtectedRoute (if any) doesn't
+    // see stale anonymous data.
+    await queryClient.invalidateQueries({ queryKey: AUTH_SESSION_QUERY_KEY });
+    const safePath = resolveReturnTo(searchParams.get("returnTo"));
+    router.replace(safePath);
+  }
 
   async function handleSubmit(values: LoginFormValues) {
     setFailure(null);
@@ -142,32 +273,33 @@ function LoginPage() {
       const result: LoginResult = await mutateAsync(values);
       if (result.kind === "mfaChallenge") {
         // §2 row 5b — no session was established, no cookies were set.
-        // Never expose/persist challenge_id; never mark AuthProvider
-        // authenticated; never navigate anywhere.
-        setMfaPending(true);
+        // challenge_id is held only in this component's state — never a
+        // URL param, never localStorage/sessionStorage, never logged.
+        setMfaChallenge({
+          challengeId: result.data.challenge_id,
+          deadline: Date.now() + result.data.expires_in_seconds * 1000,
+        });
         return;
       }
 
-      // §1/§9 — the login response itself is never trusted as the ongoing
-      // auth source of truth; invalidate the canonical /me query so
-      // AuthProvider derives authenticated state for real before
-      // navigating, so the destination's ProtectedRoute (if any) doesn't
-      // see stale anonymous data.
-      await queryClient.invalidateQueries({ queryKey: AUTH_SESSION_QUERY_KEY });
-
-      const safePath = resolveReturnTo(searchParams.get("returnTo"));
-      router.replace(safePath);
+      await navigateAfterAuthentication();
     } catch (error) {
       setFailure(failureMessage(error));
     }
   }
 
-  if (mfaPending) {
+  if (mfaChallenge) {
     return (
-      <>
-        <h1 className="text-h1 font-bold text-text-primary">Log in</h1>
-        <Alert variant="info" message={MFA_NOT_AVAILABLE_MESSAGE} />
-      </>
+      <MfaVerifyStep
+        challenge={mfaChallenge}
+        onVerified={() => {
+          void navigateAfterAuthentication();
+        }}
+        onResetToLogin={(message) => {
+          setMfaChallenge(null);
+          setFailure(message);
+        }}
+      />
     );
   }
 

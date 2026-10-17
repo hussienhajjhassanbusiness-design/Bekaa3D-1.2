@@ -2,6 +2,7 @@
 
 import { useId } from "react";
 import { TextField } from "@/components/forms/TextField";
+import { MoneyInput } from "@/components/forms/MoneyInput";
 import type { EditableSetting, EditableSettingValue } from "./settingTypes";
 
 export interface SettingControlProps {
@@ -61,16 +62,22 @@ export function SettingControl({ setting, onChange }: SettingControlProps) {
       <div>
         <label htmlFor={inputId} className="block text-label font-semibold uppercase tracking-label text-text-primary">
           {setting.label}
+          {setting.unit && <span className="font-normal"> ({setting.unit})</span>}
         </label>
         <input
           id={inputId}
           type="number"
-          value={setting.value}
+          // `value=""` (never `NaN`/`0`) is what makes a null/"not
+          // configured" numeric setting render as a genuinely empty
+          // field instead of a misleading zero.
+          value={setting.value === null ? "" : setting.value}
           min={setting.min}
           max={setting.max}
           step={setting.step}
           aria-describedby={describedBy}
-          onChange={(event) => onChange(event.target.valueAsNumber)}
+          onChange={(event) =>
+            onChange(event.target.value === "" ? null : event.target.valueAsNumber)
+          }
           className="mt-1 w-full rounded-sm border border-border-default px-3 py-2 text-body text-text-primary"
         />
         {hasDescription && (
@@ -78,6 +85,31 @@ export function SettingControl({ setting, onChange }: SettingControlProps) {
             {setting.description}
           </p>
         )}
+      </div>
+    );
+  }
+
+  if (setting.type === "money") {
+    return (
+      <MoneyInput
+        label={setting.label}
+        hint={setting.description}
+        currencyLabel={setting.value?.currency ?? "USD"}
+        valueCents={setting.value?.amountCents ?? null}
+        onChangeCents={(cents) =>
+          onChange(cents === null ? null : { amountCents: cents, currency: setting.value?.currency ?? "USD" })
+        }
+      />
+    );
+  }
+
+  if (setting.type === "json") {
+    // No V1 setting actually has this type — a minimal, honest
+    // non-editable fallback rather than a raw JSON textarea editor.
+    return (
+      <div>
+        <span className="text-label font-semibold uppercase tracking-label text-text-primary">{setting.label}</span>
+        <p className="mt-1 text-caption text-text-secondary">This setting can&rsquo;t be edited from this screen.</p>
       </div>
     );
   }

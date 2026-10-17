@@ -610,3 +610,134 @@ describe("apiClient.patch", () => {
     );
   });
 });
+
+// Phase 3 — admin product DELETE needs a query-string version
+// (?version=N) and the same CSRF/problem/timeout machinery every other
+// write already has. No request body is ever sent on DELETE.
+describe("apiClient.del", () => {
+  afterEach(() => {
+    document.cookie = "csrf_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/";
+  });
+
+  it("sends method DELETE with no body and returns the parsed response", async () => {
+    const fetchStub = vi.fn().mockResolvedValue(textResponse(204, ""));
+    vi.stubGlobal("fetch", fetchStub);
+    document.cookie = "csrf_token=abc123";
+
+    const result = await apiClient.del("/api/v1/admin/products/p1", { csrf: true });
+
+    expect(result).toBeUndefined();
+    const [calledPath, calledInit] = fetchStub.mock.calls[0] as [string, RequestInit];
+    expect(calledPath).toBe("/api/v1/admin/products/p1");
+    expect(calledInit.method).toBe("DELETE");
+    expect(calledInit.body).toBeUndefined();
+  });
+
+  it("appends a query string built from the query option", async () => {
+    const fetchStub = vi.fn().mockResolvedValue(textResponse(204, ""));
+    vi.stubGlobal("fetch", fetchStub);
+    document.cookie = "csrf_token=abc123";
+
+    await apiClient.del("/api/v1/admin/products/p1", { csrf: true, query: { version: 3 } });
+
+    const [calledPath] = fetchStub.mock.calls[0] as [string, RequestInit];
+    expect(calledPath).toBe("/api/v1/admin/products/p1?version=3");
+  });
+
+  it("attaches X-CSRF-Token when csrf: true is passed", async () => {
+    document.cookie = "csrf_token=abc123";
+    const fetchStub = vi.fn().mockResolvedValue(textResponse(204, ""));
+    vi.stubGlobal("fetch", fetchStub);
+
+    await apiClient.del("/api/v1/admin/products/p1", { csrf: true, query: { version: 1 } });
+
+    const [, calledInit] = fetchStub.mock.calls[0] as [string, RequestInit];
+    expect(new Headers(calledInit.headers).get("X-CSRF-Token")).toBe("abc123");
+  });
+
+  it("fails locally with kind: 'csrf' when the cookie is missing and csrf: true is requested — never sends the request", async () => {
+    const fetchStub = vi.fn();
+    vi.stubGlobal("fetch", fetchStub);
+
+    await expect(apiClient.del("/api/v1/admin/products/p1", { csrf: true })).rejects.toMatchObject({ kind: "csrf" });
+    expect(fetchStub).not.toHaveBeenCalled();
+  });
+
+  it("throws an ApiError with the real status and code on a 409 VERSION_CONFLICT", async () => {
+    document.cookie = "csrf_token=abc123";
+    const problemBody = { type: "about:blank", title: "Conflict", status: 409, code: "VERSION_CONFLICT" };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(409, problemBody)));
+
+    await expect(
+      apiClient.del("/api/v1/admin/products/p1", { csrf: true, query: { version: 1 } })
+    ).rejects.toMatchObject({ kind: "http", status: 409, code: "VERSION_CONFLICT" });
+  });
+
+  it("rejects a path that does not start with /api/, same rule as the other verbs", async () => {
+    await expect(apiClient.del("/v1/admin/products/p1")).rejects.toThrow('path must start with "/api/"');
+  });
+});
+
+// Phase 3 — admin product-image upload is multipart/form-data: the
+// browser must set its own Content-Type (with boundary), so postForm must
+// never set Content-Type itself, unlike post()/patch()'s JSON bodies.
+describe("apiClient.postForm", () => {
+  afterEach(() => {
+    document.cookie = "csrf_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/";
+  });
+
+  it("sends the FormData body as-is, with method POST and no Content-Type header set", async () => {
+    document.cookie = "csrf_token=abc123";
+    const fetchStub = vi.fn().mockResolvedValue(jsonResponse(201, { id: "img1" }));
+    vi.stubGlobal("fetch", fetchStub);
+
+    const formData = new FormData();
+    formData.append("file", new Blob(["x"]), "photo.png");
+
+    const result = await apiClient.postForm("/api/v1/admin/products/p1/images", formData, { csrf: true });
+
+    expect(result).toEqual({ id: "img1" });
+    const [calledPath, calledInit] = fetchStub.mock.calls[0] as [string, RequestInit];
+    expect(calledPath).toBe("/api/v1/admin/products/p1/images");
+    expect(calledInit.method).toBe("POST");
+    expect(calledInit.body).toBe(formData);
+    expect(new Headers(calledInit.headers).has("Content-Type")).toBe(false);
+  });
+
+  it("attaches X-CSRF-Token when csrf: true is passed", async () => {
+    document.cookie = "csrf_token=abc123";
+    const fetchStub = vi.fn().mockResolvedValue(jsonResponse(201, { id: "img1" }));
+    vi.stubGlobal("fetch", fetchStub);
+
+    await apiClient.postForm("/api/v1/admin/products/p1/images", new FormData(), { csrf: true });
+
+    const [, calledInit] = fetchStub.mock.calls[0] as [string, RequestInit];
+    expect(new Headers(calledInit.headers).get("X-CSRF-Token")).toBe("abc123");
+  });
+
+  it("fails locally with kind: 'csrf' when the cookie is missing and csrf: true is requested — never sends the request", async () => {
+    const fetchStub = vi.fn();
+    vi.stubGlobal("fetch", fetchStub);
+
+    await expect(
+      apiClient.postForm("/api/v1/admin/products/p1/images", new FormData(), { csrf: true })
+    ).rejects.toMatchObject({ kind: "csrf" });
+    expect(fetchStub).not.toHaveBeenCalled();
+  });
+
+  it("surfaces UPLOAD_REJECTED as an ApiError with kind 'http' and the real status", async () => {
+    document.cookie = "csrf_token=abc123";
+    const problemBody = { type: "about:blank", title: "Upload rejected", status: 422, code: "UPLOAD_REJECTED" };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(422, problemBody)));
+
+    await expect(
+      apiClient.postForm("/api/v1/admin/products/p1/images", new FormData(), { csrf: true })
+    ).rejects.toMatchObject({ kind: "http", status: 422, code: "UPLOAD_REJECTED" });
+  });
+
+  it("rejects a path that does not start with /api/, same rule as the other verbs", async () => {
+    await expect(apiClient.postForm("/v1/admin/products/p1/images", new FormData())).rejects.toThrow(
+      'path must start with "/api/"'
+    );
+  });
+});

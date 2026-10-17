@@ -68,4 +68,16 @@ describe("Button", () => {
 
     expect(screen.getByRole("button")).not.toHaveAttribute("aria-busy");
   });
+
+  it("defaults to the primary (brand) visual treatment", () => {
+    render(<Button>Save</Button>);
+    expect(screen.getByRole("button")).toHaveClass("bg-brand-dark-green");
+  });
+
+  it("variant='destructive' renders the danger treatment, never the primary brand color", () => {
+    render(<Button variant="destructive">Delete</Button>);
+    const button = screen.getByRole("button");
+    expect(button).toHaveClass("bg-danger");
+    expect(button).not.toHaveClass("bg-brand-dark-green");
+  });
 });

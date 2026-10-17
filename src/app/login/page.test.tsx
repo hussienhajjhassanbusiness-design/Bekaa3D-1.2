@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { useQueryClient } from "@tanstack/react-query";
 import Login from "./page";
 import { useLogin } from "@/lib/auth/useLogin";
+import { useMfaVerify } from "@/lib/auth/useMfaVerify";
 
 // FVS-003-IMPLEMENTATION-PLAN.md §2/Part C (confirmed BATCH 3B) — mocks
 // useLogin (the hook, not apiClient/fetch) and next/navigation, matching
@@ -13,6 +14,12 @@ import { useLogin } from "@/lib/auth/useLogin";
 
 vi.mock("@/lib/auth/useLogin", () => ({ useLogin: vi.fn() }));
 const mockedUseLogin = vi.mocked(useLogin);
+
+// Phase 3 (FVS-005) — real admin MFA verify step. Mocked the same way as
+// useLogin; useMfaVerify's own transport wiring is proven separately in
+// useMfaVerify.test.ts.
+vi.mock("@/lib/auth/useMfaVerify", () => ({ useMfaVerify: vi.fn() }));
+const mockedUseMfaVerify = vi.mocked(useMfaVerify);
 
 const mockPush = vi.fn();
 const mockReplace = vi.fn();
@@ -47,6 +54,7 @@ let invalidateQueries: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   mockedUseLogin.mockReset();
+  mockedUseMfaVerify.mockReturnValue({ mutateAsync: vi.fn() } as never);
   mockPush.mockReset();
   mockReplace.mockReset();
   mockSearchParams = new URLSearchParams();
@@ -419,5 +427,99 @@ describe("Login (/login)", () => {
     render(<Login />);
 
     expect(screen.getByRole("button", { name: /log ?in|sign ?in/i })).toHaveClass("w-full");
+  });
+});
+
+// Phase 3 (FVS-005/P1-2) — the real MFA verify step, replacing the old
+// "not available yet" placeholder. challenge_id must stay in memory
+// only (never rendered, never in a URL/storage), a wrong code or an
+// expired challenge must force a fresh login (never a retry against the
+// same challenge_id), and success must follow the exact same
+// invalidate-then-navigate sequence as a direct 200 session login.
+describe("Login (/login) — MFA verification step", () => {
+  async function reachMfaStep(user: ReturnType<typeof userEvent.setup>, expiresInSeconds = 300) {
+    const loginMutateAsync = vi.fn().mockResolvedValue({
+      kind: "mfaChallenge",
+      data: { challenge_id: "secret-challenge-id", expires_in_seconds: expiresInSeconds },
+    });
+    mockedUseLogin.mockReturnValue({ mutateAsync: loginMutateAsync } as never);
+    render(<Login />);
+    await fillValidForm(user);
+    await user.click(screen.getByRole("button", { name: /log ?in|sign ?in/i }));
+    await screen.findByLabelText(/verification code/i);
+  }
+
+  it("renders a verification-code field and submit button once the challenge arrives", async () => {
+    const user = userEvent.setup();
+    await reachMfaStep(user);
+
+    expect(screen.getByLabelText(/verification code/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /verify/i })).toBeInTheDocument();
+  });
+
+  it("submits the challenge_id and entered code, then invalidates the auth session and navigates on success", async () => {
+    const user = userEvent.setup();
+    const verifyMutateAsync = vi.fn().mockResolvedValue(undefined);
+    mockedUseMfaVerify.mockReturnValue({ mutateAsync: verifyMutateAsync } as never);
+    await reachMfaStep(user);
+
+    await user.type(screen.getByLabelText(/verification code/i), "123456");
+    await user.click(screen.getByRole("button", { name: /verify/i }));
+
+    await waitFor(() =>
+      expect(verifyMutateAsync).toHaveBeenCalledWith({ challenge_id: "secret-challenge-id", code: "123456" })
+    );
+    await waitFor(() => expect(invalidateQueries).toHaveBeenCalledTimes(1));
+    expect(mockReplace).toHaveBeenCalledWith("/");
+  });
+
+  it("toggling to 'use a recovery code' sends recovery_code instead of code", async () => {
+    const user = userEvent.setup();
+    const verifyMutateAsync = vi.fn().mockResolvedValue(undefined);
+    mockedUseMfaVerify.mockReturnValue({ mutateAsync: verifyMutateAsync } as never);
+    await reachMfaStep(user);
+
+    await user.click(screen.getByRole("button", { name: /use a recovery code/i }));
+    await user.type(screen.getByLabelText(/recovery code/i), "abcd-efgh");
+    await user.click(screen.getByRole("button", { name: /verify/i }));
+
+    await waitFor(() =>
+      expect(verifyMutateAsync).toHaveBeenCalledWith({ challenge_id: "secret-challenge-id", recovery_code: "abcd-efgh" })
+    );
+  });
+
+  it("on MFA_INVALID, shows a safe message and returns to the login form — the burned challenge is never resubmitted", async () => {
+    const user = userEvent.setup();
+    const verifyMutateAsync = vi.fn().mockRejectedValue(httpError(401, "MFA_INVALID"));
+    mockedUseMfaVerify.mockReturnValue({ mutateAsync: verifyMutateAsync } as never);
+    await reachMfaStep(user);
+
+    await user.type(screen.getByLabelText(/verification code/i), "000000");
+    await user.click(screen.getByRole("button", { name: /verify/i }));
+
+    await screen.findByLabelText(/email/i);
+    expect(screen.queryByLabelText(/verification code/i)).toBeNull();
+    expect(verifyMutateAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it("on RESOURCE_EXPIRED, shows a safe message and returns to the login form", async () => {
+    const user = userEvent.setup();
+    const verifyMutateAsync = vi.fn().mockRejectedValue(httpError(410, "RESOURCE_EXPIRED"));
+    mockedUseMfaVerify.mockReturnValue({ mutateAsync: verifyMutateAsync } as never);
+    await reachMfaStep(user);
+
+    await user.type(screen.getByLabelText(/verification code/i), "000000");
+    await user.click(screen.getByRole("button", { name: /verify/i }));
+
+    await screen.findByLabelText(/email/i);
+    expect(screen.queryByLabelText(/verification code/i)).toBeNull();
+  });
+
+  it("never renders challenge_id anywhere on the verify step itself", async () => {
+    const user = userEvent.setup();
+    await reachMfaStep(user);
+
+    expect(screen.queryByText(/secret-challenge-id/)).toBeNull();
+    expect(document.body.innerHTML).not.toContain("secret-challenge-id");
   });
 });

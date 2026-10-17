@@ -144,8 +144,8 @@ test.describe("returnTo security (FVS-003 BATCH 4 Section E)", () => {
   });
 });
 
-test.describe("MFA challenge (FVS-003 BATCH 4 Section D / T12)", () => {
-  test("202 MFA challenge shows a safe informational message, never navigates, and never exposes challenge_id", async ({
+test.describe("MFA challenge (Phase 3 FVS-005/P1-2 — real admin MFA verify step)", () => {
+  test("202 MFA challenge shows the real verification-code step, never navigates, and never exposes challenge_id", async ({
     page,
   }) => {
     await page.route("**/api/v1/auth/login", async (route) => {
@@ -164,7 +164,7 @@ test.describe("MFA challenge (FVS-003 BATCH 4 Section D / T12)", () => {
     await fillValidForm(page);
     await page.getByRole("button", { name: /log ?in/i }).click();
 
-    await expect(page.getByText(/additional verification/i)).toBeVisible();
+    await expect(page.getByLabel(/verification code/i)).toBeVisible();
     // Still on /login — the returnTo value legitimately appears in the
     // URL's own query string (it was there before submit); what must never
     // happen is an actual navigation to that destination.
@@ -173,6 +173,36 @@ test.describe("MFA challenge (FVS-003 BATCH 4 Section D / T12)", () => {
     const bodyText = await page.evaluate(() => document.body.innerText);
     expect(bodyText).not.toContain("test-only-value");
     expect(meCalled).toBe(false);
+  });
+
+  test("a wrong code (MFA_INVALID) returns to the login form and never resubmits the same (burned) challenge", async ({
+    page,
+  }) => {
+    await page.route("**/api/v1/auth/login", async (route) => {
+      await route.fulfill({
+        status: 202,
+        body: JSON.stringify({ challenge_id: "test-only-value", expires_in_seconds: 300 }),
+      });
+    });
+    const verifyAttempts: string[] = [];
+    await page.route("**/api/v1/auth/mfa/verify", async (route) => {
+      const body = route.request().postDataJSON() as { challenge_id: string };
+      verifyAttempts.push(body.challenge_id);
+      await route.fulfill({ status: 401, body: JSON.stringify({ code: "MFA_INVALID" }) });
+    });
+
+    await page.goto("/login");
+    await fillValidForm(page);
+    await page.getByRole("button", { name: /log ?in/i }).click();
+    await page.getByLabel(/verification code/i).fill("000000");
+    await page.getByRole("button", { name: /verify/i }).click();
+
+    // Back on the password step, with a safe failure message — not the
+    // verification-code step still showing (that would imply a retry
+    // against the same, now-burned, challenge_id).
+    await expect(page.getByLabel(/email/i)).toBeVisible();
+    await expect(page.getByLabel(/verification code/i)).not.toBeVisible();
+    expect(verifyAttempts).toHaveLength(1);
   });
 });
 

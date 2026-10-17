@@ -124,4 +124,16 @@ describe("ConfirmDialog", () => {
     expect(screen.getByText("Generic description")).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/accepting-orders|offer-floor|whatsapp/i);
   });
+
+  it("defaults to the primary Confirm button treatment", () => {
+    renderDialog();
+    expect(screen.getByRole("button", { name: /confirm/i })).toHaveClass("bg-brand-dark-green");
+  });
+
+  it("isDestructive renders the danger Confirm button treatment, for a genuinely irreversible action", () => {
+    renderDialog({ isDestructive: true, confirmLabel: "Delete" });
+    const confirmButton = screen.getByRole("button", { name: "Delete" });
+    expect(confirmButton).toHaveClass("bg-danger");
+    expect(confirmButton).not.toHaveClass("bg-brand-dark-green");
+  });
 });

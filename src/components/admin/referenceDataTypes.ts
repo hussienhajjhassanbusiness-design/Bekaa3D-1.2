@@ -18,6 +18,11 @@ export interface ReferenceDataEntry {
   id: string;
   name: string;
   isArchived: boolean;
+  // Reversible enable/disable (AGENTS.md: "PATCH is used for reversible
+  // enable/disable", distinct from the permanent DELETE/archive). Optional
+  // so a caller that doesn't track this concept (or an older fixture)
+  // still satisfies the type — undefined is treated as "live" (active).
+  isActive?: boolean;
   swatchValue?: string;
 }
 
