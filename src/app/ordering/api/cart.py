@@ -21,6 +21,7 @@ from app.identity.public import (
     require_csrf,
 )
 from app.ordering.api.cart_schemas import CartItemAdd, CartItemQuantityUpdate, CartRead
+from app.ordering.api.problems import already_owned_error
 from app.ordering.application.services.cart import (
     add_item,
     read_cart,
@@ -30,10 +31,12 @@ from app.ordering.application.services.cart import (
 from app.ordering.domain.exceptions import (
     CartLineLimitReachedError,
     CartLineNotFoundError,
+    ProductAlreadyOwnedError,
     ProductNotPurchasableError,
     QuantityExceedsLimitError,
 )
 from app.ordering.infrastructure.carts import SqlCartStore
+from app.ordering.infrastructure.orders import SqlOrderStore
 
 router = APIRouter(prefix="/cart", tags=["cart"])
 
@@ -47,6 +50,9 @@ _WRITE_RESPONSES: dict[int | str, dict[str, Any]] = {
     **_READ_RESPONSES,
     403: {"description": "CSRF token missing or invalid, or EMAIL_VERIFICATION_REQUIRED."},
     429: {"description": "RATE_LIMITED: too many cart changes this hour."},
+}
+_CONFLICT: dict[int | str, dict[str, Any]] = {
+    409: {"description": "PRODUCT_ALREADY_OWNED: the caller already owns this STL (VS-023)."}
 }
 _UNPROCESSABLE: dict[int | str, dict[str, Any]] = {
     422: {
@@ -95,6 +101,8 @@ def _translate(exc: Exception) -> ApiError:
                 "current_quantity": exc.current_quantity,
             },
         )
+    if isinstance(exc, ProductAlreadyOwnedError):
+        return already_owned_error(exc.product_ids)
     if isinstance(exc, CartLineLimitReachedError):
         return ApiError(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -107,6 +115,7 @@ def _translate(exc: Exception) -> ApiError:
 
 
 _DOMAIN_ERRORS = (
+    ProductAlreadyOwnedError,
     ProductNotPurchasableError,
     QuantityExceedsLimitError,
     CartLineLimitReachedError,
@@ -139,7 +148,7 @@ async def get_cart(
     response_model=CartRead,
     dependencies=[Depends(_cart_rate_limit), Depends(require_csrf)],
     summary="Add a product to the cart; an existing line merges quantities",
-    responses={**_WRITE_RESPONSES, **_UNPROCESSABLE},
+    responses={**_WRITE_RESPONSES, **_CONFLICT, **_UNPROCESSABLE},
 )
 async def add_cart_item(
     body: CartItemAdd,
@@ -154,6 +163,7 @@ async def add_cart_item(
             user_id=user.id,
             product_id=body.product_id,
             quantity=body.quantity,
+            ownership=SqlOrderStore(session),
         )
     except _DOMAIN_ERRORS as exc:
         raise _translate(exc) from exc

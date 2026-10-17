@@ -4,8 +4,8 @@ not commit. Every write takes the cart lock first, before any read; reads take n
 from dataclasses import dataclass
 from uuid import UUID
 
-from app.catalog.application.ports import CartProductReader, PurchaseRefusal
-from app.ordering.application.ports import CartStore
+from app.catalog.application.ports import CartProductReader, ProductType, PurchaseRefusal
+from app.ordering.application.ports import CartStore, OrderStore
 from app.ordering.domain.cart_rules import (
     CartLineView,
     check_line_capacity,
@@ -14,7 +14,11 @@ from app.ordering.domain.cart_rules import (
     view_line,
 )
 from app.ordering.domain.entities import Cart, CartLine
-from app.ordering.domain.exceptions import CartLineNotFoundError, ProductNotPurchasableError
+from app.ordering.domain.exceptions import (
+    CartLineNotFoundError,
+    ProductAlreadyOwnedError,
+    ProductNotPurchasableError,
+)
 
 
 @dataclass(frozen=True)
@@ -38,6 +42,7 @@ async def add_item(
     user_id: UUID,
     product_id: UUID,
     quantity: int,
+    ownership: OrderStore | None = None,
 ) -> None:
     cart = await carts.lock(user_id, create=True)
     product = (await products.get_many([product_id])).get(product_id)
@@ -45,7 +50,13 @@ async def add_item(
         raise ProductNotPurchasableError(product_id, PurchaseRefusal.NOT_LISTED)
     existing = await carts.line(cart.id, product_id)
     new_quantity = quantity_after_add(product, quantity, existing)
-    # VS-023 inserts the STL ownership check here (409 PRODUCT_ALREADY_OWNED).
+    owned = (
+        ownership is not None
+        and product.type is ProductType.STL
+        and await ownership.owned_stl_product_ids(user_id, [product_id])
+    )
+    if owned:
+        raise ProductAlreadyOwnedError((product_id,))
     if existing is not None:
         if new_quantity == existing.quantity:
             return

@@ -26,6 +26,8 @@ from app.ordering.domain.exceptions import (
 from app.ordering.domain.orders import NewOrderLine
 
 OVER_CAP = "over_cap"
+# Plan addition (Q18, ADR-032): a constant until a settings value exists.
+DIGITAL_TERMS_VERSION = "2026-10-17"
 
 
 @dataclass(frozen=True)
