@@ -9,9 +9,10 @@ import { test, expect, type Page } from "@playwright/test";
 // actually need), never a real backend.
 //
 // Scope decision (recorded, not silently resolved): there is intentionally
-// no fake Orders/Downloads/Offers/etc. page built here — Profile is the
-// only real account destination today (accountNavItems.ts has exactly one
-// entry). Mobile nav usability is proven against that one real item.
+// no fake Orders/Downloads/Offers/etc. page built here — Profile and
+// Notifications are the only real account destinations today
+// (accountNavItems.ts). Mobile nav usability is proven against Profile;
+// Notifications gets its own E2E coverage in auth-account-phase2.spec.ts.
 
 interface RawMeBody {
   id: string;

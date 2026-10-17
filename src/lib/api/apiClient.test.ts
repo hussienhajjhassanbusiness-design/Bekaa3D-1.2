@@ -101,7 +101,7 @@ describe("apiClient.get", () => {
       });
     });
 
-    it("never populates correlationId and never invents an errors[] property", async () => {
+    it("never populates correlationId, and leaves errors undefined when the response carries none", async () => {
       const problemBody = { type: "https://example.com/probs/not-ready", title: "Not Ready", status: 503 };
       vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(503, problemBody)));
 
@@ -113,7 +113,10 @@ describe("apiClient.get", () => {
       }
 
       expect((caught as { correlationId?: string }).correlationId).toBeUndefined();
-      expect(caught && "errors" in (caught as object)).toBe(false);
+      // Phase 2 — errors[] is now a confirmed field (openapi.json Problem
+      // schema); a response that carries none still resolves it to
+      // undefined, never a fabricated empty/default array.
+      expect((caught as { errors?: unknown }).errors).toBeUndefined();
     });
   });
 
@@ -522,5 +525,88 @@ describe("apiClient.post", () => {
       const headers = new Headers(calledInit.headers);
       expect(headers.get("X-CSRF-Token")).toBe("xyz");
     });
+  });
+});
+
+// Phase 2 auth/account batch — notifications' `PATCH /me/notifications/{id}`
+// is the first confirmed endpoint that needs PATCH; apiClient.patch reuses
+// every shared mechanism get()/post() already prove (path assertion,
+// timeout, ApiError wiring, CSRF opt-in) — only PATCH-specific cases are
+// repeated here in full.
+describe("apiClient.patch", () => {
+  afterEach(() => {
+    document.cookie = "csrf_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/";
+  });
+
+  it("serializes the body as JSON, sets Content-Type, uses method PATCH, and returns the parsed response", async () => {
+    const fetchStub = vi.fn().mockResolvedValue(jsonResponse(200, { id: "n1", read: true }));
+    vi.stubGlobal("fetch", fetchStub);
+
+    document.cookie = "csrf_token=anything";
+    const result = await apiClient.patch("/api/v1/me/notifications/n1", { read: true }, { csrf: true });
+
+    expect(result).toEqual({ id: "n1", read: true });
+    const [calledPath, calledInit] = fetchStub.mock.calls[0] as [string, RequestInit];
+    expect(calledPath).toBe("/api/v1/me/notifications/n1");
+    expect(calledInit.method).toBe("PATCH");
+    expect(calledInit.body).toBe(JSON.stringify({ read: true }));
+    expect(new Headers(calledInit.headers).get("Content-Type")).toBe("application/json");
+  });
+
+  it("attaches X-CSRF-Token with the current cookie value when csrf: true is passed", async () => {
+    document.cookie = "csrf_token=abc123";
+    const fetchStub = vi.fn().mockResolvedValue(jsonResponse(200, { id: "n1", read: true }));
+    vi.stubGlobal("fetch", fetchStub);
+
+    await apiClient.patch("/api/v1/me/notifications/n1", { read: true }, { csrf: true });
+
+    const [, calledInit] = fetchStub.mock.calls[0] as [string, RequestInit];
+    expect(new Headers(calledInit.headers).get("X-CSRF-Token")).toBe("abc123");
+  });
+
+  it("fails locally with kind: 'csrf' when the cookie is missing and csrf: true is requested — never sends the request", async () => {
+    const fetchStub = vi.fn();
+    vi.stubGlobal("fetch", fetchStub);
+
+    await expect(apiClient.patch("/api/v1/me/notifications/n1", { read: true }, { csrf: true })).rejects.toMatchObject(
+      { kind: "csrf" }
+    );
+    expect(fetchStub).not.toHaveBeenCalled();
+  });
+
+  it("never attaches X-CSRF-Token when csrf is omitted, even if the cookie exists", async () => {
+    document.cookie = "csrf_token=should-not-be-sent";
+    const fetchStub = vi.fn().mockResolvedValue(jsonResponse(200, { id: "n1", read: true }));
+    vi.stubGlobal("fetch", fetchStub);
+
+    await apiClient.patch("/api/v1/me/notifications/n1", { read: true });
+
+    const [, calledInit] = fetchStub.mock.calls[0] as [string, RequestInit];
+    expect(new Headers(calledInit.headers).has("X-CSRF-Token")).toBe(false);
+  });
+
+  it("throws an ApiError with kind 'http' and the real status on an RFC 9457 error", async () => {
+    document.cookie = "csrf_token=abc123";
+    const problemBody = { type: "about:blank", title: "Forbidden", status: 403, code: "CSRF_INVALID" };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(403, problemBody)));
+
+    await expect(apiClient.patch("/api/v1/me/notifications/n1", { read: true }, { csrf: true })).rejects.toMatchObject(
+      { kind: "http", status: 403, code: "CSRF_INVALID" }
+    );
+  });
+
+  it("resolves to undefined on a 2xx response with an empty body", async () => {
+    document.cookie = "csrf_token=abc123";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(textResponse(204, "")));
+
+    const result = await apiClient.patch("/api/v1/me/notifications/n1", { read: true }, { csrf: true });
+
+    expect(result).toBeUndefined();
+  });
+
+  it("rejects a path that does not start with /api/, same rule as get()/post()", async () => {
+    await expect(apiClient.patch("/v1/me/notifications/n1", { read: true })).rejects.toThrow(
+      'path must start with "/api/"'
+    );
   });
 });

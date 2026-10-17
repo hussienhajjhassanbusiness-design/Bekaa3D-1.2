@@ -1,4 +1,4 @@
-import type { ApiError } from "./ApiError";
+import type { ApiError, ValidationErrorItem } from "./ApiError";
 
 // Generic fallback UI copy. Deliberately never the raw `detail` text verbatim
 // — presenting server-authored prose as UI copy is a later, status-aware
@@ -17,6 +17,33 @@ function readOptionalString(record: Record<string, unknown>, key: string): strin
 function readOptionalNumber(record: Record<string, unknown>, key: string): number | undefined {
   const value = record[key];
   return typeof value === "number" ? value : undefined;
+}
+
+// Phase 2 — confirmed by docs/backend-handoff/openapi.json
+// (components.schemas.ValidationError): loc is a non-empty array of
+// string/number segments, msg and type are strings. An item failing any
+// part of this shape makes the whole array rejected (never partially
+// coerced) — same strictness as every other field in this parser.
+function isValidationErrorItem(value: unknown): value is ValidationErrorItem {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const { loc, msg, type } = value;
+  if (!Array.isArray(loc) || loc.length === 0) {
+    return false;
+  }
+  if (!loc.every((segment) => typeof segment === "string" || typeof segment === "number")) {
+    return false;
+  }
+  return typeof msg === "string" && typeof type === "string";
+}
+
+function readOptionalValidationErrors(record: Record<string, unknown>): ValidationErrorItem[] | undefined {
+  const value = record["errors"];
+  if (!Array.isArray(value) || !value.every(isValidationErrorItem)) {
+    return undefined;
+  }
+  return value;
 }
 
 // Parses an HTTP response body as an RFC 9457 Problem Details object,
@@ -58,6 +85,7 @@ export function parseProblemBody(rawText: string): ApiError {
     // CSRF_INVALID/RATE_LIMITED) — parsed with the same only-if-a-real-
     // string rule as every other field here, never coerced.
     code: readOptionalString(parsed, "code"),
+    errors: readOptionalValidationErrors(parsed),
     message: GENERIC_MESSAGE,
     raw: parsed,
   };

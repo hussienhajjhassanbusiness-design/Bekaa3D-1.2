@@ -9,6 +9,19 @@
 // in this case.
 export type ApiErrorKind = "http" | "network" | "timeout" | "parse" | "csrf";
 
+// Phase 2 auth/account batch — confirmed by docs/backend-handoff/openapi.json
+// (components.schemas.ValidationError): every field-level validation failure
+// the backend reports has exactly this shape. `loc` is Pydantic's own
+// location path (e.g. ["body", "email"]); per the phase-2 contract note,
+// callers drop loc[0] ("body"/"query"/"path") before mapping the remainder
+// onto a form field — this type itself performs no such mapping, it only
+// describes the confirmed wire shape.
+export interface ValidationErrorItem {
+  loc: Array<string | number>;
+  msg: string;
+  type: string;
+}
+
 export interface ApiError {
   kind: ApiErrorKind;
   status?: number;
@@ -35,6 +48,14 @@ export interface ApiError {
   // never guessed from status alone. Production auth logic (Parts D/E/F)
   // must branch on `status`+`code`, never on `raw`.
   code?: string;
+  // Phase 2 — confirmed by openapi.json's Problem schema (`errors` is a
+  // required array on every Problem body, item shape = ValidationError).
+  // Only ever populated with a real array of well-typed ValidationError
+  // items (readOptionalValidationErrors in problem.ts) — a present-but-
+  // wrong-shaped `errors` member (e.g. not an array, or an array of
+  // non-ValidationError objects) is never coerced into this field; it
+  // stays undefined, same as every other strictly-typed field here.
+  errors?: ValidationErrorItem[];
   message: string;
   raw: unknown;
 }

@@ -185,4 +185,36 @@ async function post<T = unknown>(
   return request<T>(path, init, timeoutMs);
 }
 
-export const apiClient = { get, post };
+// Phase 2 auth/account batch — notifications' confirmed
+// `PATCH /api/v1/me/notifications/{id}` is the first endpoint needing PATCH.
+// Shares every rule post() already enforces (path assertion, timeout,
+// Problem parsing, explicit-opt-in CSRF) — differs only in HTTP method.
+async function patch<T = unknown>(
+  path: string,
+  body?: unknown,
+  options: ApiClientRequestOptions = {}
+): Promise<T> {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+
+  const headers: Record<string, string> = {};
+  if (body !== undefined) {
+    headers["Content-Type"] = "application/json";
+  }
+  if (options.csrf) {
+    const csrfToken = readCsrfToken();
+    if (csrfToken === undefined) {
+      throw missingCsrfError();
+    }
+    headers[CSRF_HEADER_NAME] = csrfToken;
+  }
+
+  const hasHeaders = Object.keys(headers).length > 0;
+  const init: RequestInit = {
+    method: "PATCH",
+    ...(hasHeaders ? { headers } : {}),
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  };
+  return request<T>(path, init, timeoutMs);
+}
+
+export const apiClient = { get, post, patch };

@@ -10,4 +10,7 @@ export interface AccountNavItem {
   href: string;
 }
 
-export const ACCOUNT_NAV_ITEMS: readonly AccountNavItem[] = [{ label: "Profile", href: "/account/profile" }];
+export const ACCOUNT_NAV_ITEMS: readonly AccountNavItem[] = [
+  { label: "Profile", href: "/account/profile" },
+  { label: "Notifications", href: "/account/notifications" },
+];
