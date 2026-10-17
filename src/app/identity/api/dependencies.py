@@ -36,6 +36,30 @@ def unauthenticated_error() -> ApiError:
     )
 
 
+def _decoded_claims(request: Request) -> AccessTokenClaims:
+    """The signature and standard claims: no database traffic (see `current_claims`)."""
+    raw = request.cookies.get(ACCESS_COOKIE)
+    if not raw:
+        raise unauthenticated_error()
+    try:
+        return decode_access_token(raw)
+    except InvalidSessionError as exc:
+        raise unauthenticated_error() from exc
+
+
+async def _require_current_epoch(users: UserRepository, claims: AccessTokenClaims) -> None:
+    current_epoch = await users.get_auth_epoch(claims.user_id)
+    if current_epoch is None:
+        # The account was hard-deleted (only ever the unverified-purge job) while
+        # a token was still live.
+        raise unauthenticated_error()
+    if claims.auth_epoch != current_epoch:
+        # Not `<`: an epoch ahead of the account's own is as impossible as one
+        # behind it, and equality is the only relation that cannot be satisfied
+        # by a stale credential.
+        raise unauthenticated_error()
+
+
 async def current_claims(
     request: Request,
     session: AsyncSession = Depends(get_session),
@@ -60,24 +84,8 @@ async def current_claims(
     would silently re-validate revoked credentials. That failure looks like
     normal operation, which is exactly what makes it unacceptable.
     """
-    raw = request.cookies.get(ACCESS_COOKIE)
-    if not raw:
-        raise unauthenticated_error()
-    try:
-        claims = decode_access_token(raw)
-    except InvalidSessionError as exc:
-        raise unauthenticated_error() from exc
-
-    current_epoch = await UserRepository(session).get_auth_epoch(claims.user_id)
-    if current_epoch is None:
-        # The account was hard-deleted (only ever the unverified-purge job) while
-        # a token was still live.
-        raise unauthenticated_error()
-    if claims.auth_epoch != current_epoch:
-        # Not `<`: an epoch ahead of the account's own is as impossible as one
-        # behind it, and equality is the only relation that cannot be satisfied
-        # by a stale credential.
-        raise unauthenticated_error()
+    claims = _decoded_claims(request)
+    await _require_current_epoch(UserRepository(session), claims)
     return claims
 
 
@@ -128,6 +136,11 @@ async def current_verified_user(user: User = Depends(current_user)) -> User:
     in that table, not a role that excludes administrators, and adding a denial
     rule here would invent behaviour no document describes.
     """
+    _require_verified(user)
+    return user
+
+
+def _require_verified(user: User) -> None:
     if not user.is_verified:
         raise ApiError(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -135,13 +148,17 @@ async def current_verified_user(user: User = Depends(current_user)) -> User:
             title="Email verification required",
             detail="Verify your email address before making this change.",
         )
-    return user
 
 
 async def require_csrf(
     request: Request, claims: AccessTokenClaims = Depends(current_claims)
 ) -> AccessTokenClaims:
     """Double-submit check for unsafe cookie-authenticated methods (SEC-03)."""
+    _require_csrf_token(request, claims)
+    return claims
+
+
+def _require_csrf_token(request: Request, claims: AccessTokenClaims) -> None:
     if not verify_csrf_token(
         session_id=claims.session_id, presented=request.headers.get(CSRF_HEADER)
     ):
@@ -151,7 +168,22 @@ async def require_csrf(
             title="CSRF token missing or invalid",
             detail=f"Send this session's CSRF cookie value in the {CSRF_HEADER} header.",
         )
-    return claims
+
+
+async def verified_user_short_read(request: Request) -> User:
+    """`current_verified_user` plus `require_csrf`, read in a transaction of its own that
+    ends before the handler runs: for routes that call an external service while no
+    transaction may be open (VS-023 checkout, ADR-032)."""
+    claims = _decoded_claims(request)
+    async with request.app.state.db_session_factory() as session, session.begin():
+        users = UserRepository(session)
+        await _require_current_epoch(users, claims)
+        user = await users.get_by_id(claims.user_id)
+    if user is None or not user.can_authenticate:
+        raise unauthenticated_error()
+    _require_verified(user)
+    _require_csrf_token(request, claims)
+    return user
 
 
 def user_agent(request: Request) -> str | None:

@@ -26,6 +26,7 @@ from app.identity.api.dependencies import (
     current_claims,
     require_admin,
     require_csrf,
+    verified_user_short_read,
 )
 from app.identity.domain.enums import UserRole
 from app.main import app as main_app
@@ -427,6 +428,10 @@ def test_every_authenticated_write_enforces_csrf() -> None:
         if not methods or ctx.path is None:
             continue
         calls = _calls(ctx)
+        if verified_user_short_read in calls:
+            # VS-023: authenticates in its own short transaction and checks CSRF itself.
+            authenticated_writes.append(ctx.path)
+            continue
         if current_claims not in calls:
             continue
         authenticated_writes.append(ctx.path)
@@ -434,6 +439,7 @@ def test_every_authenticated_write_enforces_csrf() -> None:
             continue  # deliberately CSRF-free: see the catch-all docstring
         assert require_csrf in calls, f"{sorted(methods)} {ctx.path} authenticates without CSRF"
     assert len(authenticated_writes) >= 10, authenticated_writes
+    assert "/api/v1/checkout" in authenticated_writes
     assert all(path not in _INLINE_CSRF for path in authenticated_writes)
 
 

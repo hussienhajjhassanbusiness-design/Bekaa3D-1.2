@@ -431,6 +431,8 @@ async def test_cookie_flags_per_environment(
         # The fake captcha refuses to boot outside test and development (ADR-026).
         monkeypatch.setenv("CAPTCHA_PROVIDER", "turnstile")
         monkeypatch.setenv("TURNSTILE_SECRET", "unused-in-this-test")
+        # The mock payment provider refuses to boot outside test and development (VS-023).
+        monkeypatch.setenv("PAYMENT_PROVIDER", "none")
     get_settings.cache_clear()
     user = await create_user(db_session)
     try:

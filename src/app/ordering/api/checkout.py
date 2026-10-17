@@ -15,7 +15,7 @@ from app.catalog.public import cart_product_reader
 from app.core.config import get_settings
 from app.core.exceptions import ApiError
 from app.core.rate_limit import enforce_rate_limit
-from app.identity.public import User, current_verified_user, require_csrf
+from app.identity.public import User, verified_user_short_read
 from app.ordering.api.checkout_schemas import (
     IDEMPOTENCY_KEY_PATTERN,
     CheckoutRead,
@@ -101,9 +101,9 @@ _RESPONSES: dict[int | str, dict[str, Any]] = {
 
 
 async def _checkout_rate_limit(
-    request: Request, response: Response, user: User = Depends(current_verified_user)
+    request: Request, response: Response, user: User = Depends(verified_user_short_read)
 ) -> None:
-    """Per user, fail closed, like the cart's (plan Q17)."""
+    """Per user, fail closed, like the cart's (plan Q17). A replay counts too."""
     await enforce_rate_limit(
         request,
         response,
@@ -271,7 +271,7 @@ def _conflict() -> ApiError:
     "",
     status_code=status.HTTP_201_CREATED,
     response_model=CheckoutRead,
-    dependencies=[Depends(_checkout_rate_limit), Depends(require_csrf)],
+    dependencies=[Depends(_checkout_rate_limit)],
     summary="Place an order from the cart and start its online payment",
     responses=_RESPONSES,
 )
@@ -279,11 +279,12 @@ async def checkout(
     request: Request,
     body: CheckoutRequest,
     idempotency_key: IdempotencyKey,
-    user: User = Depends(current_verified_user),
+    user: User = Depends(verified_user_short_read),
 ) -> Response:
     """Tx1: claim, place the order, attach it to the claim, COMMIT. Then the provider call
     with no transaction open. Tx2: store the reference or fail the attempt, and the
-    response. A crash between them leaves the claim `in_progress` naming the order."""
+    response. A crash between them leaves the claim `in_progress` naming the order.
+    No dependency holds a session: the user is read in its own short transaction."""
     providers = request.app.state.payment_providers
     digest = request_hash(SCOPE, body.model_dump(mode="json"))
     now = datetime.now(UTC)

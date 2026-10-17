@@ -471,6 +471,19 @@ async def test_the_session_boundary(db_session: AsyncSession) -> None:
     assert_problem(no_csrf, 403)
 
 
+async def test_a_verified_buyer_without_the_csrf_header_is_403_and_writes_nothing(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    stl = await _stl(db_session)
+    with client_for(main_app) as client:
+        user = await buyer(client, db_session, stl)
+        response = client.post(
+            CHECKOUT, json=checkout_body(), headers={"Idempotency-Key": new_key()}
+        )
+    assert_problem(response, 403, "CSRF_INVALID")
+    assert await rows(db_engine, user.id) == _untouched(1)
+
+
 # ---------------------------------------------------- inside the transaction
 
 

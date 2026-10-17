@@ -33,6 +33,7 @@ VS-023 creates the order and payment tables with every frozen column, so VS-023b
    - `paid` only with `verified_at`;
    - `UNIQUE(provider, provider_payment_id)`.
 6. **Go-live gate (owner):** no real online provider is configured in production before VS-024 and VS-030 are merged, unless an operational alert on late captures and stuck payments exists.
+7. **No transaction is open while checkout waits on the provider** (owner, Checkpoint 3). The checkout route reads the customer through `verified_user_short_read`, which checks the session, verification and CSRF in its own transaction and ends it before the handler runs. The request-scoped `get_session` behind `current_verified_user` would otherwise hold a read-only transaction and a pooled connection for the whole provider call, up to its 10 s timeout. `test_checkout_no_open_transaction.py` holds a slow fake provider and finds no `idle in transaction` backend in `pg_stat_activity` meanwhile.
 
 ## Consequences
 
