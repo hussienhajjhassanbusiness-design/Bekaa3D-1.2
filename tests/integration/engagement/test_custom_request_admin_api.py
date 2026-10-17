@@ -182,6 +182,17 @@ async def test_a_lead_walks_the_whole_pipeline_and_every_step_is_audited(
         zip(["new", *steps[:-1]], steps, strict=True)
     )
     assert {(a.actor_user_id, a.entity_type) for a in audits} == {(admin_id, "custom_request")}
+    created = datetime.fromisoformat(body["created_at"])
+    window = {"from": created.isoformat(), "to": (created + timedelta(microseconds=1)).isoformat()}
+    with client_for(main_app) as client:
+        await mfa_admin(client, db_session)
+        funnel = client.get("/api/v1/admin/analytics/custom-requests/funnel", params=window)
+    assert {k: funnel.json()[k] for k in ("submitted", "quoted", "won", "won_total_cents")} == {
+        "submitted": 1,
+        "quoted": 1,
+        "won": 1,
+        "won_total_cents": 12_500,
+    }
     assert audits[2].after_data == {
         "status": "in_progress",
         "outcome": "won",
@@ -239,6 +250,21 @@ async def test_an_illegal_transition_is_409_and_writes_nothing(
     row = await _row(db_session, lead.id)
     assert (row.status, row.updated_at, row.outcome) == (current, updated_at, None)
     assert await _audits(db_session, lead.id, "custom_request.transitioned") == []
+
+
+async def test_a_quoted_lead_cannot_be_requoted(
+    db_session: AsyncSession, db_engine: AsyncEngine, private: LocalStorage
+) -> None:
+    lead = await seed_lead(db_engine, private, email=unique_email("requote"), status="contacted")
+    with client_for(main_app) as client:
+        await mfa_admin(client, db_session)
+        assert _move(client, lead.id, "quoted", quoted_amount_cents=4_000).status_code == 200
+        first = await _row(db_session, lead.id)
+        response = _move(client, lead.id, "quoted", quoted_amount_cents=9_000)
+    assert_problem(response, 409, "INVALID_STATE_TRANSITION")
+    row = await _row(db_session, lead.id)
+    assert (row.quoted_amount_cents, row.currency, row.quoted_at) == (4_000, "USD", first.quoted_at)
+    assert len(await _audits(db_session, lead.id, "custom_request.transitioned")) == 1
 
 
 @pytest.mark.parametrize(

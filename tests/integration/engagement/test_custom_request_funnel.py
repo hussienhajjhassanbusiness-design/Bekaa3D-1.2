@@ -98,7 +98,17 @@ async def test_an_empty_cohort_is_all_zeros(db_session: AsyncSession) -> None:
         body = client.get(
             FUNNEL, params={"from": base.isoformat(), "to": (base + SPAN).isoformat()}
         ).json()
-    assert [body[k] for k in ("submitted", "won", "lost", "open", "won_total_cents")] == [0] * 5
+    assert {k: v for k, v in body.items() if k not in {"from", "to"}} == {
+        "submitted": 0,
+        "contacted": 0,
+        "quoted": 0,
+        "won": 0,
+        "lost": 0,
+        "open": 0,
+        "quoted_total_cents": 0,
+        "won_total_cents": 0,
+        "currency": "USD",
+    }
 
 
 async def test_the_default_range_is_the_last_90_days(db_session: AsyncSession) -> None:
@@ -123,6 +133,7 @@ async def test_the_default_range_is_the_last_90_days(db_session: AsyncSession) -
         pytest.param({"from": "2025-01-01T00:00Z", "to": "2026-01-03T00:00Z"}, id="367-days"),
         pytest.param({"from": "2999-01-01T00:00Z"}, id="from-after-now"),
         pytest.param({"from": "not-a-date"}, id="garbage"),
+        pytest.param({"to": "0001-01-02T00:00Z"}, id="default-from-overflows"),
     ],
 )
 async def test_a_bad_range_is_422(db_session: AsyncSession, params: dict[str, str]) -> None:

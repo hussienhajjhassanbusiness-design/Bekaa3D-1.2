@@ -82,7 +82,10 @@ async def custom_request_funnel(
     """A stage counts every lead that ever reached it, so a lost quote still counts as quoted."""
     check_range(from_, to, names=("from", "to"))
     upper = to or datetime.now(UTC)
-    lower = from_ or upper - _DEFAULT_FUNNEL_SPAN
+    try:
+        lower = from_ or upper - _DEFAULT_FUNNEL_SPAN
+    except OverflowError as exc:
+        raise invalid_query("to", "is too early for the default 90-day range") from exc
     if upper <= lower:
         raise invalid_query("to", "must be later than from")
     if upper - lower > _MAX_FUNNEL_SPAN:

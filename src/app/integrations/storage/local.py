@@ -49,18 +49,16 @@ class LocalStorage(StoragePort):
     async def exists(self, key: str) -> bool:
         return await asyncio.to_thread(self._path(key).is_file)
 
-    def _open(self, key: str) -> tuple[BinaryIO, int]:
-        path = self._path(key)
-        try:
-            handle = path.open("rb")
-        except (FileNotFoundError, IsADirectoryError, PermissionError) as exc:
-            raise ObjectNotFoundError(key) from exc
-        return handle, os.fstat(handle.fileno()).st_size
+    def _size(self, path: Path, key: str) -> int:
+        if not path.is_file():
+            raise ObjectNotFoundError(key)
+        return path.stat().st_size
 
     async def open(self, key: str) -> ObjectStream:
-        """The handle pins the file, so a concurrent replace or purge cannot tear the read."""
-        handle, size = await asyncio.to_thread(self._open, key)
-        return ObjectStream(size=size, chunks=_chunks(handle))
+        """Checks now, opens on the first chunk: a response that never streams holds no file."""
+        path = self._path(key)
+        size = await asyncio.to_thread(self._size, path, key)
+        return ObjectStream(size=size, chunks=_chunks(path, key))
 
     async def delete(self, key: str) -> None:
         await asyncio.to_thread(self._path(key).unlink, missing_ok=True)
@@ -82,7 +80,12 @@ class LocalStorage(StoragePort):
         return await asyncio.to_thread(self._list, prefix)
 
 
-async def _chunks(handle: BinaryIO) -> AsyncIterator[bytes]:
+async def _chunks(path: Path, key: str) -> AsyncIterator[bytes]:
+    """Once open, the handle pins the file, so a later purge or replace cannot tear the read."""
+    try:
+        handle: BinaryIO = await asyncio.to_thread(path.open, "rb")
+    except FileNotFoundError as exc:
+        raise ObjectNotFoundError(key) from exc
     try:
         while chunk := await asyncio.to_thread(handle.read, CHUNK_BYTES):
             yield chunk

@@ -40,7 +40,8 @@ class StoragePort(ABC):
 
     @abstractmethod
     async def open(self, key: str) -> ObjectStream:
-        """Opens eagerly, raising `ObjectNotFoundError` before any byte is streamed."""
+        """Raises `ObjectNotFoundError` now, before any header is sent; the bytes are read
+        only as `chunks` is iterated, so an unsent response holds no open file."""
         raise NotImplementedError
 
     @abstractmethod

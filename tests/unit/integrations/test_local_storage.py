@@ -59,3 +59,13 @@ async def test_open_refuses_a_missing_object_before_streaming(tmp_path: Path, ke
 async def test_open_cannot_escape_the_root(tmp_path: Path, key: str) -> None:
     with pytest.raises(InvalidStorageKeyError):
         await LocalStorage(tmp_path / "root").open(key)
+
+
+async def test_open_holds_no_file_until_the_first_chunk(tmp_path: Path) -> None:
+    """An unsent response (a failed audit or commit) must not leave a handle open."""
+    storage = LocalStorage(tmp_path)
+    await storage.put("custom-requests/a.png", b"bytes")
+    stream = await storage.open("custom-requests/a.png")
+    await storage.delete("custom-requests/a.png")
+    with pytest.raises(ObjectNotFoundError):
+        await anext(stream.chunks)
