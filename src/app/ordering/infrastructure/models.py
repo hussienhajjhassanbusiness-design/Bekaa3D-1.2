@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from enum import StrEnum
 
 from sqlalchemy import (
     CHAR,
@@ -9,16 +10,31 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     ForeignKeyConstraint,
+    Index,
     Integer,
+    Text,
     UniqueConstraint,
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import CITEXT, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.catalog.application.ports import ProductType
 from app.core.database import Base
+from app.ordering.domain.enums import (
+    CancelReason,
+    FulfillmentMethod,
+    OrderItemStatus,
+    OrderSource,
+    OrderStatus,
+    PaymentMethod,
+)
+
+
+def _pg_enum(enum: type[StrEnum], name: str) -> Enum:
+    """A PostgreSQL type created by a migration, never by the ORM."""
+    return Enum(enum, name=name, create_type=False, values_callable=lambda e: [m.value for m in e])
 
 
 class CartModel(Base):
@@ -91,3 +107,246 @@ class CartItemModel(Base):
         ),
         CheckConstraint("currency = 'USD'", name="ck_cart_items_currency_usd"),
     )
+
+
+class OrderModel(Base):
+    """database-design.md 8.3 plus `digital_terms_version` (Q18); migration 03a4730dd046."""
+
+    __tablename__ = "orders"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    order_number: Mapped[str] = mapped_column(Text, nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    customer_email_snapshot: Mapped[str] = mapped_column(CITEXT, nullable=False)
+    source: Mapped[OrderSource] = mapped_column(
+        _pg_enum(OrderSource, "order_source"), nullable=False
+    )
+    status: Mapped[OrderStatus] = mapped_column(
+        _pg_enum(OrderStatus, "order_status"), nullable=False
+    )
+    fulfillment_method: Mapped[FulfillmentMethod | None] = mapped_column(
+        _pg_enum(FulfillmentMethod, "fulfillment_method")
+    )
+    payment_method: Mapped[PaymentMethod] = mapped_column(
+        _pg_enum(PaymentMethod, "payment_method"), nullable=False
+    )
+    subtotal_cents: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    tax_cents: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+    total_cents: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    currency: Mapped[str] = mapped_column(CHAR(3), nullable=False, server_default="USD")
+    recipient_name: Mapped[str | None] = mapped_column(Text)
+    contact_phone_snapshot: Mapped[str | None] = mapped_column(Text)
+    contact_phone_hash: Mapped[str | None] = mapped_column(Text)
+    governorate: Mapped[str | None] = mapped_column(Text)
+    city: Mapped[str | None] = mapped_column(Text)
+    area: Mapped[str | None] = mapped_column(Text)
+    street: Mapped[str | None] = mapped_column(Text)
+    landmark_notes: Mapped[str | None] = mapped_column(Text)
+    customer_note: Mapped[str | None] = mapped_column(Text)
+    admin_note: Mapped[str | None] = mapped_column(Text)
+    estimated_dispatch_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    terms_accepted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    digital_terms_accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    digital_terms_version: Mapped[str | None] = mapped_column(Text)
+    cash_terms_accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    placed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint("order_number", name="uq_orders_order_number"),
+        UniqueConstraint("id", "payment_method", name="uq_orders_id_payment_method"),
+        CheckConstraint(
+            "subtotal_cents >= 0 AND total_cents >= 0", name="ck_orders_money_non_negative"
+        ),
+        CheckConstraint("tax_cents = 0", name="ck_orders_tax_zero"),
+        CheckConstraint(
+            "total_cents = subtotal_cents + tax_cents", name="ck_orders_total_arithmetic"
+        ),
+        CheckConstraint("currency = 'USD'", name="ck_orders_currency_usd"),
+        CheckConstraint(
+            "fulfillment_method IS NULL OR contact_phone_snapshot IS NOT NULL",
+            name="ck_orders_physical_has_phone",
+        ),
+        CheckConstraint(
+            "fulfillment_method IS NOT NULL OR payment_method = 'online'",
+            name="ck_orders_digital_only_online",
+        ),
+        CheckConstraint(
+            "payment_method <> 'cash' OR cash_terms_accepted_at IS NOT NULL",
+            name="ck_orders_cash_terms",
+        ),
+        CheckConstraint(
+            "fulfillment_method IS DISTINCT FROM 'delivery' OR (recipient_name IS NOT NULL "
+            "AND governorate IS NOT NULL AND city IS NOT NULL AND landmark_notes IS NOT NULL)",
+            name="ck_orders_delivery_address",
+        ),
+        CheckConstraint(
+            "(contact_phone_snapshot IS NULL) = (contact_phone_hash IS NULL)",
+            name="ck_orders_phone_hash_pair",
+        ),
+        CheckConstraint(
+            "(digital_terms_accepted_at IS NULL) = (digital_terms_version IS NULL)",
+            name="ck_orders_digital_terms_version",
+        ),
+        Index("ix_orders_user_placed", "user_id", text("placed_at DESC")),
+        Index("ix_orders_status_placed", "status", text("placed_at DESC")),
+    )
+
+
+class OrderItemModel(Base):
+    """database-design.md 8.4; migration 03a4730dd046. `offer_id` gets its FK in VS-039."""
+
+    __tablename__ = "order_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    order_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    product_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    offer_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    product_type: Mapped[ProductType] = mapped_column(
+        _pg_enum(ProductType, "product_type"), nullable=False
+    )
+    product_name_snapshot: Mapped[str] = mapped_column(Text, nullable=False)
+    image_snapshot: Mapped[str | None] = mapped_column(Text)
+    unit_price_cents: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    line_total_cents: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    currency: Mapped[str] = mapped_column(CHAR(3), nullable=False, server_default="USD")
+    fulfillment_status: Mapped[OrderItemStatus] = mapped_column(
+        _pg_enum(OrderItemStatus, "order_item_status"), nullable=False
+    )
+    lead_time_days_snapshot: Mapped[int | None] = mapped_column(Integer)
+    batch_size_snapshot: Mapped[int | None] = mapped_column(Integer)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    fulfilled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    delivered_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    payment_method: Mapped[PaymentMethod] = mapped_column(
+        _pg_enum(PaymentMethod, "payment_method"), nullable=False
+    )
+    cancel_reason: Mapped[CancelReason | None] = mapped_column(
+        _pg_enum(CancelReason, "cancel_reason")
+    )
+    receipt_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    problem_reported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["order_id", "payment_method"],
+            ["orders.id", "orders.payment_method"],
+            name="fk_order_items_order_payment_method",
+            ondelete="RESTRICT",
+            onupdate="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["product_id", "product_type"],
+            ["products.id", "products.type"],
+            name="fk_order_items_product_type",
+            ondelete="RESTRICT",
+            onupdate="RESTRICT",
+        ),
+        CheckConstraint(
+            "unit_price_cents >= 0 AND line_total_cents >= 0 AND quantity > 0 "
+            "AND line_total_cents = unit_price_cents * quantity AND currency = 'USD'",
+            name="ck_order_items_money",
+        ),
+        CheckConstraint(
+            "product_type <> 'stl' OR quantity = 1", name="ck_order_items_stl_quantity_one"
+        ),
+        CheckConstraint(
+            "payment_method <> 'cash' OR product_type = 'physical'",
+            name="ck_order_items_cash_is_physical",
+        ),
+        CheckConstraint(
+            "cancel_reason IS NULL OR fulfillment_status = 'cancelled'",
+            name="ck_order_items_cancel_reason_state",
+        ),
+        CheckConstraint(
+            "(product_type = 'physical' AND lead_time_days_snapshot IS NOT NULL "
+            "AND batch_size_snapshot IS NOT NULL AND batch_size_snapshot > 0) "
+            "OR (product_type = 'stl' AND lead_time_days_snapshot IS NULL "
+            "AND batch_size_snapshot IS NULL)",
+            name="ck_order_items_snapshots_by_type",
+        ),
+        CheckConstraint(
+            "NOT (product_type = 'stl' AND fulfillment_status = 'delivered') "
+            "OR (fulfilled_at IS NOT NULL AND delivered_by IS NOT NULL)",
+            name="ck_order_items_stl_delivery_record",
+        ),
+        CheckConstraint(
+            "product_type <> 'physical' OR delivered_by IS NULL",
+            name="ck_order_items_physical_no_delivered_by",
+        ),
+        CheckConstraint(
+            "(product_type = 'stl' AND fulfillment_status IN "
+            "('pending', 'awaiting_delivery', 'delivered', 'refunded', 'cancelled')) "
+            "OR (product_type = 'physical' AND fulfillment_status <> 'awaiting_delivery')",
+            name="ck_order_items_status_by_type",
+        ),
+        Index("ix_order_items_order_id", "order_id"),
+        Index(
+            "ix_order_items_physical_status",
+            "fulfillment_status",
+            "order_id",
+            postgresql_where=text("product_type = 'physical'"),
+        ),
+        Index(
+            "uq_order_items_stl_ownership",
+            "user_id",
+            "product_id",
+            unique=True,
+            postgresql_where=text(
+                "product_type = 'stl' "
+                "AND fulfillment_status IN ('pending', 'awaiting_delivery', 'delivered')"
+            ),
+        ),
+    )
+
+
+class OrderStatusHistoryModel(Base):
+    """database-design.md 8.5: append-only; `actor_user_id` NULL means the system."""
+
+    __tablename__ = "order_status_history"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    order_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("orders.id", ondelete="RESTRICT"), nullable=False
+    )
+    order_item_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("order_items.id", ondelete="RESTRICT")
+    )
+    from_status: Mapped[str | None] = mapped_column(Text)
+    to_status: Mapped[str] = mapped_column(Text, nullable=False)
+    actor_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    reason: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (Index("ix_order_status_history_order", "order_id", "created_at"),)
