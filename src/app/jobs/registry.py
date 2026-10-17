@@ -5,10 +5,12 @@ from arq.typing import WorkerCoroutine
 from app.jobs.outbox import dispatch_outbox
 from app.jobs.partitions import ensure_partitions
 from app.jobs.purge_expired_attachments import purge_expired_attachments
+from app.jobs.purge_idempotency import purge_expired_idempotency_records
 from app.jobs.purge_security_records import purge_expired_security_records
 from app.jobs.purge_unverified import purge_unverified_accounts
 from app.jobs.reap_orphan_files import reap_orphan_files
 from app.jobs.rotate_ip_salt import rotate_ip_salt
+from app.jobs.verify_payments import verify_payments
 
 FUNCTIONS: list[WorkerCoroutine] = [
     dispatch_outbox,
@@ -18,6 +20,8 @@ FUNCTIONS: list[WorkerCoroutine] = [
     rotate_ip_salt,
     purge_expired_security_records,
     purge_expired_attachments,
+    verify_payments,
+    purge_expired_idempotency_records,
 ]
 
 CRON_JOBS: list[CronJob] = [
@@ -38,4 +42,8 @@ CRON_JOBS: list[CronJob] = [
     cron(purge_expired_security_records, hour=3, minute=29, second=0),
     # VS-034 / SRS 23: daily; a missed day is harmless, the next run takes the backlog.
     cron(purge_expired_attachments, hour=3, minute=35, second=0),
+    # VS-023: the fallback for verification lost after a webhook's 200; every minute.
+    cron(verify_payments, second=0, run_at_startup=True),
+    # VS-023 / SRS 7.5: claims live 24 h; daily, the next run takes any backlog.
+    cron(purge_expired_idempotency_records, hour=3, minute=53, second=0),
 ]

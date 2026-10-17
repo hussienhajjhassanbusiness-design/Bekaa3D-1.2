@@ -7,7 +7,8 @@ from datetime import datetime
 from typing import Any, Protocol
 from uuid import UUID
 
-from app.payments.domain.enums import PaymentProvider
+from app.ordering.public import LockedOrder
+from app.payments.domain.enums import PaymentProvider, PaymentStatus
 from app.payments.domain.outcome import ProviderResult
 from app.payments.domain.payments import Payment
 
@@ -55,6 +56,8 @@ class ParsedEvent:
 class PaymentProviderPort(Protocol):
     name: str
     supports_status_query: bool
+    # False: events are stored unverified, on the per-IP bucket (plan 2.2 step 4).
+    signs_webhooks: bool
 
     async def create_payment(self, request: CreatePayment) -> CreatedPayment:
         """Raises ProviderUnavailableError when the outcome is unknown."""
@@ -101,3 +104,70 @@ class PaymentStore(Protocol):
     ) -> None: ...
 
     async def mark_failed(self, payment_id: UUID, *, at: datetime) -> None: ...
+
+    async def mark_paid(self, payment_id: UUID, *, at: datetime) -> None: ...
+
+    async def mark_status(self, payment_id: UUID, status: PaymentStatus, *, at: datetime) -> None:
+        """`processing`, `failed` or `expired`, with its timestamp."""
+        ...
+
+    async def mark_late_capture(self, payment_id: UUID, *, at: datetime, fail: bool) -> None:
+        """`late_captured_at`, once; `fail` also ends a live attempt."""
+        ...
+
+    async def fill_provider_reference(
+        self, payment_id: UUID, provider_payment_id: str, *, at: datetime
+    ) -> None: ...
+
+
+@dataclass(frozen=True)
+class NewWebhookEvent:
+    """Stored processed with `processing_error` when ignored (unknown payment...)."""
+
+    provider: PaymentProvider
+    provider_event_id: str
+    event_type: str | None
+    payload: dict[str, Any]
+    signature_valid: bool
+    provider_payment_id: str | None
+    payment_id: UUID | None
+    processing_error: str | None
+    processed_at: datetime | None
+
+
+@dataclass(frozen=True)
+class WebhookEvent:
+    id: UUID
+    provider: PaymentProvider
+    payment_id: UUID | None
+    processed_at: datetime | None
+
+
+class WebhookEventStore(Protocol):
+    async def insert_if_new(self, event: NewWebhookEvent) -> UUID | None: ...
+
+    async def get(self, event_id: UUID) -> WebhookEvent | None: ...
+
+    async def unprocessed_ids(self, limit: int) -> list[UUID]: ...
+
+    async def mark_processed(self, event_id: UUID, *, at: datetime) -> None: ...
+
+    async def record_error(self, event_id: UUID, error: str) -> None: ...
+
+
+class OrderSide(Protocol):
+    """Ordering's half of a payment apply, through `ordering.public` (plan 3.0)."""
+
+    async def lock(self, order_id: UUID) -> LockedOrder | None:
+        """`orders` FOR UPDATE, then its lines FOR UPDATE ORDER BY id."""
+        ...
+
+    async def mark_paid(self, locked: LockedOrder, *, at: datetime) -> tuple[UUID, ...]:
+        """The STL lines moved to `awaiting_delivery`."""
+        ...
+
+    async def recompute_unpaid(self, locked: LockedOrder) -> None: ...
+
+
+class PaymentNotices(Protocol):
+    async def payment_confirmed(self, locked: LockedOrder) -> None: ...

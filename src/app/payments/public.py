@@ -16,23 +16,34 @@ from app.payments.application.services.payments import (
     start_online_payment,
 )
 from app.payments.domain.exceptions import PaymentConfigurationError, ProviderUnavailableError
-from app.payments.domain.outcome import ProviderResult
+from app.payments.domain.outcome import Outcome, ProviderResult
 from app.payments.infrastructure.payments import SqlPaymentAttempts, SqlPaymentStore
 from app.payments.infrastructure.providers.factory import configured_payment_providers
+from app.payments.infrastructure.verification import (
+    apply_provider_result,
+    verify_event,
+    verify_payment,
+    verify_unprocessed,
+)
 
 __all__ = [
     "CreatePayment",
     "CreatedPayment",
+    "Outcome",
     "PaymentConfigurationError",
     "PaymentProviderPort",
     "ProviderResult",
     "ProviderUnavailableError",
+    "apply_provider_result",
     "configured_payment_providers",
     "fail_attempt",
     "payment_attempts",
     "payment_store",
     "record_provider_reference",
     "start_online_payment",
+    "verify_event",
+    "verify_payment",
+    "verify_unprocessed",
 ]
 
 

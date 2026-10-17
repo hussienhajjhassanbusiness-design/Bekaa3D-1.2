@@ -2320,7 +2320,7 @@ Operational rule:
 - expired verification/password tokens: purge `security_token_retention_period` (default 7 days) past `expires_at` (`purge_expired_security_records`, VS-046);
 - never-verified accounts: purge after configured period;
 - custom-request attachments: purge after `expires_at`;
-- idempotency records: purge after `expires_at`;
+- idempotency records: purge after `expires_at` (`purge_expired_idempotency_records`, daily, VS-023);
 - sessions: purge `session_retention_period` (default 30 days) after the session ended, the earlier of expiry and revocation (VS-046);
 - business-history rows: preserve/anonymise instead of normal hard delete.
 
@@ -2396,7 +2396,7 @@ Later catalogue changes must never alter historical order values.
 | settings | retain; changes audited |
 | audit_logs | partition + archive after 24 months hot |
 | email_outbox | retain through operational/audit retention; exact period not specified |
-| idempotency_records | purge after expiry |
+| idempotency_records | purge after expiry (`purge_expired_idempotency_records`) |
 | cash_payment_blocks | retain; cleared, never deleted |
 
 ### Wishlist Decision

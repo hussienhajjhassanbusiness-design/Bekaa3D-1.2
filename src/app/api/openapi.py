@@ -68,6 +68,8 @@ _UNAUTHENTICATED_PATHS = frozenset(
         "/api/v1/products",
         "/api/v1/products/{slug}",
         "/api/v1/search/suggestions",
+        # VS-023: a provider calls it; the HMAC signature is the authentication.
+        "/api/v1/webhooks/payments/{provider}",
         "/health/live",
         "/health/ready",
     }

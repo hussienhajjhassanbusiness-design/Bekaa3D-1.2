@@ -108,6 +108,42 @@ class SqlPaymentStore:
             .values(status=PaymentStatus.FAILED, failed_at=at, updated_at=at)
         )
 
+    async def mark_paid(self, payment_id: UUID, *, at: datetime) -> None:
+        await self._session.execute(
+            update(_P)
+            .where(_P.id == payment_id)
+            .values(status=PaymentStatus.PAID, verified_at=at, updated_at=at)
+        )
+
+    async def mark_status(self, payment_id: UUID, status: PaymentStatus, *, at: datetime) -> None:
+        stamps = {
+            PaymentStatus.FAILED: {"failed_at": at},
+            PaymentStatus.EXPIRED: {"expired_at": at},
+        }
+        await self._session.execute(
+            update(_P)
+            .where(_P.id == payment_id)
+            .values(status=status, updated_at=at, **stamps.get(status, {}))
+        )
+
+    async def mark_late_capture(self, payment_id: UUID, *, at: datetime, fail: bool) -> None:
+        values: dict[str, Any] = {"late_captured_at": at, "updated_at": at}
+        if fail:
+            values |= {"status": PaymentStatus.FAILED, "failed_at": at}
+        await self._session.execute(
+            update(_P).where(_P.id == payment_id, _P.late_captured_at.is_(None)).values(**values)
+        )
+
+    async def fill_provider_reference(
+        self, payment_id: UUID, provider_payment_id: str, *, at: datetime
+    ) -> None:
+        """Under the payment lock, only when checkout's Tx2 never stored it."""
+        await self._session.execute(
+            update(_P)
+            .where(_P.id == payment_id, _P.provider_payment_id.is_(None))
+            .values(provider_payment_id=provider_payment_id, updated_at=at)
+        )
+
 
 class SqlPaymentAttempts:
     """Ordering's `PaymentAttempts`: the configured providers and the pending INSERT."""

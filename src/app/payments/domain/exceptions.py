@@ -16,3 +16,7 @@ class InvalidSignatureError(PaymentsDomainError):
 
 class MalformedEventError(PaymentsDomainError):
     """A signed webhook body the adapter cannot read."""
+
+
+class PaymentNotFoundError(PaymentsDomainError):
+    """The payment (or its order) to apply a result to does not exist."""

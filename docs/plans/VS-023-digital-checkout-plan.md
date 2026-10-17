@@ -1492,6 +1492,9 @@ state must be the same instance for both (R9).
   - VS-024 note: `processed_at` semantics, and reconciling attempts with no provider
     reference.
 - **SRS:** VS-023 does not change §20.2.
+  - §23: add `verify_payments` (1 min, webhook-loss fallback only; `reconcile_payments`
+    stays VS-024's) and `purge_expired_idempotency_records` (daily), as VS-046 did
+    (owner, Checkpoint 4); `api-endpoints.md` §34 and database-design §21.3 and §23 name them too;
   - §7.3 note that consent timestamps live on the order row;
   - §9.2 "bad signature: rejected, not stored".
 - **`docs/requirments/database-design.md`:**

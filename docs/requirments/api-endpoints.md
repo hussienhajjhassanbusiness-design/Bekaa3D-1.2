@@ -1527,6 +1527,8 @@ backup_verify
 ensure_partitions
 rotate_ip_salt
 purge_expired_security_records
+verify_payments
+purge_expired_idempotency_records
 ```
 
 Admin manual reconcile/confirm endpoints exist for operational intervention, but the scheduled jobs themselves are not exposed as public “run job” routes.

@@ -43,6 +43,7 @@ def _key(payment_id: UUID) -> str:
 class MockPaymentProvider:
     name = "mock"
     supports_status_query = True
+    signs_webhooks = True
 
     def __init__(self, *, redis_url: str, webhook_secret: str, frontend_base_url: str) -> None:
         self._redis_url = redis_url
@@ -121,7 +122,12 @@ class MockPaymentProvider:
             raise MalformedEventError("unreadable mock event") from exc
 
     async def simulate(
-        self, payment_id: UUID, state: ProviderState, captured_amount_cents: int | None = None
+        self,
+        payment_id: UUID,
+        state: ProviderState,
+        captured_amount_cents: int | None = None,
+        *,
+        currency: str | None = None,
     ) -> None:
         """Tests and `scripts/mock_pay.py` only. `paid` captures the full amount unless
         `captured_amount_cents` says otherwise (under- or overpayment)."""
@@ -134,6 +140,8 @@ class MockPaymentProvider:
             update["captured_amount_cents"] = str(
                 amount if amount is not None else current["amount_cents"]
             )
+            if currency is not None:
+                update["currency"] = currency
         await self._redis().hset(_key(payment_id), mapping=update)  # type: ignore[misc]
 
     async def aclose(self) -> None:
