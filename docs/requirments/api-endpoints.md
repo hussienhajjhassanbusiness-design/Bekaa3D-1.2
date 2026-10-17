@@ -608,11 +608,11 @@ A callback alone never authorizes these state changes.
 
 | Method + Path | Request | Success | Errors | Pagination / Filter / Sort | Side Effects / Notes |
 |---|---|---|---|---|---|
-| `GET /api/v1/admin/custom-requests` | query params | `200 CustomRequestPage` | 401/404 | Cursor; status/date/email; oldest actionable first | Lead pipeline |
-| `GET /api/v1/admin/custom-requests/{request_id}` | — | `200 CustomRequestDetail` | 401/404 | — | Includes private attachment metadata and admin fields |
-| `POST /api/v1/admin/custom-requests/{request_id}/transition` | `CustomRequestTransition` | `200 CustomRequestDetail` | 401/404, 409 `INVALID_STATE_TRANSITION`, 422 | — | Enforces state machine; quoted transition may record amount; lost/closed records outcome; audit |
-| `PATCH /api/v1/admin/custom-requests/{request_id}` | `CustomRequestAdminUpdate` | `200 CustomRequestDetail` | 401/404, 422 | — | Updates non-state admin data such as notes; status changes forbidden here |
-| `GET /api/v1/admin/custom-requests/{request_id}/attachments/{attachment_id}/download` | Admin + MFA | optional Range | Binary `200/206` | 401/404, 416 | — | Private internal redirect; attachment must not be expired/purged |
+| `GET /api/v1/admin/custom-requests` | query params | `200 CustomRequestPage` | 401/404, 422 | Cursor; `status`, `created_after`/`created_before`, exact `email`; order (status, created_at, id): `new` first, `closed`/`lost` last, oldest first | Lead pipeline; audited `custom_request.list_viewed` (VS-035) |
+| `GET /api/v1/admin/custom-requests/{request_id}` | — | `200 CustomRequestDetail` | 401/404 | — | Includes admin fields and the metadata of unexpired attachments (no storage key); audited `custom_request.viewed` |
+| `POST /api/v1/admin/custom-requests/{request_id}/transition` | `CustomRequestTransition` | `200 CustomRequestDetail` | 401/404, 403 CSRF, 409 `INVALID_STATE_TRANSITION`, 422 | — | Enforces the state machine under a row lock (staying put is 409); `quoted` requires an amount; the server sets the outcome (`won` at `in_progress`, `lost` at `lost`) and USD; audit (ADR-031) |
+| `PATCH /api/v1/admin/custom-requests/{request_id}` | `CustomRequestAdminUpdate` | `200 CustomRequestDetail` | 401/404, 403 CSRF, 422 | — | Notes only (blank clears); any other field, status included, is 422; audited without the text |
+| `GET /api/v1/admin/custom-requests/{request_id}/attachments/{attachment_id}/download` | Admin + MFA | — | Binary `200` | 401/404 | — | Streamed by the API (`no-store`, `attachment`, `nosniff`, sandboxed CSP); no Range; expired (`expires_at <= now`), purged, missing or another request's attachment is 404; audited. VS-020 may switch to nginx `X-Accel-Redirect` (ADR-031) |
 
 ---
 
@@ -662,7 +662,7 @@ All analytics are read-only, Admin + MFA, bounded by explicit date ranges/limits
 | `GET /api/v1/admin/analytics/wishlist` | date range/limit | `200 WishlistAnalytics` | 401/404, 400 | Wishlist totals + most-wishlisted |
 | `GET /api/v1/admin/analytics/stl-sales` | date range/limit | `200 StlSalesAnalytics` | 401/404, 400 | Best-selling STLs from paid, unrefunded lines; count of lines awaiting delivery |
 | `GET /api/v1/admin/analytics/top-rated-products` | limit | `200 TopRatedProductList` | 401/404 | Maintained rating aggregates |
-| `GET /api/v1/admin/analytics/custom-requests/funnel` | date range | `200 CustomRequestFunnelAnalytics` | 401/404, 400 | New→contacted→quoted→won/lost funnel |
+| `GET /api/v1/admin/analytics/custom-requests/funnel` | `from`, `to` (UTC offset; default the last 90 days; at most 366) | `200 CustomRequestFunnelAnalytics` | 401/404, 422 | Submission-date cohort `[from, to)`: submitted, contacted, quoted, won, lost, open and quoted/won totals in cents (VS-035, ADR-031) |
 
 Exact analytics default ranges/export formats remain tunable design-time settings; the route shapes are stable.
 
@@ -1164,17 +1164,15 @@ Server requires exact order-total match and records the admin actor/audit trail.
 
 ```text
 target_status: custom_request_status
-quoted_amount_cents?: int
-outcome?: "won" | "lost"
-note?: str
+quoted_amount_cents?: int   # required for quoted, 1-100,000,000; refused otherwise
 ```
 
-Fields are allowed only when meaningful for the transition.
+The server derives `outcome` (`won` at `in_progress`, `lost` at `lost`) and `currency` (`USD`); `outcome` and `note` are not accepted (ADR-031). Notes go through `CustomRequestAdminUpdate`.
 
 ### `CustomRequestAdminUpdate`
 
 ```text
-admin_notes?: str
+admin_notes: str | null   # required key, at most 5000; blank or null clears
 ```
 
 ---

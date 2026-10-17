@@ -1,6 +1,6 @@
-# Bring Your Idea submissions (VS-034)
+# Bring Your Idea submissions and pipeline (VS-034, VS-035)
 
-A guest describes a custom print and may attach reference images. The request is a **lead, not a transaction** (BR-112): no cart, order or payment is ever created. Decisions and rationale: [ADR-030](adr/ADR-030-bring-your-idea-submission.md). Requirements: SRS §13, BR-110-BR-115, SEC-11-SEC-16, FR-15. The admin pipeline is VS-035.
+A guest describes a custom print and may attach reference images. The request is a **lead, not a transaction** (BR-112): no cart, order or payment is ever created. Decisions and rationale: [ADR-030](adr/ADR-030-bring-your-idea-submission.md). Requirements: SRS §13, BR-110-BR-115, SEC-11-SEC-16, FR-15. The admin pipeline (VS-035, [ADR-031](adr/ADR-031-bring-your-idea-pipeline-and-api-streamed-download.md)) is described [below](#admin-pipeline-vs-035).
 
 ## Route
 
@@ -76,3 +76,77 @@ It never contains the visitor's name, email or phone. A refused submission notif
 ## Logs
 
 Only `custom_request_received` with the request id and attachment count, `custom_request_upload_refused` with a reason and file index, and `custom_request_notification_failed` with the request id and a count. Names, emails, phones, descriptions and file contents are never logged.
+
+## Admin pipeline (VS-035)
+
+Every route is under `/api/v1/admin` and needs an MFA-complete administrator. An anonymous caller gets `401 AUTH_REQUIRED`, an administrator without MFA `401 MFA_REQUIRED`, and a customer `404 NOT_FOUND`. Writes need the CSRF header. Unknown ids are `404`.
+
+| Method + path | Body / query | Success | Errors |
+|---|---|---|---|
+| `GET /admin/custom-requests` | `cursor`, `limit` 1-100 (20), `status`, `created_after` (inclusive), `created_before` (exclusive), `email` (exact, case-insensitive) | `200 CustomRequestPage` | 422 |
+| `GET /admin/custom-requests/{id}` | - | `200 CustomRequestDetail` | 404 |
+| `PATCH /admin/custom-requests/{id}` | `{"admin_notes": str \| null}`, ≤ 5000; blank clears | `200 CustomRequestDetail` | 403, 404, 422 |
+| `POST /admin/custom-requests/{id}/transition` | `{"target_status", "quoted_amount_cents"?}` | `200 CustomRequestDetail` | 403, 404, 409 `INVALID_STATE_TRANSITION`, 422 |
+| `GET /admin/custom-requests/{id}/attachments/{attachment_id}/download` | - | `200` image bytes | 404 |
+| `GET /admin/analytics/custom-requests/funnel` | `from` (inclusive), `to` (exclusive) | `200 CustomRequestFunnelAnalytics` | 422 |
+
+### Queue
+
+The list is ordered `(status, created_at, id)`: `new` first, then `contacted`, `quoted`, `in_progress`, `completed`, `closed`, `lost`, oldest first within each. A list item carries the contact fields, status, quote, outcome and `attachment_count`, but not the description or notes. The detail adds every field plus the metadata of attachments that have not expired (id, display name, type, size, `expires_at`). No storage key or path is ever returned.
+
+### State machine (SRS 20.7)
+
+| From | To | Also writes |
+|---|---|---|
+| `new` | `contacted` | `contacted_at` |
+| `contacted` | `quoted` | `quoted_at`, `quoted_amount_cents` (required, 1-100,000,000), `currency = USD` |
+| `contacted`, `quoted` | `lost` | `outcome = lost`, `closed_at` |
+| `quoted` | `in_progress` | `outcome = won` |
+| `in_progress` | `completed` | `completed_at` |
+| `completed` | `closed` | `closed_at` |
+
+Every other pair, including staying put, is `409 INVALID_STATE_TRANSITION`. `quoted_amount_cents` on any other target, a non-integer amount, `outcome`, `note` or any other field is `422`. The server sets the outcome and currency. Each transition locks the row, rechecks the state and writes its audit row in one transaction. Of two administrators racing from one state, the second either gets `409` or moves on from the first one's state when that is itself a legal edge.
+
+### Download
+
+The response streams the stored, re-encoded bytes with these headers:
+
+- `Content-Type`: the stored type;
+- `Content-Length`;
+- `Content-Disposition: attachment`, with the display name re-extensioned to the stored type (an ASCII `filename` plus a UTF-8 `filename*`);
+- `Cache-Control: no-store`;
+- `X-Content-Type-Options: nosniff`;
+- `Content-Security-Policy: default-src 'none'; sandbox`;
+- `Cross-Origin-Resource-Policy: same-origin`.
+
+`Range` is ignored. These all give the same `404`, with no audit row:
+
+- an attachment with `expires_at <= now`, even before the daily purge;
+- an attachment of another request;
+- a purged row;
+- a missing file, which also logs `custom_request_attachment_file_missing`.
+
+VS-020 may move the byte transfer to nginx `X-Accel-Redirect` (ADR-031).
+
+### Funnel
+
+`from`/`to` need a UTC offset. `to` defaults to now and `from` to 90 days before `to`. The span is at most 366 days. Leads count by `created_at` in `[from, to)`:
+
+| Field | Counts |
+|---|---|
+| `submitted` | every lead in the cohort |
+| `contacted` | leads with `contacted_at` |
+| `quoted` | leads with `quoted_at` (a lost quote still counts) |
+| `won`, `lost` | leads with that outcome |
+| `open` | `submitted - won - lost` |
+| `quoted_total_cents`, `won_total_cents` | sums of the quotes of quoted or won leads, in `currency` (`USD`) |
+
+### Audit
+
+| Action | Entity | Data |
+|---|---|---|
+| `custom_request.list_viewed` | `custom_request`, no id | filters used (booleans, status), result count |
+| `custom_request.viewed` | the request | - |
+| `custom_request.transitioned` | the request | status before; status, outcome, amount and currency after |
+| `custom_request.notes_updated` | the request | `has_notes` before and after, never the text |
+| `custom_request_attachment.downloaded` | the attachment | its request id |
