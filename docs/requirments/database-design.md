@@ -1230,6 +1230,8 @@ batch_size_snapshot IS NULL
 | `initiated_at` | TIMESTAMPTZ | No |  |
 | `verified_at` | TIMESTAMPTZ | Yes |  |
 | `late_captured_at` | TIMESTAMPTZ | Yes | set when money was captured but cannot be applied: an attempt no longer live, a cancelled order, or an amount that does not match (the attempt is then `failed`); the row stays `failed` / `expired` and is refunded automatically (ADR-024) |
+| `captured_amount_cents` | BIGINT | Yes | what the provider reported captured, in `captured_currency`: set with `paid` (the exact amount) and on a late capture (any amount, so an overpayment's refund is not capped by `amount_cents`); never on cash (VS-024, migration `00ce1ce252a6`) |
+| `captured_currency` | CHAR(3) | Yes | the captured amount's currency, any ISO 4217 code (a non-USD capture is exactly the mismatch it records); only with `captured_amount_cents` (VS-024) |
 | `failed_at` | TIMESTAMPTZ | Yes |  |
 | `expired_at` | TIMESTAMPTZ | Yes |  |
 | `provider_metadata` | JSONB | Yes | provider-specific metadata only |
@@ -1264,6 +1266,17 @@ Added by VS-023 (migration `03a4730dd046`):
 status IN ('paid', 'partially_refunded', 'refunded') → verified_at IS NOT NULL   -- paid only through verification
 status = 'failed' → failed_at IS NOT NULL;  status = 'expired' → expired_at IS NOT NULL
 UNIQUE(provider, provider_payment_id)   -- NULLs distinct; one capture never matches two attempts
+```
+
+Added by VS-024 (migration `00ce1ce252a6`, additive: both columns nullable, no default):
+
+```text
+ck_payments_captured_shape: (captured_amount_cents IS NULL OR captured_amount_cents >= 0)
+    AND (captured_currency IS NULL OR captured_currency ~ '^[A-Z]{3}$')
+    AND (captured_currency IS NULL OR captured_amount_cents IS NOT NULL)
+ck_payments_captured_when:  captured_amount_cents IS NULL
+    OR (provider <> 'cash' AND (late_captured_at IS NOT NULL
+        OR status IN ('paid', 'partially_refunded', 'refunded')))
 ```
 
 The cash index is created before the live-payment index, so a second cash payment reports INV-22 by name.

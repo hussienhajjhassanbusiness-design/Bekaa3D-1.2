@@ -58,6 +58,9 @@ class PaymentModel(Base):
     initiated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     late_captured_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # VS-024 (migration 00ce1ce252a6): what the provider reported captured.
+    captured_amount_cents: Mapped[int | None] = mapped_column(BigInteger)
+    captured_currency: Mapped[str | None] = mapped_column(CHAR(3))
     failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     expired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     provider_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
@@ -107,6 +110,18 @@ class PaymentModel(Base):
             "(status <> 'failed' OR failed_at IS NOT NULL) "
             "AND (status <> 'expired' OR expired_at IS NOT NULL)",
             name="ck_payments_terminal_timestamps",
+        ),
+        CheckConstraint(
+            "(captured_amount_cents IS NULL OR captured_amount_cents >= 0) "
+            "AND (captured_currency IS NULL OR captured_currency ~ '^[A-Z]{3}$') "
+            "AND (captured_currency IS NULL OR captured_amount_cents IS NOT NULL)",
+            name="ck_payments_captured_shape",
+        ),
+        CheckConstraint(
+            "captured_amount_cents IS NULL OR (provider <> 'cash' AND "
+            "(late_captured_at IS NOT NULL "
+            "OR status IN ('paid', 'partially_refunded', 'refunded')))",
+            name="ck_payments_captured_when",
         ),
         Index(
             "uq_payments_one_live",

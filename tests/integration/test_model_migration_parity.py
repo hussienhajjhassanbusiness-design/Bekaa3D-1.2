@@ -1,5 +1,5 @@
-"""The ORM models match migration 03a4730dd046 for VS-023's six tables: Alembic's
-autogenerate diff against the migrated schema must be empty (VS-023 plan 8, PR A)."""
+"""The ORM models match the migrated schema for VS-023's six tables (03a4730dd046, plus
+VS-024's payments.captured_* in 00ce1ce252a6): Alembic's autogenerate diff must be empty."""
 
 from typing import Any
 
