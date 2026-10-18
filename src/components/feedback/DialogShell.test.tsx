@@ -3,10 +3,10 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DialogShell } from "./DialogShell";
 
-// FVS-019-IMPLEMENTATION-PLAN.md T04 — extracted from FVS-007's own
-// ConfirmDialog so neither it nor GrantEntitlementDialog needs a second
-// independent focus-trap/Escape/backdrop implementation
-// (#SHARED-DIALOG-SHELL). Carries NO business/domain knowledge — title/
+// Extracted from FVS-007's own ConfirmDialog so neither it nor any
+// future dialog elsewhere in the app needs a second independent
+// focus-trap/Escape/backdrop implementation (#SHARED-DIALOG-SHELL).
+// Carries NO business/domain knowledge — title/
 // description/actions are entirely the caller's `children`; this shell
 // only owns the accessible-dialog mechanics (role, aria-modal, focus
 // trap, Escape, backdrop click, focus restoration).

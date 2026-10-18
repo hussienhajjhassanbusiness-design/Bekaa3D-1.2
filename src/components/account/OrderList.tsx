@@ -38,10 +38,9 @@ const DEFAULT_ERROR_MESSAGE = "We couldn't load your orders. Please try again.";
 //
 // Presentational only — no network, no query. Desktop/tablet renders
 // a real <table>; mobile renders a stacked list — both exist in the
-// DOM simultaneously with CSS-only visibility switching (the
-// DownloadHistoryTable pattern), so there is no duplicate screen-
-// reader announcement and no JS viewport detection. No fake rows are
-// ever rendered.
+// DOM simultaneously with CSS-only visibility switching, so there is
+// no duplicate screen-reader announcement and no JS viewport
+// detection. No fake rows are ever rendered.
 export function OrderList({
   items,
   isLoading = false,

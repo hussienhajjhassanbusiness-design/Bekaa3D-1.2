@@ -25,4 +25,9 @@ describe("OrderSummaryDisplay", () => {
     expect(screen.getByText("Paid")).toBeInTheDocument();
     expect(screen.getByText("None")).toBeInTheDocument();
   });
+
+  it("renders no shipping row — ADR-024 means nothing is ever charged for shipping on this site", () => {
+    render(<OrderSummaryDisplay summary={{ currency: "USD", subtotalCents: 1000, totalCents: 1000 }} />);
+    expect(screen.queryByText(/shipping/i)).not.toBeInTheDocument();
+  });
 });

@@ -9,14 +9,19 @@ import type { DeliveryMethodSelection, ConsentState, PriceConflictLine, CartConf
 // frontend-owned presentation category, never a claimed backend code.
 
 describe("DeliveryMethodSelection", () => {
-  it("accepts an address+zone selection", () => {
-    const selection: DeliveryMethodSelection = { kind: "address", addressId: "addr-1", zoneId: "zone-1" };
+  it("accepts an address selection", () => {
+    const selection: DeliveryMethodSelection = { kind: "address", addressId: "addr-1" };
     expect(selection.kind).toBe("address");
   });
 
-  it("accepts a pickup selection with no address/zone fields", () => {
+  it("accepts a pickup selection with no address fields", () => {
     const selection: DeliveryMethodSelection = { kind: "pickup" };
     expect(selection.kind).toBe("pickup");
+  });
+
+  it("has no zoneId field — ADR-024 removed shipping charges, so an address selection is complete on its own", () => {
+    const selection: DeliveryMethodSelection = { kind: "address", addressId: "addr-1" };
+    expect("zoneId" in selection).toBe(false);
   });
 
   it("has no governorate/address-parsing field on either variant", () => {

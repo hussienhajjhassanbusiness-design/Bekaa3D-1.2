@@ -10,6 +10,9 @@
 // an id, an amount) without money having moved; this field is the
 // only thing any component may use to distinguish "created" from
 // "settled" — never the presence of `id` alone.
+//
+// No shipping field exists here: ADR-024 means nothing was ever
+// charged for shipping, so there is nothing to refund.
 export interface RefundLineBreakdownModel {
   lineId: string;
   productDisplayName: string;
@@ -26,7 +29,6 @@ export interface RefundModel {
   currency: string;
   settlementMethodLabel?: string;
   lines?: readonly RefundLineBreakdownModel[];
-  shippingAmountCents?: number;
   reason?: string;
   createdAtLabel?: string;
 }

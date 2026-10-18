@@ -5,9 +5,9 @@ import { isTerminalPaymentStatus, type PaymentStatus } from "./paymentStatusMode
 
 export interface UsePaymentStatusPollerOptions {
   status: PaymentStatus | null;
-  // REQUIRED — never a built-in production default, mirroring
-  // useScanStatusPolling's own `intervalMs`-required precedent
-  // exactly (FVS-027-IMPLEMENTATION-PLAN.md T03).
+  // REQUIRED — never a built-in production default, so callers for
+  // different polling contexts cannot silently diverge on interval
+  // policy (FVS-027-IMPLEMENTATION-PLAN.md T03).
   getDelayMs: (attempt: number) => number;
   maxDurationMs: number;
   onPoll: () => void;
@@ -18,10 +18,10 @@ export interface UsePaymentStatusPollerResult {
   retry: () => void;
 }
 
-// Mirrors useScanStatusPolling's own "dumb hook, caller does the
-// actual work" architecture exactly — extended only with the
-// max-duration/timeout concept this slice's own UX-states line
-// requires. This hook never fetches or interprets a response; a
+// A "dumb hook, caller does the actual work" architecture, extended
+// only with the max-duration/timeout concept this slice's own
+// UX-states line requires. This hook never fetches or interprets a
+// response; a
 // thrown network error during whatever `onPoll` triggers is the
 // caller's own concern, surfaced one layer up as
 // PaymentVerificationState's "network-error" kind — never a status

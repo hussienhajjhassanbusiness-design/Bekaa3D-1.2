@@ -30,9 +30,9 @@ const FOCUSABLE_SELECTOR = 'button, [href], input, select, textarea, [tabindex]:
 //
 // Extracted from FVS-007's own ConfirmDialog (which had its own
 // independent focus-trap/Escape/backdrop implementation) so neither it
-// nor any future dialog (e.g. FVS-019's GrantEntitlementDialog) needs a
-// second, separately-maintained copy of the same accessible-dialog
-// mechanics. Carries NO business/domain knowledge — title, description,
+// nor any future dialog elsewhere in the app needs a second,
+// separately-maintained copy of the same accessible-dialog mechanics.
+// Carries NO business/domain knowledge — title, description,
 // and actions are entirely the caller's `children`; this shell owns
 // only role/aria-modal, the labelledby/describedby wiring, the Tab
 // focus trap, Escape handling, backdrop-click handling, and focus

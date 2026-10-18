@@ -85,6 +85,11 @@ describe("OrderSummaryModel / OrderDetailModel", () => {
     expect("internalNote" in detail).toBe(false);
     expect("manualConfirmReason" in detail.summary).toBe(false);
   });
+
+  it("has no shippingCents field on the summary — ADR-024 means nothing is ever charged for shipping", () => {
+    const summary: OrderSummaryModel = { currency: "USD" };
+    expect("shippingCents" in summary).toBe(false);
+  });
 });
 
 describe("OrderListItemModel", () => {

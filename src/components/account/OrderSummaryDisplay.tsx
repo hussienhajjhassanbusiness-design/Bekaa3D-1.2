@@ -32,14 +32,6 @@ export function OrderSummaryDisplay({ summary }: OrderSummaryDisplayProps) {
           </dd>
         </div>
       )}
-      {summary.shippingCents !== undefined && (
-        <div className="flex items-center justify-between gap-2">
-          <dt className="text-body text-text-secondary">Shipping</dt>
-          <dd>
-            <PriceDisplay amountCents={summary.shippingCents} currency={summary.currency} />
-          </dd>
-        </div>
-      )}
       {summary.totalCents !== undefined && (
         <div className="flex items-center justify-between gap-2">
           <dt className="text-body font-semibold text-text-primary">Total</dt>

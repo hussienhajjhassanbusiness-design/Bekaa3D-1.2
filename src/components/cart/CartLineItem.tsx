@@ -5,10 +5,9 @@ import type { CartLineModel } from "@/lib/cart/cartModel";
 
 export interface CartLineItemProps {
   line: CartLineModel;
-  // Required, presentational-only seams — mirrors
-  // AddressList.onDelete/ShippingZoneManager.onArchive's precedent.
-  // Wired to a real mutation only once FVS-025-IMPLEMENTATION-PLAN.md
-  // T08 unblocks.
+  // Required, presentational-only seams — mirrors AddressList.onDelete's
+  // precedent. Wired to a real mutation only once
+  // FVS-025-IMPLEMENTATION-PLAN.md T08 unblocks.
   onQuantityChange: (lineId: string, nextQuantity: number) => void;
   onRemove: (lineId: string) => void;
   // Caller-supplied, already-safe text — never a hardcoded/invented

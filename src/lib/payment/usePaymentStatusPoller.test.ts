@@ -3,9 +3,9 @@ import { renderHook, act } from "@testing-library/react";
 import { usePaymentStatusPoller } from "./usePaymentStatusPoller";
 import type { PaymentStatus } from "./paymentStatusModel";
 
-// FVS-027-IMPLEMENTATION-PLAN.md T03 — mirrors useScanStatusPolling's
-// own "dumb hook, caller does the actual work" architecture exactly.
-// `getDelayMs`/`maxDurationMs` are REQUIRED — no built-in production
+// FVS-027-IMPLEMENTATION-PLAN.md T03 — a "dumb hook, caller does the
+// actual work" architecture. `getDelayMs`/`maxDurationMs` are
+// REQUIRED — no built-in production
 // interval is hidden inside this hook. This hook never fetches or
 // interprets a response; a network error is entirely the caller's
 // own concern, surfaced one layer up as PaymentVerificationState's

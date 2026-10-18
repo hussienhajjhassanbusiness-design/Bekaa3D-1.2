@@ -4,8 +4,8 @@
 // resource — FVS-026 checkout MUST reuse/invalidate `addressKeys.root`
 // (or `.list()`) rather than inventing a checkout-local address cache
 // for the same underlying data (FVS-023-IMPLEMENTATION-PLAN.md §0,
-// mirroring the precedent `entitlementKeys`/`publicSettingsKeys`
-// already set for their own resources).
+// mirroring the precedent `publicSettingsKeys` already set for its
+// own resource).
 //
 // `list()` takes no page/cursor argument: whether `/me/addresses` is
 // paginated is unconfirmed (plan §1) — baking a page argument into the

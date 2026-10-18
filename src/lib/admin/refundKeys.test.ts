@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import { refundKeys } from "./refundKeys";
 
 // FVS-032-IMPLEMENTATION-PLAN.md T01 — the ONE canonical refund
-// query-key family, mirroring entitlementKeys exactly
+// query-key family, mirroring the same canonical pattern used
+// elsewhere in this app
 // (#ARCHITECTURE-CANONICAL-REFUNDS-QUERY). No page/cursor argument on
 // list() — the real refund-list pagination shape is unconfirmed.
 

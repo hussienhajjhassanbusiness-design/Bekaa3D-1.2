@@ -21,11 +21,3 @@ export function canAdjustQuantity(line: CartLineModel): boolean {
 export function hasPriceChanged(line: CartLineModel): boolean {
   return line.currentPriceCents !== undefined && line.currentPriceCents !== line.snapshotPriceCents;
 }
-
-// A pure, client-side precheck only — see the module header. Wiring
-// this against the real entitlement cache is a found integration gap
-// (plan §5): EntitlementModel currently has no productId field to
-// populate `ownedProductIds` with.
-export function canAddStlGivenOwnership(productId: string, ownedProductIds: ReadonlySet<string>): boolean {
-  return !ownedProductIds.has(productId);
-}

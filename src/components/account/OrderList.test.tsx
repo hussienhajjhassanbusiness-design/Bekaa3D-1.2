@@ -5,10 +5,10 @@ import { OrderList } from "./OrderList";
 import type { OrderListFilters, OrderListItemModel } from "@/lib/orders/orderModel";
 
 // FVS-029-IMPLEMENTATION-PLAN.md T05 — presentational only, no
-// network. Desktop table / mobile cards via CSS-only dual render (the
-// DownloadHistoryTable pattern). Filters are presentational-only this
-// batch: statusOptions is caller/config-driven, never a hardcoded
-// list; forward-only cursor seam, no Previous control anywhere.
+// network. Desktop table / mobile cards via CSS-only dual render.
+// Filters are presentational-only this batch: statusOptions is
+// caller/config-driven, never a hardcoded list; forward-only cursor
+// seam, no Previous control anywhere.
 
 const ITEMS: readonly OrderListItemModel[] = [
   { id: "order-1", displayDate: "Oct 7, 2026", statusLabel: "Processing", totalCents: 5000, currency: "USD" },

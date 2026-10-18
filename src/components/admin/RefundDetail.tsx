@@ -43,13 +43,6 @@ export function RefundDetail({ refund }: RefundDetailProps) {
         </ul>
       )}
 
-      {refund.shippingAmountCents !== undefined && (
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-body text-text-secondary">Shipping</span>
-          <PriceDisplay amountCents={refund.shippingAmountCents} currency={refund.currency} />
-        </div>
-      )}
-
       {refund.reason && <p className="text-body text-text-secondary">{refund.reason}</p>}
     </div>
   );

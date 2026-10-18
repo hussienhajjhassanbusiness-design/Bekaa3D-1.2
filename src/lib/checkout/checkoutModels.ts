@@ -6,8 +6,11 @@
 
 // Order-level only — per-line delivery granularity for a mixed cart
 // is explicitly unresolved by every source audited (plan §0); this
-// type does not guess it.
-export type DeliveryMethodSelection = { kind: "address"; addressId: string; zoneId: string } | { kind: "pickup" };
+// type does not guess it. No `zoneId`/shipping-cost field anywhere:
+// ADR-024 removed shipping charges entirely, so choosing an address
+// is itself a complete selection — there is no further delivery-cost
+// step to resolve.
+export type DeliveryMethodSelection = { kind: "address"; addressId: string } | { kind: "pickup" };
 
 export interface ConsentState {
   termsAccepted: boolean;

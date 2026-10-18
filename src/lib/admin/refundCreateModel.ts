@@ -4,19 +4,18 @@
 // from purchase price, current price, line total, or any
 // already-refunded arithmetic (#SECURITY-SERVER-REFUND-BALANCE-AUTHORITY).
 // `isDigital` is optional and presentation-only; it only ever
-// triggers an extra confirmation step, never an authorization
-// decision.
+// triggers an informational warning, never an authorization decision
+// or a confirmation gate — ADR-019 means there is no entitlement to
+// revoke, so a digital line simply becomes refunded like any other.
+//
+// No shipping candidate exists here: ADR-024 means nothing was ever
+// charged for shipping, so there is nothing to refund.
 export interface RefundLineCandidate {
   lineId: string;
   productDisplayName: string;
   refundableBalanceCents: number;
   currency: string;
   isDigital?: boolean;
-}
-
-export interface ShippingRefundCandidate {
-  refundableBalanceCents: number;
-  currency: string;
 }
 
 export type RefundLineAmountValidation =

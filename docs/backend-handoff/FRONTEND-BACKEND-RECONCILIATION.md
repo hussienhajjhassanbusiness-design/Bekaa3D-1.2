@@ -403,3 +403,32 @@ At that point, a tester can browse, search, filter, view a product, register, ve
 - **Rate limits apply during manual/automated testing** and must be reset between test runs via the documented Redis `ratelimit:*` key deletion (never `FLUSHALL` — it also holds MFA challenges and the job queue) (`BACKEND-RESPONSE.md` A3(d)).
 - **The FVS plan's own slice numbers occasionally disagree with where `BACKEND-RESPONSE.md` points.** For example, `BACKEND-RESPONSE.md`'s removal table cites "the threshold display in FVS-022 and FVS-026" for the free-shipping threshold, but FVS-022 as written in `FRONTEND-VERTICAL-SLICE-PLAN.md` (Home/About/WhatsApp) does not itself render a threshold banner — only FVS-007 (settings editor) and FVS-026 (checkout) plausibly would. Treat `BACKEND-RESPONSE.md`'s slice-number citations as approximate pointers into milestone FM-B/C, not as a guarantee that the named FVS file is the only place to check, and grep the actual component tree before assuming a concept is or isn't present somewhere.
 - **No real backend has been reachable in this environment at any point** (`BACKEND-UNLOCK-HANDOFF.md` line 14). Every "ready now" (A) classification in this document is ready on paper, against documented contracts and `openapi.json` — it still needs a first real round-trip against a running backend before being called done, per `docs/setup/frontend-setup.md` and the project's own slice Definition of Done.
+
+## 12. ADR retirement implementation completed
+
+Batch 4 (section 9) has been executed in the source tree. This records what actually happened, not a plan.
+
+**Retired source domains (FVS-018, FVS-019, FVS-020, FVS-021, FVS-024) — deleted entirely, no replacement:**
+- STL asset-version workflow: `AssetVersionList`, `AssetVersionUploader`, `assetVersionWorkflow.ts`, `useScanStatusPolling.ts`
+- Admin entitlement grant: `GrantEntitlementDialog`, `entitlementGrantModels.ts`
+- Customer STL library: `EntitlementList`, `EntitlementCard`, `entitlementModel.ts`, `entitlementKeys.ts`
+- Customer STL downloads: `DownloadButton`, `DownloadHistoryTable`, `DownloadNotice`, `downloadHistoryModel.ts`
+- Admin shipping-zone management: `ShippingZoneManager`, `shippingZoneModels.ts`, `shippingZoneKeys.ts`
+
+None of these ever had a mounted route (`/account/library`, `/account/downloads`, `/admin/shipping-zones`, an admin asset-version route) — confirmed before deletion that no page under `src/app/**` referenced them, so there was nothing to unmount and normal not-found behavior already applies.
+
+**Reusable primitives intentionally kept, still in active use:** `DialogShell`, `ConfirmDialog`, `Alert`, the generic `FileUploader`/`ImageGallery` product-image pipeline, `AddressList`/`AddressCard`/`addressKeys`, `publicSettingsKeys`. Comments in these files that illustrated their design by naming a now-deleted consumer (e.g. "GrantEntitlementDialog", "useScanStatusPolling", "entitlementKeys", "ShippingZoneManager") were reworded to describe the pattern generically instead of citing a file that no longer exists.
+
+**FVS-026 (checkout) correction, applied now:** `DeliveryMethodSelection` no longer carries a `zoneId`; choosing an address is itself a complete selection. `DeliveryMethodSelector` no longer accepts a `zones` prop or renders a shipping-zone `<select>`. `OrderSummary` no longer accepts/renders `shippingCents`.
+
+**FVS-029 (order history) correction, applied now, independent of backend readiness:** `OrderSummaryModel`/`OrderSummaryDisplay` no longer carry/render `shippingCents` — this was found during the sweep even though FVS-029 itself is still class C (backend not built).
+
+**FVS-025 (cart) correction, applied now:** `cartInvariants.canAddStlGivenOwnership` deleted — it had no real data source once entitlements were removed, and C11 confirms per-customer ownership is "not built and not planned."
+
+**FVS-032 (refunds) correction, applied now:** `RefundCreateForm` no longer accepts a `shippingCandidate`/renders a shipping row; its digital-line confirmation dialog was replaced with a plain, non-blocking `Alert` warning (no entitlement exists to revoke). `RefundDetail`/`RefundModel` no longer carry/render `shippingAmountCents`, for the same reason.
+
+**STL public-product behavior:** unchanged and verified clean — `ProductDetailView`, `AddToCartButton`, `ProductCard`, `SortSelect` never implemented an owned-STL/library UX state or a "most downloaded" sort to begin with, so there was nothing to remove there.
+
+**Obsolete settings:** `free_shipping_threshold` and `daily_download_cap` were already excluded from the admin settings UI (`settingsAdapter.ts`'s `OBSOLETE_KEYS`) before this pass; confirmed still correct, no change needed.
+
+**Remaining matches for retired terminology, and why each is legitimate:** `free_shipping_threshold` still appears in `PublicSettingsRead`/mock API responses — it is a real (always-`null`) field in the live backend contract until VS-028 removes it; nothing renders UI from it. `entitlement`/`shipping` still appear in historical FVS plan docs, this reconciliation doc, and a handful of explanatory ADR-citing comments and regression-test names (asserting the field is *absent*) — none is a live dependency on a removed concept.

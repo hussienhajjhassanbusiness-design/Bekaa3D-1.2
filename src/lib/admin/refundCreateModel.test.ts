@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { validateRefundLineAmount } from "./refundCreateModel";
-import type { RefundLineCandidate, ShippingRefundCandidate } from "./refundCreateModel";
+import type { RefundLineCandidate } from "./refundCreateModel";
 
 // FVS-032-IMPLEMENTATION-PLAN.md T01/T03 — RefundLineCandidate models
 // a per-line refundable ceiling the SERVER supplies
@@ -31,13 +31,6 @@ describe("RefundLineCandidate", () => {
       isDigital: true,
     };
     expect(candidate.isDigital).toBe(true);
-  });
-});
-
-describe("ShippingRefundCandidate", () => {
-  it("accepts a server-supplied shipping-refundable ceiling", () => {
-    const candidate: ShippingRefundCandidate = { refundableBalanceCents: 800, currency: "USD" };
-    expect(candidate.refundableBalanceCents).toBe(800);
   });
 });
 

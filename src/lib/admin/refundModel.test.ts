@@ -21,7 +21,7 @@ describe("RefundModel", () => {
     expect(refund.isSettled).toBe(false);
   });
 
-  it("accepts optional settlementMethodLabel, lines breakdown, shippingAmountCents, reason, createdAtLabel", () => {
+  it("accepts optional settlementMethodLabel, lines breakdown, reason, createdAtLabel", () => {
     const line: RefundLineBreakdownModel = {
       lineId: "line-1",
       productDisplayName: "Garden Gnome",
@@ -37,11 +37,22 @@ describe("RefundModel", () => {
       currency: "USD",
       settlementMethodLabel: "Manual",
       lines: [line],
-      shippingAmountCents: 500,
       reason: "Damaged in transit",
       createdAtLabel: "Jan 1, 2026",
     };
     expect(refund.lines?.[0]?.productDisplayName).toBe("Garden Gnome");
+  });
+
+  it("has no shipping field — ADR-024 means nothing was ever charged for shipping", () => {
+    const refund: RefundModel = {
+      id: "refund-1",
+      linkedOrderDisplayId: "order-1",
+      statusLabel: "Settled",
+      isSettled: true,
+      totalAmountCents: 2000,
+      currency: "USD",
+    };
+    expect("shippingAmountCents" in refund).toBe(false);
   });
 
   it("isSettled is explicit — a pending refund can carry an id and amount without being settled", () => {

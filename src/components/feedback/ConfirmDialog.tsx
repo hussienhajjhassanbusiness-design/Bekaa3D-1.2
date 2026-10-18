@@ -33,10 +33,10 @@ export interface ConfirmDialogProps {
 //
 // The accessible-dialog mechanics (role, aria-modal, focus trap, Escape,
 // backdrop click, focus restoration) now live in the shared
-// `DialogShell` (FVS-019 follow-up extraction, `#SHARED-DIALOG-SHELL`) —
-// this component only supplies its own title/description/Confirm/Cancel
-// content on top of it, so a second dialog (e.g. GrantEntitlementDialog)
-// never needs its own independent focus-trap implementation.
+// `DialogShell` (`#SHARED-DIALOG-SHELL`) — this component only
+// supplies its own title/description/Confirm/Cancel content on top of
+// it, so a second dialog elsewhere in the app never needs its own
+// independent focus-trap implementation.
 export function ConfirmDialog({
   open,
   title,

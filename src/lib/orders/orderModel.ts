@@ -29,13 +29,13 @@ export interface OrderLineModel {
 // Payment/refund are optional presentation labels only — never a
 // claimed amount/reason/provider-reference shape, since none is
 // confirmed. Address/zone snapshots are deliberately absent entirely
-// this batch (plan §0) rather than guessed.
+// this batch (plan §0) rather than guessed. No `shippingCents` field:
+// ADR-024 means nothing is ever charged for shipping on this site.
 export interface OrderSummaryModel {
   currency: string;
   paymentStatusLabel?: string;
   refundStatusLabel?: string;
   subtotalCents?: number;
-  shippingCents?: number;
   totalCents?: number;
 }
 

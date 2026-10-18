@@ -6,8 +6,8 @@ import type { CartLineModel } from "@/lib/cart/cartModel";
 
 // FVS-025-IMPLEMENTATION-PLAN.md T03 — presentational only, no
 // network. Required callback seams (onQuantityChange/onRemove) mirror
-// AddressList.onDelete/ShippingZoneManager.onArchive's precedent —
-// wired to a real mutation only once T08 unblocks.
+// AddressList.onDelete's precedent — wired to a real mutation only
+// once T08 unblocks.
 
 function makePhysicalLine(overrides: Partial<CartLineModel> = {}): CartLineModel {
   return {

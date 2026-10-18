@@ -67,9 +67,9 @@ describe("RefundDetail", () => {
     expect(screen.getByText("$15.00")).toBeInTheDocument();
   });
 
-  it("renders the shipping amount when present", () => {
-    render(<RefundDetail refund={makeRefund({ shippingAmountCents: 500 })} />);
-    expect(screen.getByText("$5.00")).toBeInTheDocument();
+  it("renders no shipping row — ADR-024 means nothing was ever charged for shipping", () => {
+    render(<RefundDetail refund={makeRefund()} />);
+    expect(screen.queryByText(/shipping/i)).not.toBeInTheDocument();
   });
 
   it("renders the reason when present", () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isStlLine, canAdjustQuantity, hasPriceChanged, canAddStlGivenOwnership } from "./cartInvariants";
+import { isStlLine, canAdjustQuantity, hasPriceChanged } from "./cartInvariants";
 import type { CartLineModel } from "./cartModel";
 
 // FVS-025-IMPLEMENTATION-PLAN.md T02 — small, pure helpers only. Every
@@ -52,19 +52,5 @@ describe("hasPriceChanged", () => {
 
   it("is true when currentPriceCents differs from snapshotPriceCents", () => {
     expect(hasPriceChanged(makeLine({ snapshotPriceCents: 1000, currentPriceCents: 1200 }))).toBe(true);
-  });
-});
-
-describe("canAddStlGivenOwnership", () => {
-  it("is true when the product id is not in the owned set", () => {
-    expect(canAddStlGivenOwnership("prod-1", new Set(["prod-2"]))).toBe(true);
-  });
-
-  it("is false when the product id is already in the owned set", () => {
-    expect(canAddStlGivenOwnership("prod-1", new Set(["prod-1", "prod-2"]))).toBe(false);
-  });
-
-  it("is true for an empty owned set", () => {
-    expect(canAddStlGivenOwnership("prod-1", new Set())).toBe(true);
   });
 });

@@ -8,16 +8,20 @@ import { OrderSummary } from "./OrderSummary";
 
 describe("OrderSummary", () => {
   it("renders every supplied amount via PriceDisplay with the exact given currency", () => {
-    render(<OrderSummary subtotalCents={1000} shippingCents={500} totalCents={1500} currency="USD" />);
+    render(<OrderSummary subtotalCents={1000} totalCents={1500} currency="USD" />);
     expect(screen.getByText("$10.00")).toBeInTheDocument();
-    expect(screen.getByText("$5.00")).toBeInTheDocument();
     expect(screen.getByText("$15.00")).toBeInTheDocument();
   });
 
   it("never computes or infers an omitted field from the others", () => {
-    render(<OrderSummary subtotalCents={1000} shippingCents={500} currency="USD" />);
-    // totalCents was NOT supplied — must never show a computed $15.00.
+    render(<OrderSummary subtotalCents={1000} currency="USD" />);
+    // totalCents was NOT supplied — must never show a computed total.
     expect(screen.queryByText("$15.00")).not.toBeInTheDocument();
+  });
+
+  it("renders no shipping row — ADR-024 means nothing is ever charged for shipping on this site", () => {
+    render(<OrderSummary subtotalCents={1000} totalCents={1500} currency="USD" />);
+    expect(screen.queryByText(/shipping/i)).not.toBeInTheDocument();
   });
 
   it("renders a placeholder when no amount field is supplied at all — never fabricated zeros", () => {

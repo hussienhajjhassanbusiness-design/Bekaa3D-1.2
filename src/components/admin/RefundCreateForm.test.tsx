@@ -2,15 +2,16 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { RefundCreateForm } from "./RefundCreateForm";
-import type { RefundLineCandidate, ShippingRefundCandidate } from "@/lib/admin/refundCreateModel";
+import type { RefundLineCandidate } from "@/lib/admin/refundCreateModel";
 
 // FVS-032-IMPLEMENTATION-PLAN.md T02/T03/T04 — per-line MoneyInput
 // reuse against a server-supplied ceiling
-// (#SECURITY-SERVER-REFUND-BALANCE-AUTHORITY); a digital candidate
-// requires explicit ConfirmDialog confirmation before submission
-// (#SECURITY-DIGITAL-REFUND-ENTITLEMENT), since VS-026 itself states
-// digital refund revokes entitlement — this component never mutates
-// entitlement state itself, only surfaces the warning.
+// (#SECURITY-SERVER-REFUND-BALANCE-AUTHORITY). A digital candidate
+// shows a plain, non-blocking warning once a nonzero amount is
+// entered — there is no entitlement to revoke (ADR-019), so this is
+// informational only and never gates submission. No shipping row
+// exists anywhere: ADR-024 means nothing was ever charged for
+// shipping.
 
 const PHYSICAL: RefundLineCandidate = {
   lineId: "line-1",
@@ -26,8 +27,6 @@ const DIGITAL: RefundLineCandidate = {
   currency: "USD",
   isDigital: true,
 };
-
-const SHIPPING: ShippingRefundCandidate = { refundableBalanceCents: 800, currency: "USD" };
 
 describe("RefundCreateForm", () => {
   it("renders a labeled MoneyInput per line candidate, with the product name in the label", () => {
@@ -65,20 +64,12 @@ describe("RefundCreateForm", () => {
     await user.type(screen.getByLabelText(/Garden Gnome/), "0.10");
     await user.click(screen.getByRole("button", { name: "Submit refund" }));
 
-    expect(onSubmit).toHaveBeenCalledWith({ lineAmountsCents: { "line-1": 10 }, shippingAmountCents: null });
+    expect(onSubmit).toHaveBeenCalledWith({ lineAmountsCents: { "line-1": 10 } });
   });
 
-  it("renders no shipping input unless a shippingCandidate is supplied", () => {
-    render(<RefundCreateForm orderDisplayId="order-1" lineCandidates={[PHYSICAL]} onSubmit={vi.fn()} />);
+  it("renders no shipping input — ADR-024 means nothing was ever charged for shipping", () => {
+    render(<RefundCreateForm orderDisplayId="order-1" lineCandidates={[PHYSICAL, DIGITAL]} onSubmit={vi.fn()} />);
     expect(screen.queryByLabelText(/shipping/i)).not.toBeInTheDocument();
-  });
-
-  it("renders the shipping input when a shippingCandidate is supplied, with its own ceiling", () => {
-    render(
-      <RefundCreateForm orderDisplayId="order-1" lineCandidates={[PHYSICAL]} shippingCandidate={SHIPPING} onSubmit={vi.fn()} />
-    );
-    expect(screen.getByLabelText(/shipping/i)).toBeInTheDocument();
-    expect(screen.getByText("$8.00")).toBeInTheDocument();
   });
 
   it("each line's selection is independent — entering an amount on one line never affects another", async () => {
@@ -91,7 +82,6 @@ describe("RefundCreateForm", () => {
 
     expect(onSubmit).toHaveBeenCalledWith({
       lineAmountsCents: { "line-1": 1000, "line-2": null },
-      shippingAmountCents: null,
     });
   });
 
@@ -105,7 +95,7 @@ describe("RefundCreateForm", () => {
     expect(screen.getByRole("button", { name: "Submit refund" })).toBeDisabled();
   });
 
-  it("a physical-only refund never shows the digital-entitlement warning", async () => {
+  it("a physical-only refund never shows the digital warning", async () => {
     const onSubmit = vi.fn();
     const user = userEvent.setup();
     render(<RefundCreateForm orderDisplayId="order-1" lineCandidates={[PHYSICAL]} onSubmit={onSubmit} />);
@@ -113,36 +103,29 @@ describe("RefundCreateForm", () => {
     await user.type(screen.getByLabelText(/Garden Gnome/), "10.00");
     await user.click(screen.getByRole("button", { name: "Submit refund" }));
 
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByText(/cannot be un-sent/i)).not.toBeInTheDocument();
     expect(onSubmit).toHaveBeenCalledTimes(1);
   });
 
-  it("selecting a digital line requires explicit confirmation before onSubmit fires", async () => {
-    const onSubmit = vi.fn();
+  it("entering a nonzero amount on a digital line shows a plain warning, with no confirmation dialog", async () => {
     const user = userEvent.setup();
-    render(<RefundCreateForm orderDisplayId="order-1" lineCandidates={[DIGITAL]} onSubmit={onSubmit} />);
+    render(<RefundCreateForm orderDisplayId="order-1" lineCandidates={[DIGITAL]} onSubmit={vi.fn()} />);
 
     await user.type(screen.getByLabelText(/Dragon STL/), "5.00");
-    await user.click(screen.getByRole("button", { name: "Submit refund" }));
 
-    expect(onSubmit).not.toHaveBeenCalled();
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByText(/revoke/i)).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Confirm" }));
-    expect(onSubmit).toHaveBeenCalledWith({ lineAmountsCents: { "line-2": 500 }, shippingAmountCents: null });
+    expect(screen.getByText(/cannot be un-sent/i)).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("cancelling the digital confirmation never calls onSubmit", async () => {
+  it("submits a digital refund immediately on click — the warning never gates submission", async () => {
     const onSubmit = vi.fn();
     const user = userEvent.setup();
     render(<RefundCreateForm orderDisplayId="order-1" lineCandidates={[DIGITAL]} onSubmit={onSubmit} />);
 
     await user.type(screen.getByLabelText(/Dragon STL/), "5.00");
     await user.click(screen.getByRole("button", { name: "Submit refund" }));
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
 
-    expect(onSubmit).not.toHaveBeenCalled();
+    expect(onSubmit).toHaveBeenCalledWith({ lineAmountsCents: { "line-2": 500 } });
   });
 
   it("renders a server-supplied lineError verbatim, e.g. after an over-refund race rejection", () => {
