@@ -179,6 +179,12 @@ def cash_payment(c: Ctx, oid: uuid.UUID, **over: Any) -> Stmt:
     return ins("payments", row | over)
 
 
+def paid_capture(c: Ctx, oid: uuid.UUID, **over: Any) -> Stmt:
+    """A verified online payment that records what the provider captured (VS-024)."""
+    row = {"status": "paid", "verified_at": NOW, "captured_amount_cents": 1000}
+    return online_payment(c, oid, **({"captured_currency": "USD"} | row | over))
+
+
 def webhook(**over: Any) -> Stmt:
     row = {"provider": "mock", "provider_event_id": f"evt-{uuid.uuid4().hex}", "payload": {}}
     return ins("webhook_events", row | over)
@@ -506,6 +512,53 @@ REFUSALS: list[Case] = [
         "ck_payments_terminal_timestamps",
         lambda c, a, b: ([online_order(c, a)], online_payment(c, a, status="expired")),
     ),
+    # payments.captured_* (VS-024, migration 00ce1ce252a6); each row breaks one CHECK only
+    _c(
+        "captured-amount-negative",
+        "ck_payments_captured_shape",
+        lambda c, a, b: ([online_order(c, a)], paid_capture(c, a, captured_amount_cents=-1)),
+    ),
+    _c(
+        "captured-currency-lowercase",
+        "ck_payments_captured_shape",
+        lambda c, a, b: ([online_order(c, a)], paid_capture(c, a, captured_currency="usd")),
+    ),
+    _c(
+        "captured-currency-without-amount",
+        "ck_payments_captured_shape",
+        lambda c, a, b: ([online_order(c, a)], paid_capture(c, a, captured_amount_cents=None)),
+    ),
+    _c(
+        "captured-on-a-pending-attempt",
+        "ck_payments_captured_when",
+        lambda c, a, b: (
+            [online_order(c, a)],
+            online_payment(c, a, captured_amount_cents=1000, captured_currency="USD"),
+        ),
+    ),
+    _c(
+        "captured-on-a-failed-attempt-without-late-capture",
+        "ck_payments_captured_when",
+        lambda c, a, b: (
+            [online_order(c, a)],
+            online_payment(
+                c,
+                a,
+                status="failed",
+                failed_at=NOW,
+                captured_amount_cents=1000,
+                captured_currency="USD",
+            ),
+        ),
+    ),
+    _c(
+        "captured-on-a-cash-payment",
+        "ck_payments_captured_when",
+        lambda c, a, b: (
+            [cash_delivery_order(c, a)],
+            cash_payment(c, a, captured_amount_cents=2000, captured_currency="USD"),
+        ),
+    ),
     # webhook_events
     _c(
         "duplicate-webhook-event",
@@ -645,6 +698,43 @@ ACCEPTED: list[tuple[str, Build]] = [
             [online_order(c, a)],
             online_payment(c, a, status="paid", verified_at=NOW),
         ),
+    ),
+    (
+        "captured-amount-on-a-paid-attempt",
+        lambda c, a, b: ([online_order(c, a)], paid_capture(c, a)),
+    ),
+    (
+        "captured-overpayment-in-another-currency-on-a-late-capture",
+        lambda c, a, b: (
+            [online_order(c, a)],
+            online_payment(
+                c,
+                a,
+                status="failed",
+                failed_at=NOW,
+                late_captured_at=NOW,
+                captured_amount_cents=1500,
+                captured_currency="EUR",
+            ),
+        ),
+    ),
+    (
+        "captured-amount-without-currency-on-an-expired-late-capture",
+        lambda c, a, b: (
+            [online_order(c, a)],
+            online_payment(
+                c,
+                a,
+                status="expired",
+                expired_at=NOW,
+                late_captured_at=NOW,
+                captured_amount_cents=900,
+            ),
+        ),
+    ),
+    (
+        "cash-payment-without-captured-columns",
+        lambda c, a, b: ([cash_delivery_order(c, a)], cash_payment(c, a)),
     ),
     (
         "webhook-linked-to-a-payment",

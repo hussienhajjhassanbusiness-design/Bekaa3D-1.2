@@ -23,6 +23,7 @@ from app.core.config import get_settings
 CART_REVISION = "bde6135b2538"
 BYI_REVISION = "26d5d039d72c"
 ORDERS_REVISION = "03a4730dd046"
+CAPTURED_REVISION = "00ce1ce252a6"
 EXPECTED_ENUMS = {"user_role", "outbox_status", "setting_type", "notification_type"}
 
 
@@ -125,6 +126,29 @@ def test_full_downgrade_and_upgrade_round_trips() -> None:
         assert byi_tables <= asyncio.run(fetch(table_query)), "the parent is untouched"
         command.upgrade(config, "head")
         assert order_tables <= asyncio.run(fetch(table_query))
+
+        # VS-024 PR A: stepping back to its own parent drops the two CHECKs, then the two
+        # columns; payments itself (03a4730dd046) stays. The head is never pinned here.
+        assert chain[CAPTURED_REVISION].down_revision == ORDERS_REVISION
+        captured_columns = (
+            "SELECT column_name FROM information_schema.columns WHERE table_name = 'payments' "
+            "AND column_name IN ('captured_amount_cents', 'captured_currency')"
+        )
+        captured_checks = (
+            "SELECT conname FROM pg_constraint WHERE conrelid = 'payments'::regclass "
+            "AND conname IN ('ck_payments_captured_shape', 'ck_payments_captured_when')"
+        )
+        both_columns = {"captured_amount_cents", "captured_currency"}
+        both_checks = {"ck_payments_captured_shape", "ck_payments_captured_when"}
+        assert asyncio.run(fetch(captured_columns)) == both_columns
+        assert asyncio.run(fetch(captured_checks)) == both_checks
+        command.downgrade(config, ORDERS_REVISION)
+        assert asyncio.run(fetch(captured_columns)) == set()
+        assert asyncio.run(fetch(captured_checks)) == set()
+        assert "payments" in asyncio.run(fetch(table_query)), "the parent is untouched"
+        command.upgrade(config, "head")
+        assert asyncio.run(fetch(captured_columns)) == both_columns
+        assert asyncio.run(fetch(captured_checks)) == both_checks
 
         command.downgrade(config, "base")
 
