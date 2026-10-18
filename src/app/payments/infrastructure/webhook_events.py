@@ -4,7 +4,7 @@ takes no row lock: deduplication is the unique key, processing is idempotent."""
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +12,9 @@ from app.payments.application.ports import NewWebhookEvent, WebhookEvent
 from app.payments.infrastructure.models import WebhookEventModel
 
 _E = WebhookEventModel
+# `processing_error` values verification leaves on an unprocessed event (VS-024 3.2a, 3.3).
+MANUAL_CONFIRMATION_REQUIRED = "manual_confirmation_required"
+PROVIDER_UNKNOWN_REFERENCE = "provider_unknown_reference"
 
 
 class SqlWebhookEventStore:
@@ -44,10 +47,14 @@ class SqlWebhookEventStore:
         )
 
     async def unprocessed_ids(self, limit: int) -> list[UUID]:
-        """Oldest first, served by `ix_webhook_events_unprocessed`."""
+        """Oldest first, served by `ix_webhook_events_unprocessed`. An event awaiting manual
+        confirmation is never retried here, so it cannot block the head of the queue."""
         result = await self._session.scalars(
             select(_E.id)
-            .where(_E.processed_at.is_(None))
+            .where(
+                _E.processed_at.is_(None),
+                _E.processing_error.is_distinct_from(MANUAL_CONFIRMATION_REQUIRED),
+            )
             .order_by(_E.received_at, _E.id)
             .limit(limit)
         )
@@ -68,3 +75,21 @@ class SqlWebhookEventStore:
             .where(_E.id == event_id, _E.processed_at.is_(None))
             .values(processing_error=error)
         )
+
+    async def count_unprocessed_for_payment(self, payment_id: UUID) -> int:
+        """Served by `ix_webhook_events_payment_unprocessed`."""
+        count = await self._session.scalar(
+            select(func.count())
+            .select_from(_E)
+            .where(_E.payment_id == payment_id, _E.processed_at.is_(None))
+        )
+        return int(count or 0)
+
+    async def mark_processed_for_payment(self, payment_id: UUID, *, at: datetime) -> int:
+        """Every unprocessed event of the payment; the number marked."""
+        result = await self._session.execute(
+            update(_E)
+            .where(_E.payment_id == payment_id, _E.processed_at.is_(None))
+            .values(processed_at=at, processing_error=None)
+        )
+        return int(result.rowcount)  # type: ignore[attr-defined]

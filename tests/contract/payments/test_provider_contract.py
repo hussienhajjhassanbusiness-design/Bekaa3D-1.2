@@ -88,6 +88,15 @@ async def test_query_reports_each_state(
     assert (await adapter.query_status(PaymentRef(payment_id, None))).result == expected
 
 
+async def test_a_reference_the_provider_never_saw_is_unknown(
+    adapter: PaymentProviderPort,
+) -> None:
+    """VS-024 3.2a: "no record" is `unknown`, never `pending`, and carries no capture."""
+    status = await adapter.query_status(PaymentRef(uuid.uuid4(), None))
+    assert status.result == ProviderResult("unknown", None, None)
+    assert status.provider_payment_id is None
+
+
 async def test_a_late_success_after_expiry_reports_paid(adapter: PaymentProviderPort) -> None:
     payment_id = await _created(adapter)
     await _drive(adapter, payment_id, "expired")

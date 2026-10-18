@@ -2,7 +2,7 @@
 while the caller holds `CartStore.lock` on that cart (VS-022 plan §3.3 invariant)."""
 
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal, Protocol, overload
 from uuid import UUID
@@ -61,19 +61,29 @@ class CartStore(Protocol):
 
 @dataclass(frozen=True)
 class PaymentAttemptRef:
-    """The pending payment checkout opened; Payments owns the row."""
+    """A payment attempt of the order; Payments owns the row."""
 
     id: UUID
     provider: str
     status: str
     amount_cents: int
     currency: str
+    # Never logged or audited (VS-024 2.1).
+    redirect_url: str | None = field(default=None, repr=False)
 
 
 class PaymentAttempts(Protocol):
     """Implemented by Payments (`app.payments.public`); checkout never imports Payments."""
 
     def configured_providers(self) -> frozenset[str]: ...
+
+    async def live_attempt(self, order_id: UUID) -> PaymentAttemptRef | None:
+        """The `pending` or `processing` attempt, with its `redirect_url`. No lock."""
+        ...
+
+    async def previous_provider(self, order_id: UUID) -> str | None:
+        """The provider of the order's latest attempt. No lock."""
+        ...
 
     async def open_attempt(
         self, *, order_id: UUID, amount_cents: int, currency: str, provider: str, at: datetime
