@@ -7,7 +7,8 @@ from typing import Literal
 
 from app.payments.domain.enums import PaymentStatus
 
-ProviderState = Literal["pending", "processing", "paid", "failed", "expired"]
+# `unknown`: the provider has no record of the merchant reference (VS-024 D10).
+ProviderState = Literal["pending", "processing", "paid", "failed", "expired", "unknown"]
 
 LIVE = frozenset({PaymentStatus.PENDING, PaymentStatus.PROCESSING})
 REACHED_PAID = frozenset(
@@ -44,7 +45,10 @@ def decide(
     result: ProviderResult,
 ) -> Outcome:
     """Paid only for a live attempt on an uncancelled order whose captured amount equals
-    both the attempt and the order total in USD; any other capture is a late capture."""
+    both the attempt and the order total in USD; any other capture is a late capture.
+    `unknown` is "no answer": it never fails, pays or releases anything (VS-024 3.2a)."""
+    if result.state == "unknown":
+        return Outcome.NOOP
     if result.state == "paid":
         if payment_status in REACHED_PAID:
             return Outcome.NOOP

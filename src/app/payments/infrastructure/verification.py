@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.payments.application.ports import PaymentProviderPort, PaymentRef, ProviderStatus
 from app.payments.application.services.apply import apply_result
 from app.payments.domain.exceptions import ProviderUnavailableError
+from app.payments.domain.limits import VERIFY_BATCH_SIZE
 from app.payments.domain.outcome import Outcome, ProviderResult
 from app.payments.infrastructure.ordering_side import SqlOrderSide, SqlPaymentNotices
 from app.payments.infrastructure.payments import SqlPaymentStore
@@ -21,7 +22,7 @@ from app.platform.public import SqlAuditWriter
 
 logger = structlog.get_logger()
 
-BATCH_SIZE = 50
+BATCH_SIZE = VERIFY_BATCH_SIZE
 Providers = Mapping[str, PaymentProviderPort]
 Factory = async_sessionmaker[AsyncSession]
 

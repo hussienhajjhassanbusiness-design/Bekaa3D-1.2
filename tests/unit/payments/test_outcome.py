@@ -85,7 +85,7 @@ def test_failure_and_expiry_end_a_live_attempt(status: PaymentStatus) -> None:
 
 
 @pytest.mark.parametrize("status", [P.PAID, P.FAILED, P.EXPIRED, P.REFUNDED])
-@pytest.mark.parametrize("state", ["pending", "processing", "failed", "expired"])
+@pytest.mark.parametrize("state", ["pending", "processing", "failed", "expired", "unknown"])
 def test_non_paid_results_never_touch_a_settled_attempt(
     status: PaymentStatus, state: ProviderState
 ) -> None:
@@ -94,3 +94,14 @@ def test_non_paid_results_never_touch_a_settled_attempt(
 
 def test_a_pending_result_on_a_pending_attempt_changes_nothing() -> None:
     assert run(P.PENDING, result("pending")) is Outcome.NOOP
+
+
+@pytest.mark.parametrize("status", list(PaymentStatus))
+@pytest.mark.parametrize("cancelled", [False, True])
+@pytest.mark.parametrize("late", [False, True])
+@pytest.mark.parametrize("amount", [None, 1000, 999])
+def test_unknown_is_a_noop_for_every_attempt_and_order(
+    status: PaymentStatus, cancelled: bool, late: bool, amount: int | None
+) -> None:
+    """VS-024 D10: `unknown` never fails, pays, expires or late-captures an attempt."""
+    assert run(status, result("unknown", amount), cancelled=cancelled, late=late) is Outcome.NOOP

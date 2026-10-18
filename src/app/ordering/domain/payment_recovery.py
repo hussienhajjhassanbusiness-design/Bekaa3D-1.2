@@ -1,0 +1,92 @@
+"""Retry and hold-release rules for an unpaid online order (VS-024 plan 3.1, T1, 2.5). Pure:
+timings arrive as parameters, so Ordering imports nothing from Payments here."""
+
+from collections.abc import Sequence
+from datetime import datetime, timedelta
+from enum import StrEnum
+
+from app.ordering.domain.enums import OrderItemStatus, OrderStatus, PaymentMethod
+from app.ordering.domain.orders import Order, OrderLine
+
+
+class RetryRefusal(StrEnum):
+    """409 INVALID_STATE_TRANSITION `reason` values, in T1's order."""
+
+    CASH_ORDER = "cash_order"
+    ORDER_CANCELLED = "order_cancelled"
+    ORDER_NOT_PAYABLE = "order_not_payable"
+    CHECKOUT_HOLD_EXPIRED = "checkout_hold_expired"
+
+
+class ReleaseRefusal(StrEnum):
+    """409 INVALID_STATE_TRANSITION `reason` values for the manual release (plan 2.5)."""
+
+    CASH_ORDER = "cash_order"
+    ORDER_CANCELLED = "order_cancelled"
+    ORDER_NOT_PAYABLE = "order_not_payable"
+    GRACE_NOT_ELAPSED = "grace_not_elapsed"
+    UNPROCESSED_EVENTS = "unprocessed_events"
+
+
+def hold_deadline(
+    placed_at: datetime, latest_initiated_at: datetime | None, hold: timedelta
+) -> datetime:
+    """D4: measured from the later of placement and the latest attempt."""
+    start = placed_at if latest_initiated_at is None else max(placed_at, latest_initiated_at)
+    return start + hold
+
+
+def manual_release_available_at(deadline: datetime, grace: timedelta, *, early: bool) -> datetime:
+    """`early` (Revision 2, Q7): no stored provider reference and a latest answer `unknown`."""
+    return deadline if early else deadline + grace
+
+
+def _unpayable(order: Order, lines: Sequence[OrderLine]) -> bool:
+    return order.status is not OrderStatus.PENDING_PAYMENT or any(
+        line.fulfillment_status is not OrderItemStatus.PENDING for line in lines
+    )
+
+
+def retry_refusal(
+    order: Order, lines: Sequence[OrderLine], *, now: datetime, hold: timedelta
+) -> RetryRefusal | None:
+    """T1, first match wins; read under the orders lock. A live attempt is the index's job."""
+    if order.payment_method is PaymentMethod.CASH:
+        return RetryRefusal.CASH_ORDER
+    if order.cancelled_at is not None:
+        return RetryRefusal.ORDER_CANCELLED
+    if _unpayable(order, lines):
+        return RetryRefusal.ORDER_NOT_PAYABLE
+    if now >= order.placed_at + hold:
+        return RetryRefusal.CHECKOUT_HOLD_EXPIRED
+    return None
+
+
+def can_retry_payment(
+    order: Order, lines: Sequence[OrderLine], *, now: datetime, hold: timedelta
+) -> bool:
+    """T1 without the lock, for VS-025's `OrderDetail`; the POST re-checks under the lock."""
+    return retry_refusal(order, lines, now=now, hold=hold) is None
+
+
+def manual_release_refusal(
+    order: Order,
+    lines: Sequence[OrderLine],
+    *,
+    now: datetime,
+    available_at: datetime,
+    unprocessed_events: int,
+    events_reviewed: bool,
+) -> ReleaseRefusal | None:
+    """Plan 2.5 step 5, first match wins; read under orders, lines and payments locks."""
+    if order.payment_method is PaymentMethod.CASH:
+        return ReleaseRefusal.CASH_ORDER
+    if order.cancelled_at is not None:
+        return ReleaseRefusal.ORDER_CANCELLED
+    if _unpayable(order, lines):
+        return ReleaseRefusal.ORDER_NOT_PAYABLE
+    if now < available_at:
+        return ReleaseRefusal.GRACE_NOT_ELAPSED
+    if unprocessed_events > 0 and not events_reviewed:
+        return ReleaseRefusal.UNPROCESSED_EVENTS
+    return None

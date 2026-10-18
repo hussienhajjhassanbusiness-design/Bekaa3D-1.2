@@ -157,3 +157,19 @@ def require_consent(command: CheckoutCommand, *, has_stl: bool) -> None:
     """BR-060: STL purchases are final, and the customer must say so."""
     if has_stl and not command.accept_digital_final_sale:
         raise ConsentRequiredError("accept_digital_final_sale is required for STL lines.")
+
+
+def choose_provider(
+    requested: str | None, configured: frozenset[str], previous: str | None = None
+) -> str:
+    """Checkout and retry (VS-024 plan 3.6): the named provider, else the previous attempt's
+    while still configured, else the only one; raises PaymentMethodNotAllowedError."""
+    if requested is not None:
+        if requested not in configured:
+            raise PaymentMethodNotAllowedError("provider_not_configured")
+        return requested
+    if previous is not None and previous in configured:
+        return previous
+    if len(configured) != 1:
+        raise PaymentMethodNotAllowedError("provider_required")
+    return next(iter(configured))

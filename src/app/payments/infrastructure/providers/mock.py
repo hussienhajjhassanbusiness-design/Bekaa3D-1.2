@@ -24,11 +24,12 @@ from app.payments.domain.exceptions import (
     MalformedEventError,
     ProviderUnavailableError,
 )
+from app.payments.domain.limits import MOCK_REDIS_TIMEOUT_SECONDS, MOCK_STATE_TTL_SECONDS
 from app.payments.domain.outcome import ProviderResult, ProviderState
 
 SIGNATURE_HEADER = "x-mock-signature"
-STATE_TTL_SECONDS = 7 * 24 * 3600
-TIMEOUT_SECONDS = 10.0
+STATE_TTL_SECONDS = MOCK_STATE_TTL_SECONDS
+TIMEOUT_SECONDS = MOCK_REDIS_TIMEOUT_SECONDS
 _STATES = frozenset({"pending", "processing", "paid", "failed", "expired"})
 
 

@@ -12,9 +12,8 @@ from app.payments.application.ports import (
     PaymentStore,
 )
 from app.payments.domain.exceptions import ProviderUnavailableError
+from app.payments.domain.limits import PROVIDER_TIMEOUT_SECONDS
 from app.platform.application.ports import AuditWriter
-
-PROVIDER_TIMEOUT_SECONDS = 10.0
 
 
 async def start_online_payment(

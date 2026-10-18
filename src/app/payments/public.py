@@ -15,7 +15,9 @@ from app.payments.application.services.payments import (
     record_provider_reference,
     start_online_payment,
 )
+from app.payments.domain import limits
 from app.payments.domain.exceptions import PaymentConfigurationError, ProviderUnavailableError
+from app.payments.domain.limits import CHECKOUT_RATE_LIMIT, CHECKOUT_RATE_WINDOW_SECONDS
 from app.payments.domain.outcome import Outcome, ProviderResult
 from app.payments.infrastructure.payments import SqlPaymentAttempts, SqlPaymentStore
 from app.payments.infrastructure.providers.factory import configured_payment_providers
@@ -27,6 +29,8 @@ from app.payments.infrastructure.verification import (
 )
 
 __all__ = [
+    "CHECKOUT_RATE_LIMIT",
+    "CHECKOUT_RATE_WINDOW_SECONDS",
     "CreatePayment",
     "CreatedPayment",
     "Outcome",
@@ -37,6 +41,7 @@ __all__ = [
     "apply_provider_result",
     "configured_payment_providers",
     "fail_attempt",
+    "limits",
     "payment_attempts",
     "payment_store",
     "record_provider_reference",

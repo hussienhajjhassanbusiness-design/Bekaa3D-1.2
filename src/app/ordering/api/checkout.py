@@ -42,6 +42,8 @@ from app.ordering.domain.exceptions import (
 from app.ordering.infrastructure.carts import SqlCartStore
 from app.ordering.infrastructure.orders import SqlOrderStore
 from app.payments.public import (
+    CHECKOUT_RATE_LIMIT,
+    CHECKOUT_RATE_WINDOW_SECONDS,
     CreatePayment,
     ProviderUnavailableError,
     fail_attempt,
@@ -65,8 +67,8 @@ router = APIRouter(prefix="/checkout", tags=["checkout"])
 
 SCOPE = "checkout"
 REPLAYED_HEADER = "Idempotent-Replayed"
-_RATE_LIMIT = 30
-_RATE_WINDOW_SECONDS = 3600
+_RATE_LIMIT = CHECKOUT_RATE_LIMIT
+_RATE_WINDOW_SECONDS = CHECKOUT_RATE_WINDOW_SECONDS
 _UNSTORED = ("instance", "request_id")
 _PROBLEM_FIELDS = {"type", "title", "status", "detail", "instance", "code", "request_id", "errors"}
 
