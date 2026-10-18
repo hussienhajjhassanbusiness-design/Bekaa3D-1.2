@@ -1404,6 +1404,8 @@ Admin routes are mounted on a separate router with separate authentication and r
 | `ensure_partitions`         | Monthly | Creates audit-log partitions three months ahead. If they run out, every audited action fails.                                                                |
 | `purge_expired_security_records` | Daily | Deletes expired verification and reset tokens and ended sessions past their retention (VS-046). |
 | `rotate_ip_salt`            | Daily check; rotates once per calendar month | Makes historical IP hashes unlinkable (ADR-028). |
+| `verify_payments`           | 1 min   | Verifies unprocessed payment webhook events against the provider: the fallback for verification lost after the webhook's 200. Stuck payments with no event stay `reconcile_payments`' job (VS-024). Without it, a lost background task leaves a paid order unpaid until reconciliation (VS-023). |
+| `purge_expired_idempotency_records` | Daily | Deletes idempotency claims past their 24 h life (VS-023). |
 
 ---
 

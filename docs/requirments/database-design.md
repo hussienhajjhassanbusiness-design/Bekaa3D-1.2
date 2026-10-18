@@ -1287,6 +1287,13 @@ WHERE status IN ('pending', 'processing')   -- VS-023: reconciliation covers bot
 (late_captured_at) WHERE late_captured_at IS NOT NULL   -- late captures visible before VS-030
 ```
 
+Until VS-030 builds refund obligations, the only supported view of late captures is this listing, served by `ix_payments_late_captured` (VS-023, ADR-032 decision 21). Each one also has a `payment.late_capture` audit row with its reason. The automatic refund in the `late_captured_at` row above is VS-030's.
+
+```sql
+SELECT id, order_id, provider, amount_cents, status, late_captured_at
+FROM payments WHERE late_captured_at IS NOT NULL ORDER BY late_captured_at;
+```
+
 ---
 
 ## 9.2 `webhook_events`
@@ -2320,7 +2327,7 @@ Operational rule:
 - expired verification/password tokens: purge `security_token_retention_period` (default 7 days) past `expires_at` (`purge_expired_security_records`, VS-046);
 - never-verified accounts: purge after configured period;
 - custom-request attachments: purge after `expires_at`;
-- idempotency records: purge after `expires_at`;
+- idempotency records: purge after `expires_at` (`purge_expired_idempotency_records`, daily, VS-023);
 - sessions: purge `session_retention_period` (default 30 days) after the session ended, the earlier of expiry and revocation (VS-046);
 - business-history rows: preserve/anonymise instead of normal hard delete.
 
@@ -2396,7 +2403,7 @@ Later catalogue changes must never alter historical order values.
 | settings | retain; changes audited |
 | audit_logs | partition + archive after 24 months hot |
 | email_outbox | retain through operational/audit retention; exact period not specified |
-| idempotency_records | purge after expiry |
+| idempotency_records | purge after expiry (`purge_expired_idempotency_records`) |
 | cash_payment_blocks | retain; cleared, never deleted |
 
 ### Wishlist Decision

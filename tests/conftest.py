@@ -24,6 +24,7 @@ from tests.smoke.test_vs014_smoke import SMOKE_ELSEWHERE as VS014_SMOKE
 from tests.smoke.test_vs015_smoke import SMOKE_ELSEWHERE as VS015_SMOKE
 from tests.smoke.test_vs016_smoke import SMOKE_ELSEWHERE as VS016_SMOKE
 from tests.smoke.test_vs022_smoke import SMOKE_ELSEWHERE as VS022_SMOKE
+from tests.smoke.test_vs023_smoke import SMOKE_ELSEWHERE as VS023_SMOKE
 from tests.smoke.test_vs026_smoke import SMOKE_ELSEWHERE as VS026_SMOKE
 from tests.smoke.test_vs033_smoke import SMOKE_ELSEWHERE as VS033_SMOKE
 from tests.smoke.test_vs034_smoke import SMOKE_ELSEWHERE as VS034_SMOKE
@@ -33,6 +34,8 @@ from tests.smoke.test_vs046_smoke import SMOKE_ELSEWHERE as VS046_SMOKE
 
 # Tests never call Cloudflare; a local .env predating VS-033 may not set this.
 os.environ.setdefault("CAPTCHA_PROVIDER", "fake")
+# VS-023: the mock payment provider; boot refuses it outside development/test/staging.
+os.environ.setdefault("PAYMENT_PROVIDER", "mock")
 
 _SMOKE_NODE_IDS = frozenset(
     node_id
@@ -43,6 +46,7 @@ _SMOKE_NODE_IDS = frozenset(
         VS015_SMOKE,
         VS016_SMOKE,
         VS022_SMOKE,
+        VS023_SMOKE,
         VS026_SMOKE,
         VS033_SMOKE,
         VS034_SMOKE,

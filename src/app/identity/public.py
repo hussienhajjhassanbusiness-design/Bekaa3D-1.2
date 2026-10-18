@@ -18,6 +18,7 @@ from app.identity.api.dependencies import (
     not_found_error,
     require_admin,
     require_csrf,
+    verified_user_short_read,
 )
 from app.identity.application.token_claims import AccessTokenClaims
 from app.identity.domain.entities import User
@@ -33,6 +34,7 @@ __all__ = [
     "not_found_error",
     "require_admin",
     "require_csrf",
+    "verified_user_short_read",
 ]
 
 

@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from uuid import UUID
 
 from app.catalog.application.ports import PurchaseRefusal
@@ -43,3 +44,81 @@ class CartLineNotFoundError(OrderingDomainError):
     def __init__(self, product_id: UUID) -> None:
         super().__init__(f"No cart line for product {product_id}.")
         self.product_id = product_id
+
+
+@dataclass(frozen=True)
+class LineRefusal:
+    """One cart line checkout refuses: a `PurchaseRefusal` value or `over_cap`."""
+
+    product_id: UUID
+    reason: str
+    max_quantity: int | None = None
+
+
+class CheckoutLinesRefusedError(OrderingDomainError):
+    """Lines that cannot be bought; every one is named (422, VS-022 contract)."""
+
+    def __init__(self, refusals: list[LineRefusal]) -> None:
+        super().__init__(f"{len(refusals)} cart line(s) cannot be bought.")
+        self.refusals = refusals
+        self.only_caps = all(r.reason == "over_cap" for r in refusals)
+
+
+class CartEmptyError(OrderingDomainError):
+    """No cart, no lines, or every line dropped as already owned (409 CART_EMPTY)."""
+
+    def __init__(self, dropped: tuple[UUID, ...] = ()) -> None:
+        super().__init__("The cart has nothing to check out.")
+        self.dropped = dropped
+
+
+@dataclass(frozen=True)
+class PriceChange:
+    product_id: UUID
+    old_amount_cents: int
+    new_amount_cents: int
+    currency: str
+
+
+class CartPriceChangedError(OrderingDomainError):
+    """A live price differs from the snapshot and was not accepted (409)."""
+
+    def __init__(self, changes: list[PriceChange]) -> None:
+        super().__init__(f"{len(changes)} price(s) changed since they were added.")
+        self.changes = changes
+
+
+class InvalidFulfillmentError(OrderingDomainError):
+    """A physical line or a fulfillment field before VS-028 (422 INVALID_FULFILLMENT)."""
+
+
+class PaymentMethodNotAllowedError(OrderingDomainError):
+    """422 PAYMENT_METHOD_NOT_ALLOWED with a machine-readable `reason`."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(f"Payment method not allowed: {reason}.")
+        self.reason = reason
+
+
+class OnlinePaymentUnavailableError(OrderingDomainError):
+    """No online provider is configured (503 ONLINE_PAYMENT_UNAVAILABLE)."""
+
+
+class OrdersPausedError(OrderingDomainError):
+    """`accepting_orders` is off (503 ORDERS_PAUSED)."""
+
+
+class ConsentRequiredError(OrderingDomainError):
+    """An STL line needs `accept_digital_final_sale` (422 VALIDATION_ERROR)."""
+
+
+class ProductAlreadyOwnedError(OrderingDomainError):
+    """The STL is owned, or held by another live order of this user (409)."""
+
+    def __init__(self, product_ids: tuple[UUID, ...]) -> None:
+        super().__init__(f"Already owned: {', '.join(map(str, product_ids))}.")
+        self.product_ids = product_ids
+
+
+class OrderNumberExhaustedError(OrderingDomainError):
+    """Every generated order number collided; a defect, surfaced as a 500."""

@@ -23,6 +23,7 @@ from app.ordering.infrastructure.models import CartItemModel, CartModel
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
 from tests.integration.catalog.storefront_support import Refs, seed_product, seed_refs
 from tests.integration.deep_support import assert_problem, client_for, create_user, csrf, login
+from tests.integration.payments.support import seed_online_order
 
 CART = "/api/v1/cart"
 ITEMS = f"{CART}/items"
@@ -531,3 +532,28 @@ async def test_lines_keep_add_order_and_never_leak_between_users(
     assert order == [str(first.id), str(second.id)]
     assert bob_cart["items"] == []
     assert_problem(bob_patch, 404, "NOT_FOUND")
+
+
+# ------------------------------------------------- STL ownership (VS-023)
+
+
+async def test_adding_an_owned_stl_is_409_product_already_owned(db_session: AsyncSession) -> None:
+    stl = await seed_product(db_session, await seed_refs(db_session), type=ProductType.STL)
+    with client_for(main_app) as client:
+        user = await _signed_in(client, db_session)
+        await seed_online_order(db_session, user_id=user.id, stl_id=stl.id, line_status="delivered")
+        response = _add(client, stl.id)
+    assert_problem(response, 409, "PRODUCT_ALREADY_OWNED")
+    assert response.json()["product_ids"] == [str(stl.id)]
+    assert await _line_rows(db_session, user.id) == []
+
+
+async def test_an_stl_in_the_customers_own_unpaid_order_can_still_be_added(
+    db_session: AsyncSession,
+) -> None:
+    """Only a paid line owns (ADR-025 :38); checkout then meets the ownership index."""
+    stl = await seed_product(db_session, await seed_refs(db_session), type=ProductType.STL)
+    with client_for(main_app) as client:
+        user = await _signed_in(client, db_session)
+        await seed_online_order(db_session, user_id=user.id, stl_id=stl.id, line_status="pending")
+        assert _add(client, stl.id).status_code == 200

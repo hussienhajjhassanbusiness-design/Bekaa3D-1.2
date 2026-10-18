@@ -175,6 +175,7 @@ These codes are implementation additions needed to give the frontend determinist
 | 401 | `INVALID_CREDENTIALS` | Login failed; response remains enumeration-safe |
 | 401 | `MFA_REQUIRED` | Admin login requires second factor |
 | 401 | `MFA_INVALID` | MFA code/recovery code invalid |
+| 401 | `WEBHOOK_SIGNATURE_INVALID` | Payment webhook signature did not verify; nothing stored, counted per IP (VS-023, ADR-032) |
 | 403 | `ACCOUNT_DISABLED` | Account cannot authenticate/write |
 | 403 | `CSRF_INVALID` | CSRF token missing/mismatch |
 | 409 | `ACCOUNT_DELETION_BLOCKED` | Open order or unsettled refund prevents anonymisation |
@@ -182,7 +183,8 @@ These codes are implementation additions needed to give the frontend determinist
 | 409 | `CART_PRICE_CHANGED` | Current product price differs from unconfirmed cart snapshot |
 | 409 | `INVALID_STATE_TRANSITION` | Requested state-machine transition is illegal |
 | 409 | `ORDER_NOT_CANCELLABLE` | Customer/admin cancellation cannot legally occur |
-| 409 | `PAYMENT_ALREADY_ACTIVE` | Live payment already exists |
+| 409 | `PAYMENT_ALREADY_ACTIVE` | Live payment already exists (VS-024 retry; cannot occur on a fresh checkout) |
+| 409 | `IDEMPOTENCY_REQUEST_IN_PROGRESS` | Same `Idempotency-Key` and body while the first request is still running, or crashed between placing the order and starting the payment; body carries `order_id`, `order_number`; `Retry-After: 2` (VS-023, ADR-032) |
 | 409 | `CATEGORY_IN_USE` | Category, material or colour cannot be archived while a live product uses it (VS-013) |
 | 409 | `SLUG_CONFLICT` | Live slug already exists |
 | 409 | `VERSION_CONFLICT` | The `version` sent is not the stored one; nothing was written. Body carries `current_version` (ADR-020) |
@@ -202,11 +204,23 @@ These codes are implementation additions needed to give the frontend determinist
 | 422 | `CART_LINE_LIMIT_REACHED` | A new product would exceed the cart's 50 lines; body carries `limit` (VS-022, ADR-029) |
 | 422 | `MALWARE_DETECTED` | Uploaded content failed malware scan |
 | 422 | `SETTING_INVALID` | Setting value does not match its declared type/range |
-| 502 | `PAYMENT_PROVIDER_ERROR` | Provider call failed |
+| 502 | `PAYMENT_PROVIDER_ERROR` | Provider call failed (reserved; checkout uses `PAYMENT_PROVIDER_UNAVAILABLE`) |
+| 502 | `PAYMENT_PROVIDER_UNAVAILABLE` | The order was placed but its online payment could not be started (provider down or timed out after the order committed); body carries `order_id`, `order_number`; replayed for the same key (VS-023, ADR-032) |
+| 503 | `ONLINE_PAYMENT_UNAVAILABLE` | No online payment provider is configured (`PAYMENT_PROVIDER=none`); nothing written (VS-023) |
 | 503 | `PAYMENT_VERIFICATION_UNAVAILABLE` | Automated verification unavailable and manual verification is required |
 | 405 | `METHOD_NOT_ALLOWED` | Route exists but not for this method; response carries `Allow`. Under `/api/v1/admin` only an MFA-complete administrator ever sees it (VS-011); everyone else gets 401/404 per SEC-10 |
 | 500 | `INTERNAL_ERROR` | Unexpected server fault; details are logged, never returned |
 | 503 | `SERVICE_UNAVAILABLE` | A required dependency (database, Redis, the captcha provider) is unreachable or timed out; retrying later is safe. A captcha outage carries `Retry-After` (ADR-026) |
+
+## 5.3 Payment Webhook Processing Errors (stored, never returned)
+
+A webhook that passes its signature is always answered `200 {received: true}`. When its event cannot be applied it is stored already processed, with one of these values in `webhook_events.processing_error`, and logged as an error (`payment_webhook_ignored`). A provider that does not answer verification leaves the event unprocessed with the provider's error text, and the `verify_payments` job retries it.
+
+| `processing_error` | Meaning |
+|---|---|
+| `unknown_payment` | Neither the provider's reference nor our `payment_reference` names a payment |
+| `reference_mismatch` | Our `payment_reference` names a payment whose stored provider reference differs from the event's |
+| `provider_mismatch` | Our `payment_reference` names a payment of another provider |
 
 **Security note:** authentication, resend-verification, and password-reset flows must preserve the SRS anti-enumeration requirement. Do not leak account existence through response body, timing, or status differences.
 
@@ -348,7 +362,7 @@ Removed by ADR-024. The courier prices and collects the delivery fee; there is n
 
 | Method + Path | Auth / Authorization | Request | Success | Errors | Side Effects / Notes |
 |---|---|---|---|---|---|
-| `POST /api/v1/checkout` | Verified Customer | `CheckoutRequest` + required `Idempotency-Key` | `201 CheckoutRead` | 401, 403, 409 `CART_EMPTY` / `CART_PRICE_CHANGED` / `IDEMPOTENCY_KEY_CONFLICT` / `PAYMENT_ALREADY_ACTIVE`, 422 `INVALID_FULFILLMENT` / `PRODUCT_NOT_PURCHASABLE` / `QUANTITY_EXCEEDS_LIMIT` / `PAYMENT_METHOD_NOT_ALLOWED` / `CASH_PAYMENT_LIMIT_REACHED`, 429, 503 `ORDERS_PAUSED`, 502 | Single transaction validates cart, recomputes amounts, then validates the payment method against the recomputed total, snapshots order/lines/address/contact phone/payment method/terms, clears cart. Online: creates a pending payment with the chosen provider and returns provider redirect information. Cash: creates no payment and returns the order with `payment_due` |
+| `POST /api/v1/checkout` | Verified Customer | `CheckoutRequest` + required `Idempotency-Key` | `201 CheckoutRead` | 401, 403, 409 `CART_EMPTY` / `CART_PRICE_CHANGED` / `PRODUCT_ALREADY_OWNED` / `IDEMPOTENCY_KEY_CONFLICT` / `IDEMPOTENCY_REQUEST_IN_PROGRESS`, 422 `INVALID_FULFILLMENT` / `PRODUCT_NOT_PURCHASABLE` / `QUANTITY_EXCEEDS_LIMIT` / `PAYMENT_METHOD_NOT_ALLOWED` / `CASH_PAYMENT_LIMIT_REACHED` / `VALIDATION_ERROR`, 429, 502 `PAYMENT_PROVIDER_UNAVAILABLE`, 503 `ORDERS_PAUSED` / `ONLINE_PAYMENT_UNAVAILABLE` | **As built (VS-023, digital and online only; ADR-032):** two transactions around the provider call; the live price is charged; `dropped_lines` names STLs bought since they were added; a replay carries `Idempotent-Replayed: true` and counts against the 30/hour limit; `PAYMENT_ALREADY_ACTIVE` is VS-024's retry code and cannot occur here; cash and physical lines arrive with VS-028. Full contract: [`docs/checkout.md`](../checkout.md). Target behaviour: single transaction validates cart, recomputes amounts, then validates the payment method against the recomputed total, snapshots order/lines/address/contact phone/payment method/terms, clears cart. Online: creates a pending payment with the chosen provider and returns provider redirect information. Cash: creates no payment and returns the order with `payment_due` |
 
 ### Price-Change Confirmation Contract
 
@@ -672,7 +686,7 @@ Exact analytics default ranges/export formats remain tunable design-time setting
 
 | Method + Path | Auth / Authorization | Request | Success | Errors | Side Effects / Notes |
 |---|---|---|---|---|---|
-| `POST /api/v1/webhooks/payments/{provider}` | Provider; IP allowlist + signature if supported | raw provider event | `200 WebhookReceipt` | 400, 401/403 signature/IP failure, 429 | Persist unique `(provider,event_id)` first and return quickly; duplicate event is safe; callback never marks order paid by itself; verification/reconciliation follows independently |
+| `POST /api/v1/webhooks/payments/{provider}` | Provider; IP allowlist (VS-020 nginx) + HMAC signature | raw provider event, at most 64 KiB | `200 WebhookAck` (`{received: true}`) | 400 `VALIDATION_ERROR` (body over 64 KiB, checked before the signature, or a signed body unreadable), 401 `WEBHOOK_SIGNATURE_INVALID`, 404 (provider not configured; never `cash`), 429 (per IP for bad signatures, per provider otherwise) | Persist unique `(provider,event_id)` first and return quickly; duplicate event is safe; callback never marks order paid by itself; verification asks the provider after the 200, with the `verify_payments` job as fallback (VS-023, ADR-032). Ignored events: §5.3 |
 
 The online provider is undecided (SRS §30.4); `{provider}` is its `payment_provider` value. Only configured online providers are routable: any other value, `cash` always, and `mock` in production give 404 and store nothing. Verification uses the adapter named on the payment row, never the URL; an event whose provider differs from its payment's provider is stored, ignored and alerted. Signature mechanics and status-query capabilities remain provider-dependent external details. The endpoint contract does not trust them as proof.
 
@@ -1264,6 +1278,8 @@ payment:
   redirect_url?
 ```
 
+As built in VS-023 (digital, online): `order` is `{id, order_number, source, status, payment_method, fulfillment_method, subtotal, tax, total, placed_at, lines[{id, product_id, product_type, name, unit_price, quantity, line_total, fulfillment_status}]}`, `payment` is `{id, status: "pending", provider, redirect_url}`, and `dropped_lines` is `[{product_id, reason: "already_owned"}]`. No provider reference, provider metadata or `admin_note` is ever returned.
+
 ## `OrderDetail`
 
 Includes:
@@ -1527,6 +1543,8 @@ backup_verify
 ensure_partitions
 rotate_ip_salt
 purge_expired_security_records
+verify_payments
+purge_expired_idempotency_records
 ```
 
 Admin manual reconcile/confirm endpoints exist for operational intervention, but the scheduled jobs themselves are not exposed as public “run job” routes.

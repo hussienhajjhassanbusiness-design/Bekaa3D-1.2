@@ -1,0 +1,92 @@
+"""Order entities (VS-023 plan 3.1). Pure: rows come in and out through Ordering's ports."""
+
+from dataclasses import dataclass
+from datetime import datetime
+from uuid import UUID
+
+from app.catalog.application.ports import ProductType
+from app.ordering.domain.enums import (
+    FulfillmentMethod,
+    OrderItemStatus,
+    OrderSource,
+    OrderStatus,
+    PaymentMethod,
+)
+
+
+@dataclass(frozen=True)
+class NewOrderLine:
+    """A line priced from the live product, never from the cart snapshot (ADR-029 d3)."""
+
+    product_id: UUID
+    product_type: ProductType
+    product_name_snapshot: str
+    image_snapshot: str | None
+    unit_price_cents: int
+    quantity: int
+    line_total_cents: int
+    currency: str
+
+
+@dataclass(frozen=True)
+class NewOrder:
+    order_number: str
+    user_id: UUID
+    customer_email_snapshot: str
+    source: OrderSource
+    status: OrderStatus
+    payment_method: PaymentMethod
+    subtotal_cents: int
+    tax_cents: int
+    total_cents: int
+    currency: str
+    customer_note: str | None
+    terms_accepted_at: datetime
+    digital_terms_accepted_at: datetime | None
+    digital_terms_version: str | None
+    placed_at: datetime
+
+
+@dataclass(frozen=True)
+class Order:
+    id: UUID
+    order_number: str
+    user_id: UUID
+    customer_email_snapshot: str
+    source: OrderSource
+    status: OrderStatus
+    fulfillment_method: FulfillmentMethod | None
+    payment_method: PaymentMethod
+    subtotal_cents: int
+    tax_cents: int
+    total_cents: int
+    currency: str
+    placed_at: datetime
+    cancelled_at: datetime | None
+
+
+@dataclass(frozen=True)
+class OrderLine:
+    id: UUID
+    order_id: UUID
+    user_id: UUID
+    product_id: UUID
+    product_type: ProductType
+    product_name_snapshot: str
+    unit_price_cents: int
+    quantity: int
+    line_total_cents: int
+    currency: str
+    fulfillment_status: OrderItemStatus
+
+
+@dataclass(frozen=True)
+class StatusChange:
+    """One `order_status_history` row; `order_item_id` None means the order projection."""
+
+    order_id: UUID
+    from_status: str | None
+    to_status: str
+    order_item_id: UUID | None = None
+    actor_user_id: UUID | None = None
+    reason: str | None = None

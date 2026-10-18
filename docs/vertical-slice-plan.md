@@ -24,7 +24,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 | VS-018 | Entitlements: admin grant and STL library | — | Removed (ADR-019) |
 | VS-019 | Protected STL download through nginx | — | Removed (ADR-019) |
 | VS-022 | Mixed cart | VS-013 | Done |
-| VS-023 | Checkout and verified payment for digital orders | VS-022, VS-008, VS-007 | Not started |
+| VS-023 | Checkout and verified payment for digital orders | VS-022, VS-008, VS-007 | Done |
 | VS-023b | STL delivery queue and mark-as-sent | VS-023 | Not started |
 | VS-024 | Payment recovery: reconciliation, stale checkouts, manual confirm | VS-023 | Not started |
 | VS-025 | Customer order history | VS-023 | Not started |
@@ -501,7 +501,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - Storefront visibility is one shared `listed_predicate()`, used by the storefront and the cart's `CartProductReader`.
 
 ## VS-023 — Checkout and verified payment for digital orders
-**Status:** Not started
+**Status:** Done
 **Depends on:** VS-022, VS-008, VS-007
 **Goal:** A customer buys an STL end to end on the mock provider, and the line enters the STL delivery queue (`awaiting_delivery`) only after independent server-side verification.
 - **Model / migration:**
@@ -558,6 +558,15 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - `paid` is reachable only through verification.
   - One checkout per idempotency key.
   - A paid STL line is `awaiting_delivery`, ready for VS-023b's queue.
+- **As built:**
+  - Migration `03a4730dd046`; contract in [`checkout.md`](checkout.md); decisions in [ADR-032](adr/ADR-032-checkout-idempotency-and-payment-verification.md); plan [`plans/VS-023-digital-checkout-plan.md`](plans/VS-023-digital-checkout-plan.md).
+  - Consent is validated before writing and recorded on the order insert; the cart is cleared last, in the same transaction. Checkout is **two** transactions around the provider call, not one: only the `201` and the post-commit `502 PAYMENT_PROVIDER_UNAVAILABLE` are stored for replay.
+  - The cash CHECKs are the full list: cash line physical, `provider = 'cash'` iff a cash order, one cash payment per order, a cash payment `paid`/`partially_refunded`/`refunded` with `recorded_by` and `verified_at` and above zero, `late_captured_at` never on cash or a paid row, `recorded_by` never on an online payment.
+  - `webhook_events` carries `provider_payment_id` and `payment_id`, resolved at receipt (the provider's reference first, then our `payments.id`); an event that cannot be applied is stored already processed with `processing_error`.
+  - Verification runs in a background task after the webhook's 200, with the `verify_payments` job (every minute) as fallback; SRS §23 lists both new jobs.
+  - Paid only on an exact amount in USD on a live attempt of an uncancelled order; anything else is a late capture, recorded once. Until VS-030 the only supported view of late captures is the SQL listing in [`checkout.md`](checkout.md).
+  - `PAYMENT_PROVIDER=none` gives `503 ONLINE_PAYMENT_UNAVAILABLE`; boot refuses the mock outside development, test and staging (and staging with the default secret) in the API and the worker.
+  - `scripts/mock_pay.py` is the only way to pay a mock payment outside the tests.
 
 ## VS-023b — STL delivery queue and mark-as-sent
 **Status:** Not started
@@ -590,6 +599,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 **Goal:**
 - A customer whose payment attempt failed or expired retries on the same order.
 - A lost callback can no longer leave a customer charged with nothing delivered.
+- **Notes from VS-023:** `webhook_events.processed_at` is set once verification applied the provider's answer, or at receipt for an ignored event (`processing_error`); a provider that did not answer leaves the event unprocessed with its error. An attempt with no `provider_payment_id` older than the provider timeout is a reconciliation candidate (a crash between checkout's two transactions); reconcile it by our `payments.id` through `verify_payment()`, which stores the reference.
 - An unpaid order is cancelled when its checkout hold ends.
 - The administrator can confirm a payment by hand when automatic verification is unavailable.
 - **Model / migration:** None. The one-live-payment partial unique index from VS-023 enforces a single live attempt.
@@ -767,6 +777,9 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 ## VS-030 — Refunds and settlement
 **Status:** Not started
 **Depends on:** VS-029, VS-024
+- **Notes from VS-023:**
+  - Create a late-capture refund obligation for every row that already has `late_captured_at` (`SELECT id, order_id, provider, amount_cents, status, late_captured_at FROM payments WHERE late_captured_at IS NOT NULL`); until then that listing is the only view.
+  - `derive_order_status` implements SRS §20.2 as written. The VS-023 plan's Revision 1 item 1 records two cases (one line `refunded` with a refund still owed; all lines cancelled with a refund owed) where a reorder may be wanted; a change needs an ADR and the co-developer's confirmation.
 **Goal:** The administrator refunds any part of any paid line by hand, records each refund here, and every refund stays in a queue until settled — or, if it fails, until it is reissued.
 - **Model / migration:** `refunds` and `refund_items`, with non-negative money checks.
   - `refunds.kind` (new enum `refund_kind`: `admin`, `cancellation`, `late_capture`, `chargeback`); `reason` stays free text for people. No `method` column and no provider refund id: every V1 refund is manual (ADR-024).
@@ -881,6 +894,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 ## VS-032 — Live online payment provider
 **Status:** Not started (final phase: needs a server)
 **Depends on:** VS-020, VS-024, VS-030 (and the SRS §30.4 provider decision and merchant credentials)
+**Go-live gate:** [ADR-032](adr/ADR-032-checkout-idempotency-and-payment-verification.md) decision 24: no real online provider is configured in production before VS-024 and VS-030 are merged, unless an operational alert on late captures and stuck payments exists. Every adapter must sign its webhooks (ADR-032 decision 15).
 **Goal:** Real online revenue: configuring the chosen provider(s) runs the same checkout, verification and recovery flows against them. Refunds stay manual (ADR-024).
 - **Model / migration:** Adds the chosen provider value(s) to `payment_provider`; provider metadata only if needed.
 - **Endpoints / jobs:** None new; the provider-neutral webhook route from VS-023 is IP-allowlisted in VS-020's nginx.
