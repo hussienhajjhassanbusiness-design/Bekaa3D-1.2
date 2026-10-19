@@ -214,7 +214,7 @@ Every rule is numbered for traceability. `BR-` prefix.
 | BR-037 | Estimated dispatch date = placement date + max across physical lines of (lead time × ceil(quantity ÷ batch size)); customers see it as the estimated ready date. |
 | BR-038 | Customers are promised an estimated **dispatch** date, never a delivery date; courier transit and the delivery fee are outside the company's control. |
 | BR-039 | Unpaid **online** checkouts expire after a configurable hold period and are cancelled automatically. Cash orders have no hold (BR-142). |
-| BR-040 | The global "accepting orders" kill switch blocks new checkouts, cash orders included, but never affects payments already in flight or cash handovers of existing orders. |
+| BR-040 | The global "accepting orders" kill switch blocks new checkouts, cash orders included, and new offer submissions, but never affects payments already in flight, cash handovers of existing orders, or responding to, expiring or withdrawing an existing offer (ADR-034). |
 | BR-041 | Checkout is idempotent; a repeated request with the same idempotency key returns the original order.                               |
 | BR-042 | Digital lines enter `awaiting_delivery` on payment verification and are fulfilled when the administrator emails the file and marks the line delivered, independently of physical lines. |
 
@@ -1124,7 +1124,7 @@ Numbered for traceability. `INV-` prefix.
 * INV-07 — Lines whose product is WhatsApp-only, invisible, unavailable, or deleted are rejected at checkout.
 * INV-08 — STL lines have quantity exactly 1 and are rejected when the customer already owns the STL (§10.3).
 * INV-09 — A cart holds at most one line per product; merged quantity respects the cap.
-* INV-10 — The kill switch blocks new checkouts but never in-flight payments.
+* INV-10 — The kill switch blocks new checkouts and new offers but never in-flight payments or existing offers.
 * INV-11 — Dispatch estimate accounts for quantity and batch size.
 
 **Content**
@@ -1643,7 +1643,7 @@ These questions apply to whichever provider §30.4 chooses; the Whish answers so
 | **Cash on Delivery (COD)** | Payment method `cash` with delivery: the courier collects the amount due in cash at the door; at pickup it is paid at the counter |
 | **Courier Delivery Fee**  | The fee the courier sets and collects from the customer on delivery; never part of the order total |
 | **Idempotency Key**       | Client-supplied header preventing duplicate order or refund creation                         |
-| **Kill Switch**           | Global setting pausing all new checkouts, online and cash                                    |
+| **Kill Switch**           | Global setting pausing all new checkouts, online and cash, and new offer submissions         |
 | **Lead Time**             | Days required to produce one batch of a physical product                                     |
 | **Mixed Order**           | An order containing both digital and physical lines                                          |
 | **Outbox**                | Table holding emails written inside a business transaction, delivered afterwards by a worker |

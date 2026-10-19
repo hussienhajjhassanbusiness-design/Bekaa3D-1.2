@@ -39,6 +39,7 @@ Only expensive-to-reverse decisions belong here. Folder names and small refactor
 - [ADR-031: Bring Your Idea pipeline - an API-streamed admin download until a server exists, a server-derived outcome, a bounded quote, and a cohort funnel](ADR-031-bring-your-idea-pipeline-and-api-streamed-download.md)
 - [ADR-032: Checkout, idempotency and payment verification - two transactions around the provider call, verification after the 200, paid only on an exact match (VS-023)](ADR-032-checkout-idempotency-and-payment-verification.md)
 - [ADR-033: Customer order read model - fixed schemas, `in_production` masked, flags from Payments, one payment shown (VS-025)](ADR-033-customer-order-read-model.md)
+- [ADR-034: Offer submission and expiry - a list-price ceiling, the kill switch on new offers, the cooldown read after the insert, and a lock-then-recheck expiry job (VS-039)](ADR-034-offer-submission-and-expiry.md)
 
 ## Governance
 

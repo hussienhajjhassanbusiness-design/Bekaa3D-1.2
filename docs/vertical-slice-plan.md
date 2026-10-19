@@ -41,7 +41,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 | VS-036 | Reviews and Verified Purchase badge | VS-015, VS-028, VS-030, VS-031 | Not started |
 | VS-037 | Review moderation | VS-036 | Not started |
 | VS-038 | Wishlist and wishlist analytics | VS-013 | Done |
-| VS-039 | Offer submission and inactivity expiry | VS-023, VS-007 | Not started |
+| VS-039 | Offer submission and inactivity expiry | VS-023, VS-007 | Done |
 | VS-040 | Offer counter, accept, reject, withdraw | VS-039 | Not started |
 | VS-041 | Accepted-offer checkout and auto-close | VS-040, VS-023, VS-024 | Not started |
 | VS-042 | Download statistics rollup | — | Removed (ADR-019) |
@@ -1058,7 +1058,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 - **Done when:** `wishlist_count` always equals the number of live wishlist rows.
 
 ## VS-039 — Offer submission and inactivity expiry
-**Status:** Not started
+**Status:** Done ([ADR-034](adr/ADR-034-offer-submission-and-expiry.md), [`docs/offers.md`](offers.md)). Owner decisions 2026-10-20: the amount is capped at the list price, and `accepting_orders` also blocks new offers (never existing ones); VS-040 allows withdrawal from both awaiting states.
 **Depends on:** VS-023, VS-007
 **Goal:** A customer opens one valid price offer per STL product, both sides see its history, and an offer nobody answers expires on its own.
 - **Model / migration:** `offers` (partial unique index: one live offer per user and product across `awaiting_admin`, `awaiting_customer` and `accepted`; `(status, responds_by)` index) and `offer_rounds`, which is append-only.
