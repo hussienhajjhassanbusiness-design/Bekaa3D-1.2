@@ -17,6 +17,7 @@ from app.payments.application.services.payments import (
 )
 from app.payments.domain.exceptions import PaymentConfigurationError, ProviderUnavailableError
 from app.payments.domain.outcome import Outcome, ProviderResult
+from app.payments.infrastructure.order_payments import SqlOrderPaymentReader
 from app.payments.infrastructure.payments import SqlPaymentAttempts, SqlPaymentStore
 from app.payments.infrastructure.providers.factory import configured_payment_providers
 from app.payments.infrastructure.verification import (
@@ -37,6 +38,7 @@ __all__ = [
     "apply_provider_result",
     "configured_payment_providers",
     "fail_attempt",
+    "order_payment_reader",
     "payment_attempts",
     "payment_store",
     "record_provider_reference",
@@ -52,6 +54,11 @@ def payment_attempts(
 ) -> SqlPaymentAttempts:
     """Ordering's `PaymentAttempts` port on the caller's session (checkout Tx1)."""
     return SqlPaymentAttempts(session, providers)
+
+
+def order_payment_reader(session: AsyncSession) -> SqlOrderPaymentReader:
+    """Ordering's `OrderPaymentReader` for the customer's order history (VS-025)."""
+    return SqlOrderPaymentReader(session)
 
 
 def payment_store(session: AsyncSession) -> SqlPaymentStore:

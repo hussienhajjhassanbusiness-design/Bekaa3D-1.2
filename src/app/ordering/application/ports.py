@@ -10,7 +10,16 @@ from uuid import UUID
 from app.catalog.application.ports import ProductType
 from app.ordering.domain.entities import Cart, CartLine
 from app.ordering.domain.enums import OrderItemStatus, OrderStatus
-from app.ordering.domain.orders import NewOrder, NewOrderLine, Order, OrderLine, StatusChange
+from app.ordering.domain.orders import (
+    CustomerOrder,
+    CustomerOrderLine,
+    HistoryEntry,
+    NewOrder,
+    NewOrderLine,
+    Order,
+    OrderLine,
+    StatusChange,
+)
 
 
 class CartStore(Protocol):
@@ -126,3 +135,47 @@ class OrderStore(Protocol):
     async def set_order_status(
         self, order_id: UUID, status: OrderStatus, *, at: datetime
     ) -> None: ...
+
+
+@dataclass(frozen=True)
+class OrderPaymentView:
+    """`shown`: the live or paid attempt, else the latest one (VS-025 plan Q4)."""
+
+    reached_paid: bool
+    shown: PaymentAttemptRef | None
+
+
+class OrderPaymentReader(Protocol):
+    """Implemented by Payments (`app.payments.public`); an order with no payment is absent."""
+
+    async def views(self, order_ids: Sequence[UUID]) -> dict[UUID, OrderPaymentView]: ...
+
+
+@dataclass(frozen=True)
+class OrderFilters:
+    status: OrderStatus | None = None
+    placed_after: datetime | None = None
+    placed_before: datetime | None = None
+
+
+class OrderHistoryStore(Protocol):
+    """The customer's own orders; every query carries `user_id` in its predicate."""
+
+    async def page(
+        self,
+        user_id: UUID,
+        filters: OrderFilters,
+        *,
+        after: tuple[datetime, UUID] | None,
+        limit: int,
+    ) -> list[CustomerOrder]:
+        """`placed_after` inclusive, `placed_before` exclusive; `(placed_at, id)` DESC."""
+        ...
+
+    async def get(self, user_id: UUID, order_id: UUID) -> CustomerOrder | None: ...
+
+    async def lines(self, user_id: UUID, order_id: UUID) -> list[CustomerOrderLine]: ...
+
+    async def history(self, user_id: UUID, order_id: UUID) -> list[HistoryEntry]:
+        """Oldest first."""
+        ...
