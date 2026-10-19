@@ -70,7 +70,7 @@ class CartStore(Protocol):
 
 @dataclass(frozen=True)
 class PaymentAttemptRef:
-    """The pending payment checkout opened; Payments owns the row."""
+    """One payment attempt as Ordering sees it; Payments owns the row."""
 
     id: UUID
     provider: str

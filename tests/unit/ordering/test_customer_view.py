@@ -74,6 +74,31 @@ def test_history_omits_in_production_and_rewrites_its_exit() -> None:
     ]
 
 
+def test_a_reprint_after_a_return_reads_from_returned() -> None:
+    """FR-08 return resolution: `returned -> in_production -> shipped`."""
+    item = uuid.uuid4()
+    entries = [
+        HistoryEntry(item, "pending", "in_production", AT),
+        HistoryEntry(item, "in_production", "shipped", AT),
+        HistoryEntry(item, "shipped", "returned", AT),
+        HistoryEntry(item, "returned", "in_production", AT),
+        HistoryEntry(item, "in_production", "shipped", AT),
+    ]
+    shown = [(e.from_status, e.to_status) for e in customer_history(entries)]
+    assert shown == [("pending", "shipped"), ("shipped", "returned"), ("returned", "shipped")]
+
+
+def test_masking_is_per_line() -> None:
+    a, b = uuid.uuid4(), uuid.uuid4()
+    entries = [
+        HistoryEntry(a, "returned", "in_production", AT),
+        HistoryEntry(b, "in_production", "ready_for_pickup", AT),
+        HistoryEntry(a, "in_production", "shipped", AT),
+    ]
+    shown = [(e.from_status, e.to_status) for e in customer_history(entries)]
+    assert shown == [("pending", "ready_for_pickup"), ("returned", "shipped")]
+
+
 def test_history_without_in_production_is_unchanged() -> None:
     entries = [_entry(None, "pending_payment"), _entry("pending", "awaiting_delivery")]
     assert customer_history(entries) == entries

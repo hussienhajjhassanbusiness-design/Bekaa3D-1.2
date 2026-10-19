@@ -96,7 +96,8 @@ class SqlOrderHistory:
     async def lines(self, user_id: UUID, order_id: UUID) -> list[CustomerOrderLine]:
         result = await self._session.execute(
             select(*_LINE_COLUMNS)
-            .where(_I.order_id == order_id, _I.user_id == user_id)
+            .join(_O, _O.id == _I.order_id)
+            .where(_I.order_id == order_id, _O.user_id == user_id)
             .order_by(_I.created_at, _I.id)
         )
         return [

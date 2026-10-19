@@ -112,9 +112,11 @@ async def seed_order(
     line_status: str = "pending",
     status: str = "pending_payment",
     placed_at: datetime = T0,
+    method: str = "cash",
     **over: Any,
 ) -> uuid.UUID:
-    """`kind`: `stl` (online, digital) or `pickup` / `delivery` (cash, one physical line)."""
+    """`kind`: `stl` (online, digital) or `pickup` / `delivery` (one physical line, paid by
+    `method`)."""
     oid, owner = uuid.uuid4(), user_id or c.owner_id
     order: dict[str, Any] = {
         "id": oid,
@@ -152,9 +154,9 @@ async def seed_order(
             line |= {"fulfilled_at": T0 + timedelta(days=1), "delivered_by": c.other_id}
     else:
         order |= {
-            "payment_method": "cash",
+            "payment_method": method,
             "fulfillment_method": kind,
-            "cash_terms_accepted_at": T0,
+            "cash_terms_accepted_at": T0 if method == "cash" else None,
             "contact_phone_snapshot": "+96170123456",
             "contact_phone_hash": "HASH-SENTINEL",
         }
@@ -168,7 +170,7 @@ async def seed_order(
         line |= {
             "product_id": c.physical_id,
             "product_type": "physical",
-            "payment_method": "cash",
+            "payment_method": method,
             "lead_time_days_snapshot": 3,
             "batch_size_snapshot": 2,
         }
@@ -179,7 +181,7 @@ async def seed_order(
 
 
 async def seed_payment(
-    db: AsyncSession, order_id: uuid.UUID, status: str, *, at: datetime = T0
+    db: AsyncSession, order_id: uuid.UUID, status: str, *, at: datetime = T0, **over: Any
 ) -> None:
     row: dict[str, Any] = {
         "order_id": order_id,
@@ -189,7 +191,7 @@ async def seed_payment(
         "amount_cents": 1500,
         "initiated_at": at,
         "provider_payment_id": f"mock_REFERENCE_SENTINEL_{uuid.uuid4().hex}",
-    }
+    } | over
     if status in ("paid", "partially_refunded", "refunded"):
         row["verified_at"] = at
     if status == "failed":
@@ -198,6 +200,19 @@ async def seed_payment(
         row["expired_at"] = at
     await _insert(db, "payments", row)
     await db.commit()
+
+
+async def seed_cash_handover(db: AsyncSession, order_id: uuid.UUID, admin_id: uuid.UUID) -> None:
+    """The one `cash` row the handover writes (ADR-024; `ck_payments_cash_shape`)."""
+    await seed_payment(
+        db,
+        order_id,
+        "paid",
+        provider="cash",
+        order_payment_method="cash",
+        provider_payment_id=None,
+        recorded_by=admin_id,
+    )
 
 
 async def seed_history(
@@ -457,13 +472,13 @@ async def test_the_order_level_history_is_shown_without_actor_or_reason(
 
 
 @pytest.mark.parametrize(
-    ("statuses", "shown", "due"),
+    ("statuses", "shown"),
     [
-        (["pending"], "pending", False),
-        (["failed"], "failed", False),
-        (["failed", "expired"], "expired", False),
-        (["pending", "failed"], "pending", False),
-        (["paid", "expired"], "paid", False),
+        (["pending"], "pending"),
+        (["failed"], "failed"),
+        (["failed", "expired"], "expired"),
+        (["pending", "failed"], "pending"),
+        (["paid", "expired"], "paid"),
     ],
     ids=["pending", "failed", "latest-ended", "live-over-newer-ended", "paid-over-newer-ended"],
 )
@@ -473,7 +488,6 @@ async def test_the_payment_shown_is_the_live_or_paid_one_else_the_latest(
     client: TestClient,
     statuses: list[str],
     shown: str,
-    due: bool,
 ) -> None:
     """`statuses` oldest first; at most one is live (`uq_payments_one_live`)."""
     oid = await seed_order(db_session, ctx)
@@ -481,7 +495,82 @@ async def test_the_payment_shown_is_the_live_or_paid_one_else_the_latest(
         await seed_payment(db_session, oid, status, at=T0 + timedelta(minutes=n))
     detail = _detail(client, oid)
     assert detail["payment"]["status"] == shown
-    assert detail["payment_due"] is due
+
+
+# -------------------------------------------------------------- flags through the real reader
+
+
+async def test_a_paid_cash_order_still_in_progress_is_not_due(
+    db_session: AsyncSession, ctx: Ctx, client: TestClient
+) -> None:
+    """A returned line can bring a paid cash order back to `in_progress` (SRS 20.2):
+    only the cash payment row keeps it from asking for the money again."""
+    oid = await seed_order(
+        db_session, ctx, kind="delivery", status="in_progress", line_status="returned"
+    )
+    await seed_cash_handover(db_session, oid, ctx.other_id)
+    detail = _detail(client, oid)
+    assert detail["payment_due"] is False
+    assert detail["payment"] == {
+        "status": "paid",
+        "provider": "cash",
+        "amount": {"amount_cents": 1500, "currency": "USD"},
+    }
+    [summary] = client.get(ORDERS).json()["items"]
+    assert summary["payment_due"] is False
+
+
+@pytest.mark.parametrize(
+    ("order_status", "payment_status"),
+    [("in_progress", "paid"), ("partially_refunded", "partially_refunded")],
+)
+async def test_a_paid_online_physical_order_can_be_cancelled(
+    db_session: AsyncSession,
+    ctx: Ctx,
+    client: TestClient,
+    order_status: str,
+    payment_status: str,
+) -> None:
+    oid = await seed_order(db_session, ctx, kind="pickup", method="online", status=order_status)
+    await seed_payment(db_session, oid, payment_status)
+    detail = _detail(client, oid)
+    assert (detail["can_cancel"], detail["payment_due"]) == (True, False)
+
+
+async def test_can_cancel_asks_payments_not_the_order_status(
+    db_session: AsyncSession, ctx: Ctx, client: TestClient
+) -> None:
+    """ADR-033 d4: an `in_progress` online order whose only attempt failed is not paid."""
+    oid = await seed_order(db_session, ctx, kind="pickup", method="online", status="in_progress")
+    await seed_payment(db_session, oid, "failed")
+    assert _detail(client, oid)["can_cancel"] is False
+
+
+async def test_a_late_captured_attempt_on_a_cancelled_order_counts_for_nothing(
+    db_session: AsyncSession, ctx: Ctx, client: TestClient
+) -> None:
+    oid = await seed_order(
+        db_session,
+        ctx,
+        kind="pickup",
+        method="online",
+        status="cancelled",
+        line_status="cancelled",
+        cancelled_at=T0,
+    )
+    await seed_payment(
+        db_session,
+        oid,
+        "failed",
+        late_captured_at=T0,
+        captured_amount_cents=987654,
+        captured_currency="USD",
+    )
+    response = client.get(f"{ORDERS}/{oid}")
+    detail = response.json()
+    assert (detail["can_cancel"], detail["payment_due"]) == (False, False)
+    assert detail["payment"]["status"] == "failed"
+    assert "987654" not in response.text and "captured" not in response.text
 
 
 # -------------------------------------------------------------- pages and filters
@@ -502,6 +591,17 @@ async def test_pages_cover_every_order_once_when_placed_at_ties(
             break
     assert seen == sorted(ids, key=uuid.UUID, reverse=True)
     assert cursor is None
+
+
+async def test_the_default_page_is_20_and_100_is_allowed(
+    db_session: AsyncSession, ctx: Ctx, client: TestClient
+) -> None:
+    for n in range(21):
+        await seed_order(db_session, ctx, placed_at=T0 - timedelta(minutes=n))
+    default = client.get(ORDERS).json()
+    assert (len(default["items"]), default["next_cursor"] is None) == (20, False)
+    widest = client.get(ORDERS, params={"limit": 100}).json()
+    assert (len(widest["items"]), widest["next_cursor"]) == (21, None)
 
 
 async def test_an_order_placed_between_pages_is_neither_repeated_nor_skipping_one(

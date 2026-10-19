@@ -3,6 +3,7 @@
 
 from collections.abc import Iterable
 from dataclasses import replace
+from uuid import UUID
 
 from app.catalog.application.ports import ProductType
 from app.ordering.domain.enums import OrderItemStatus, OrderStatus, PaymentMethod
@@ -24,14 +25,17 @@ def customer_lines(lines: Iterable[CustomerOrderLine]) -> list[CustomerOrderLine
 
 
 def customer_history(entries: Iterable[HistoryEntry]) -> list[HistoryEntry]:
-    """Entries into `in_production` are dropped; one out of it reads as from `pending`,
-    and an entry that masking turns into `pending -> pending` is dropped too."""
+    """Entries into `in_production` are dropped; the next one out of it reads as from the
+    state before it (`pending`, or `returned` on a reprint). A no-op that leaves is dropped."""
+    before_hidden: dict[UUID | None, str] = {}
     shown = []
     for entry in entries:
         if entry.to_status == HIDDEN_STATUS.value:
+            before_hidden[entry.order_item_id] = entry.from_status or OrderItemStatus.PENDING
             continue
         if entry.from_status == HIDDEN_STATUS.value:
-            entry = replace(entry, from_status=OrderItemStatus.PENDING.value)
+            earlier = before_hidden.pop(entry.order_item_id, OrderItemStatus.PENDING.value)
+            entry = replace(entry, from_status=earlier)
         if entry.from_status != entry.to_status:
             shown.append(entry)
     return shown
