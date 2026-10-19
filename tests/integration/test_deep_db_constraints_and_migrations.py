@@ -315,6 +315,7 @@ RESTRICT_TO_USERS_ALLOWED = {
     ("order_items", "user_id"),  # database-design.md:1890
     ("order_items", "delivered_by"),  # database-design.md:1891
     ("payments", "recorded_by"),  # database-design.md:1892
+    ("offers", "user_id"),  # database-design.md:1913; submitting needs a verified email
 }
 
 _FKS_TO_USERS = (

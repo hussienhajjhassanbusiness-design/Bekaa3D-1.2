@@ -9387,7 +9387,7 @@
             }
           },
           {
-            "description": "Exclusive deadline bound; must carry a UTC offset.",
+            "description": "Pending offers due before this (exclusive), with a UTC offset.",
             "in": "query",
             "name": "responds_before",
             "required": false,
@@ -9401,7 +9401,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Exclusive deadline bound; must carry a UTC offset.",
+              "description": "Pending offers due before this (exclusive), with a UTC offset.",
               "title": "Responds Before"
             }
           },

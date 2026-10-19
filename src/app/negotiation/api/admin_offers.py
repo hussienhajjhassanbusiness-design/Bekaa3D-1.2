@@ -45,7 +45,7 @@ async def list_offers(
     product_id: UUID | None = Query(default=None),
     user_id: UUID | None = Query(default=None, description="The customer who made the offer."),
     responds_before: datetime | None = Query(
-        default=None, description="Exclusive deadline bound; must carry a UTC offset."
+        default=None, description="Pending offers due before this (exclusive), with a UTC offset."
     ),
     cursor: str | None = Query(default=None, description="Opaque cursor from a previous page."),
     limit: int = Query(default=_DEFAULT_PAGE_SIZE, ge=1, le=_MAX_PAGE_SIZE),

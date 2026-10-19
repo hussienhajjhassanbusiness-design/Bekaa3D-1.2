@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from app.identity.domain.enums import UserRole
 from app.jobs.expire_offers import expire_offers
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
 from tests.integration.deep_support import create_user
@@ -52,7 +53,8 @@ async def test_an_overdue_offer_expires_with_a_system_round(
     db_session: AsyncSession, db_engine: AsyncEngine, status: str
 ) -> None:
     deadline = datetime.now(UTC).replace(microsecond=0) - SECOND
-    _, offer = await _overdue(db_session, status, deadline)
+    await create_user(db_session, role=UserRole.ADMIN)
+    owner, offer = await _overdue(db_session, status, deadline)
     result = await expire_offers(_ctx(db_engine), now=deadline + SECOND)
     assert result["expired"] >= 1
     state = await _state(db_engine, offer)
@@ -64,6 +66,15 @@ async def test_an_overdue_offer_expires_with_a_system_round(
         "audits": 1,
         "notifications": 1,
     }
+    async with db_engine.connect() as conn:
+        others = await conn.scalar(
+            text(
+                "SELECT count(*) FROM notifications WHERE payload->>'offer_id' = :o"
+                " AND user_id <> :u"
+            ),
+            {"o": str(offer), "u": owner},
+        )
+    assert others == 0
 
 
 @pytest.mark.parametrize(

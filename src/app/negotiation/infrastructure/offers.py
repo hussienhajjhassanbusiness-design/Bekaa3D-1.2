@@ -156,7 +156,10 @@ class SqlOfferStore:
         if filters.user_id is not None:
             stmt = stmt.where(_O.user_id == filters.user_id)
         if filters.responds_before is not None:
-            stmt = stmt.where(_O.responds_by < filters.responds_before)
+            # A closed offer keeps its old deadline; only a pending one is "due".
+            stmt = stmt.where(
+                _O.status.in_(AWAITING_STATUSES), _O.responds_by < filters.responds_before
+            )
         if after is not None:
             rank, at, offer_id = after
             stmt = stmt.where(

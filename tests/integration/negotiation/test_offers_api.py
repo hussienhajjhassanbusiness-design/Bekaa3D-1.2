@@ -52,6 +52,7 @@ async def test_submit_opens_an_offer_on_the_admins_turn(
     client: TestClient, db_session: AsyncSession, db_engine: AsyncEngine
 ) -> None:
     admin = await create_user(db_session, role=UserRole.ADMIN)
+    inactive = await create_user(db_session, role=UserRole.ADMIN, active=False)
     product = await stl(db_session)
     user = await _customer(client, db_session)
     at = datetime.now(UTC).replace(microsecond=0)
@@ -77,7 +78,26 @@ async def test_submit_opens_an_offer_on_the_admins_turn(
     }
     rows = await offer_rows(db_engine, user)
     assert (rows.offers, rows.rounds, rows.audits) == (1, 1, 1)
-    assert rows.notifications >= 1
+    recipients = set(
+        (
+            await db_session.scalars(
+                text("SELECT user_id FROM notifications WHERE payload->>'offer_id' = :o"),
+                {"o": body["id"]},
+            )
+        ).all()
+    )
+    active_admins = set(
+        (
+            await db_session.scalars(
+                text(
+                    "SELECT id FROM users WHERE role = 'admin' AND is_active"
+                    " AND deleted_at IS NULL AND anonymized_at IS NULL"
+                )
+            )
+        ).all()
+    )
+    assert recipients == active_admins and admin.id in recipients
+    assert user not in recipients and inactive.id not in recipients
     audit = (
         await db_session.execute(
             text(
@@ -251,7 +271,9 @@ async def test_second_live_offer_is_409(
     assert (rows.offers, rows.rounds, rows.audits) == (1, 1, 0)
 
 
-@pytest.mark.parametrize("status", ["expired", "withdrawn", "paid", "checkout_expired"])
+@pytest.mark.parametrize(
+    "status", ["expired", "withdrawn", "paid", "checkout_expired", "auto_closed"]
+)
 async def test_a_closed_offer_does_not_block_a_new_one(
     client: TestClient, db_session: AsyncSession, status: str
 ) -> None:
@@ -338,6 +360,16 @@ async def test_malformed_bodies_are_422(
     user = await _customer(client, db_session)
     assert_problem(submit(client, product, **body), 422, "VALIDATION_ERROR")
     assert (await offer_rows(db_engine, user)).offers == 0
+
+
+async def test_the_message_limit_counts_the_trimmed_text(
+    client: TestClient, db_session: AsyncSession
+) -> None:
+    product = await stl(db_session)
+    await _customer(client, db_session)
+    response = submit(client, product, message=" " + "x" * 1000 + " ")
+    assert response.status_code == 201, response.text
+    assert response.json()["rounds"][0]["message"] == "x" * 1000
 
 
 async def test_a_multiline_message_is_kept(client: TestClient, db_session: AsyncSession) -> None:

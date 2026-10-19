@@ -66,6 +66,7 @@ class OfferModel(Base):
     )
 
     __table_args__ = (
+        UniqueConstraint("id", "user_id", "product_id", name="uq_offers_id_user_product"),
         CheckConstraint(
             "initial_amount_cents > 0 AND current_amount_cents > 0 "
             "AND (agreed_amount_cents IS NULL OR agreed_amount_cents > 0) AND currency = 'USD'",
@@ -80,8 +81,9 @@ class OfferModel(Base):
             name="ck_offers_turn_by_status",
         ),
         CheckConstraint(
-            "status <> 'accepted' OR (agreed_amount_cents IS NOT NULL "
-            "AND accepted_at IS NOT NULL AND checkout_expires_at IS NOT NULL)",
+            "status NOT IN ('accepted', 'paid', 'checkout_expired') "
+            "OR (agreed_amount_cents IS NOT NULL AND accepted_at IS NOT NULL "
+            "AND checkout_expires_at IS NOT NULL)",
             name="ck_offers_accepted_shape",
         ),
         CheckConstraint(

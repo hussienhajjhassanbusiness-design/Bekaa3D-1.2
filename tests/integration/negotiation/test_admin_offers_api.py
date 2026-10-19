@@ -153,6 +153,13 @@ async def test_queue_filters(client: TestClient, db_session: AsyncSession) -> No
         status="awaiting_customer",
         responds_by=now + timedelta(days=1),
     )
+    closed = await seed_offer(
+        db_session,
+        user_id=customer,
+        product_id=await stl(db_session),
+        status="expired",
+        responds_by=now - timedelta(days=1),
+    )
     other = (await create_user(db_session)).id
     elsewhere = await seed_offer(db_session, user_id=other, product_id=product)
     await mfa_admin(client, db_session)
@@ -160,7 +167,7 @@ async def test_queue_filters(client: TestClient, db_session: AsyncSession) -> No
     def ids(**params: str) -> set[str]:
         return {i["id"] for i in client.get(ADMIN_OFFERS, params=params).json()["items"]}
 
-    assert ids(user_id=str(customer)) == {str(due), str(later)}
+    assert ids(user_id=str(customer)) == {str(due), str(later), str(closed)}
     assert ids(user_id=str(customer), status="awaiting_customer") == {str(later)}
     assert ids(product_id=str(product)) >= {str(due), str(elsewhere)}
     assert str(later) not in ids(product_id=str(product))

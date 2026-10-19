@@ -30,10 +30,11 @@ class OfferCreate(BaseModel):
     currency: Literal["USD"]
     message: MultilineStr | None = Field(default=None, max_length=MAX_MESSAGE_LENGTH)
 
-    @field_validator("message")
+    @field_validator("message", mode="before")
     @classmethod
-    def _blank_is_none(cls, value: str | None) -> str | None:
-        return (value.strip() or None) if value is not None else None
+    def _trimmed(cls, value: object) -> object:
+        """Before the length check: the 1 000-character limit counts the trimmed text."""
+        return (value.strip() or None) if isinstance(value, str) else value
 
 
 class OfferProductRead(BaseModel):

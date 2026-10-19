@@ -1,6 +1,7 @@
 """The DB itself refuses bad offer rows (VS-039; database-design.md 11, 15.7; SRS 11.4)."""
 
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -10,7 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
 from tests.integration.deep_support import create_user
-from tests.integration.negotiation.offer_support import seed_offer, stl
+from tests.integration.negotiation.offer_support import physical, seed_offer, stl
+from tests.integration.payments.support import seed_online_order
 
 pytestmark = pytest.mark.integration
 LIVE = ["awaiting_admin", "awaiting_customer", "accepted"]
@@ -71,6 +73,8 @@ async def test_live_index_is_per_customer_and_product(db_session: AsyncSession) 
         ({"status": "expired", "turn": "admin"}, "ck_offers_turn_by_status"),
         ({"status": "accepted", "agreed_amount_cents": None}, "ck_offers_accepted_shape"),
         ({"status": "accepted", "checkout_expires_at": None}, "ck_offers_accepted_shape"),
+        ({"status": "paid", "agreed_amount_cents": None}, "ck_offers_accepted_shape"),
+        ({"status": "checkout_expired", "accepted_at": None}, "ck_offers_accepted_shape"),
         ({"status": "rejected", "cooldown_until": None}, "ck_offers_rejected_shape"),
         ({"status": "rejected", "rejected_at": None}, "ck_offers_rejected_shape"),
     ],
@@ -132,12 +136,99 @@ async def test_a_round_without_an_amount_is_fine(db_session: AsyncSession) -> No
     await _round(db_session, await seed_offer(db_session, user_id=user, product_id=product))
 
 
-async def test_order_item_offer_id_must_name_an_offer(db_session: AsyncSession) -> None:
-    """The FK 03a4730dd046 deferred to VS-039 is in place and validated."""
-    validated = await db_session.scalar(
-        text("SELECT convalidated FROM pg_constraint WHERE conname = 'order_items_offer_id_fkey'")
+async def _offer_on_line(
+    db: AsyncSession, offer_user: str, offer_product: str
+) -> tuple[uuid.UUID, uuid.UUID]:
+    """An STL order line, and an accepted offer by the same or another user and product."""
+    user, product = await _pair(db)
+    other_user, other_product = await _pair(db)
+    order = await seed_online_order(db, user_id=user, stl_id=product)
+    offer = await seed_offer(
+        db,
+        user_id=user if offer_user == "same" else other_user,
+        product_id=product if offer_product == "same" else other_product,
+        status="accepted",
     )
-    assert validated is True
+    return order, offer
+
+
+@pytest.mark.parametrize(
+    ("offer_user", "offer_product"),
+    [("other", "same"), ("same", "other"), ("other", "other")],
+)
+async def test_a_line_cannot_carry_another_customers_or_products_offer(
+    db_session: AsyncSession, offer_user: str, offer_product: str
+) -> None:
+    """ADR-034: VS-041 cannot price a line from an offer that is not that line's own."""
+    order, offer = await _offer_on_line(db_session, offer_user, offer_product)
+    with pytest.raises(IntegrityError) as caught:
+        await _set_line_offer(db_session, order, offer)
+    await db_session.rollback()
+    assert "fk_order_items_offer_owner" in str(caught.value)
+
+
+async def test_a_line_may_carry_its_own_offer(db_session: AsyncSession) -> None:
+    order, offer = await _offer_on_line(db_session, "same", "same")
+    await _set_line_offer(db_session, order, offer)
+
+
+async def _set_line_offer(db: AsyncSession, order: uuid.UUID, offer: uuid.UUID) -> None:
+    await db.execute(
+        text("UPDATE order_items SET offer_id = :f WHERE order_id = :o"), {"f": offer, "o": order}
+    )
+    await db.commit()
+
+
+async def test_a_physical_line_cannot_carry_an_offer(db_session: AsyncSession) -> None:
+    """The offer service refuses physical products; the DB refuses the line regardless."""
+    user = (await create_user(db_session)).id
+    product = await physical(db_session)
+    offer = await seed_offer(db_session, user_id=user, product_id=product, status="accepted")
+    order = uuid.uuid4()
+    now = datetime.now(UTC)
+    rows = {
+        "orders": {
+            "id": order,
+            "order_number": f"B3D-{uuid.uuid4().hex[:8].upper()}",
+            "user_id": user,
+            "customer_email_snapshot": "buyer@example.com",
+            "source": "offer",
+            "status": "in_progress",
+            "subtotal_cents": 800,
+            "total_cents": 800,
+            "terms_accepted_at": now,
+            "placed_at": now,
+            "payment_method": "cash",
+            "fulfillment_method": "pickup",
+            "cash_terms_accepted_at": now,
+            "contact_phone_snapshot": "+96170123456",
+            "contact_phone_hash": "hash",
+        },
+        "order_items": {
+            "order_id": order,
+            "user_id": user,
+            "product_id": product,
+            "offer_id": offer,
+            "product_type": "physical",
+            "product_name_snapshot": "Lamp",
+            "unit_price_cents": 800,
+            "quantity": 1,
+            "line_total_cents": 800,
+            "fulfillment_status": "pending",
+            "payment_method": "cash",
+            "lead_time_days_snapshot": 3,
+            "batch_size_snapshot": 2,
+        },
+    }
+    with pytest.raises(IntegrityError) as caught:
+        for table, row in rows.items():
+            columns, values = ", ".join(row), ", ".join(f":{c}" for c in row)
+            await db_session.execute(
+                text(f"INSERT INTO {table} ({columns}) VALUES ({values})"), row
+            )
+        await db_session.commit()
+    await db_session.rollback()
+    assert "ck_order_items_offer_is_stl" in str(caught.value)
 
 
 async def test_offers_and_rounds_refuse_deleting_their_parents(db_session: AsyncSession) -> None:

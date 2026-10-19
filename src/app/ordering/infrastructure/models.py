@@ -217,9 +217,7 @@ class OrderItemModel(Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
     product_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-    offer_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("offers.id", ondelete="RESTRICT")
-    )
+    offer_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     product_type: Mapped[ProductType] = mapped_column(
         _pg_enum(ProductType, "product_type"), nullable=False
     )
@@ -261,6 +259,17 @@ class OrderItemModel(Base):
             name="fk_order_items_order_payment_method",
             ondelete="RESTRICT",
             onupdate="RESTRICT",
+        ),
+        # VS-039 / ADR-034: a line's offer is its own customer's, on its own product.
+        ForeignKeyConstraint(
+            ["offer_id", "user_id", "product_id"],
+            ["offers.id", "offers.user_id", "offers.product_id"],
+            name="fk_order_items_offer_owner",
+            ondelete="RESTRICT",
+            onupdate="RESTRICT",
+        ),
+        CheckConstraint(
+            "offer_id IS NULL OR product_type = 'stl'", name="ck_order_items_offer_is_stl"
         ),
         ForeignKeyConstraint(
             ["product_id", "product_type"],

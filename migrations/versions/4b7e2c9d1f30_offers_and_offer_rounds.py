@@ -88,6 +88,8 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(["product_id"], ["products.id"], ondelete="RESTRICT"),
+        # The target of order_items' composite FK (a line's own customer and product).
+        sa.UniqueConstraint("id", "user_id", "product_id", name="uq_offers_id_user_product"),
         sa.CheckConstraint(
             "initial_amount_cents > 0 AND current_amount_cents > 0 "
             "AND (agreed_amount_cents IS NULL OR agreed_amount_cents > 0) AND currency = 'USD'",
@@ -104,8 +106,9 @@ def upgrade() -> None:
             name="ck_offers_turn_by_status",
         ),
         sa.CheckConstraint(
-            "status <> 'accepted' OR (agreed_amount_cents IS NOT NULL "
-            "AND accepted_at IS NOT NULL AND checkout_expires_at IS NOT NULL)",
+            "status NOT IN ('accepted', 'paid', 'checkout_expired') "
+            "OR (agreed_amount_cents IS NOT NULL AND accepted_at IS NOT NULL "
+            "AND checkout_expires_at IS NOT NULL)",
             name="ck_offers_accepted_shape",
         ),
         sa.CheckConstraint(
@@ -155,17 +158,25 @@ def upgrade() -> None:
         ),
     )
 
+    # A line's offer is the same customer's, on the same product, and only an STL line has one.
     # NOT VALID, then VALIDATE: the scan runs under a lock that does not block writes.
     op.execute(
-        "ALTER TABLE order_items ADD CONSTRAINT order_items_offer_id_fkey "
-        "FOREIGN KEY (offer_id) REFERENCES offers (id) ON DELETE RESTRICT NOT VALID"
+        "ALTER TABLE order_items ADD CONSTRAINT fk_order_items_offer_owner "
+        "FOREIGN KEY (offer_id, user_id, product_id) REFERENCES offers (id, user_id, product_id) "
+        "ON DELETE RESTRICT ON UPDATE RESTRICT NOT VALID"
     )
-    op.execute("ALTER TABLE order_items VALIDATE CONSTRAINT order_items_offer_id_fkey")
+    op.execute(
+        "ALTER TABLE order_items ADD CONSTRAINT ck_order_items_offer_is_stl "
+        "CHECK (offer_id IS NULL OR product_type = 'stl') NOT VALID"
+    )
+    op.execute("ALTER TABLE order_items VALIDATE CONSTRAINT fk_order_items_offer_owner")
+    op.execute("ALTER TABLE order_items VALIDATE CONSTRAINT ck_order_items_offer_is_stl")
 
 
 def downgrade() -> None:
-    # Dependents first: the order_items FK, then rounds, then offers, then the types.
-    op.drop_constraint("order_items_offer_id_fkey", "order_items", type_="foreignkey")
+    # Dependents first: the order_items constraints, then rounds, then offers, then the types.
+    op.drop_constraint("ck_order_items_offer_is_stl", "order_items", type_="check")
+    op.drop_constraint("fk_order_items_offer_owner", "order_items", type_="foreignkey")
     op.drop_table("offer_rounds")
     op.drop_table("offers")
     for name in reversed(list(_ENUMS)):

@@ -89,7 +89,7 @@ async def seed_offer(
         "created_at": at,
         "updated_at": at,
     }
-    if status == "accepted":
+    if status in {"accepted", "paid", "checkout_expired"}:
         row |= {
             "agreed_amount_cents": 800,
             "accepted_at": at,
