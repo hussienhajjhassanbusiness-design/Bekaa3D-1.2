@@ -403,6 +403,248 @@
         "title": "AdminMaterialPage",
         "type": "object"
       },
+      "AdminOfferDetailRead": {
+        "properties": {
+          "agreed_amount": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PriceRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "allowed_actions": {
+            "description": "Empty until VS-040 adds counter, accept, reject and withdraw.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Allowed Actions",
+            "type": "array"
+          },
+          "checkout_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkout Expires At"
+          },
+          "cooldown_until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set on a rejected offer (BR-089).",
+            "title": "Cooldown Until"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "current_amount": {
+            "$ref": "#/components/schemas/PriceRead"
+          },
+          "customer": {
+            "$ref": "#/components/schemas/OfferCustomerRead"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "initial_amount": {
+            "$ref": "#/components/schemas/PriceRead"
+          },
+          "product": {
+            "$ref": "#/components/schemas/OfferProductRead"
+          },
+          "responds_by": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The turn's deadline; the offer expires once it is reached.",
+            "title": "Responds By"
+          },
+          "rounds": {
+            "description": "The complete, append-only history.",
+            "items": {
+              "$ref": "#/components/schemas/OfferRoundRead"
+            },
+            "title": "Rounds",
+            "type": "array"
+          },
+          "status": {
+            "$ref": "#/components/schemas/OfferStatus"
+          },
+          "turn": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OfferTurn"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whose answer is awaited; null once closed."
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "product",
+          "status",
+          "turn",
+          "current_amount",
+          "agreed_amount",
+          "responds_by",
+          "checkout_expires_at",
+          "created_at",
+          "initial_amount",
+          "cooldown_until",
+          "updated_at",
+          "rounds",
+          "allowed_actions",
+          "customer"
+        ],
+        "title": "AdminOfferDetailRead",
+        "type": "object"
+      },
+      "AdminOfferPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AdminOfferSummaryRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "AdminOfferPage",
+        "type": "object"
+      },
+      "AdminOfferSummaryRead": {
+        "properties": {
+          "agreed_amount": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PriceRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "checkout_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkout Expires At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "current_amount": {
+            "$ref": "#/components/schemas/PriceRead"
+          },
+          "customer": {
+            "$ref": "#/components/schemas/OfferCustomerRead"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "product": {
+            "$ref": "#/components/schemas/OfferProductRead"
+          },
+          "responds_by": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The turn's deadline; the offer expires once it is reached.",
+            "title": "Responds By"
+          },
+          "status": {
+            "$ref": "#/components/schemas/OfferStatus"
+          },
+          "turn": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OfferTurn"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whose answer is awaited; null once closed."
+          }
+        },
+        "required": [
+          "id",
+          "product",
+          "status",
+          "turn",
+          "current_amount",
+          "agreed_amount",
+          "responds_by",
+          "checkout_expires_at",
+          "created_at",
+          "customer"
+        ],
+        "title": "AdminOfferSummaryRead",
+        "type": "object"
+      },
       "AdminProductCreate": {
         "additionalProperties": false,
         "description": "api-endpoints.md 29.10. `type` and price are required; aggregates are not accepted.",
@@ -3660,6 +3902,454 @@
         ],
         "title": "NotificationUpdate",
         "type": "object"
+      },
+      "OfferAction": {
+        "enum": [
+          "submitted",
+          "countered",
+          "accepted",
+          "rejected",
+          "withdrawn",
+          "expired",
+          "paid",
+          "checkout_expired",
+          "auto_closed"
+        ],
+        "title": "OfferAction",
+        "type": "string"
+      },
+      "OfferActor": {
+        "enum": [
+          "customer",
+          "admin",
+          "system"
+        ],
+        "title": "OfferActor",
+        "type": "string"
+      },
+      "OfferCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "amount_cents": {
+            "description": "At least minimum_offer_percentage of the list price, at most the price.",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 1.0,
+            "title": "Amount Cents",
+            "type": "integer"
+          },
+          "currency": {
+            "const": "USD",
+            "title": "Currency",
+            "type": "string"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "product_id": {
+            "format": "uuid",
+            "title": "Product Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_id",
+          "amount_cents",
+          "currency"
+        ],
+        "title": "OfferCreate",
+        "type": "object"
+      },
+      "OfferCustomerRead": {
+        "properties": {
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "email"
+        ],
+        "title": "OfferCustomerRead",
+        "type": "object"
+      },
+      "OfferDetailRead": {
+        "properties": {
+          "agreed_amount": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PriceRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "allowed_actions": {
+            "description": "Empty until VS-040 adds counter, accept, reject and withdraw.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Allowed Actions",
+            "type": "array"
+          },
+          "checkout_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkout Expires At"
+          },
+          "cooldown_until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set on a rejected offer (BR-089).",
+            "title": "Cooldown Until"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "current_amount": {
+            "$ref": "#/components/schemas/PriceRead"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "initial_amount": {
+            "$ref": "#/components/schemas/PriceRead"
+          },
+          "product": {
+            "$ref": "#/components/schemas/OfferProductRead"
+          },
+          "responds_by": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The turn's deadline; the offer expires once it is reached.",
+            "title": "Responds By"
+          },
+          "rounds": {
+            "description": "The complete, append-only history.",
+            "items": {
+              "$ref": "#/components/schemas/OfferRoundRead"
+            },
+            "title": "Rounds",
+            "type": "array"
+          },
+          "status": {
+            "$ref": "#/components/schemas/OfferStatus"
+          },
+          "turn": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OfferTurn"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whose answer is awaited; null once closed."
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "product",
+          "status",
+          "turn",
+          "current_amount",
+          "agreed_amount",
+          "responds_by",
+          "checkout_expires_at",
+          "created_at",
+          "initial_amount",
+          "cooldown_until",
+          "updated_at",
+          "rounds",
+          "allowed_actions"
+        ],
+        "title": "OfferDetailRead",
+        "type": "object"
+      },
+      "OfferPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OfferSummaryRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "OfferPage",
+        "type": "object"
+      },
+      "OfferProductRead": {
+        "properties": {
+          "cover_image": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicImage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null only if the product row is gone (never in V1).",
+            "title": "Name"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slug"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "cover_image"
+        ],
+        "title": "OfferProductRead",
+        "type": "object"
+      },
+      "OfferRoundRead": {
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/OfferAction"
+          },
+          "actor": {
+            "$ref": "#/components/schemas/OfferActor"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PriceRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "sequence": {
+            "title": "Sequence",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sequence",
+          "actor",
+          "action",
+          "amount",
+          "message",
+          "created_at"
+        ],
+        "title": "OfferRoundRead",
+        "type": "object"
+      },
+      "OfferStatus": {
+        "enum": [
+          "awaiting_admin",
+          "awaiting_customer",
+          "accepted",
+          "rejected",
+          "expired",
+          "withdrawn",
+          "paid",
+          "checkout_expired",
+          "auto_closed"
+        ],
+        "title": "OfferStatus",
+        "type": "string"
+      },
+      "OfferSummaryRead": {
+        "properties": {
+          "agreed_amount": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PriceRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "checkout_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkout Expires At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "current_amount": {
+            "$ref": "#/components/schemas/PriceRead"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "product": {
+            "$ref": "#/components/schemas/OfferProductRead"
+          },
+          "responds_by": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The turn's deadline; the offer expires once it is reached.",
+            "title": "Responds By"
+          },
+          "status": {
+            "$ref": "#/components/schemas/OfferStatus"
+          },
+          "turn": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OfferTurn"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whose answer is awaited; null once closed."
+          }
+        },
+        "required": [
+          "id",
+          "product",
+          "status",
+          "turn",
+          "current_amount",
+          "agreed_amount",
+          "responds_by",
+          "checkout_expires_at",
+          "created_at"
+        ],
+        "title": "OfferSummaryRead",
+        "type": "object"
+      },
+      "OfferTurn": {
+        "enum": [
+          "admin",
+          "customer"
+        ],
+        "title": "OfferTurn",
+        "type": "string"
       },
       "OrderDetailRead": {
         "properties": {
@@ -8634,6 +9324,275 @@
           }
         ],
         "summary": "Update a material",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/offers": {
+      "get": {
+        "operationId": "list_offers_api_v1_admin_offers_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/OfferStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "product_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Product Id"
+            }
+          },
+          {
+            "description": "The customer who made the offer.",
+            "in": "query",
+            "name": "user_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The customer who made the offer.",
+              "title": "User Id"
+            }
+          },
+          {
+            "description": "Exclusive deadline bound; must carry a UTC offset.",
+            "in": "query",
+            "name": "responds_before",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exclusive deadline bound; must carry a UTC offset.",
+              "title": "Responds Before"
+            }
+          },
+          {
+            "description": "Opaque cursor from a previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque cursor from a previous page.",
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminOfferPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No session, or MFA not completed."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unknown id, or caller is not an administrator."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Invalid filter or a tampered cursor."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the database or Redis is unreachable; retry later."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "The offer queue: the administrator's turn first, soonest deadline first",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/offers/{offer_id}": {
+      "get": {
+        "operationId": "get_offer_api_v1_admin_offers__offer_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "offer_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Offer Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminOfferDetailRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No session, or MFA not completed."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unknown id, or caller is not an administrator."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the database or Redis is unreachable; retry later."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "One offer with its complete negotiation history",
         "tags": [
           "admin",
           "admin"
@@ -13652,6 +14611,225 @@
         ]
       }
     },
+    "/api/v1/me/offers": {
+      "get": {
+        "operationId": "list_my_offers_api_v1_me_offers_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/OfferStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "product_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Product Id"
+            }
+          },
+          {
+            "description": "Opaque cursor from a previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque cursor from a previous page.",
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OfferPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No valid session cookie was presented."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Invalid filter or cursor."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the database or Redis is unreachable; retry later."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "List the caller's own offers, newest first",
+        "tags": [
+          "offers"
+        ]
+      }
+    },
+    "/api/v1/me/offers/{offer_id}": {
+      "get": {
+        "operationId": "get_my_offer_api_v1_me_offers__offer_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "offer_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Offer Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OfferDetailRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No valid session cookie was presented."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No such offer among the caller's own."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the database or Redis is unreachable; retry later."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "One of the caller's own offers, with its complete history",
+        "tags": [
+          "offers"
+        ]
+      }
+    },
     "/api/v1/me/orders": {
       "get": {
         "operationId": "list_my_orders_api_v1_me_orders_get",
@@ -14259,6 +15437,123 @@
         "summary": "Add a product to the wishlist (idempotent)",
         "tags": [
           "wishlist"
+        ]
+      }
+    },
+    "/api/v1/offers": {
+      "post": {
+        "operationId": "create_offer_api_v1_offers_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OfferCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OfferDetailRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "MALFORMED_REQUEST: the body is not valid JSON."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No valid session cookie was presented."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "CSRF token missing or invalid, or EMAIL_VERIFICATION_REQUIRED."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "OFFER_ALREADY_ACTIVE, or PRODUCT_ALREADY_OWNED."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "OFFER_BELOW_MINIMUM (with `minimum`), OFFER_COOLDOWN_ACTIVE (with `cooldown_until`), PRODUCT_NOT_PURCHASABLE (with `reason`), or VALIDATION_ERROR."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "RATE_LIMITED: too many offers this hour."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "ORDERS_PAUSED: the shop is not accepting orders or offers."
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Open a price offer on an STL product",
+        "tags": [
+          "offers"
         ]
       }
     },
