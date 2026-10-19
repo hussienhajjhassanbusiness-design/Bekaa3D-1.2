@@ -1,9 +1,12 @@
 """The kinds of operational alert Payments raises (VS-024 plan 3.5). Pure: delivery and
 de-duplication live in `infrastructure.alerts`."""
 
+from datetime import timedelta
 from enum import StrEnum
 from typing import Any
 from uuid import UUID
+
+from app.payments.domain.limits import ALERT_REPEAT_PER_PAYMENT, ALERT_REPEAT_PER_PROVIDER
 
 
 class AlertKind(StrEnum):
@@ -44,3 +47,17 @@ def alert_payload(
         "payment_id": str(payment_id) if payment_id else None,
         "order_id": str(order_id) if order_id else None,
     } | kept
+
+
+_REPEAT = {
+    AlertKind.STUCK: ALERT_REPEAT_PER_PAYMENT,
+    AlertKind.EVENT_UNVERIFIED: ALERT_REPEAT_PER_PAYMENT,
+    AlertKind.PROVIDER_UNAVAILABLE: ALERT_REPEAT_PER_PAYMENT,
+    AlertKind.PROVIDER_NOT_CONFIGURED: ALERT_REPEAT_PER_PAYMENT,
+    AlertKind.PROVIDER_UNREACHABLE: ALERT_REPEAT_PER_PROVIDER,
+}
+
+
+def repeat_window(kind: AlertKind) -> timedelta | None:
+    """Plan 3.5: how soon the same alert may repeat; None means once per entity, ever."""
+    return _REPEAT.get(kind)

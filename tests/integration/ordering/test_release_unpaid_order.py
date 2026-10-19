@@ -25,7 +25,7 @@ from tests.integration.payments.recovery_support import ORDER_STATE, one, seed_o
 
 pytestmark = pytest.mark.integration
 
-EPOCH = datetime(1971, 4, 1, tzinfo=UTC)
+EPOCH = datetime(2271, 4, 1, tzinfo=UTC)
 AT = datetime(2026, 10, 20, 9, 0, tzinfo=UTC)
 HISTORY = """
     SELECT order_item_id IS NULL AS order_row, from_status, to_status, actor_user_id, reason
@@ -119,7 +119,7 @@ async def test_only_an_unpaid_uncancelled_online_order_is_released(
 async def test_release_candidates_page_unpaid_online_orders_by_placement(
     db_engine: AsyncEngine, db_session: AsyncSession
 ) -> None:
-    epoch = datetime(1972, 4, 1, tzinfo=UTC)
+    epoch = datetime(2272, 4, 1, tzinfo=UTC)
     due = [
         (await seed_order(db_session, placed_at=epoch + timedelta(minutes=m))).order_id
         for m in range(5)

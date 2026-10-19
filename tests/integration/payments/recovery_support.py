@@ -3,21 +3,29 @@ state, known (or not) to the mock. Each test picks its own far-past epoch, and t
 are run from that epoch's keyset start, so rows other tests leave behind never match."""
 
 import uuid
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
+import pytest_asyncio
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.catalog.domain.enums import ProductType
-from app.payments.application.ports import CreatePayment
+from app.identity.domain.enums import UserRole
+from app.identity.public import active_administrator_contacts
+from app.payments.application.ports import CreatePayment, PaymentRef, ProviderStatus
+from app.payments.domain.exceptions import ProviderUnavailableError
 from app.payments.infrastructure.providers.mock import MockPaymentProvider
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
 from tests.integration.catalog.storefront_support import seed_product, seed_refs
 from tests.integration.deep_support import create_user
 
 HOLD = timedelta(seconds=1800)  # the checkout_hold_period default
+# Each test's epoch is its year plus this: after `NOW` and past every far-past window
+# (1985, 1990, 1991) that older tests read without a lower bound.
+YEARS_AHEAD = 300
 START = uuid.UUID(int=0)
 
 
@@ -52,9 +60,11 @@ async def seed_order(
     user_id: uuid.UUID | None = None,
     stl_id: uuid.UUID | None = None,
     with_lines: bool = True,
+    stl: bool = True,
     **over: Any,
 ) -> SeededOrder:
-    """An unpaid online order with one STL line (plus one physical line when asked)."""
+    """An unpaid online order with one STL line (plus one physical line when asked);
+    `stl=False` leaves only the physical line (a seeded cash order)."""
     if user_id is None:
         user_id = (await create_user(db)).id
     refs = await seed_refs(db) if stl_id is None or physical else None
@@ -62,7 +72,7 @@ async def seed_order(
         assert refs is not None
         stl_id = (await seed_product(db, refs, type=ProductType.STL)).id
     order_id, number = uuid.uuid4(), f"B3D-{uuid.uuid4().hex[:8].upper()}"
-    lines_total = total_cents + (2000 if physical else 0)
+    lines_total = (total_cents if stl else 0) + (2000 if physical else 0)
     order: dict[str, Any] = {
         "id": order_id,
         "order_number": number,
@@ -88,13 +98,13 @@ async def seed_order(
     line = {
         "order_id": order_id,
         "user_id": user_id,
-        "payment_method": order["payment_method"],
+        "payment_method": (order | over)["payment_method"],
         "product_type": "stl",
         "product_name_snapshot": "Seeded STL",
         "quantity": 1,
         "fulfillment_status": "pending",
     }
-    if with_lines:
+    if with_lines and stl:
         await _insert(
             db,
             "order_items",
@@ -223,3 +233,121 @@ PAYMENT_STATE = """
       provider_payment_id
     FROM payments WHERE id = :p
 """
+# Everything but alert rows: what "nothing written" compares (plan 6.2).
+UNTOUCHED = """
+    SELECT o.status, o.cancelled_at, o.updated_at,
+      (SELECT array_agg(row(i.fulfillment_status::text, i.cancelled_at, i.updated_at)::text
+         ORDER BY i.id) FROM order_items i WHERE i.order_id = o.id) AS lines,
+      (SELECT array_agg(row(p.status::text, p.provider_payment_id, p.failed_at, p.expired_at,
+         p.verified_at, p.late_captured_at, p.captured_amount_cents, p.updated_at)::text
+         ORDER BY p.id) FROM payments p WHERE p.order_id = o.id) AS payments,
+      (SELECT count(*) FROM order_status_history h WHERE h.order_id = o.id) AS history,
+      (SELECT count(*) FROM audit_logs a WHERE a.action <> 'payment.alert_raised'
+         AND (a.entity_id = o.id
+              OR a.entity_id IN (SELECT id FROM payments WHERE order_id = o.id))) AS audits,
+      (SELECT count(*) FROM email_outbox e WHERE e.payload->>'order_id' = CAST(o.id AS text)
+         AND e.template <> 'admin_payment_alert') AS emails
+    FROM orders o WHERE o.id = :o
+"""
+
+
+class Spy:
+    """The mock, counting the status queries it answers."""
+
+    name = "mock"
+    supports_status_query = True
+
+    def __init__(self, mock: MockPaymentProvider) -> None:
+        self.mock, self.calls = mock, 0
+
+    async def query_status(self, ref: PaymentRef) -> ProviderStatus:
+        self.calls += 1
+        return await self.mock.query_status(ref)
+
+
+class Down:
+    """A status provider that never answers."""
+
+    name = "mock"
+    supports_status_query = True
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def query_status(self, ref: PaymentRef) -> ProviderStatus:
+        self.calls += 1
+        raise ProviderUnavailableError("connection refused")
+
+
+def factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
+    return async_sessionmaker(engine, expire_on_commit=False)
+
+
+async def alerts(engine: AsyncEngine, payment_id: uuid.UUID) -> dict[str, int]:
+    async with engine.connect() as conn:
+        rows = await conn.execute(
+            text(
+                "SELECT after_data->>'kind' AS kind, count(*) AS n FROM audit_logs"
+                " WHERE entity_id = :p AND action = 'payment.alert_raised' GROUP BY 1"
+            ),
+            {"p": payment_id},
+        )
+        return {row.kind: row.n for row in rows}
+
+
+async def provider_alerts(engine: AsyncEngine, provider: str = "mock") -> int:
+    async with engine.connect() as conn:
+        count: int = await conn.scalar(
+            text(
+                "SELECT count(*) FROM audit_logs WHERE action = 'payment.alert_raised'"
+                " AND entity_id IS NULL AND after_data->>'kind' = 'provider_unreachable'"
+                " AND after_data->>'provider' = :v AND created_at > now() - interval '1 hour'"
+            ),
+            {"v": provider},
+        )
+        return count
+
+
+async def forget_provider_alerts(engine: AsyncEngine) -> None:
+    """Age every recent `provider_unreachable` row out of its 1 h window (shared database)."""
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                "UPDATE audit_logs SET created_at = created_at - interval '2 hours'"
+                " WHERE action = 'payment.alert_raised' AND entity_id IS NULL"
+                " AND after_data->>'kind' = 'provider_unreachable'"
+                " AND created_at > now() - interval '2 hours'"
+            )
+        )
+
+
+async def admin(db: AsyncSession) -> list[tuple[uuid.UUID, str]]:
+    """At least one verified admin; everyone an alert reaches."""
+    await create_user(db, role=UserRole.ADMIN)
+    contacts = await active_administrator_contacts(db)
+    await db.commit()
+    return contacts
+
+
+async def explain(engine: AsyncEngine, query: Any, *, seqscan: bool) -> str:
+    """EXPLAIN the store's own Select with its parameters, on fresh statistics (as
+    autovacuum keeps them); `seqscan=False` disables seq scans."""
+    compiled = query.compile(compile_kwargs={"render_postcompile": True})
+    async with engine.connect() as conn:
+        await conn.execute(text("ANALYZE payments, orders"))
+        await conn.commit()
+        if not seqscan:
+            await conn.execute(text("SET enable_seqscan = off"))
+        rows = await conn.execute(text(f"EXPLAIN {compiled}"), dict(compiled.params))
+        plan = "\n".join(str(row[0]) for row in rows)
+        await conn.rollback()
+    return plan
+
+
+@pytest_asyncio.fixture
+async def drop_alert_emails(db_engine: AsyncEngine) -> AsyncIterator[None]:
+    """After the test, delete the admin alert emails it queued (only VS-024 writes this
+    template), so the shared outbox never carries thousands of them into later tests."""
+    yield
+    async with db_engine.begin() as conn:
+        await conn.execute(text("DELETE FROM email_outbox WHERE template = 'admin_payment_alert'"))

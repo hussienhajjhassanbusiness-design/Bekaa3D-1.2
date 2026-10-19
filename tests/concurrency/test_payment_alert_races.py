@@ -17,6 +17,7 @@ from app.payments.infrastructure.verification import verify_event, verify_paymen
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
 from tests.concurrency.test_payment_races import STAGGER, _as, _factory, _synced_locks
 from tests.integration.deep_support import create_user
+from tests.integration.payments.recovery_support import drop_alert_emails  # noqa: F401
 from tests.integration.payments.test_verification import _event
 from tests.integration.payments.verification_support import (
     mock_fixture,  # noqa: F401
@@ -26,7 +27,7 @@ from tests.integration.payments.verification_support import (
 pytestmark = [
     pytest.mark.concurrency,
     pytest.mark.integration,
-    pytest.mark.usefixtures("configured_app"),
+    pytest.mark.usefixtures("configured_app", "drop_alert_emails"),
 ]
 
 STATE = """

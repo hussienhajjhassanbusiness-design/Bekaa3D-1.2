@@ -9,8 +9,6 @@ from datetime import timedelta
 from typing import Any
 
 import pytest
-import structlog
-import structlog.testing
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
@@ -24,6 +22,7 @@ from app.payments.infrastructure.alerts import SqlPaymentAlerts
 from app.payments.infrastructure.verification import verify_payment
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
 from tests.integration.deep_support import create_user
+from tests.integration.payments.recovery_support import drop_alert_emails  # noqa: F401
 from tests.integration.payments.test_verification import _factory
 from tests.integration.payments.verification_support import (
     Seeded,
@@ -31,7 +30,10 @@ from tests.integration.payments.verification_support import (
     pending_payment,
 )
 
-pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("configured_app")]
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.usefixtures("configured_app", "drop_alert_emails"),
+]
 
 REDIRECT = "https://pay.example/session-SECRET-REDIRECT"
 # Exactly what a late-capture alert may carry (plan 3.5; VS-024 2.1).
@@ -184,12 +186,23 @@ async def test_a_late_capture_alerts_every_admin_once_with_only_what_they_need(
 
 
 async def test_the_alert_log_event_carries_ids_and_counts_only(
-    db_engine: AsyncEngine, db_session: AsyncSession, mock: Any
+    db_engine: AsyncEngine, db_session: AsyncSession, mock: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Before the formatter's redaction: the event itself never names an email or amount."""
     await _admins(db_session)
-    with structlog.testing.capture_logs() as events:
-        seeded = await _late_capture(db_engine, db_session, mock)
+    events: list[dict[str, Any]] = []
+
+    class Recorder:
+        """The module's logger, replaced: structlog may have cached the real one."""
+
+        def __getattr__(self, level: str) -> Any:
+            async def record(event: str, **kw: Any) -> None:
+                events.append({"event": event, "log_level": level.removeprefix("a"), **kw})
+
+            return record
+
+    monkeypatch.setattr(alerts, "logger", Recorder())
+    seeded = await _late_capture(db_engine, db_session, mock)
     (alert,) = [e for e in events if e["event"] == "payment_alert"]
     assert set(alert) == {
         "event",

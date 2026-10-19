@@ -9,8 +9,16 @@ from app.jobs.purge_idempotency import purge_expired_idempotency_records
 from app.jobs.purge_security_records import purge_expired_security_records
 from app.jobs.purge_unverified import purge_unverified_accounts
 from app.jobs.reap_orphan_files import reap_orphan_files
+from app.jobs.reconcile_payments import reconcile_payments
+from app.jobs.release_stale_checkouts import release_stale_checkouts
 from app.jobs.rotate_ip_salt import rotate_ip_salt
 from app.jobs.verify_payments import verify_payments
+from app.payments.domain.limits import (
+    RECONCILE_CRON_MINUTES,
+    RECONCILE_CRON_SECOND,
+    RELEASE_CRON_MINUTES,
+    RELEASE_CRON_SECOND,
+)
 
 FUNCTIONS: list[WorkerCoroutine] = [
     dispatch_outbox,
@@ -22,6 +30,8 @@ FUNCTIONS: list[WorkerCoroutine] = [
     purge_expired_attachments,
     verify_payments,
     purge_expired_idempotency_records,
+    reconcile_payments,
+    release_stale_checkouts,
 ]
 
 CRON_JOBS: list[CronJob] = [
@@ -46,4 +56,18 @@ CRON_JOBS: list[CronJob] = [
     cron(verify_payments, second=0, run_at_startup=True),
     # VS-023 / SRS 7.5: claims live 24 h; daily, the next run takes any backlog.
     cron(purge_expired_idempotency_records, hour=3, minute=53, second=0),
+    # VS-024: missed callbacks and stuck attempts; the provider is asked, never assumed.
+    cron(
+        reconcile_payments,
+        minute=set(RECONCILE_CRON_MINUTES),
+        second=RECONCILE_CRON_SECOND,
+        run_at_startup=True,
+    ),
+    # VS-024: unpaid checkouts past their hold, released only on an explicit answer.
+    cron(
+        release_stale_checkouts,
+        minute=set(RELEASE_CRON_MINUTES),
+        second=RELEASE_CRON_SECOND,
+        run_at_startup=True,
+    ),
 ]

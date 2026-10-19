@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import insert, select, tuple_, update
+from sqlalchemy import Select, insert, select, tuple_, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -210,17 +210,24 @@ class SqlOrderStore:
     ) -> list[tuple[datetime, UUID]]:
         """Unpaid online orders placed at or before `placed_before`, keyset-paged by
         `(placed_at, id)` (`ix_orders_status_placed`). No lock."""
-        query = select(_O.placed_at, _O.id).where(
-            _O.status == OrderStatus.PENDING_PAYMENT,
-            _O.payment_method == PaymentMethod.ONLINE,
-            _O.placed_at <= placed_before,
-        )
-        if after is not None:
-            query = query.where(tuple_(_O.placed_at, _O.id) > after)
-        rows = await self._session.execute(query.order_by(_O.placed_at, _O.id).limit(limit))
-        return [(row.placed_at, row.id) for row in rows]
+        query = release_candidates_query(placed_before=placed_before, after=after, limit=limit)
+        return [(row.placed_at, row.id) for row in await self._session.execute(query)]
 
     async def set_order_status(self, order_id: UUID, status: OrderStatus, *, at: datetime) -> None:
         await self._session.execute(
             update(_O).where(_O.id == order_id).values(status=status, updated_at=at)
         )
+
+
+def release_candidates_query(
+    *, placed_before: datetime, after: tuple[datetime, UUID] | None, limit: int
+) -> Select[datetime, UUID]:
+    """The release job's selection, also EXPLAINed by its test (plan 6.2)."""
+    query = select(_O.placed_at, _O.id).where(
+        _O.status == OrderStatus.PENDING_PAYMENT,
+        _O.payment_method == PaymentMethod.ONLINE,
+        _O.placed_at <= placed_before,
+    )
+    if after is not None:
+        query = query.where(tuple_(_O.placed_at, _O.id) > after)
+    return query.order_by(_O.placed_at, _O.id).limit(limit)

@@ -1,6 +1,7 @@
 """`SqlWebhookEventStore` (database-design 9.2; VS-023 plan 4.6). It never commits and
 takes no row lock: deduplication is the unique key, processing is idempotent."""
 
+from collections.abc import Sequence
 from datetime import datetime
 from uuid import UUID
 
@@ -15,6 +16,7 @@ _E = WebhookEventModel
 # `processing_error` values verification leaves on an unprocessed event (VS-024 3.2a, 3.3).
 MANUAL_CONFIRMATION_REQUIRED = "manual_confirmation_required"
 PROVIDER_UNKNOWN_REFERENCE = "provider_unknown_reference"
+DISMISSED_BY_ADMIN = "dismissed_by_admin"
 
 
 class SqlWebhookEventStore:
@@ -93,3 +95,26 @@ class SqlWebhookEventStore:
             .values(processed_at=at, processing_error=None)
         )
         return int(result.rowcount)  # type: ignore[attr-defined]
+
+    async def count_unprocessed_for_payments(self, payment_ids: Sequence[UUID]) -> int:
+        """Across the order's attempts; unlocked (`ix_webhook_events_payment_unprocessed`)."""
+        if not payment_ids:
+            return 0
+        count = await self._session.scalar(
+            select(func.count())
+            .select_from(_E)
+            .where(_E.payment_id.in_(payment_ids), _E.processed_at.is_(None))
+        )
+        return int(count or 0)
+
+    async def dismiss_for_payments(
+        self, payment_ids: Sequence[UUID], *, at: datetime
+    ) -> list[UUID]:
+        """The manual release's reviewed events (plan 2.5): processed, `dismissed_by_admin`."""
+        result = await self._session.scalars(
+            update(_E)
+            .where(_E.payment_id.in_(payment_ids), _E.processed_at.is_(None))
+            .values(processed_at=at, processing_error=DISMISSED_BY_ADMIN)
+            .returning(_E.id)
+        )
+        return sorted(result.all(), key=str)

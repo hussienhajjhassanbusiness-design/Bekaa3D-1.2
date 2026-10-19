@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import insert, select, tuple_, update
+from sqlalchemy import Select, insert, select, tuple_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ordering.application.ports import PaymentAttemptRef
@@ -182,6 +182,13 @@ class SqlPaymentStore:
         )
         return [_payment(row) for row in rows]
 
+    async def for_order(self, order_id: UUID) -> list[Payment]:
+        """Every attempt of the order by `(initiated_at, id)`. No lock (release Tx A)."""
+        rows = await self._session.execute(
+            select(*_SELECT).where(_P.order_id == order_id).order_by(_P.initiated_at, _P.id)
+        )
+        return [_payment(row) for row in rows]
+
     async def live_for_order(self, order_id: UUID) -> Payment | None:
         row = (
             await self._session.execute(
@@ -203,13 +210,20 @@ class SqlPaymentStore:
         self, *, before: datetime, after: tuple[datetime, UUID] | None, limit: int
     ) -> list[tuple[datetime, UUID]]:
         """Served by `ix_payments_unsettled`; cash is never live (`ck_payments_cash_shape`)."""
-        query = select(_P.initiated_at, _P.id).where(
-            _P.status.in_(LIVE), _P.order_payment_method == "online", _P.initiated_at <= before
-        )
-        if after is not None:
-            query = query.where(tuple_(_P.initiated_at, _P.id) > after)
-        rows = await self._session.execute(query.order_by(_P.initiated_at, _P.id).limit(limit))
-        return [(row.initiated_at, row.id) for row in rows]
+        query = stale_live_query(before=before, after=after, limit=limit)
+        return [(row.initiated_at, row.id) for row in await self._session.execute(query)]
+
+
+def stale_live_query(
+    *, before: datetime, after: tuple[datetime, UUID] | None, limit: int
+) -> Select[datetime, UUID]:
+    """The reconcile job's selection, also EXPLAINed by its test (plan 6.2)."""
+    query = select(_P.initiated_at, _P.id).where(
+        _P.status.in_(LIVE), _P.order_payment_method == "online", _P.initiated_at <= before
+    )
+    if after is not None:
+        query = query.where(tuple_(_P.initiated_at, _P.id) > after)
+    return query.order_by(_P.initiated_at, _P.id).limit(limit)
 
 
 class SqlPaymentAttempts:

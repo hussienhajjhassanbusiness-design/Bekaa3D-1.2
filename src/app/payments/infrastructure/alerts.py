@@ -7,12 +7,13 @@ from typing import Any
 from uuid import UUID
 
 import structlog
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.engagement.public import NotificationType, create_notification
 from app.identity.public import active_administrator_contacts
 from app.ordering.public import LockedOrder
-from app.payments.domain.alerts import AlertKind, alert_payload
+from app.payments.domain.alerts import AlertKind, alert_payload, repeat_window
 from app.payments.domain.payments import Payment
 from app.platform.public import SqlAuditWriter, SqlOutboxWriter
 
@@ -40,6 +41,10 @@ class SqlPaymentAlerts:
         payload = alert_payload(kind, payment_id=payment_id, order_id=order_id, details=details)
         try:
             async with self._session.begin_nested():
+                # Last lock of the transaction (after any orders, lines, payments): two
+                # raisers of one alert serialise here, so the check below sees the other.
+                key = func.hashtextextended(_key(kind, payload), 0)
+                await self._session.execute(select(func.pg_advisory_xact_lock(key)))
                 if await self._raised(kind, payment_id, payload, dedupe_window):
                     return False
                 await SqlAuditWriter(self._session).record(
@@ -158,3 +163,28 @@ class SqlLateCaptureAlerts:
 
 def _id(value: UUID | None) -> str | None:
     return str(value) if value is not None else None
+
+
+def _key(kind: AlertKind, payload: dict[str, Any]) -> str:
+    """The de-duplication entity: the payment, or the provider for a provider alert."""
+    entity = payload.get("payment_id") or payload.get("provider") or ""
+    return f"payment_alert:{kind}:{entity}"
+
+
+async def alert(
+    factory: async_sessionmaker[AsyncSession],
+    kind: AlertKind,
+    *,
+    payment_id: UUID | None = None,
+    order_id: UUID | None = None,
+    details: dict[str, Any],
+) -> bool:
+    """A job's alert in its own short transaction, repeated per `repeat_window(kind)`."""
+    async with factory() as session, session.begin():
+        return await SqlPaymentAlerts(session).raise_alert(
+            kind,
+            payment_id=payment_id,
+            order_id=order_id,
+            details=details,
+            dedupe_window=repeat_window(kind),
+        )

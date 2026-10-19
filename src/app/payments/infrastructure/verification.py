@@ -16,6 +16,8 @@ from app.payments.application.services.apply import Source, apply_result
 from app.payments.domain.exceptions import ProviderUnavailableError
 from app.payments.domain.limits import PROVIDER_TIMEOUT_SECONDS, VERIFY_BATCH_SIZE
 from app.payments.domain.outcome import Outcome, ProviderResult
+from app.payments.domain.payments import Payment
+from app.payments.domain.release import Capability
 from app.payments.infrastructure.alerts import SqlLateCaptureAlerts, SqlPaymentAlerts
 from app.payments.infrastructure.ordering_side import SqlOrderSide, SqlPaymentNotices
 from app.payments.infrastructure.payments import SqlPaymentStore
@@ -55,6 +57,21 @@ async def apply_provider_result(
         provider_payment_id=provider_payment_id,
         at=datetime.now(UTC),
         late_captures=SqlLateCaptureAlerts(SqlPaymentAlerts(session)),
+    )
+
+
+def capability(providers: Providers, provider: str) -> Capability:
+    """What the payment's adapter can tell us (T2, `confirm_refusal`)."""
+    adapter = providers.get(provider)
+    if adapter is None:
+        return Capability.NOT_CONFIGURED
+    return Capability.STATUS_QUERY if _queryable(adapter) else Capability.NO_STATUS_QUERY
+
+
+async def ask_provider(providers: Providers, payment: Payment) -> ProviderStatus:
+    """The bounded status query for one attempt; call it with no transaction open."""
+    return await _ask(
+        providers, payment.provider.value, PaymentRef(payment.id, payment.provider_payment_id)
     )
 
 
@@ -136,18 +153,31 @@ async def verify_payment(
 ) -> Outcome:
     """The same without an event (reconciliation). Raises ProviderUnavailableError when the
     provider does not answer; `unknown` is NOOP and opens no Tx B (VS-024 3.2a)."""
+    _, outcome = await verify_payment_answer(
+        factory, providers, payment_id, source=source, actor_user_id=actor_user_id
+    )
+    return outcome
+
+
+async def verify_payment_answer(
+    factory: Factory,
+    providers: Providers,
+    payment_id: UUID,
+    *,
+    source: Literal["reconcile", "release", "manual_reconcile"],
+    actor_user_id: UUID | None,
+) -> tuple[ProviderResult | None, Outcome]:
+    """`verify_payment` with the provider's answer (None: no such payment), for the jobs."""
     async with factory() as session, session.begin():
         payment = await SqlPaymentStore(session).get(payment_id)
     if payment is None:
-        return Outcome.NOOP
-    status = await _ask(
-        providers, payment.provider.value, PaymentRef(payment.id, payment.provider_payment_id)
-    )
+        return None, Outcome.NOOP
+    status = await ask_provider(providers, payment)
     if status.result.state == "unknown":
         await logger.awarning("payment_reference_unknown", payment_id=str(payment.id))
-        return Outcome.NOOP
+        return status.result, Outcome.NOOP
     async with factory() as session, session.begin():
-        return await apply_provider_result(
+        outcome = await apply_provider_result(
             session,
             payment.id,
             status.result,
@@ -155,6 +185,7 @@ async def verify_payment(
             actor_user_id=actor_user_id,
             provider_payment_id=status.provider_payment_id,
         )
+    return status.result, outcome
 
 
 async def verify_unprocessed(
