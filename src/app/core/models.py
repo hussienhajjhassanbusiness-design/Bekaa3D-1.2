@@ -7,6 +7,7 @@ about a table whose model class was never imported in that process)."""
 import app.catalog.infrastructure.models as _catalog_models  # noqa: F401
 import app.engagement.infrastructure.models as _engagement_models  # noqa: F401
 import app.identity.infrastructure.models as _identity_models  # noqa: F401
+import app.negotiation.infrastructure.models as _negotiation_models  # noqa: F401
 import app.ordering.infrastructure.models as _ordering_models  # noqa: F401
 import app.payments.infrastructure.models as _payments_models  # noqa: F401
 import app.platform.infrastructure.models as _platform_models  # noqa: F401

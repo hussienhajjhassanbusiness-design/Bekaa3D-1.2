@@ -205,7 +205,7 @@ class OrderModel(Base):
 
 
 class OrderItemModel(Base):
-    """database-design.md 8.4; migration 03a4730dd046. `offer_id` gets its FK in VS-039."""
+    """database-design.md 8.4; migration 03a4730dd046 (`offer_id` FK: 4b7e2c9d1f30)."""
 
     __tablename__ = "order_items"
 
@@ -217,7 +217,9 @@ class OrderItemModel(Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
     product_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-    offer_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    offer_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("offers.id", ondelete="RESTRICT")
+    )
     product_type: Mapped[ProductType] = mapped_column(
         _pg_enum(ProductType, "product_type"), nullable=False
     )
