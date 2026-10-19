@@ -537,6 +537,34 @@ async def test_a_paid_online_physical_order_can_be_cancelled(
     assert (detail["can_cancel"], detail["payment_due"]) == (True, False)
 
 
+@pytest.mark.parametrize(("second", "expected"), [("cancelled", True), ("in_production", False)])
+async def test_a_line_an_admin_cancelled_does_not_block_self_cancel(
+    db_session: AsyncSession, ctx: Ctx, client: TestClient, second: str, expected: bool
+) -> None:
+    """Owner decision 2026-10-19 (ADR-033 d4): only live (not cancelled) lines count."""
+    oid = await seed_order(db_session, ctx, kind="pickup", method="online", status="in_progress")
+    await _insert(
+        db_session,
+        "order_items",
+        {
+            "order_id": oid,
+            "user_id": ctx.owner_id,
+            "product_id": ctx.physical_id,
+            "product_type": "physical",
+            "payment_method": "online",
+            "product_name_snapshot": "Second",
+            "unit_price_cents": 500,
+            "quantity": 1,
+            "line_total_cents": 500,
+            "fulfillment_status": second,
+            "lead_time_days_snapshot": 3,
+            "batch_size_snapshot": 2,
+        },
+    )
+    await seed_payment(db_session, oid, "paid")
+    assert _detail(client, oid)["can_cancel"] is expected
+
+
 async def test_can_cancel_asks_payments_not_the_order_status(
     db_session: AsyncSession, ctx: Ctx, client: TestClient
 ) -> None:

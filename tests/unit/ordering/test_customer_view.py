@@ -150,8 +150,9 @@ def _can(**over: Any) -> bool:
         {"status": OrderStatus.PARTIALLY_REFUNDED},
         {"payment_method": PaymentMethod.CASH, "reached_paid": False},
         {"lines": [_line(PHYSICAL, S.PENDING), _line(PHYSICAL, S.PENDING)]},
+        {"lines": [_line(PHYSICAL, S.PENDING), _line(PHYSICAL, S.CANCELLED)]},
     ],
-    ids=["paid-online", "partially-refunded", "unpaid-cash", "all-physical"],
+    ids=["paid-online", "partially-refunded", "unpaid-cash", "all-physical", "one-cancelled"],
 )
 def test_can_cancel_when_every_condition_holds(over: dict[str, Any]) -> None:
     assert _can(**over)
@@ -168,7 +169,8 @@ def test_can_cancel_when_every_condition_holds(over: dict[str, Any]) -> None:
         {"status": OrderStatus.CANCELLED},
         {"status": OrderStatus.REFUNDED},
         {"lines": [_line(PHYSICAL, S.PENDING), _line(PHYSICAL, S.IN_PRODUCTION)]},
-        {"lines": [_line(PHYSICAL, S.PENDING), _line(PHYSICAL, S.CANCELLED)]},
+        {"lines": [_line(PHYSICAL, S.CANCELLED), _line(STL, S.AWAITING_DELIVERY)]},
+        {"lines": [_line(PHYSICAL, S.PENDING), _line(PHYSICAL, S.REFUNDED)]},
         {"lines": [_line(PHYSICAL, S.READY_FOR_PICKUP)]},
     ],
     ids=[
@@ -180,7 +182,8 @@ def test_can_cancel_when_every_condition_holds(over: dict[str, Any]) -> None:
         "cancelled",
         "refunded",
         "one-in-production",
-        "one-cancelled",
+        "every-physical-cancelled",
+        "one-refunded",
         "ready-for-pickup",
     ],
 )

@@ -57,14 +57,17 @@ def can_cancel(
     reached_paid: bool,
     lines: Iterable[CustomerOrderLine],
 ) -> bool:
-    """SRS 8.9 / ADR-024 d8, on the unmasked line states: a physical line, cash or a
-    payment that reached paid, a cancellable status, every physical line `pending`."""
-    physical = [
-        line.fulfillment_status for line in lines if line.product_type is ProductType.PHYSICAL
+    """SRS 8.9 as amended by the owner (ADR-033 d4), on unmasked states: a live (not
+    cancelled) physical line, cash or paid, a cancellable status, every live one `pending`."""
+    live_physical = [
+        line.fulfillment_status
+        for line in lines
+        if line.product_type is ProductType.PHYSICAL
+        and line.fulfillment_status is not OrderItemStatus.CANCELLED
     ]
     return (
-        bool(physical)
+        bool(live_physical)
         and (payment_method is PaymentMethod.CASH or reached_paid)
         and status in CANCELLABLE_ORDER_STATUSES
-        and all(s is OrderItemStatus.PENDING for s in physical)
+        and all(s is OrderItemStatus.PENDING for s in live_physical)
     )
