@@ -90,3 +90,57 @@ class StatusChange:
     order_item_id: UUID | None = None
     actor_user_id: UUID | None = None
     reason: str | None = None
+
+
+@dataclass(frozen=True)
+class CustomerOrder:
+    """An order as its customer may read it (VS-025): no `admin_note`, phone hash or email."""
+
+    id: UUID
+    order_number: str
+    source: OrderSource
+    status: OrderStatus
+    fulfillment_method: FulfillmentMethod | None
+    payment_method: PaymentMethod
+    subtotal_cents: int
+    tax_cents: int
+    total_cents: int
+    currency: str
+    recipient_name: str | None
+    contact_phone_snapshot: str | None
+    governorate: str | None
+    city: str | None
+    area: str | None
+    street: str | None
+    landmark_notes: str | None
+    customer_note: str | None
+    estimated_dispatch_at: datetime | None
+    placed_at: datetime
+    completed_at: datetime | None
+    cancelled_at: datetime | None
+
+
+@dataclass(frozen=True)
+class CustomerOrderLine:
+    id: UUID
+    product_id: UUID
+    product_type: ProductType
+    product_name_snapshot: str
+    image_snapshot: str | None
+    unit_price_cents: int
+    quantity: int
+    line_total_cents: int
+    currency: str
+    fulfillment_status: OrderItemStatus
+    fulfilled_at: datetime | None
+    cancelled_at: datetime | None
+
+
+@dataclass(frozen=True)
+class HistoryEntry:
+    """One customer-visible `order_status_history` row: no actor and no reason."""
+
+    order_item_id: UUID | None
+    from_status: str | None
+    to_status: str
+    created_at: datetime

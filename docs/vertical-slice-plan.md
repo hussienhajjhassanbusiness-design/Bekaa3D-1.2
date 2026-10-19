@@ -27,7 +27,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 | VS-023 | Checkout and verified payment for digital orders | VS-022, VS-008, VS-007 | Done |
 | VS-023b | STL delivery queue and mark-as-sent | VS-023 | Not started |
 | VS-024 | Payment recovery: reconciliation, stale checkouts, manual confirm | VS-023 | Not started |
-| VS-025 | Customer order history | VS-023 | Not started |
+| VS-025 | Customer order history | VS-023 | Done |
 | VS-026 | Address book | VS-008 | Done |
 | VS-027 | Shipping zones | — | Removed (ADR-024) |
 | VS-028 | Physical checkout: delivery, pickup, payment method, dispatch estimate | VS-023, VS-024, VS-026 | Not started |
@@ -647,24 +647,28 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 - **Must resolve before build** (final PR #8 review, both reviewers; recorded per the owner's stop rule, not yet decided):
   1. **No-status-API providers dead-end the hold release.** The release cancels only "when the provider confirms the attempt unpaid", and this section and the entities doc skip any order "whose provider has no status API". Admin cancel of a `pending_payment` order is 409, and manual confirm only applies or records a late capture. So an abandoned checkout stays `pending_payment` forever: the attempt stays live (retry gets `PAYMENT_ALREADY_ACTIVE`), its `pending` STL line holds the ownership index (the customer can never buy that STL again), and an alert repeats every run. The same trap catches a provider that keeps answering "pending", an order whose only attempt is a mismatched-amount late capture, and a provider-mismatch event that was "stored and ignored" if that leaves it unprocessed. This contradicts BR-039 and this slice's "Done when". Suggested fix: because a later success becomes a late capture anyway, release after the hold plus a grace period when the provider cannot answer and no webhook event exists, with an alert; or add an admin "expire attempt / release order" action. Define "unpaid" per provider state, and say that ignored or failed events set `processed_at`.
   2. **Manual confirm with a wrong amount: 422 or late capture?** This section ("A manual confirm with the wrong amount gives 422") and `api-endpoints.md` ("Server requires exact order-total match") refuse it. ADR-024 decision 15, SRS §9.2 and the late-capture rule above say a mismatched amount found by verification **or manual confirmation** is a late capture with an automatic refund. Scenario: a no-status-API provider, and the customer transfers $45 on a $50 order. The admin enters 4500 and gets 422, so no refund obligation exists, the attempt stays live, and with item 1 the order hangs. Suggested fix: separate an admin typo from a provider showing a different captured amount (for example a `captured_amount_cents` that must match the dashboard, plus an explicit "record mismatch as late capture" path), and align the API row and this slice's test.
+- **Wire in when VS-024 merges:** VS-025 ships `OrderDetail` without `can_retry_payment` and `hold_expires_at`. Whichever of VS-024 and VS-025 merges second adds both to `src/app/ordering/api/order_schemas.py` (`OrderDetailRead`) with a test for each; VS-025's payment read is `app.payments.public.order_payment_reader` ([ADR-033](adr/ADR-033-customer-order-read-model.md)).
+
 
 ## VS-025 — Customer order history
-**Status:** Not started
+**Status:** Done
 **Depends on:** VS-023
 **Goal:** A customer sees their orders and each order's immutable details.
 - **Model / migration:** None.
 - **Endpoints / jobs:** `GET /api/v1/me/orders` (cursor; filters: status and date range) and `GET /api/v1/me/orders/{id}`.
 - **Logic:**
   - Ownership is enforced in the SQL predicate.
-  - Fixed customer-facing schemas that cannot carry `internal_note` or provider references.
-  - STL lines show `awaiting_delivery` or `delivered` with `delivered_at`; this is the customer's STL purchase list (F-027).
-  - Each order shows its payment method and the derived `payment_due` and `can_cancel` flags (`can_cancel`: at least one physical line, cash or a payment that reached `paid`, status `in_progress` or `partially_refunded`, every physical line `pending`); a physical line in `in_production` is shown as `pending` ("Received"), and the customer's status history omits `in_production` entries, because "start printing" is internal (ADR-024). VS-029 tests the masking once physical lines can move.
+  - Fixed customer-facing schemas that cannot carry `admin_note` or provider references.
+  - STL lines show `awaiting_delivery` or `delivered` with `fulfilled_at`; this is the customer's STL purchase list (F-027).
+  - Each order shows its payment method and the derived `payment_due` and `can_cancel` flags (`can_cancel`: at least one live (not cancelled) physical line, cash or a payment that reached `paid`, status `in_progress` or `partially_refunded`, every live physical line `pending`); a physical line in `in_production` is shown as `pending` ("Received"), and the customer's status history omits `in_production` entries, because "start printing" is internal (ADR-024). VS-029 tests the masking once physical lines can move.
 - **Tests:**
   - Another user's order gives 404.
   - Snapshots survive product edits.
   - The internal note never appears.
   - Pagination is stable.
 - **Done when:** A customer sees exactly what they bought, at the price they paid.
+- **As built:** [ADR-033](adr/ADR-033-customer-order-read-model.md), [`docs/order-history.md`](order-history.md). No refund summary until VS-030 (no `refunds` table yet).
+- **Wire in when VS-024 merges:** `OrderDetail` gains `can_retry_payment` and `hold_expires_at` from VS-024's `can_retry_payment` and `hold_deadline`. Whichever of VS-024 and VS-025 merges second adds them, with a test for each, in `src/app/ordering/api/order_schemas.py`.
 
 ## VS-026 — Address book
 **Status:** Done
@@ -728,6 +732,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - Every cart type checks out with correct totals and the right payment methods.
   - No order carries a shipping amount, and snapshots are immutable.
   - The cash limits hold across accounts that share a phone.
+- **Owner decision 2026-10-19 (ADR-033): `amount_due_cents`.** Unpaid cash orders expose `amount_due_cents` (with the order's currency): the sum of `line_total_cents` over live (not cancelled) lines, the amount BR-055 / BR-143 require at handover. Null when `payment_due` is false. Add it to `OrderSummaryRead` and `OrderDetailRead` (`src/app/ordering/api/order_schemas.py`, VS-025) and to the cash `CheckoutRead`; test it after one line is cancelled. VS-029's handover should compute its expected amount with the same function.
 
 ## VS-029 — Admin order queue, fulfillment and cash handover
 **Status:** Not started
@@ -746,7 +751,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
     - pickup: `pending → in_production → ready_for_pickup → picked_up`.
   - **No physical work on an unpaid online order (BR-148):** every physical transition requires the order to be a cash order or to have an online payment that reached `paid` (`paid`, `partially_refunded` or `refunded`), otherwise 409 `INVALID_STATE_TRANSITION`. The hold release's `pending → cancelled` (VS-024) is the only exception, and it does not use this endpoint.
   - **Lock order (ADR-024):** every transition locks the `orders` row first, then the line, then recomputes the status, and writes history, audit, email and notification in the same transaction.
-  - `in_production` ("start printing") sends no email or notification, and is hidden from the customer's status history. `OrderDetail.can_cancel` is true only when the order has a physical line, is cash or has a payment that reached `paid`, has status `in_progress` or `partially_refunded`, and every physical line is `pending`. Emails and notifications: finished (`ready_to_ship`), shipped, ready for pickup (with the pickup address and hours), delivered or picked up. Delivery emails say "delivery fee paid to the courier on delivery".
+  - `in_production` ("start printing") sends no email or notification, and is hidden from the customer's status history. `OrderDetail.can_cancel` is true only when the order has a live (not cancelled) physical line, is cash or has a payment that reached `paid`, has status `in_progress` or `partially_refunded`, and every live physical line is `pending`. Emails and notifications: finished (`ready_to_ship`), shipped, ready for pickup (with the pickup address and hours), delivered or picked up. Delivery emails say "delivery fee paid to the courier on delivery".
   - On a cash order the transition endpoint refuses `→ delivered` and `→ picked_up` with 409 `INVALID_STATE_TRANSITION`; only the handover reaches them.
   - **Cash handover** (SRS §9.8), in one transaction:
     - locks the `orders` row, then all its lines by `id`;
@@ -845,7 +850,8 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 - **Logic:**
   - Reuses the transitions from VS-029 and refund creation from VS-030.
   - **Lock order (ADR-024):** every cancel locks the `orders` row, then all physical lines by `id`, then checks and changes them, creates any refund, and recomputes the status. A cancel that may insert a block then also locks the customer's cart and takes the phone advisory lock, so it serialises against that customer's checkouts with any phone and against other accounts' checkouts with the same phone.
-  - Customer cancel requires at least one physical line, a cash order or a payment that reached `paid`, and every physical line `pending`, otherwise 409 `ORDER_NOT_CANCELLABLE` with no partial change. It works for paid online orders and unpaid cash orders; it matches `can_cancel`.
+  - Customer cancel requires at least one live (not cancelled) physical line, a cash order or a payment that reached `paid`, and every live physical line `pending`, otherwise 409 `ORDER_NOT_CANCELLABLE` with no partial change. It works for paid online orders and unpaid cash orders; it matches `can_cancel`.
+  - **Owner decision 2026-10-19 (ADR-033 d4):** lines an administrator already cancelled are ignored: they neither block the cancel nor count as the physical line it needs. Reuse `app.ordering.domain.customer_view.can_cancel` for the check under the locks, so the flag and the route can never disagree; test an order with one cancelled and one `pending` physical line.
   - Admin cancel covers `pending`, `in_production`, `ready_to_ship` and `ready_for_pickup` lines.
   - Every cancellation of a paid line creates a pending `cancellation` refund for the line's **remaining balance** in the same transaction (none when that is 0, e.g. after a full chargeback); cancelling an unpaid cash line creates none.
   - Admin cancel restates BR-148: on an unpaid online order (`pending_payment`) it gives 409; only the hold release cancels those.
