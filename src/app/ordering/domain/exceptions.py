@@ -122,3 +122,7 @@ class ProductAlreadyOwnedError(OrderingDomainError):
 
 class OrderNumberExhaustedError(OrderingDomainError):
     """Every generated order number collided; a defect, surfaced as a 500."""
+
+
+class OrderNotReleasableError(OrderingDomainError):
+    """A hold release on an order that is not an unpaid, uncancelled online order."""

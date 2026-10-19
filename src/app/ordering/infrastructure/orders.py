@@ -6,12 +6,12 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import insert, select, update
+from sqlalchemy import insert, select, tuple_, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalog.application.ports import ProductType
-from app.ordering.domain.enums import OrderItemStatus, OrderStatus
+from app.ordering.domain.enums import OrderItemStatus, OrderStatus, PaymentMethod
 from app.ordering.domain.exceptions import OrderNumberExhaustedError, ProductAlreadyOwnedError
 from app.ordering.domain.orders import NewOrder, NewOrderLine, Order, OrderLine, StatusChange
 from app.ordering.infrastructure.models import (
@@ -172,15 +172,53 @@ class SqlOrderStore:
         )
         return [_line(row) for row in result.all()]
 
+    async def lock_owned_order(self, order_id: UUID, user_id: UUID) -> Order | None:
+        """The retry's lock: `orders` FOR UPDATE with the ownership predicate (VS-024 3.4)."""
+        row = (
+            await self._session.execute(
+                select(*_ORDER_COLUMNS)
+                .where(_O.id == order_id, _O.user_id == user_id)
+                .with_for_update()
+            )
+        ).first()
+        return _order(row) if row is not None else None
+
     async def set_line_status(
-        self, line_ids: Sequence[UUID], status: OrderItemStatus, *, at: datetime
+        self,
+        line_ids: Sequence[UUID],
+        status: OrderItemStatus,
+        *,
+        at: datetime,
+        cancelled_at: datetime | None = None,
     ) -> None:
         if line_ids:
-            await self._session.execute(
-                update(_I)
-                .where(_I.id.in_(line_ids))
-                .values(fulfillment_status=status, updated_at=at)
-            )
+            values: dict[str, Any] = {"fulfillment_status": status, "updated_at": at}
+            if cancelled_at is not None:
+                values["cancelled_at"] = cancelled_at
+            await self._session.execute(update(_I).where(_I.id.in_(line_ids)).values(**values))
+
+    async def set_cancelled(self, order_id: UUID, *, at: datetime) -> None:
+        """The first writer of `orders.cancelled_at`; only under the orders lock."""
+        await self._session.execute(
+            update(_O)
+            .where(_O.id == order_id, _O.cancelled_at.is_(None))
+            .values(cancelled_at=at, updated_at=at)
+        )
+
+    async def release_candidates(
+        self, *, placed_before: datetime, after: tuple[datetime, UUID] | None, limit: int
+    ) -> list[tuple[datetime, UUID]]:
+        """Unpaid online orders placed at or before `placed_before`, keyset-paged by
+        `(placed_at, id)` (`ix_orders_status_placed`). No lock."""
+        query = select(_O.placed_at, _O.id).where(
+            _O.status == OrderStatus.PENDING_PAYMENT,
+            _O.payment_method == PaymentMethod.ONLINE,
+            _O.placed_at <= placed_before,
+        )
+        if after is not None:
+            query = query.where(tuple_(_O.placed_at, _O.id) > after)
+        rows = await self._session.execute(query.order_by(_O.placed_at, _O.id).limit(limit))
+        return [(row.placed_at, row.id) for row in rows]
 
     async def set_order_status(self, order_id: UUID, status: OrderStatus, *, at: datetime) -> None:
         await self._session.execute(
