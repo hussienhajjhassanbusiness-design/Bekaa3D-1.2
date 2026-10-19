@@ -93,10 +93,13 @@ def upgrade() -> None:
             "AND (agreed_amount_cents IS NULL OR agreed_amount_cents > 0) AND currency = 'USD'",
             name="ck_offers_money",
         ),
-        # SRS 11.2: a turn and a deadline exist exactly while a party must answer.
+        # SRS 11.2: a turn and a deadline exist exactly while a party must answer. NULL-safe
+        # comparisons throughout: a CHECK that evaluates to NULL passes.
         sa.CheckConstraint(
-            "(status = 'awaiting_admin' AND turn = 'admin' AND responds_by IS NOT NULL) "
-            "OR (status = 'awaiting_customer' AND turn = 'customer' AND responds_by IS NOT NULL) "
+            "(status = 'awaiting_admin' AND turn IS NOT DISTINCT FROM 'admin' "
+            "AND responds_by IS NOT NULL) "
+            "OR (status = 'awaiting_customer' AND turn IS NOT DISTINCT FROM 'customer' "
+            "AND responds_by IS NOT NULL) "
             "OR (status NOT IN ('awaiting_admin', 'awaiting_customer') AND turn IS NULL)",
             name="ck_offers_turn_by_status",
         ),
@@ -146,7 +149,8 @@ def upgrade() -> None:
         sa.CheckConstraint("sequence > 0", name="ck_offer_rounds_sequence_positive"),
         sa.CheckConstraint(
             "(amount_cents IS NULL AND currency IS NULL) "
-            "OR (amount_cents > 0 AND currency = 'USD')",
+            "OR (amount_cents IS NOT NULL AND amount_cents > 0 "
+            "AND currency IS NOT DISTINCT FROM 'USD')",
             name="ck_offer_rounds_money",
         ),
     )
