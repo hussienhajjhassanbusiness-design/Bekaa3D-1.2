@@ -15,6 +15,7 @@ leave an audit row describing a change that was still able to fail.
 Introduced by VS-010 as `AuditWriter`; moved here and renamed in VS-012c.
 """
 
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -57,6 +58,24 @@ class SqlAuditWriter:
             after_data=after_data,
             request_id=request_id,
             ip_hash=ip_hash,
+        )
+
+    async def recorded(
+        self,
+        *,
+        action: str,
+        entity_type: str,
+        entity_id: UUID | None,
+        matching: dict[str, str],
+        since: datetime | None,
+    ) -> bool:
+        """Whether such a row exists (after `since`, when given): de-duplication by audit row."""
+        return await self._audit.exists(
+            action=action,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            matching=matching,
+            since=since,
         )
 
 

@@ -16,6 +16,7 @@ from app.payments.application.services.apply import Source, apply_result
 from app.payments.domain.exceptions import ProviderUnavailableError
 from app.payments.domain.limits import PROVIDER_TIMEOUT_SECONDS, VERIFY_BATCH_SIZE
 from app.payments.domain.outcome import Outcome, ProviderResult
+from app.payments.infrastructure.alerts import SqlLateCaptureAlerts, SqlPaymentAlerts
 from app.payments.infrastructure.ordering_side import SqlOrderSide, SqlPaymentNotices
 from app.payments.infrastructure.payments import SqlPaymentStore
 from app.payments.infrastructure.webhook_events import (
@@ -53,12 +54,13 @@ async def apply_provider_result(
         actor_user_id=actor_user_id,
         provider_payment_id=provider_payment_id,
         at=datetime.now(UTC),
+        late_captures=SqlLateCaptureAlerts(SqlPaymentAlerts(session)),
     )
 
 
 def _queryable(adapter: PaymentProviderPort) -> bool:
-    # An adapter that does not declare the flag keeps VS-023's behaviour: it is asked.
-    return bool(getattr(adapter, "supports_status_query", True))
+    # Undeclared means no status API: never pay or release on a guess.
+    return getattr(adapter, "supports_status_query", False) is True
 
 
 async def _ask(providers: Providers, provider: str, ref: PaymentRef) -> ProviderStatus:

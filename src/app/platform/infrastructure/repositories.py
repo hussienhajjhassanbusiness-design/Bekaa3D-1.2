@@ -133,6 +133,28 @@ class AuditLogRepository:
         await self._session.refresh(model)
         return _audit_to_domain(model)
 
+    async def exists(
+        self,
+        *,
+        action: str,
+        entity_type: str,
+        entity_id: UUID | None,
+        matching: dict[str, str],
+        since: datetime | None,
+    ) -> bool:
+        """A row with this action and entity whose `after_data` contains `matching`.
+        `ix_audit_logs_entity`, or `ix_audit_logs_action_created_at` for no entity."""
+        A = AuditLogModel  # noqa: N806
+        query = select(A.id).where(
+            A.action == action, A.entity_type == entity_type, A.after_data.contains(matching)
+        )
+        query = query.where(
+            A.entity_id.is_(None) if entity_id is None else A.entity_id == entity_id
+        )
+        if since is not None:
+            query = query.where(A.created_at > since)
+        return await self._session.scalar(query.limit(1)) is not None
+
     async def get_by_id(self, audit_id: UUID) -> AuditLogEntry | None:
         """By `id` alone: the primary key is `(id, created_at)` since VS-012a, so
         this probes each partition's key index rather than pruning to one. With

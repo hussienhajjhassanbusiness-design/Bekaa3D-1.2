@@ -181,6 +181,34 @@ async def test_an_event_for_a_no_status_provider_is_never_queried_and_stays_unpr
     assert await _row(db_engine, FROZEN, p=seeded.payment_id) == before
 
 
+async def test_an_adapter_that_does_not_declare_a_status_query_is_never_asked(
+    db_engine: AsyncEngine, db_session: AsyncSession, mock: MockPaymentProvider
+) -> None:
+    """Undeclared is not "yes": nothing is paid or released on a guess."""
+
+    class Undeclared:
+        name = "mock"
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def query_status(self, ref: PaymentRef) -> ProviderStatus:
+            self.calls += 1
+            return await mock.query_status(ref)
+
+    seeded = await pending_payment(db_session, mock)
+    await mock.simulate(seeded.payment_id, "paid")
+    event_id = await _event(db_engine, seeded)
+    stub, before = Undeclared(), await _row(db_engine, FROZEN, p=seeded.payment_id)
+    assert await verify_event(_factory(db_engine), {"mock": stub}, event_id) is None  # type: ignore[dict-item]
+    with pytest.raises(ProviderUnavailableError, match="no status query"):
+        await verify_payment(_factory(db_engine), {"mock": stub}, seeded.payment_id)  # type: ignore[dict-item]
+    assert stub.calls == 0
+    event = await _event_state(db_engine, event_id)
+    assert (event.processed_at, event.processing_error) == (None, "manual_confirmation_required")
+    assert await _row(db_engine, FROZEN, p=seeded.payment_id) == before
+
+
 async def test_verify_payments_skips_events_awaiting_manual_confirmation(
     db_engine: AsyncEngine, db_session: AsyncSession, mock: MockPaymentProvider
 ) -> None:

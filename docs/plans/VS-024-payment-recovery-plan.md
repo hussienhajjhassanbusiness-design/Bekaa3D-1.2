@@ -874,7 +874,15 @@ def hold_deadline(placed_at, live_initiated_at, hold) -> datetime # VS-025 hold_
     `ordering/application/services/checkout.py:58-66`) serves checkout and retry when the
     setting becomes a list;
   - contract fixtures add "unknown reference", "status timeout" and "no status API";
-  - `PaymentAlerts` is the alert the go-live gate refers to.
+  - `PaymentAlerts` is the alert the go-live gate refers to;
+  - an adapter that does not declare `supports_status_query` is treated as having no
+    status API (step 8): it must set the flag to be asked at all;
+  - captured currencies must be upper-case ISO 4217 codes
+    (`test_a_capture_names_its_currency_in_upper_case_iso_4217`); anything else breaks
+    `ck_payments_captured_shape` and rolls back Tx B, so the event is retried, never applied;
+  - `previous_provider`'s latest-attempt ordering becomes testable once a second online
+    provider exists (today `mock` is the only one, so the oldest-attempt mutant is
+    equivalent).
 - **VS-025:** `can_retry_payment`, `hold_deadline`, `order_payment_state`.
 - **VS-028:** nothing new. Its test "a cash order is never selected by release,
   reconciliation or retry" (`docs/vertical-slice-plan.md:723`) runs against VS-024's
