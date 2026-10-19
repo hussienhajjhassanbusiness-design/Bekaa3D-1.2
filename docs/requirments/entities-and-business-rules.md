@@ -505,7 +505,7 @@ PENDING
         └── REFUNDED
 ```
 
-`AWAITING_DELIVERY` is entered atomically with Payment verification. `DELIVERED` is set by an administrator after emailing the file, recording `delivered_at` and the acting administrator (ADR-019).
+`AWAITING_DELIVERY` is entered atomically with Payment verification. `DELIVERED` is set by an administrator after emailing the file, recording `fulfilled_at` and the acting administrator (`delivered_by`) (ADR-019).
 
 ### Physical OrderItem — Delivery
 

@@ -27,7 +27,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 | VS-023 | Checkout and verified payment for digital orders | VS-022, VS-008, VS-007 | Done |
 | VS-023b | STL delivery queue and mark-as-sent | VS-023 | Not started |
 | VS-024 | Payment recovery: reconciliation, stale checkouts, manual confirm | VS-023 | Not started |
-| VS-025 | Customer order history | VS-023 | Not started |
+| VS-025 | Customer order history | VS-023 | Done |
 | VS-026 | Address book | VS-008 | Done |
 | VS-027 | Shipping zones | — | Removed (ADR-024) |
 | VS-028 | Physical checkout: delivery, pickup, payment method, dispatch estimate | VS-023, VS-024, VS-026 | Not started |
@@ -647,17 +647,19 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 - **Must resolve before build** (final PR #8 review, both reviewers; recorded per the owner's stop rule, not yet decided):
   1. **No-status-API providers dead-end the hold release.** The release cancels only "when the provider confirms the attempt unpaid", and this section and the entities doc skip any order "whose provider has no status API". Admin cancel of a `pending_payment` order is 409, and manual confirm only applies or records a late capture. So an abandoned checkout stays `pending_payment` forever: the attempt stays live (retry gets `PAYMENT_ALREADY_ACTIVE`), its `pending` STL line holds the ownership index (the customer can never buy that STL again), and an alert repeats every run. The same trap catches a provider that keeps answering "pending", an order whose only attempt is a mismatched-amount late capture, and a provider-mismatch event that was "stored and ignored" if that leaves it unprocessed. This contradicts BR-039 and this slice's "Done when". Suggested fix: because a later success becomes a late capture anyway, release after the hold plus a grace period when the provider cannot answer and no webhook event exists, with an alert; or add an admin "expire attempt / release order" action. Define "unpaid" per provider state, and say that ignored or failed events set `processed_at`.
   2. **Manual confirm with a wrong amount: 422 or late capture?** This section ("A manual confirm with the wrong amount gives 422") and `api-endpoints.md` ("Server requires exact order-total match") refuse it. ADR-024 decision 15, SRS §9.2 and the late-capture rule above say a mismatched amount found by verification **or manual confirmation** is a late capture with an automatic refund. Scenario: a no-status-API provider, and the customer transfers $45 on a $50 order. The admin enters 4500 and gets 422, so no refund obligation exists, the attempt stays live, and with item 1 the order hangs. Suggested fix: separate an admin typo from a provider showing a different captured amount (for example a `captured_amount_cents` that must match the dashboard, plus an explicit "record mismatch as late capture" path), and align the API row and this slice's test.
+- **Wire in when VS-024 merges:** VS-025 ships `OrderDetail` without `can_retry_payment` and `hold_expires_at`. Whichever of VS-024 and VS-025 merges second adds both to `src/app/ordering/api/order_schemas.py` (`OrderDetailRead`) with a test for each; VS-025's payment read is `app.payments.public.order_payment_reader` ([ADR-033](adr/ADR-033-customer-order-read-model.md)).
+
 
 ## VS-025 — Customer order history
-**Status:** Not started
+**Status:** Done
 **Depends on:** VS-023
 **Goal:** A customer sees their orders and each order's immutable details.
 - **Model / migration:** None.
 - **Endpoints / jobs:** `GET /api/v1/me/orders` (cursor; filters: status and date range) and `GET /api/v1/me/orders/{id}`.
 - **Logic:**
   - Ownership is enforced in the SQL predicate.
-  - Fixed customer-facing schemas that cannot carry `internal_note` or provider references.
-  - STL lines show `awaiting_delivery` or `delivered` with `delivered_at`; this is the customer's STL purchase list (F-027).
+  - Fixed customer-facing schemas that cannot carry `admin_note` or provider references.
+  - STL lines show `awaiting_delivery` or `delivered` with `fulfilled_at`; this is the customer's STL purchase list (F-027).
   - Each order shows its payment method and the derived `payment_due` and `can_cancel` flags (`can_cancel`: at least one physical line, cash or a payment that reached `paid`, status `in_progress` or `partially_refunded`, every physical line `pending`); a physical line in `in_production` is shown as `pending` ("Received"), and the customer's status history omits `in_production` entries, because "start printing" is internal (ADR-024). VS-029 tests the masking once physical lines can move.
 - **Tests:**
   - Another user's order gives 404.
@@ -665,6 +667,8 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - The internal note never appears.
   - Pagination is stable.
 - **Done when:** A customer sees exactly what they bought, at the price they paid.
+- **As built:** [ADR-033](adr/ADR-033-customer-order-read-model.md), [`docs/order-history.md`](order-history.md). No refund summary until VS-030 (no `refunds` table yet).
+- **Wire in when VS-024 merges:** `OrderDetail` gains `can_retry_payment` and `hold_expires_at` from VS-024's `can_retry_payment` and `hold_deadline`. Whichever of VS-024 and VS-025 merges second adds them, with a test for each, in `src/app/ordering/api/order_schemas.py`.
 
 ## VS-026 — Address book
 **Status:** Done

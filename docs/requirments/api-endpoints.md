@@ -401,8 +401,8 @@ A materially changed retry uses a **new** idempotency key.
 
 | Method + Path | Auth / Authorization | Request | Success | Errors | Pagination / Filter / Sort | Side Effects / Notes |
 |---|---|---|---|---|---|---|
-| `GET /api/v1/me/orders` | Authenticated | query params | `200 OrderPage` | 401 | Cursor; optional `status`, `placed_after`, `placed_before`; default `-placed_at` | Own orders only |
-| `GET /api/v1/me/orders/{order_id}` | Authenticated; owner | — | `200 OrderDetail` | 401, 404 | — | Includes lines, payment method, `payment_due`, `can_cancel`, payment projection, refund summary and status history needed by customer; `in_production` is shown as `pending` and omitted from the history |
+| `GET /api/v1/me/orders` | Authenticated | query params | `200 OrderPage` | 401, 422 | Cursor; optional `status`, `placed_after` (inclusive), `placed_before` (exclusive), both with a timezone; fixed `-placed_at, -id` | Own orders only. **As built (VS-025):** items are `OrderSummary`; see [`docs/order-history.md`](../order-history.md) |
+| `GET /api/v1/me/orders/{order_id}` | Authenticated; owner | — | `200 OrderDetail` | 401, 404 | — | Includes lines, payment method, `payment_due`, `can_cancel`, payment projection, refund summary and status history needed by customer; `in_production` is shown as `pending` and omitted from the history. **As built (VS-025, ADR-033):** no refund summary until VS-030; another customer's order is the same 404 as an unknown id |
 | `POST /api/v1/me/orders/{order_id}/cancel` | Verified Customer; owner | `CustomerOrderCancelRequest` | `200 OrderDetail` | 401, 403, 404, 409 `ORDER_NOT_CANCELLABLE` / `INVALID_STATE_TRANSITION` | — | V1 decision: cancels all still-self-cancellable physical lines atomically; digital lines are never cancelled; allowed only when `can_cancel` is true (a physical line, a cash order or a payment that reached `paid`, every physical line `pending`); if cancellation is no longer legally possible, no partial silent cancellation occurs |
 | `POST /api/v1/me/orders/{order_id}/confirm-receipt` | Verified Customer; owner; CSRF | — | `200 OrderDetail` | 401, 403, 404, 409 `INVALID_STATE_TRANSITION` | — | Sets `receipt_confirmed_at` on delivered / picked-up lines; idempotent; no state change (ADR-024, VS-029b) |
 | `POST /api/v1/me/orders/{order_id}/report-problem` | Verified Customer; owner; CSRF | `ProblemReportCreate` | `201 OrderDetail` | 401, 403, 404, 409 `INVALID_STATE_TRANSITION`, 422, 429 | — | Sets `problem_reported_at` and creates a contact message linked to the order; no state change (ADR-024, VS-029b) |
@@ -413,7 +413,7 @@ The delivered / picked-up email links only to the order page; it never carries a
 
 # 12. Customer STL Purchases
 
-Removed by ADR-019: there is no STL library, entitlement or download endpoint, because the platform stores no STL files. A customer sees each STL purchase and whether it has been sent as a line in `GET /api/v1/me/orders/{order_id}` (`fulfillment_status`: `awaiting_delivery` or `delivered`, with `delivered_at`). The file itself arrives by email from the administrator.
+Removed by ADR-019: there is no STL library, entitlement or download endpoint, because the platform stores no STL files. A customer sees each STL purchase and whether it has been sent as a line in `GET /api/v1/me/orders/{order_id}` (`fulfillment_status`: `awaiting_delivery` or `delivered`, with `fulfilled_at`). The file itself arrives by email from the administrator.
 
 | Method + Path | Auth / Authorization | Request | Success | Errors | Pagination / Filter / Sort | Side Effects / Notes |
 |---|---|---|---|---|---|---|
@@ -553,7 +553,7 @@ The admin entitlement-grant endpoint is removed by ADR-019. To give an STL away,
 | `GET /api/v1/admin/orders/{order_id}` | — | `200 AdminOrderDetail` | 401/404 | — | Customer/order data, contact phone, payment method and amount due, lines with `available_actions` (ADR-025), status history, payments/refunds, internal note |
 | `PATCH /api/v1/admin/orders/{order_id}` | `AdminOrderUpdate` | `200 AdminOrderDetail` | 401/404, 422 | — | V1 restricted to mutable admin fields such as internal note; order status is not directly patchable |
 | `GET /api/v1/admin/stl-deliveries` | query params | `200 StlDeliveryPage` | 401/404, 400 | Cursor; optional `product_id`, customer; default oldest first (`placed_at`) | STL delivery queue (ADR-019): every STL line in `awaiting_delivery`, with order number, product, customer and `customer_email_snapshot` to send to |
-| `POST /api/v1/admin/orders/{order_id}/items/{item_id}/transition` | `OrderItemTransitionRequest` | `200 AdminOrderDetail` | 401/404, 409 `INVALID_STATE_TRANSITION`, 422 | — | Locks the order, then the line (ADR-024 lock order); a physical edge requires a cash order or an online payment that reached `paid` — `paid`, `partially_refunded` or `refunded` (BR-148); validates the delivery/pickup/STL state machine; `→ cancelled` from `ready_to_ship`, `returned` or `ready_for_pickup` requires `cancel_reason` and may insert a cash payment block (BR-144; it then also locks the customer's cart and takes the phone advisory lock); an unpaid cash line totalling 0 may go `shipped → cancelled` (`other`); recomputes order projection; history + audit + notifications. For an STL line, `awaiting_delivery → delivered` records `delivered_at` and `delivered_by` and notifies the customer that the file was emailed. `→ in_production` sends no customer notification. On a cash order, `→ delivered` and `→ picked_up` are refused; use the cash handover |
+| `POST /api/v1/admin/orders/{order_id}/items/{item_id}/transition` | `OrderItemTransitionRequest` | `200 AdminOrderDetail` | 401/404, 409 `INVALID_STATE_TRANSITION`, 422 | — | Locks the order, then the line (ADR-024 lock order); a physical edge requires a cash order or an online payment that reached `paid` — `paid`, `partially_refunded` or `refunded` (BR-148); validates the delivery/pickup/STL state machine; `→ cancelled` from `ready_to_ship`, `returned` or `ready_for_pickup` requires `cancel_reason` and may insert a cash payment block (BR-144; it then also locks the customer's cart and takes the phone advisory lock); an unpaid cash line totalling 0 may go `shipped → cancelled` (`other`); recomputes order projection; history + audit + notifications. For an STL line, `awaiting_delivery → delivered` records `fulfilled_at` and `delivered_by` and notifies the customer that the file was emailed. `→ in_production` sends no customer notification. On a cash order, `→ delivered` and `→ picked_up` are refused; use the cash handover |
 | `POST /api/v1/admin/orders/{order_id}/cash-handover` | `CashHandoverRequest` | `200 AdminOrderDetail` | 401/404, 409 `INVALID_STATE_TRANSITION`, 422 `CASH_AMOUNT_MISMATCH` | — | Cash orders only. Locks the order, then all lines by `id`; at least one live line, and every live line `shipped` / `ready_for_pickup`; amount must equal the sum of live line totals and be above zero (the full amount the customer paid); marks them delivered / picked up, creates the single `cash` payment (`paid`, `recorded_by`), recomputes status; history + audit + notification + email with the cash receipt (ADR-024) |
 | `POST /api/v1/admin/orders/{order_id}/cancel` | `AdminOrderCancelRequest` | `200 AdminOrderDetail` | 401/404, 409 `INVALID_STATE_TRANSITION` | — | Locks the order, then all physical lines by `id`. 409 on an unpaid online (`pending_payment`) order (BR-148; only the hold release cancels those). Cancels eligible lines according to state (`pending`, `in_production`, `ready_to_ship`, `ready_for_pickup`); `cancel_reason` required for `ready_to_ship` and `ready_for_pickup` lines; a paid line's `cancellation` refund is its remaining balance (none when 0); on a cash order the BR-144 block rule applies (then also the customer's cart lock and the phone advisory lock); digital rules preserved |
 
@@ -1307,6 +1307,12 @@ customer-visible status history (omits in_production)
 
 `admin_note` is never returned by customer endpoints.
 
+As built in VS-025 ([ADR-033](../adr/ADR-033-customer-order-read-model.md), [`docs/order-history.md`](../order-history.md)): `{id, order_number, source, status, fulfillment_method, payment_method, payment_due, can_cancel, subtotal, tax, total, delivery_address, contact_phone, delivery_fee_note, estimated_dispatch_at, placed_at, completed_at, cancelled_at, customer_note, lines[], payment, status_history[]}`. Each line is `{id, product_id, product_type, name, image_url, unit_price, quantity, line_total, fulfillment_status, fulfilled_at, cancelled_at}`; `payment` is `{status, provider, amount}` or null; each history entry is `{order_item_id, from_status, to_status, at}`. The refund summary arrives with VS-030; `can_retry_payment` and `hold_expires_at` with VS-024.
+
+## `OrderSummary`
+
+As built in VS-025: `{id, order_number, status, payment_method, fulfillment_method, payment_due, total, placed_at}`, in an `OrderPage` (`items`, `next_cursor`).
+
 ## `OfferDetail`
 
 ```text
@@ -1333,7 +1339,7 @@ customer_email_snapshot
 paid_at
 ```
 
-Order lines in `OrderDetail` carry `fulfillment_status` (with `in_production` shown as `pending`) and, for STL lines, `delivered_at`; physical lines carry `receipt_confirmed_at` and `problem_reported_at`.
+Order lines in `OrderDetail` carry `fulfillment_status` (with `in_production` shown as `pending`) and `fulfilled_at` (for STL lines, when the file was emailed); physical lines carry `receipt_confirmed_at` and `problem_reported_at`.
 
 ## `AdminOrderDetail` line actions
 
