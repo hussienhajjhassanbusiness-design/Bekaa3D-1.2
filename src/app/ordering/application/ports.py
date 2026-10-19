@@ -89,6 +89,13 @@ class PaymentAttempts(Protocol):
         self, *, order_id: UUID, amount_cents: int, currency: str, provider: str, at: datetime
     ) -> PaymentAttemptRef: ...
 
+    async def open_retry_attempt(
+        self, *, order_id: UUID, amount_cents: int, currency: str, provider: str, at: datetime
+    ) -> PaymentAttemptRef:
+        """The INSERT in a SAVEPOINT; `uq_payments_one_live` raises LiveAttemptExistsError,
+        any other integrity error propagates (VS-024 2.1)."""
+        ...
+
 
 class SettingsSource(Protocol):
     """The slice of Platform's `SettingsReader` checkout needs."""
@@ -127,6 +134,14 @@ class OrderStore(Protocol):
 
     async def lock_lines(self, order_id: UUID) -> list[OrderLine]:
         """`SELECT ... FROM order_items WHERE order_id = :id ORDER BY id FOR UPDATE`."""
+        ...
+
+    async def lock_owned_order(self, order_id: UUID, user_id: UUID) -> Order | None:
+        """`orders` FOR UPDATE with the ownership predicate (VS-024 2.1)."""
+        ...
+
+    async def order_lines(self, order_id: UUID) -> list[OrderLine]:
+        """The order's lines by id, no lock (the retry holds the orders row)."""
         ...
 
     async def set_line_status(

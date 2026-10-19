@@ -3685,6 +3685,42 @@
         "title": "PaymentMethod",
         "type": "string"
       },
+      "PaymentRetryRead": {
+        "properties": {
+          "order": {
+            "$ref": "#/components/schemas/RetryOrderRead"
+          },
+          "payment": {
+            "$ref": "#/components/schemas/RetryPaymentRead"
+          }
+        },
+        "required": [
+          "order",
+          "payment"
+        ],
+        "title": "PaymentRetryRead",
+        "type": "object"
+      },
+      "PaymentRetryRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "payment_provider": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment Provider"
+          }
+        },
+        "title": "PaymentRetryRequest",
+        "type": "object"
+      },
       "PriceIn": {
         "additionalProperties": false,
         "properties": {
@@ -4430,6 +4466,92 @@
           "captcha_token"
         ],
         "title": "ResendVerificationRequest",
+        "type": "object"
+      },
+      "RetryOrderRead": {
+        "properties": {
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "hold_expires_at": {
+            "format": "date-time",
+            "title": "Hold Expires At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "order_number": {
+            "title": "Order Number",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/OrderStatus"
+          },
+          "total_cents": {
+            "title": "Total Cents",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "order_number",
+          "status",
+          "total_cents",
+          "currency",
+          "hold_expires_at"
+        ],
+        "title": "RetryOrderRead",
+        "type": "object"
+      },
+      "RetryPaymentRead": {
+        "properties": {
+          "amount_cents": {
+            "title": "Amount Cents",
+            "type": "integer"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "redirect_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The provider's payment page; null if none.",
+            "title": "Redirect Url"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "provider",
+          "amount_cents",
+          "currency",
+          "redirect_url"
+        ],
+        "title": "RetryPaymentRead",
         "type": "object"
       },
       "SearchSuggestionList": {
@@ -13147,6 +13269,168 @@
         "summary": "Mark one notification read or unread",
         "tags": [
           "notifications"
+        ]
+      }
+    },
+    "/api/v1/me/orders/{order_id}/payments": {
+      "post": {
+        "description": "Tx1: claim (scope `payment_retry:{order_id}`), lock the caller's order, T1, the new\nattempt in a SAVEPOINT, COMMIT. The provider call with no transaction open. Tx2:\nthe reference or the failure, and the stored response.",
+        "operationId": "retry_payment_api_v1_me_orders__order_id__payments_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Order Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "8-255 characters of [A-Za-z0-9._:-]; one key per retry of one order.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "description": "8-255 characters of [A-Za-z0-9._:-]; one key per retry of one order.",
+              "pattern": "^[A-Za-z0-9._:-]{8,255}$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentRetryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentRetryRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "MALFORMED_REQUEST: the body is not valid JSON."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No valid session cookie was presented."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "CSRF token missing or invalid, or EMAIL_VERIFICATION_REQUIRED."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "NOT_FOUND: no such order, or not yours."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "PAYMENT_ALREADY_ACTIVE (with `payment_id`, `payment_status`, `redirect_url`), INVALID_STATE_TRANSITION (with `reason`), IDEMPOTENCY_KEY_CONFLICT, or IDEMPOTENCY_REQUEST_IN_PROGRESS."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "PAYMENT_METHOD_NOT_ALLOWED (with `reason`), or VALIDATION_ERROR."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "RATE_LIMITED: too many retries this hour."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "PAYMENT_PROVIDER_UNAVAILABLE: the attempt failed and the order is still payable; replayed for the same key."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "ONLINE_PAYMENT_UNAVAILABLE."
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Start a new payment attempt for one of your unpaid orders",
+        "tags": [
+          "orders"
         ]
       }
     },

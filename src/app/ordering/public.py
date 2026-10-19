@@ -18,7 +18,7 @@ from app.ordering.domain.enums import (
     OrderStatus,
     PaymentMethod,
 )
-from app.ordering.domain.exceptions import OrderNotReleasableError
+from app.ordering.domain.exceptions import LiveAttemptExistsError, OrderNotReleasableError
 from app.ordering.domain.order_status import LineState, OrderStatusInputs, derive_order_status
 from app.ordering.domain.orders import Order, OrderLine, StatusChange
 from app.ordering.domain.payment_recovery import (
@@ -34,6 +34,7 @@ __all__ = [
     "CancelReason",
     "FulfillmentMethod",
     "LineState",
+    "LiveAttemptExistsError",
     "LockedOrder",
     "OrderItemStatus",
     "OrderNotReleasableError",

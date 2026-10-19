@@ -7,9 +7,11 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import Select, insert, select, tuple_, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ordering.application.ports import PaymentAttemptRef
+from app.ordering.public import LiveAttemptExistsError
 from app.payments.application.ports import PaymentProviderPort
 from app.payments.domain.enums import PaymentProvider, PaymentStatus
 from app.payments.domain.outcome import LIVE
@@ -17,6 +19,7 @@ from app.payments.domain.payments import Payment
 from app.payments.infrastructure.models import PaymentModel
 
 _P = PaymentModel
+ONE_LIVE_INDEX = "uq_payments_one_live"
 _COLUMNS = (
     _P.id,
     _P.order_id,
@@ -230,6 +233,7 @@ class SqlPaymentAttempts:
     """Ordering's `PaymentAttempts`: the configured providers, the attempts, the INSERT."""
 
     def __init__(self, session: AsyncSession, providers: Mapping[str, PaymentProviderPort]) -> None:
+        self._session = session
         self._store = SqlPaymentStore(session)
         self._providers = providers
 
@@ -255,6 +259,30 @@ class SqlPaymentAttempts:
             at=at,
         )
         return _ref(payment)
+
+    async def open_retry_attempt(
+        self, *, order_id: UUID, amount_cents: int, currency: str, provider: str, at: datetime
+    ) -> PaymentAttemptRef:
+        try:
+            async with self._session.begin_nested():
+                payment = await self._store.insert_pending(
+                    order_id=order_id,
+                    provider=PaymentProvider(provider),
+                    amount_cents=amount_cents,
+                    currency=currency,
+                    at=at,
+                )
+        except IntegrityError as exc:
+            if _constraint(exc) == ONE_LIVE_INDEX:
+                raise LiveAttemptExistsError(str(order_id)) from exc
+            raise
+        return _ref(payment)
+
+
+def _constraint(error: IntegrityError) -> str | None:
+    """The driver's own constraint name, as `SqlOrderStore` reads it."""
+    name = getattr(getattr(error.orig, "__cause__", None), "constraint_name", None)
+    return name if isinstance(name, str) else None
 
 
 def _ref(payment: Payment) -> PaymentAttemptRef:

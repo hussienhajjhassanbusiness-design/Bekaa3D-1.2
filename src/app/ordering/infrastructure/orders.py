@@ -183,6 +183,12 @@ class SqlOrderStore:
         ).first()
         return _order(row) if row is not None else None
 
+    async def order_lines(self, order_id: UUID) -> list[OrderLine]:
+        result = await self._session.execute(
+            select(*_LINE_COLUMNS).where(_I.order_id == order_id).order_by(_I.id)
+        )
+        return [_line(row) for row in result.all()]
+
     async def set_line_status(
         self,
         line_ids: Sequence[UUID],
