@@ -243,7 +243,7 @@ Every rule is numbered for traceability. `BR-` prefix.
 | BR-063 | Every refund creates a tracked obligation record that remains pending until settled. Every V1 refund is manual: the administrator pays it in the provider dashboard or in cash and settles it here. A failed refund stays owed until reissued. |
 | BR-064 | A refunded digital line is marked refunded; if it has not been sent yet it leaves the delivery queue and must not be sent.       |
 | BR-065 | A file already emailed cannot be recalled; the protections are the all-sales-final consent record and the delivery record.     |
-| BR-066 | A customer may cancel their own order while every physical line is still `pending`, whether it was paid online or is an unpaid cash order. |
+| BR-066 | A customer may cancel their own order while every live (not cancelled) physical line is still `pending`, whether it was paid online or is an unpaid cash order; lines an administrator already cancelled are ignored (owner decision 2026-10-19, ADR-033). |
 | BR-067 | Once the administrator marks any line "start printing" (`in_production`), self-cancellation closes and cancellation becomes an admin decision. |
 | BR-068 | STL lines are never self-cancellable.                                                                                            |
 | BR-069 | A customer whose STL line was refunded may purchase the product again.                                                           |
@@ -383,7 +383,7 @@ Complete inventory. `F-` prefix. Phase indicates build order (§28).
 | F-030 | Wishlist management                              | 1     |
 | F-031 | Review management                                | 1     |
 | F-032 | Notification centre with read/unread             | 1     |
-| F-033 | Self-service order cancellation (while every physical line is pending) | 2 |
+| F-033 | Self-service order cancellation (while every live physical line is pending) | 2 |
 | F-034 | Data export (JSON)                               | 5     |
 | F-035 | Account deletion via anonymisation               | 5     |
 
@@ -731,7 +731,7 @@ The delivered and picked-up emails have "I got it" and "Report a problem" button
 
 ### 8.9 What the Customer Sees
 
-The customer sees `in_production` as `pending` ("Received"), and their status history omits `in_production` entries. Because the cutoff is invisible, the order exposes a derived `can_cancel` flag: true only when the order has at least one physical line, is a cash order or has a payment that reached `paid`, has status `in_progress` or `partially_refunded`, and every physical line is `pending`. It is false for an STL-only order and for an unpaid online order.
+The customer sees `in_production` as `pending` ("Received"), and their status history omits `in_production` entries. Because the cutoff is invisible, the order exposes a derived `can_cancel` flag: true only when the order has at least one live (not cancelled) physical line, is a cash order or has a payment that reached `paid`, has status `in_progress` or `partially_refunded`, and every live physical line is `pending`; physical lines an administrator already cancelled are ignored. It is false for an STL-only order and for an unpaid online order.
 
 ---
 

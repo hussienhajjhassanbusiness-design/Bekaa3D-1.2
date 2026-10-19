@@ -1142,7 +1142,7 @@ batch_size_snapshot IS NULL
 - per-line status is mandatory because mixed orders can resolve differently;
 - digital fulfillment is independent of physical fulfillment;
 - an STL line is marked `delivered` only from `awaiting_delivery`, by an administrator, after emailing the file (ADR-019);
-- physical lines may be self-cancelled only while every physical line of the order is `pending` (before start printing);
+- physical lines may be self-cancelled only while every live (not cancelled) physical line of the order is `pending` (before start printing); already-cancelled lines are ignored;
 - on a cash order, `delivered` / `picked_up` are reached only through the cash handover;
 - no physical line of an unpaid online order changes state (BR-148);
 - customers see `in_production` as `pending`, and their status history omits it;
@@ -2522,7 +2522,7 @@ Every write that changes an order's lines, payment or refunds takes its locks in
 
 ## Cancellation vs Start Printing
 
-Self-cancel locks the order, then every physical line, then checks they are all `pending`. Start printing locks the same order row first. Exactly one wins, even when printing starts on a different line from the one the cancel checks last.
+Self-cancel locks the order, then every physical line, then checks every live (not cancelled) one is `pending`. Start printing locks the same order row first. Exactly one wins, even when printing starts on a different line from the one the cancel checks last.
 
 ## Cash Handover
 
