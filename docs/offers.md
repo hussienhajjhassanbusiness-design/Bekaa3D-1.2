@@ -81,7 +81,7 @@ Each returns `200` with the offer detail (`AdminOfferDetail` on admin routes).
   - must be at most today's list price;
   - a customer's counter must also meet `minimum_offer_percentage`; an administrator's needn't.
 - **Accept:**
-  - names `expected_amount_cents`, the `current_amount` the caller's page showed. Any other value is refused, so a stale page never binds either party to an amount it did not show (ADR-035 d9);
+  - names `expected_amount_cents`, the `current_amount` the caller's page showed. Any other value is refused, so a stale page never binds either party to an amount other than the one it showed, apart from the list-price cap below (ADR-035 d9);
   - freezes `agreed_amount = min(amount on the table, today's list price)`;
   - sets `checkout_expires_at` to now + `offer_checkout_window` (24 h by default);
   - clears `responds_by`, since the inactivity timer no longer applies.

@@ -176,6 +176,20 @@ def test_accept_refuses_an_amount_no_longer_on_the_table(actor: OfferActor, expe
     assert caught.value.current_amount_cents == 800
 
 
+@pytest.mark.parametrize(
+    ("offer", "error"),
+    [
+        (_customer_turn(), OfferNotYourTurnError),
+        (make_offer(responds_by=NOW), OfferExpiredError),
+        (make_offer(status=OfferStatus.WITHDRAWN, turn=None), OfferInvalidTransitionError),
+    ],
+)
+def test_the_move_is_checked_before_the_amount_seen(offer: Offer, error: type[Exception]) -> None:
+    """ADR-035 d9: a stale amount on an offer that cannot be accepted reports the real reason."""
+    with pytest.raises(error):
+        _accept(offer, ADMIN, expected=1)
+
+
 def test_the_amount_seen_is_the_one_on_the_table_not_the_capped_one() -> None:
     """Under a lowered list price the caller still names `current_amount`, not the cap."""
     assert _accept(make_offer(), ADMIN, list_price=700, expected=800)[1] == 700
