@@ -197,9 +197,18 @@ async def test_overlapping_checkout_expiry_runs_close_once(db_engine: AsyncEngin
         db_engine, status="accepted", responds_by=None, checkout_expires_at=closes_at
     )
 
+    class NoPayment:  # the offer has no order, so nothing is in flight
+        async def in_flight(self, offer_id: uuid.UUID) -> bool:
+            return False
+
     async def run(deps: OfferDeps) -> object:
         return await expire_checkout_offer(
-            deps.offers, deps.notifier, deps.audit, offer_id=offer, now=datetime.now(UTC)
+            deps.offers,
+            deps.notifier,
+            deps.audit,
+            NoPayment(),
+            offer_id=offer,
+            now=datetime.now(UTC),
         )
 
     assert sorted(map(bool, await _race(db_engine, run, run))) == [False, True]

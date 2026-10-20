@@ -1,16 +1,19 @@
 """What a customer may see of an order (VS-025; SRS 8.9, ADR-024 d8). Pure.
 `in_production` ("start printing") is internal: shown as `pending`, absent from history."""
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import replace
+from datetime import datetime, timedelta
 from uuid import UUID
 
 from app.catalog.application.ports import ProductType
 from app.ordering.domain.enums import OrderItemStatus, OrderStatus, PaymentMethod
-from app.ordering.domain.orders import CustomerOrderLine, HistoryEntry
+from app.ordering.domain.orders import CustomerOrder, CustomerOrderLine, HistoryEntry
+from app.ordering.domain.payment_recovery import hold_deadline, retry_refusal
 
 HIDDEN_STATUS = OrderItemStatus.IN_PRODUCTION
 CANCELLABLE_ORDER_STATUSES = frozenset({OrderStatus.IN_PROGRESS, OrderStatus.PARTIALLY_REFUNDED})
+LIVE_ATTEMPT_STATUSES = frozenset({"pending", "processing"})
 
 
 def customer_line_status(status: OrderItemStatus) -> OrderItemStatus:
@@ -71,3 +74,34 @@ def can_cancel(
         and status in CANCELLABLE_ORDER_STATUSES
         and all(s is OrderItemStatus.PENDING for s in live_physical)
     )
+
+
+def can_retry_payment(
+    order: CustomerOrder,
+    lines: Sequence[CustomerOrderLine],
+    *,
+    attempt_status: str | None,
+    offer_open: bool,
+    now: datetime,
+    hold: timedelta,
+) -> bool:
+    """VS-024's T1 without the lock, and false while an attempt is live or an offer order's
+    window has closed, both of which the retry refuses (ADR-037). The POST re-checks."""
+    return (
+        retry_refusal(order, lines, now=now, hold=hold) is None
+        and attempt_status not in LIVE_ATTEMPT_STATUSES
+        and offer_open
+    )
+
+
+def hold_expires_at(
+    order: CustomerOrder, *, latest_initiated_at: datetime | None, hold: timedelta
+) -> datetime | None:
+    """When an unpaid online order may be released (VS-024 D4); None for any other order."""
+    if (
+        order.payment_method is not PaymentMethod.ONLINE
+        or order.status is not OrderStatus.PENDING_PAYMENT
+        or order.cancelled_at is not None
+    ):
+        return None
+    return hold_deadline(order.placed_at, latest_initiated_at, hold)

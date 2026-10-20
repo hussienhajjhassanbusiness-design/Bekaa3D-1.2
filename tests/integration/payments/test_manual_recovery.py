@@ -453,5 +453,6 @@ async def test_a_confirm_takes_the_same_locks_as_the_webhook(
     order = [s.split(" FROM ")[1].split()[0] for s in statements if s.endswith("FOR UPDATE")]
     print("\nCONFIRM FOR UPDATE:", order)
     assert statements[0].startswith("SELECT payments.id") and "FOR UPDATE" not in statements[0]
-    # The confirm's own locks, then apply_result's on the rows it already holds.
-    assert order == ["orders", "order_items", "payments"] * 2
+    # The confirm's own locks, then apply_result's on the rows it already holds, then the
+    # paid STL's live offers (ADR-037).
+    assert order == ["orders", "order_items", "payments"] * 2 + ["offers"]

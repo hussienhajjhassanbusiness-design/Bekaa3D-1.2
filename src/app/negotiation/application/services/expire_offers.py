@@ -11,6 +11,7 @@ from app.negotiation.application.ports import (
     OfferMailer,
     OfferNotifier,
     OfferStore,
+    PaymentInFlight,
 )
 from app.negotiation.domain.offers import (
     ENTITY_TYPE,
@@ -58,13 +59,17 @@ async def expire_checkout_offer(
     offers: OfferStore,
     notifier: OfferNotifier,
     audit: AuditWriter,
+    payments: PaymentInFlight,
     *,
     offer_id: UUID,
     now: datetime,
 ) -> bool:
-    """`accepted -> checkout_expired`; SRS 16.1 lists no email for it, so in-app only."""
+    """`accepted -> checkout_expired`; SRS 16.1 lists no email for it, so in-app only. A
+    payment in flight is left to complete; read under the offer lock (ADR-037)."""
     offer = await offers.lock_unless_locked(offer_id)
     if offer is None or not is_checkout_over(offer, now):
+        return False
+    if await payments.in_flight(offer.id):
         return False
     closed, round_ = expire_checkout(
         offer, next_sequence=await offers.next_sequence(offer.id), now=now

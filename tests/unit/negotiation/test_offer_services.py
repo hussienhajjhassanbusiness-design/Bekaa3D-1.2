@@ -76,6 +76,8 @@ async def test_submit_writes_offer_audit_and_admin_notification() -> None:
     )
     [(recipient, payload)] = world.notifier.sent
     assert recipient is None and payload["event"] == "offer.submitted"
+    # ADR-037: serialised with a payment's auto-close on (user, product).
+    assert world.store.acquisition_locks == [(USER, STL.id)]
 
 
 async def test_kill_switch_refuses_before_anything_else() -> None:

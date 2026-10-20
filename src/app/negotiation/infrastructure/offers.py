@@ -15,13 +15,14 @@ from app.negotiation.application.ports import (
     QueuedOffer,
     QueueKey,
 )
-from app.negotiation.domain.enums import AWAITING_STATUSES, OfferStatus
+from app.negotiation.domain.enums import AWAITING_STATUSES, LIVE_STATUSES, OfferStatus
 from app.negotiation.domain.exceptions import OfferAlreadyActiveError
 from app.negotiation.domain.offers import NewOffer, NewRound, Offer, OfferRound
 from app.negotiation.infrastructure.models import OfferModel, OfferRoundModel
 
 _O, _R = OfferModel, OfferRoundModel
 _LIVE_INDEX = "uq_offers_live"
+_ACQUISITION_LOCK = "offer-acquisition:{user_id}:{product_id}"
 _OFFER_COLUMNS = (
     _O.id,
     _O.user_id,
@@ -252,3 +253,22 @@ class SqlOfferStore:
     async def next_sequence(self, offer_id: UUID) -> int:
         stmt = select(func.coalesce(func.max(_R.sequence), 0) + 1).where(_R.offer_id == offer_id)
         return int(await self._session.scalar(stmt) or 1)
+
+    async def lock_acquisition(self, user_id: UUID, product_id: UUID) -> None:
+        key = _ACQUISITION_LOCK.format(user_id=user_id, product_id=product_id)
+        await self._session.execute(
+            select(func.pg_advisory_xact_lock(func.hashtextextended(key, 0)))
+        )
+
+    async def lock_live(self, user_id: UUID, product_id: UUID) -> list[Offer]:
+        stmt = (
+            select(*_OFFER_COLUMNS)
+            .where(
+                _O.user_id == user_id,
+                _O.product_id == product_id,
+                _O.status.in_(LIVE_STATUSES),
+            )
+            .order_by(_O.id)
+            .with_for_update()
+        )
+        return [_offer(row) for row in (await self._session.execute(stmt)).all()]

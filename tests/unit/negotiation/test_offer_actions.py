@@ -42,6 +42,7 @@ from tests.unit.negotiation.offer_fakes import (
     STL,
     USER,
     FakeAudit,
+    FakeInFlight,
     FakeMailer,
     FakeNotifier,
     FakeOwnership,
@@ -244,7 +245,7 @@ async def test_checkout_expiry_closes_once_and_tells_the_customer_in_app() -> No
     offer = _accepted(world, NOW)
     for _ in range(2):
         await expire_checkout_offer(
-            world.store, world.notifier, world.audit, offer_id=offer.id, now=NOW
+            world.store, world.notifier, world.audit, FakeInFlight(), offer_id=offer.id, now=NOW
         )
     assert world.store.offers[offer.id].status is OfferStatus.CHECKOUT_EXPIRED
     assert len(world.store.rounds_by_offer[offer.id]) == 1
@@ -261,9 +262,25 @@ async def test_checkout_expiry_skips_an_open_window_or_a_locked_row() -> None:
     world.store.locked_elsewhere.add(locked.id)
     for offer in (early, locked):
         assert not await expire_checkout_offer(
-            world.store, world.notifier, world.audit, offer_id=offer.id, now=NOW
+            world.store, world.notifier, world.audit, FakeInFlight(), offer_id=offer.id, now=NOW
         )
     assert not world.audit.rows and not world.notifier.sent
+
+
+async def test_checkout_expiry_leaves_an_offer_with_a_payment_in_flight() -> None:
+    """VS-041: a payment in flight completes; the next run after it ends unpaid expires it."""
+    world = World()
+    offer = _accepted(world, NOW)
+    paying = FakeInFlight({offer.id})
+    assert not await expire_checkout_offer(
+        world.store, world.notifier, world.audit, paying, offer_id=offer.id, now=NOW
+    )
+    assert world.store.offers[offer.id].status is OfferStatus.ACCEPTED
+    assert not world.audit.rows and not world.notifier.sent
+    paying.offer_ids.clear()
+    assert await expire_checkout_offer(
+        world.store, world.notifier, world.audit, paying, offer_id=offer.id, now=NOW
+    )
 
 
 async def _remind(world: World, offer: Offer, at: Any = NOW) -> bool:

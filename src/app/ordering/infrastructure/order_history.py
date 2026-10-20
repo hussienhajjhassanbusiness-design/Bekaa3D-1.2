@@ -54,6 +54,7 @@ _LINE_COLUMNS = (
     _I.fulfillment_status,
     _I.fulfilled_at,
     _I.cancelled_at,
+    _I.offer_id,
 )
 
 

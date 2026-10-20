@@ -9,6 +9,7 @@ from uuid import UUID
 from app.catalog.application.ports import CartProduct, ProductType
 from app.negotiation.domain.enums import (
     AWAITING_STATUSES,
+    LIVE_STATUSES,
     OfferAction,
     OfferActor,
     OfferStatus,
@@ -19,6 +20,7 @@ from app.negotiation.domain.exceptions import (
     OfferAboveListPriceError,
     OfferAmountChangedError,
     OfferBelowMinimumError,
+    OfferCheckoutExpiredError,
     OfferCooldownActiveError,
     OfferExpiredError,
     OfferInvalidTransitionError,
@@ -344,6 +346,34 @@ def expire_checkout(offer: Offer, *, next_sequence: int, now: datetime) -> tuple
         raise OfferNotExpirableError(offer.status)
     closed = replace(offer, status=OfferStatus.CHECKOUT_EXPIRED, updated_at=now)
     return closed, NewRound(next_sequence, OfferActor.SYSTEM, OfferAction.CHECKOUT_EXPIRED)
+
+
+def check_checkout(offer: Offer, now: datetime) -> None:
+    """VS-041: 410 once the window has closed (whether or not the job has run), else 409
+    unless accepted. Read under the offer lock with a clock read after it."""
+    if offer.status is OfferStatus.CHECKOUT_EXPIRED or is_checkout_over(offer, now):
+        raise OfferCheckoutExpiredError()
+    if offer.status is not OfferStatus.ACCEPTED:
+        raise OfferInvalidTransitionError(offer.status)
+
+
+def mark_paid(offer: Offer, *, next_sequence: int, now: datetime) -> tuple[Offer, NewRound]:
+    """`accepted -> paid` (SRS 5.4 step 6): the round records the agreed amount paid."""
+    if offer.status is not OfferStatus.ACCEPTED:
+        raise OfferInvalidTransitionError(offer.status)
+    paid = replace(offer, status=OfferStatus.PAID, updated_at=now)
+    round_ = NewRound(next_sequence, OfferActor.SYSTEM, OfferAction.PAID, offer.agreed_amount_cents)
+    return paid, round_
+
+
+def auto_close(offer: Offer, *, next_sequence: int, now: datetime) -> tuple[Offer, NewRound]:
+    """BR-088, SRS 11.4: any live offer closes once the STL is bought another way."""
+    if offer.status not in LIVE_STATUSES:
+        raise OfferInvalidTransitionError(offer.status)
+    closed = replace(
+        offer, status=OfferStatus.AUTO_CLOSED, turn=None, remind_at=None, updated_at=now
+    )
+    return closed, NewRound(next_sequence, OfferActor.SYSTEM, OfferAction.AUTO_CLOSED)
 
 
 def is_reminder_due(offer: Offer, now: datetime) -> bool:

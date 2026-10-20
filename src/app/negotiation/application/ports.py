@@ -95,6 +95,21 @@ class OfferStore(Protocol):
 
     async def next_sequence(self, offer_id: UUID) -> int: ...
 
+    async def lock_acquisition(self, user_id: UUID, product_id: UUID) -> None:
+        """Transaction-scoped advisory lock on (user, product): submission and the STL
+        purchase's auto-close serialise on it (ADR-037)."""
+        ...
+
+    async def lock_live(self, user_id: UUID, product_id: UUID) -> list[Offer]:
+        """Live offers for (user, product), `FOR UPDATE` in id order (at most one)."""
+        ...
+
+
+class PaymentInFlight(Protocol):
+    async def in_flight(self, offer_id: UUID) -> bool:
+        """A pending or processing attempt on an uncancelled order holding the offer's line."""
+        ...
+
 
 class StlOwnership(Protocol):
     async def owns(self, user_id: UUID, product_id: UUID) -> bool:

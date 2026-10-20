@@ -142,6 +142,12 @@ class OrderDetailRead(BaseModel):
     payment_method: PaymentMethod
     payment_due: bool
     can_cancel: bool
+    can_retry_payment: bool = Field(
+        description="A new payment attempt may be started now; the POST re-checks."
+    )
+    hold_expires_at: datetime | None = Field(
+        description="An unpaid online order: when it may be released if still unpaid."
+    )
     subtotal: PriceRead
     tax: PriceRead
     total: PriceRead
@@ -170,6 +176,8 @@ class OrderDetailRead(BaseModel):
             payment_method=o.payment_method,
             payment_due=view.payment_due,
             can_cancel=view.can_cancel,
+            can_retry_payment=view.can_retry_payment,
+            hold_expires_at=view.hold_expires_at,
             subtotal=_price(o.subtotal_cents, o.currency),
             tax=_price(o.tax_cents, o.currency),
             total=_price(o.total_cents, o.currency),

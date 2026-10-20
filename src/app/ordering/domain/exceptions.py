@@ -150,3 +150,19 @@ class PaymentAlreadyActiveError(OrderingDomainError):
     def __init__(self, payment_id: UUID | None, status: str | None, redirect_url: str | None):
         super().__init__("A payment for this order is already in progress.")
         self.payment_id, self.status, self.redirect_url = payment_id, status, redirect_url
+
+
+class OfferCheckoutNotFoundError(OrderingDomainError):
+    """404: no such offer among the caller's own (VS-041)."""
+
+
+class OfferCheckoutExpiredError(OrderingDomainError):
+    """410 OFFER_CHECKOUT_EXPIRED: the accepted offer's window has closed (BR-086)."""
+
+
+class OfferNotCheckoutableError(OrderingDomainError):
+    """409 INVALID_STATE_TRANSITION with `offer_status`: the offer is not accepted."""
+
+    def __init__(self, offer_status: str) -> None:
+        super().__init__(f"An offer that is {offer_status} cannot be checked out.")
+        self.offer_status = offer_status

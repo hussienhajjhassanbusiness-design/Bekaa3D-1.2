@@ -17,8 +17,10 @@ from app.core.config import get_settings
 from app.core.exceptions import ApiError
 from app.core.rate_limit import enforce_rate_limit
 from app.identity.public import User, not_found_error, verified_user_short_read
+from app.negotiation.public import SqlOfferCheckouts
 from app.ordering.api.checkout_schemas import IDEMPOTENCY_KEY_PATTERN
 from app.ordering.api.idempotent import replay, stored
+from app.ordering.api.problems import payment_already_active_error
 from app.ordering.application.services.retry import RetriedPayment, start_retry
 from app.ordering.domain.enums import OrderStatus
 from app.ordering.domain.exceptions import (
@@ -69,7 +71,8 @@ _RESPONSES: dict[int | str, dict[str, Any]] = {
     404: {"description": "NOT_FOUND: no such order, or not yours."},
     409: {
         "description": "PAYMENT_ALREADY_ACTIVE (with `payment_id`, `payment_status`, "
-        "`redirect_url`), INVALID_STATE_TRANSITION (with `reason`), IDEMPOTENCY_KEY_CONFLICT, or "
+        "`redirect_url`), INVALID_STATE_TRANSITION (with `reason`, including "
+        "`offer_checkout_expired`), IDEMPOTENCY_KEY_CONFLICT, or "
         "IDEMPOTENCY_REQUEST_IN_PROGRESS."
     },
     422: {"description": "PAYMENT_METHOD_NOT_ALLOWED (with `reason`), or VALIDATION_ERROR."},
@@ -151,17 +154,7 @@ def _translate(exc: Exception) -> ApiError:
     if isinstance(exc, RetryOrderNotFoundError):
         return not_found_error()
     if isinstance(exc, PaymentAlreadyActiveError):
-        return ApiError(
-            status_code=status.HTTP_409_CONFLICT,
-            code="PAYMENT_ALREADY_ACTIVE",
-            title="A payment is already in progress",
-            detail="This order already has a payment in progress. Resume it instead.",
-            extensions={
-                "payment_id": str(exc.payment_id) if exc.payment_id else None,
-                "payment_status": exc.status,
-                "redirect_url": exc.redirect_url,
-            },
-        )
+        return payment_already_active_error(exc)
     if isinstance(exc, RetryRefusedError):
         return ApiError(
             status_code=status.HTTP_409_CONFLICT,
@@ -272,6 +265,8 @@ async def retry_payment(
                     requested_provider=body.payment_provider,
                     hold=timedelta(seconds=hold),
                     now=now,
+                    offers=SqlOfferCheckouts(session),
+                    clock=lambda: datetime.now(UTC),
                 )
             except _TRANSLATED as exc:
                 raise _translate(exc) from exc

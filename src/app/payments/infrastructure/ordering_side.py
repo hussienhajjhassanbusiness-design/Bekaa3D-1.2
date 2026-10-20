@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalog.application.ports import ProductType
 from app.engagement.public import NotificationType, create_notification
+from app.negotiation.public import StlPurchase, settle_offers_on_stl_purchase
 from app.ordering.public import (
     LineState,
     LockedOrder,
@@ -32,15 +33,25 @@ class SqlOrderSide:
         return await lock_order_for_change(self._session, order_id)
 
     async def mark_paid(self, locked: LockedOrder, *, at: datetime) -> tuple[UUID, ...]:
-        """STL lines `pending -> awaiting_delivery` in this transaction (ADR-019 d2)."""
-        moved = tuple(
-            line.id
+        """STL lines `pending -> awaiting_delivery` and their offers settled, in this
+        transaction (ADR-019 d2, ADR-037)."""
+        moved = [
+            line
             for line in locked.lines
             if line.product_type is ProductType.STL
             and line.fulfillment_status is OrderItemStatus.PENDING
-        )
+        ]
         await mark_order_paid(self._session, locked, at=at)
-        return moved
+        # BR-088, SRS 5.4 step 6: after the orders, lines and payment locks (ADR-037).
+        await settle_offers_on_stl_purchase(
+            self._session,
+            [
+                StlPurchase(line.order_id, line.user_id, line.product_id, line.offer_id)
+                for line in moved
+            ],
+            at=at,
+        )
+        return tuple(line.id for line in moved)
 
     async def recompute_unpaid(self, locked: LockedOrder) -> None:
         order = locked.order
