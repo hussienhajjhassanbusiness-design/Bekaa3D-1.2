@@ -36,7 +36,8 @@ pytestmark = [
     pytest.mark.usefixtures("configured_app", "shop_open"),
 ]
 ACTIONS = ["counter", "accept", "withdraw"]
-COUNTER = {"amount_cents": 850, "currency": "USD"}
+COUNTER: dict[str, Any] = {"amount_cents": 850, "currency": "USD"}
+ACCEPT: dict[str, Any] = {"expected_amount_cents": 800}
 
 
 @pytest.fixture
@@ -61,7 +62,7 @@ async def _offer(
 
 
 def _body(action: str) -> dict[str, Any] | None:
-    return COUNTER if action == "counter" else None
+    return {"counter": COUNTER, "accept": ACCEPT}.get(action)
 
 
 async def test_customer_counter_hands_the_turn_back_and_resets_the_deadline(
@@ -100,7 +101,7 @@ async def test_customer_accept_freezes_the_agreed_amount(
     _, offer = await _offer(client, db_session)
     at = datetime.now(UTC).replace(microsecond=0)
     with time_machine.travel(at, tick=False):
-        response = act(client, offer, "accept")
+        response = act(client, offer, "accept", ACCEPT)
     assert response.status_code == 200, response.text
     body = response.json()
     assert (body["status"], body["turn"], body["responds_by"]) == ("accepted", None, None)
@@ -131,10 +132,47 @@ async def test_accept_caps_the_agreed_amount_at_todays_list_price(
         text("UPDATE products SET price_cents = 900 WHERE id = :p"), {"p": product}
     )
     await db_session.commit()
-    body = act(client, offer, "accept").json()
+    body = act(client, offer, "accept", {"expected_amount_cents": 950}).json()
     assert body["agreed_amount"]["amount_cents"] == 900
     assert body["current_amount"]["amount_cents"] == 950
     assert (await offer_state(db_engine, offer))["rounds"][-1] == "2:customer:accepted:900"
+
+
+@pytest.mark.parametrize("expected", [799, 801])
+async def test_accepting_an_amount_no_longer_on_the_table_is_409(
+    client: TestClient, db_session: AsyncSession, db_engine: AsyncEngine, expected: int
+) -> None:
+    """ADR-035 d9: the customer is bound only to the amount their page showed."""
+    _, offer = await _offer(client, db_session)
+    before = await offer_state(db_engine, offer)
+    response = act(client, offer, "accept", {"expected_amount_cents": expected})
+    assert_problem(response, 409, "OFFER_AMOUNT_CHANGED")
+    assert response.json()["current_amount"] == {"amount_cents": 800, "currency": "USD"}
+    assert await offer_state(db_engine, offer) == before
+    assert await side_effects(db_engine, offer) == {
+        "audits": [],
+        "notifications": [],
+        "emails": [],
+    }
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        None,
+        {},
+        {"expected_amount_cents": 0},
+        {"expected_amount_cents": "800"},
+        {"expected_amount_cents": 800, "currency": "USD"},
+    ],
+)
+async def test_accept_requires_the_amount_seen(
+    client: TestClient, db_session: AsyncSession, db_engine: AsyncEngine, body: Any
+) -> None:
+    _, offer = await _offer(client, db_session)
+    before = await offer_state(db_engine, offer)
+    assert_problem(act(client, offer, "accept", body), 422, "VALIDATION_ERROR")
+    assert await offer_state(db_engine, offer) == before
 
 
 @pytest.mark.parametrize("status", ["awaiting_admin", "awaiting_customer"])
@@ -279,7 +317,7 @@ async def test_accepting_an_stl_bought_meanwhile_is_409(
     await seed_online_order(
         db_session, user_id=user, stl_id=product, line_status="awaiting_delivery"
     )
-    assert_problem(act(client, offer, "accept"), 409, "PRODUCT_ALREADY_OWNED")
+    assert_problem(act(client, offer, "accept", ACCEPT), 409, "PRODUCT_ALREADY_OWNED")
     assert (await offer_state(db_engine, offer))["status"] == "awaiting_customer"
     assert await side_effects(db_engine, offer) == {
         "audits": [],
@@ -295,7 +333,7 @@ async def test_the_kill_switch_never_blocks_an_answer(
     _, offer = await _offer(client, db_session)
     before = await set_setting(db_engine, "accepting_orders", "false")
     try:
-        assert act(client, offer, "accept").status_code == 200
+        assert act(client, offer, "accept", ACCEPT).status_code == 200
     finally:
         await set_setting(db_engine, "accepting_orders", before)
 

@@ -28,6 +28,7 @@ from app.negotiation.application.services.respond_to_offer import (
 )
 from app.negotiation.domain.enums import OfferAction, OfferActor, OfferStatus, OfferTurn
 from app.negotiation.domain.exceptions import (
+    OfferAmountChangedError,
     OfferExpiredError,
     OfferInvalidTransitionError,
     OfferNotAllowedError,
@@ -131,7 +132,7 @@ async def test_customer_counter_tells_administrators_in_app_only() -> None:
 async def test_accept_always_emails_the_customer(who: Responder) -> None:
     world = World()
     offer = world.seed() if who is ADMIN else world.customer_turn()
-    accepted = await accept_offer(world.deps, who, offer_id=offer.id)
+    accepted = await accept_offer(world.deps, who, offer_id=offer.id, expected_amount_cents=800)
     assert accepted.checkout_expires_at == NOW + timedelta(hours=2)
     recipients = [recipient for recipient, _ in world.notifier.sent]
     assert recipients == ([USER] if who is ADMIN else [None, USER])
@@ -145,7 +146,7 @@ async def test_accept_always_emails_the_customer(who: Responder) -> None:
 async def test_accept_uses_todays_lowered_list_price() -> None:
     world = World(products=FakeProducts({STL.id: replace(STL, price_cents=650)}))
     offer = world.seed()
-    accepted = await accept_offer(world.deps, ADMIN, offer_id=offer.id)
+    accepted = await accept_offer(world.deps, ADMIN, offer_id=offer.id, expected_amount_cents=800)
     assert accepted.agreed_amount_cents == 650
     assert world.store.rounds_by_offer[offer.id][0].amount_cents == 650
 
@@ -181,11 +182,21 @@ async def test_a_customer_never_reaches_anothers_offer() -> None:
     assert world.untouched(offer)
 
 
+@pytest.mark.parametrize("who", [ADMIN, CUSTOMER])
+async def test_a_stale_accept_writes_nothing(who: Responder) -> None:
+    """ADR-035 d9: checked before the product and ownership, so it is what a stale page sees."""
+    world = World(ownership=FakeOwnership(owned=True), products=FakeProducts({}))
+    offer = world.seed() if who is ADMIN else world.customer_turn()
+    with pytest.raises(OfferAmountChangedError):
+        await accept_offer(world.deps, who, offer_id=offer.id, expected_amount_cents=850)
+    assert world.untouched(offer)
+
+
 async def test_accept_refuses_an_stl_owned_meanwhile() -> None:
     world = World(ownership=FakeOwnership(owned=True))
     offer = world.seed()
     with pytest.raises(OfferProductOwnedError):
-        await accept_offer(world.deps, ADMIN, offer_id=offer.id)
+        await accept_offer(world.deps, ADMIN, offer_id=offer.id, expected_amount_cents=800)
     assert world.untouched(offer)
 
 
@@ -196,7 +207,7 @@ async def test_counter_and_accept_recheck_the_product(product: CartProduct | Non
     world = World(products=FakeProducts({STL.id: product} if product else {}))
     offer = world.seed()
     with pytest.raises(OfferNotAllowedError):
-        await accept_offer(world.deps, ADMIN, offer_id=offer.id)
+        await accept_offer(world.deps, ADMIN, offer_id=offer.id, expected_amount_cents=800)
     with pytest.raises(OfferNotAllowedError):
         await counter_offer(world.deps, ADMIN, offer_id=offer.id, amount_cents=900, message=None)
     assert world.untouched(offer)
@@ -306,7 +317,7 @@ async def test_the_deadline_is_read_after_the_lock_is_taken() -> None:
     world.store = SlowLock()
     offer = world.seed(responds_by=NOW + timedelta(seconds=1))
     with pytest.raises(OfferExpiredError):
-        await accept_offer(world.deps, ADMIN, offer_id=offer.id)
+        await accept_offer(world.deps, ADMIN, offer_id=offer.id, expected_amount_cents=800)
     assert world.untouched(offer)
 
 

@@ -190,6 +190,7 @@ These codes are implementation additions needed to give the frontend determinist
 | 409 | `VERSION_CONFLICT` | The `version` sent is not the stored one; nothing was written. Body carries `current_version` (ADR-020) |
 | 409 | `REVIEW_ALREADY_EXISTS` | Active user/product review already exists |
 | 409 | `OFFER_NOT_YOUR_TURN` | Offer action attempted by wrong actor |
+| 409 | `OFFER_AMOUNT_CHANGED` | Accept named an `expected_amount_cents` that is not the offer's `current_amount`; nothing was written. Body carries `current_amount` (ADR-035 d9) |
 | 410 | `OFFER_EXPIRED` | Offer inactivity lifetime elapsed |
 | 410 | `RESOURCE_EXPIRED` | Single-use/time-limited resource expired |
 | 416 | `RANGE_NOT_SATISFIABLE` | Invalid byte range on an admin attachment download |
@@ -429,7 +430,7 @@ Removed by ADR-019: there is no STL library, entitlement or download endpoint, b
 | `GET /api/v1/me/offers` | Authenticated | query params | `200 OfferPage` | 401 | Cursor; optional `status`, `product_id`; default `-created_at` | Own offer history |
 | `GET /api/v1/me/offers/{offer_id}` | Authenticated; owner | — | `200 OfferDetail` | 401, 404 | — | Includes append-only rounds and current deadline |
 | `POST /api/v1/me/offers/{offer_id}/counter` | Verified Customer; owner; customer turn | `OfferCounterRequest` | `200 OfferDetail` | 401, 403, 404, 409 `OFFER_NOT_YOUR_TURN` / `INVALID_STATE_TRANSITION`, 410, 422, 429 | — | Adds round; switches turn; resets `responds_by`; notification/outbox |
-| `POST /api/v1/me/offers/{offer_id}/accept` | Verified Customer; owner; customer turn | — | `200 OfferDetail` | 401, 403, 404, 409, 410, 429 | — | Freezes agreed price; creates checkout window; notification/outbox |
+| `POST /api/v1/me/offers/{offer_id}/accept` | Verified Customer; owner; customer turn | `OfferAcceptRequest` | `200 OfferDetail` | 401, 403, 404, 409 (incl. `OFFER_AMOUNT_CHANGED`), 410, 422, 429 | — | Freezes agreed price; creates checkout window; notification/outbox; `expected_amount_cents` must equal `current_amount` (ADR-035 d9) |
 | `POST /api/v1/me/offers/{offer_id}/withdraw` | Verified Customer; owner | `OfferWithdrawRequest` (optional) | `200 OfferDetail` | 401, 403, 404, 409, 410, 429 | — | Legal in both awaiting states, whoever's turn (ADR-034, ADR-035); append history |
 | `POST /api/v1/me/offers/{offer_id}/checkout` | Verified Customer; owner; accepted offer | `OfferCheckoutRequest` + `Idempotency-Key` | `201 CheckoutRead` | 401, 403, 404, 409 `IDEMPOTENCY_KEY_CONFLICT` / `PAYMENT_ALREADY_ACTIVE`, 410 `OFFER_CHECKOUT_EXPIRED`, 429, 502 | — | One-time agreed-price checkout; creates order/payment; price comes from immutable accepted offer |
 
@@ -602,7 +603,7 @@ A callback alone never authorizes these state changes.
 | `GET /api/v1/admin/offers` | query params | `200 AdminOfferPage` | 401/404 | Cursor; `status`, `product_id`, customer, deadlines; pending deadline first | Pending offers queue |
 | `GET /api/v1/admin/offers/{offer_id}` | — | `200 AdminOfferDetail` | 401/404 | — | Complete negotiation rounds |
 | `POST /api/v1/admin/offers/{offer_id}/counter` | `OfferCounterRequest` | `200 AdminOfferDetail` | 401/404, 409 `OFFER_NOT_YOUR_TURN`, 410, 422 | — | Append round; switch turn; reset deadline; notification/outbox |
-| `POST /api/v1/admin/offers/{offer_id}/accept` | — | `200 AdminOfferDetail` | 401/404, 409, 410 | — | Freeze current amount; start checkout window; notification/outbox |
+| `POST /api/v1/admin/offers/{offer_id}/accept` | `OfferAcceptRequest` | `200 AdminOfferDetail` | 401/404, 409 (incl. `OFFER_AMOUNT_CHANGED`), 410, 422 | — | Freeze current amount; start checkout window; notification/outbox; `expected_amount_cents` must equal `current_amount` (ADR-035 d9) |
 | `POST /api/v1/admin/offers/{offer_id}/reject` | `OfferRejectRequest` | `200 AdminOfferDetail` | 401/404, 409, 410 | — | Append rejection; arm cooldown; notification/outbox |
 
 ---
@@ -940,6 +941,12 @@ message?: str
 amount_cents: int
 currency: "USD"
 message?: str
+```
+
+### `OfferAcceptRequest`
+
+```text
+expected_amount_cents: int  # the current_amount the caller saw (ADR-035 d9)
 ```
 
 ### `OfferWithdrawRequest`

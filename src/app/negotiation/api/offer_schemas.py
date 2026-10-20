@@ -50,6 +50,14 @@ class OfferCounterRequest(BaseModel):
     _trimmed = field_validator("message", mode="before")(_trim)
 
 
+class OfferAcceptRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_amount_cents: AmountCents = Field(
+        description="`current_amount` as the caller last saw it; any other is 409."
+    )
+
+
 class OfferReasonRequest(BaseModel):
     """Body of reject and withdraw; the reason is kept as the round's message."""
 

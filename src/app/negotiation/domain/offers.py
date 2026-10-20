@@ -17,6 +17,7 @@ from app.negotiation.domain.enums import (
 from app.negotiation.domain.exceptions import (
     NegotiationDomainError,
     OfferAboveListPriceError,
+    OfferAmountChangedError,
     OfferBelowMinimumError,
     OfferCooldownActiveError,
     OfferExpiredError,
@@ -265,10 +266,17 @@ def counter(
     return countered, NewRound(next_sequence, actor, OfferAction.COUNTERED, amount_cents, message)
 
 
+def check_amount_seen(offer: Offer, expected_amount_cents: int) -> None:
+    """Accept binds only the amount the caller saw; a stale page is refused (ADR-035 d9)."""
+    if expected_amount_cents != offer.current_amount_cents:
+        raise OfferAmountChangedError(offer.current_amount_cents)
+
+
 def accept(
     offer: Offer,
     *,
     actor: OfferActor,
+    expected_amount_cents: int,
     list_price_cents: int,
     checkout_window_seconds: int,
     next_sequence: int,
@@ -276,6 +284,7 @@ def accept(
 ) -> tuple[Offer, NewRound]:
     """Freezes the agreed price (BR-085), never above today's list price (ADR-035)."""
     check_move(offer, actor, OfferMove.ACCEPT, now)
+    check_amount_seen(offer, expected_amount_cents)
     agreed = min(offer.current_amount_cents, list_price_cents)
     accepted = replace(
         offer,

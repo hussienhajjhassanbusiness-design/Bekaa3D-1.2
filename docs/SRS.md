@@ -1229,15 +1229,18 @@ For a cash order, `ready_for_pickup → picked_up` happens only through the hand
 
 ```
                   ┌──> rejected (sets cooldown)
-awaiting_admin ───┼──> accepted ──> paid
-   ↑    │         └──> expired         └──> checkout_expired
-   │    └──> awaiting_customer ──┐     └──> auto_closed
-   └───────────────────────────  ┤
+                  ├──> expired
+awaiting_admin ───┴──> accepted ──┬──> paid
+   ↑    │                 ↑       ├──> checkout_expired
+   │    │                 │       └──> auto_closed
+   │    │                 │ customer accepts on their own turn
+   │    └──> awaiting_customer ──┐
+   └─────────────────────────────┤ customer counters
                                  ├──> withdrawn
                                  └──> expired
 ```
 
-Once accepted, only the checkout window applies.
+Either party accepts on its own turn: the administrator from `awaiting_admin`, the customer from `awaiting_customer` (F-092, FR-13). Once accepted, only the checkout window applies.
 
 ### 20.7 Custom Request
 

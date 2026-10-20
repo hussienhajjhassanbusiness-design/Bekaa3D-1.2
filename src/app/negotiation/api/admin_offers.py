@@ -24,6 +24,7 @@ from app.negotiation.api.offer_schemas import (
     AdminOfferDetailRead,
     AdminOfferPage,
     AdminOfferSummaryRead,
+    OfferAcceptRequest,
     OfferCounterRequest,
     OfferReasonRequest,
 )
@@ -53,8 +54,8 @@ _ACTION_RESPONSES: dict[int | str, dict[str, Any]] = {
     **_RESPONSES,
     403: {"description": "CSRF token missing or invalid."},
     409: {
-        "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), or "
-        "PRODUCT_ALREADY_OWNED (accept)."
+        "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), "
+        "OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED (accept)."
     },
     410: {"description": "OFFER_EXPIRED: the response deadline has passed."},
     422: {
@@ -172,6 +173,7 @@ async def counter(
 async def accept(
     offer_id: UUID,
     request: Request,
+    body: OfferAcceptRequest,
     claims: AccessTokenClaims = Depends(require_admin),
     session: AsyncSession = Depends(get_session),
     products: CartProductReader = Depends(cart_product_reader),
@@ -179,7 +181,9 @@ async def accept(
     deps = offer_deps(session, products)
     who = Responder(OfferActor.ADMIN, claims.user_id, request_context(request))
     try:
-        await accept_offer(deps, who, offer_id=offer_id)
+        await accept_offer(
+            deps, who, offer_id=offer_id, expected_amount_cents=body.expected_amount_cents
+        )
     except NegotiationDomainError as exc:
         raise translate(exc) from exc
     return await _detail(deps.offers, products, session, offer_id, datetime.now(UTC))

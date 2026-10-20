@@ -22,6 +22,7 @@ from app.identity.public import (
 from app.negotiation.api.cursors import decode_customer, encode_customer
 from app.negotiation.api.offer_errors import translate
 from app.negotiation.api.offer_schemas import (
+    OfferAcceptRequest,
     OfferCounterRequest,
     OfferCreate,
     OfferDetailRead,
@@ -77,8 +78,8 @@ _ACTION_RESPONSES: dict[int | str, dict[str, Any]] = {
     403: {"description": "CSRF token missing or invalid, or EMAIL_VERIFICATION_REQUIRED."},
     404: {"description": "No such offer among the caller's own."},
     409: {
-        "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), or "
-        "PRODUCT_ALREADY_OWNED (accept)."
+        "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), "
+        "OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED (accept)."
     },
     410: {"description": "OFFER_EXPIRED: the response deadline has passed."},
     422: {
@@ -252,6 +253,7 @@ async def counter_my_offer(
 async def accept_my_offer(
     offer_id: UUID,
     request: Request,
+    body: OfferAcceptRequest,
     user: User = Depends(current_verified_user),
     session: AsyncSession = Depends(get_session),
     products: CartProductReader = Depends(cart_product_reader),
@@ -259,7 +261,9 @@ async def accept_my_offer(
     deps = offer_deps(session, products)
     who = Responder(OfferActor.CUSTOMER, user.id, request_context(request))
     try:
-        await accept_offer(deps, who, offer_id=offer_id)
+        await accept_offer(
+            deps, who, offer_id=offer_id, expected_amount_cents=body.expected_amount_cents
+        )
     except NegotiationDomainError as exc:
         raise translate(exc) from exc
     return await _detail(deps.offers, products, offer_id, user, datetime.now(UTC))

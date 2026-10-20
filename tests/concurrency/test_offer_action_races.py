@@ -99,7 +99,7 @@ async def test_accept_racing_reject_one_wins(db_engine: AsyncEngine) -> None:
     _, admin, offer = await _seed(db_engine)
     results = await _race(
         db_engine,
-        lambda d: accept_offer(d, admin, offer_id=offer),
+        lambda d: accept_offer(d, admin, offer_id=offer, expected_amount_cents=800),
         lambda d: reject_offer(d, admin, offer_id=offer, reason=None),
     )
     assert sum(isinstance(r, Offer) for r in results) == 1
@@ -113,7 +113,7 @@ async def test_withdraw_racing_admin_accept_one_wins(db_engine: AsyncEngine) -> 
     results = await _race(
         db_engine,
         lambda d: withdraw_offer(d, customer, offer_id=offer, reason=None),
-        lambda d: accept_offer(d, admin, offer_id=offer),
+        lambda d: accept_offer(d, admin, offer_id=offer, expected_amount_cents=800),
     )
     assert sum(isinstance(r, Offer) for r in results) == 1
     assert sum(isinstance(r, OfferInvalidTransitionError) for r in results) == 1
@@ -168,7 +168,7 @@ async def test_two_tabs_withdraw_racing_an_answer(db_engine: AsyncEngine, second
 
     def answer(deps: OfferDeps) -> Awaitable[Offer]:
         if second == "accept":
-            return accept_offer(deps, customer, offer_id=offer)
+            return accept_offer(deps, customer, offer_id=offer, expected_amount_cents=800)
         return counter_offer(deps, customer, offer_id=offer, amount_cents=900, message=None)
 
     results = await _race(
