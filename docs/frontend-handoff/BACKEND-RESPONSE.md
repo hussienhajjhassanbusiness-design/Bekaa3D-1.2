@@ -2200,7 +2200,7 @@ There is no total: compute one for display if you need it; checkout recomputes i
 
 **Notes:**
 - A cash order is `in_progress` from the moment it is placed, with `payment_due: true`.
-- `can_cancel` is true only while the order has a physical line, is paid or is cash, and every physical line is still `pending`. STL lines are never cancelled.
+- `can_cancel` is true only while the order has a live (not cancelled) physical line, is paid or is cash, and every live physical line is still `pending`; lines the administrator already cancelled are ignored (ADR-033). STL lines are never cancelled.
 - Your request for a machine-readable list of legal admin transitions is **decided: yes** ([ADR-025](../adr/ADR-025-frontend-contract-decisions.md)). The admin screens should render only the listed actions and never re-encode the state machine. Customer responses do not carry the list; customers use `can_cancel`.
 
 ### Domain / item: C11 — Per-product ownership check
@@ -2385,8 +2385,8 @@ There is no total: compute one for display if you need it; checkout recomputes i
 **Authoritative source/OpenAPI file:** none yet. Plan: VS-031; api-endpoints.md sections 11 and 18; ADR-024 decisions 6 and 8.
 
 **Notes:** your questions, provisionally.
-- **Cutoff:** a customer can cancel only while **every** physical line is still `pending`, meaning printing has not started on any of them. The moment the administrator marks one line `in_production`, self-cancel closes. The customer never sees `in_production`; they see `can_cancel` turn false.
-- **Customer cancel is all or nothing:** it cancels every physical line of the order, never some. STL lines are never cancelled.
+- **Cutoff:** a customer can cancel only while **every** live (not cancelled) physical line is still `pending`, meaning printing has not started on any of them. The moment the administrator marks one line `in_production`, self-cancel closes. The customer never sees `in_production`; they see `can_cancel` turn false.
+- **Customer cancel is all or nothing:** it cancels every live physical line of the order, never some. STL lines are never cancelled.
 - **Race lost:** `409 ORDER_NOT_CANCELLABLE`, shared problem body, nothing changed. Re-read the order.
 - **Refund after an admin cancel:** cancelling a paid line creates a pending refund of kind `cancellation` for the line's remaining balance, in the same transaction. It then sits in the refund queue ([P1-13](#domain--item-p1-13--refunds)) until the administrator pays it by hand and settles it. Cancelling an unpaid cash line creates no refund.
 - A cash order refused at the door can block that customer and phone from paying cash again. The administrator can clear the block.

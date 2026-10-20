@@ -410,7 +410,7 @@ Payment reached paid (paid, partially refunded or refunded; online or cash)
   └── otherwise                       → IN_PROGRESS
 ```
 
-This is a projection rule rather than a normal command-driven state machine. A failed or expired attempt leaves the Order `PENDING_PAYMENT` until the hold release cancels it. "Refunds cover all paid money" counts non-failed refund records, pending or settled; "any refund present" also counts a failed refund not yet reissued (owed); `late_capture` refunds never count; "all items refunded" means every item fully refunded. Derived flags: `payment_due` marks an unpaid cash Order; `can_cancel` is true only when the Order has a physical item, is cash or has a Payment that reached paid, has status `IN_PROGRESS` or `PARTIALLY_REFUNDED`, and every physical item is `pending`.
+This is a projection rule rather than a normal command-driven state machine. A failed or expired attempt leaves the Order `PENDING_PAYMENT` until the hold release cancels it. "Refunds cover all paid money" counts non-failed refund records, pending or settled; "any refund present" also counts a failed refund not yet reissued (owed); `late_capture` refunds never count; "all items refunded" means every item fully refunded. Derived flags: `payment_due` marks an unpaid cash Order; `can_cancel` is true only when the Order has a live (not cancelled) physical item, is cash or has a Payment that reached paid, has status `IN_PROGRESS` or `PARTIALLY_REFUNDED`, and every live physical item is `pending` (cancelled items are ignored; ADR-033).
 
 **Relationships:**
 
@@ -505,7 +505,7 @@ PENDING
         └── REFUNDED
 ```
 
-`AWAITING_DELIVERY` is entered atomically with Payment verification. `DELIVERED` is set by an administrator after emailing the file, recording `delivered_at` and the acting administrator (ADR-019).
+`AWAITING_DELIVERY` is entered atomically with Payment verification. `DELIVERED` is set by an administrator after emailing the file, recording `fulfilled_at` and the acting administrator (`delivered_by`) (ADR-019).
 
 ### Physical OrderItem — Delivery
 

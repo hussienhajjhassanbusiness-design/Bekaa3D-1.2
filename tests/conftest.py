@@ -26,11 +26,13 @@ from tests.smoke.test_vs016_smoke import SMOKE_ELSEWHERE as VS016_SMOKE
 from tests.smoke.test_vs022_smoke import SMOKE_ELSEWHERE as VS022_SMOKE
 from tests.smoke.test_vs023_smoke import SMOKE_ELSEWHERE as VS023_SMOKE
 from tests.smoke.test_vs024_smoke import SMOKE_ELSEWHERE as VS024_SMOKE
+from tests.smoke.test_vs025_smoke import SMOKE_ELSEWHERE as VS025_SMOKE
 from tests.smoke.test_vs026_smoke import SMOKE_ELSEWHERE as VS026_SMOKE
 from tests.smoke.test_vs033_smoke import SMOKE_ELSEWHERE as VS033_SMOKE
 from tests.smoke.test_vs034_smoke import SMOKE_ELSEWHERE as VS034_SMOKE
 from tests.smoke.test_vs035_smoke import SMOKE_ELSEWHERE as VS035_SMOKE
 from tests.smoke.test_vs038_smoke import SMOKE_ELSEWHERE as VS038_SMOKE
+from tests.smoke.test_vs039_smoke import SMOKE_ELSEWHERE as VS039_SMOKE
 from tests.smoke.test_vs046_smoke import SMOKE_ELSEWHERE as VS046_SMOKE
 
 # Tests never call Cloudflare; a local .env predating VS-033 may not set this.
@@ -49,11 +51,13 @@ _SMOKE_NODE_IDS = frozenset(
         VS022_SMOKE,
         VS023_SMOKE,
         VS024_SMOKE,
+        VS025_SMOKE,
         VS026_SMOKE,
         VS033_SMOKE,
         VS034_SMOKE,
         VS035_SMOKE,
         VS038_SMOKE,
+        VS039_SMOKE,
         VS046_SMOKE,
     )
     for ids in suite.values()

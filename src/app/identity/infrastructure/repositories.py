@@ -315,6 +315,13 @@ class UserRepository:
         )
         return [(row.id, row.email) for row in await self._session.execute(stmt)]
 
+    async def emails_by_id(self, user_ids: list[UUID]) -> dict[UUID, str]:
+        """One query; unknown ids are absent. Anonymised users carry their placeholder."""
+        if not user_ids:
+            return {}
+        stmt = select(UserModel.id, UserModel.email).where(UserModel.id.in_(user_ids))
+        return {row.id: str(row.email) for row in (await self._session.execute(stmt)).all()}
+
     async def get_by_id_for_update(self, user_id: UUID) -> User | None:
         """Read one user and hold a row lock on them until the transaction ends.
 

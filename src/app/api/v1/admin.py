@@ -47,6 +47,7 @@ from app.identity.public import (
     not_found_error,
     require_admin,
 )
+from app.negotiation.api.admin_offers import admin_router as offers_router
 from app.ordering.api.admin_release import admin_router as order_release_router
 from app.payments.api.admin_payments import admin_router as admin_payments_router
 from app.platform.api.audit_logs import admin_router as audit_logs_router
@@ -109,6 +110,8 @@ router.include_router(engagement_analytics_router)
 # VS-024. Payment reconcile and manual confirm; the manual hold release.
 router.include_router(admin_payments_router)
 router.include_router(order_release_router)
+# VS-039. The offer queue and offer detail (api-endpoints.md 21).
+router.include_router(offers_router)
 
 
 def _allowed_methods(request: Request) -> list[str]:

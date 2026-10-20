@@ -35,6 +35,7 @@ __all__ = [
     "not_found_error",
     "require_admin",
     "require_csrf",
+    "user_emails",
     "verified_user_short_read",
 ]
 
@@ -48,3 +49,8 @@ async def active_administrator_contacts(session: AsyncSession) -> list[tuple[UUI
     """Active, verified administrators and their emails (VS-024 payment alerts). The
     emails go to the outbox only; never log them."""
     return await UserRepository(session).active_administrator_contacts()
+
+
+async def user_emails(session: AsyncSession, user_ids: list[UUID]) -> dict[UUID, str]:
+    """Account emails by id, read in the caller's transaction (VS-039 admin offer queue)."""
+    return await UserRepository(session).emails_by_id(user_ids)

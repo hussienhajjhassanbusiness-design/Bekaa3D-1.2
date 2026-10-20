@@ -25,6 +25,7 @@ from app.payments.domain.exceptions import (
 from app.payments.domain.limits import CHECKOUT_RATE_LIMIT, CHECKOUT_RATE_WINDOW_SECONDS
 from app.payments.domain.outcome import Outcome, ProviderResult
 from app.payments.infrastructure.manual import confirm_payment_manually
+from app.payments.infrastructure.order_payments import SqlOrderPaymentReader
 from app.payments.infrastructure.payments import SqlPaymentAttempts, SqlPaymentStore
 from app.payments.infrastructure.providers.factory import configured_payment_providers
 from app.payments.infrastructure.reconcile import reconcile_stuck
@@ -53,6 +54,7 @@ __all__ = [
     "confirm_payment_manually",
     "fail_attempt",
     "limits",
+    "order_payment_reader",
     "payment_attempts",
     "payment_store",
     "reconcile_stuck",
@@ -71,6 +73,11 @@ def payment_attempts(
 ) -> SqlPaymentAttempts:
     """Ordering's `PaymentAttempts` port on the caller's session (checkout Tx1)."""
     return SqlPaymentAttempts(session, providers)
+
+
+def order_payment_reader(session: AsyncSession) -> SqlOrderPaymentReader:
+    """Ordering's `OrderPaymentReader` for the customer's order history (VS-025)."""
+    return SqlOrderPaymentReader(session)
 
 
 def payment_store(session: AsyncSession) -> SqlPaymentStore:

@@ -506,8 +506,8 @@ so that I am not charged for work that has not started.
 Given:
 
 The customer owns the order
-The order has at least one physical line, and is a cash order or has an online payment that reached paid
-Every physical line is still pending: the administrator has not marked start printing
+The order has at least one live (not cancelled) physical line, and is a cash order or has an online payment that reached paid
+Every live physical line is still pending: the administrator has not marked start printing; lines already cancelled are ignored
 
 When:
 

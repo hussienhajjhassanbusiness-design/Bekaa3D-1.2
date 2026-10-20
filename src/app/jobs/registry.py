@@ -2,6 +2,7 @@ from arq import cron
 from arq.cron import CronJob
 from arq.typing import WorkerCoroutine
 
+from app.jobs.expire_offers import expire_offers
 from app.jobs.outbox import dispatch_outbox
 from app.jobs.partitions import ensure_partitions
 from app.jobs.purge_expired_attachments import purge_expired_attachments
@@ -32,6 +33,7 @@ FUNCTIONS: list[WorkerCoroutine] = [
     purge_expired_idempotency_records,
     reconcile_payments,
     release_stale_checkouts,
+    expire_offers,
 ]
 
 CRON_JOBS: list[CronJob] = [
@@ -70,4 +72,6 @@ CRON_JOBS: list[CronJob] = [
         second=RELEASE_CRON_SECOND,
         run_at_startup=True,
     ),
+    # VS-039 / SRS 23: every 5 min; a deadline is honoured to within one tick.
+    cron(expire_offers, minute=set(range(0, 60, 5)), second=30, run_at_startup=True),
 ]

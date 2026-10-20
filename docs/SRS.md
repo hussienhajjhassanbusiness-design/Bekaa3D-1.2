@@ -214,7 +214,7 @@ Every rule is numbered for traceability. `BR-` prefix.
 | BR-037 | Estimated dispatch date = placement date + max across physical lines of (lead time × ceil(quantity ÷ batch size)); customers see it as the estimated ready date. |
 | BR-038 | Customers are promised an estimated **dispatch** date, never a delivery date; courier transit and the delivery fee are outside the company's control. |
 | BR-039 | Unpaid **online** checkouts expire after a configurable hold period and are cancelled automatically. Cash orders have no hold (BR-142). |
-| BR-040 | The global "accepting orders" kill switch blocks new checkouts, cash orders included, but never affects payments already in flight or cash handovers of existing orders. |
+| BR-040 | The global "accepting orders" kill switch blocks new checkouts, cash orders included, and new offer submissions, but never affects payments already in flight, cash handovers of existing orders, or responding to, expiring or withdrawing an existing offer (ADR-034). |
 | BR-041 | Checkout is idempotent; a repeated request with the same idempotency key returns the original order.                               |
 | BR-042 | Digital lines enter `awaiting_delivery` on payment verification and are fulfilled when the administrator emails the file and marks the line delivered, independently of physical lines. |
 
@@ -243,7 +243,7 @@ Every rule is numbered for traceability. `BR-` prefix.
 | BR-063 | Every refund creates a tracked obligation record that remains pending until settled. Every V1 refund is manual: the administrator pays it in the provider dashboard or in cash and settles it here. A failed refund stays owed until reissued. |
 | BR-064 | A refunded digital line is marked refunded; if it has not been sent yet it leaves the delivery queue and must not be sent.       |
 | BR-065 | A file already emailed cannot be recalled; the protections are the all-sales-final consent record and the delivery record.     |
-| BR-066 | A customer may cancel their own order while every physical line is still `pending`, whether it was paid online or is an unpaid cash order. |
+| BR-066 | A customer may cancel their own order while every live (not cancelled) physical line is still `pending`, whether it was paid online or is an unpaid cash order; lines an administrator already cancelled are ignored (owner decision 2026-10-19, ADR-033). |
 | BR-067 | Once the administrator marks any line "start printing" (`in_production`), self-cancellation closes and cancellation becomes an admin decision. |
 | BR-068 | STL lines are never self-cancellable.                                                                                            |
 | BR-069 | A customer whose STL line was refunded may purchase the product again.                                                           |
@@ -383,7 +383,7 @@ Complete inventory. `F-` prefix. Phase indicates build order (§28).
 | F-030 | Wishlist management                              | 1     |
 | F-031 | Review management                                | 1     |
 | F-032 | Notification centre with read/unread             | 1     |
-| F-033 | Self-service order cancellation (while every physical line is pending) | 2 |
+| F-033 | Self-service order cancellation (while every live physical line is pending) | 2 |
 | F-034 | Data export (JSON)                               | 5     |
 | F-035 | Account deletion via anonymisation               | 5     |
 
@@ -731,7 +731,7 @@ The delivered and picked-up emails have "I got it" and "Report a problem" button
 
 ### 8.9 What the Customer Sees
 
-The customer sees `in_production` as `pending` ("Received"), and their status history omits `in_production` entries. Because the cutoff is invisible, the order exposes a derived `can_cancel` flag: true only when the order has at least one physical line, is a cash order or has a payment that reached `paid`, has status `in_progress` or `partially_refunded`, and every physical line is `pending`. It is false for an STL-only order and for an unpaid online order.
+The customer sees `in_production` as `pending` ("Received"), and their status history omits `in_production` entries. Because the cutoff is invisible, the order exposes a derived `can_cancel` flag: true only when the order has at least one live (not cancelled) physical line, is a cash order or has a payment that reached `paid`, has status `in_progress` or `partially_refunded`, and every live physical line is `pending`; physical lines an administrator already cancelled are ignored. It is false for an STL-only order and for an unpaid online order.
 
 ---
 
@@ -1124,7 +1124,7 @@ Numbered for traceability. `INV-` prefix.
 * INV-07 — Lines whose product is WhatsApp-only, invisible, unavailable, or deleted are rejected at checkout.
 * INV-08 — STL lines have quantity exactly 1 and are rejected when the customer already owns the STL (§10.3).
 * INV-09 — A cart holds at most one line per product; merged quantity respects the cap.
-* INV-10 — The kill switch blocks new checkouts but never in-flight payments.
+* INV-10 — The kill switch blocks new checkouts and new offers but never in-flight payments or existing offers.
 * INV-11 — Dispatch estimate accounts for quantity and batch size.
 
 **Content**
@@ -1643,7 +1643,7 @@ These questions apply to whichever provider §30.4 chooses; the Whish answers so
 | **Cash on Delivery (COD)** | Payment method `cash` with delivery: the courier collects the amount due in cash at the door; at pickup it is paid at the counter |
 | **Courier Delivery Fee**  | The fee the courier sets and collects from the customer on delivery; never part of the order total |
 | **Idempotency Key**       | Client-supplied header preventing duplicate order or refund creation                         |
-| **Kill Switch**           | Global setting pausing all new checkouts, online and cash                                    |
+| **Kill Switch**           | Global setting pausing all new checkouts, online and cash, and new offer submissions         |
 | **Lead Time**             | Days required to produce one batch of a physical product                                     |
 | **Mixed Order**           | An order containing both digital and physical lines                                          |
 | **Outbox**                | Table holding emails written inside a business transaction, delivered afterwards by a worker |
