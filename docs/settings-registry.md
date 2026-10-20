@@ -26,7 +26,7 @@ rather than inferred from the specification. Changing one is a migration if you
 want the new value to apply to a fresh deployment, or a `PATCH` if you want it
 to apply now.
 
-## The fifteen settings
+## The seventeen settings
 
 | Key | Type | Unit | Default | Range | Public |
 |---|---|---|---|---|:-:|
@@ -38,7 +38,9 @@ to apply now.
 | `checkout_hold_period` | duration | seconds | `1800` (30 min) | 300 – 7 200 | ❌ — also bounds payment retry (from `placed_at`); the release deadline runs from the later of placement and the latest attempt (VS-024) |
 | `unverified_account_purge_period` | duration | seconds | `2592000` (30 d) | 604 800 – 7 776 000 | ❌ |
 | `daily_download_cap` | integer | downloads / customer / UTC day | `20` | 1 – 1 000 | ❌ — obsolete since ADR-019 (no downloads); removed by VS-023b |
-| `free_shipping_threshold` | money | cents | `null` | 0 – 1 000 000 cents | ✅ — obsolete since ADR-024 (the platform charges no shipping); removed by VS-028 |
+| `cash_payment_enabled` | boolean | — | `true` | — | ✅ |
+| `cash_max_open_orders` | integer | unpaid, uncancelled cash orders / customer or contact phone | `1` | 1 – 10 | ❌ |
+| `cash_max_order_total` | money | cents (USD) | `10000` (100 USD) | 1 – 1 000 000 cents | ✅ |
 | `pickup_address` | string | — | `null` | ≤ 500 chars | ✅ |
 | `pickup_hours` | string | — | `null` | ≤ 200 chars | ✅ |
 | `whatsapp_number` | string | — | `null` | E.164, ≤ 15 digits | ✅ |
@@ -74,35 +76,29 @@ attachment's `expires_at` at submission, so a change affects new uploads only;
 `purge_expired_attachments` deletes the file and the row once that moment passes.
 See [`custom-requests.md`](custom-requests.md) and ADR-030.
 
-**`free_shipping_threshold` defaults to JSON `null`.** BR-076 called the
-threshold optional, so "off" had to be representable. ADR-024 removed BR-076:
-the courier prices and collects delivery, so VS-028 deletes this setting.
+**`free_shipping_threshold` was deleted on 2026-10-20 (VS-028 PR A, migration
+`fcd589e89e59`).** ADR-024 removed BR-076: the courier prices and collects
+delivery, so there is no threshold. It left the table, the registry and the public
+allowlist together; its admin route now answers `404`. A downgrade restores it as
+JSON `null`.
+
+**The cash settings (VS-028, ADR-024 d7, BR-145)** were seeded by the same
+migration. `cash_payment_enabled` switches cash off without touching online orders
+or existing cash orders. The two limits bound how much printing a fake or refused
+cash order can waste (SRS §9.8); the total is checked after checkout recomputes it,
+and is at least 1 cent because a cash order's total must be above zero (it is never
+null). The maximum total is public because checkout must tell the customer why cash
+is unavailable; the open-order limit is private, like other abuse limits. Checkout
+starts reading them in VS-028 PR B.
 
 **`pickup_address`, `pickup_hours` and `whatsapp_number` default to JSON
 `null`** because the real values are awaited from the client (SRS §30.2). They
 are served publicly, so a plausible-looking placeholder address would be worse
 than a visibly absent one — the frontend hides an element whose value is null.
 
-## Planned by VS-028 (ADR-024)
-
-Not seeded yet. VS-028 adds these with the cash-on-delivery checkout and deletes
-`free_shipping_threshold`:
-
-| Key | Type | Unit | Default | Range | Public |
-|---|---|---|---|---|:-:|
-| `cash_payment_enabled` | boolean | — | `true` | — | ✅ |
-| `cash_max_open_orders` | integer | unpaid, uncancelled cash orders / customer or contact phone | `1` | 1 – 10 | ❌ |
-| `cash_max_order_total` | money | cents (USD) | `10000` (100 USD) | 1 – 1 000 000 cents | ✅ |
-
-`cash_payment_enabled` switches cash off without touching online orders or
-existing cash orders. The two limits bound how much printing a fake or refused
-cash order can waste (SRS §9.8); the total is checked after checkout recomputes it. The maximum total is public because checkout
-must tell the customer why cash is unavailable; the open-order limit is private,
-like other abuse limits.
-
 ## JSON null is not SQL NULL
 
-`settings.value` is `JSONB NOT NULL`, yet five settings default to null (four once VS-028 deletes `free_shipping_threshold`). Those
+`settings.value` is `JSONB NOT NULL`, yet three settings default to null (`free_shipping_threshold`, the fourth, was deleted by VS-028). Those
 are two different nulls:
 
 - **SQL NULL** means "no value in this column". Forbidden here.
@@ -114,10 +110,12 @@ The model sets `JSONB(none_as_null=False)` so Python `None` is written as JSON
 
 ## Public settings
 
-`GET /api/v1/settings/public` is unauthenticated and today returns exactly five keys:
+`GET /api/v1/settings/public` is unauthenticated and returns exactly six keys (VS-028,
+2026-10-20; before it, `free_shipping_threshold` was the fifth key and the cash keys were
+absent):
 
 ```
-accepting_orders, free_shipping_threshold, pickup_address, pickup_hours, whatsapp_number
+accepting_orders, cash_payment_enabled, cash_max_order_total, pickup_address, pickup_hours, whatsapp_number
 ```
 
 Two independent things stop an internal setting leaking, and **both** would have
@@ -132,17 +130,11 @@ Adding a row to the `settings` table therefore cannot make it public. Making a
 setting public is an edit to the registry *and* to the response schema, in a
 reviewed change.
 
-VS-028 changes the allowlist (ADR-024): `free_shipping_threshold` leaves it, and
-`cash_payment_enabled` and `cash_max_order_total` join it, giving six keys:
+VS-028 changed the allowlist this way (ADR-024): `free_shipping_threshold` left it, and
+`cash_payment_enabled` and `cash_max_order_total` joined it, through the registry and
+`PublicSettingsRead` together, as described above.
 
-```
-accepting_orders, cash_payment_enabled, cash_max_order_total, pickup_address, pickup_hours, whatsapp_number
-```
-
-Both changes go through the registry and `PublicSettingsRead` together, as
-described above.
-
-Of today's fifteen seeded keys, the ten not in today's five-key list are internal. `daily_download_cap` was deliberately private
+Of today's seventeen seeded keys, the eleven not in the six-key list are internal. `daily_download_cap` was deliberately private
 (publishing an abuse limit tells an abuser how to pace themselves); it is now
 obsolete, because ADR-019 removed downloads, and VS-023b deletes it.
 
@@ -172,7 +164,7 @@ not just the first.
 | `GET /api/v1/admin/settings` | Admin + MFA | Cursor page, ordered by key; `limit` (default 20, max 100), `prefix`, `type` |
 | `GET /api/v1/admin/settings/{key}` | Admin + MFA | `404` for an unknown key |
 | `PATCH /api/v1/admin/settings/{key}` | Admin + MFA + CSRF | `422 SETTING_INVALID` on a bad value; audited |
-| `GET /api/v1/settings/public` | Public | The allowlisted keys (five today, six after VS-028); rate limited |
+| `GET /api/v1/settings/public` | Public | The six allowlisted keys (VS-028); rate limited |
 
 Keys cannot be created through the API. A new setting arrives as a registry
 entry plus a migration that seeds its row.

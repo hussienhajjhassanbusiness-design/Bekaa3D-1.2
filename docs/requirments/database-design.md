@@ -1030,6 +1030,13 @@ fulfillment_method = 'delivery' → recipient_name, governorate, city, landmark_
 (digital_terms_accepted_at IS NULL) = (digital_terms_version IS NULL)
 ```
 
+As built (VS-028 PR A, migration `fcd589e89e59`), the two spellings cash matching depends on:
+
+```text
+ck_orders_contact_phone_e164: contact_phone_snapshot IS NULL OR contact_phone_snapshot ~ '^\+961[0-9]{7,8}$'
+ck_orders_phone_hash_format:  contact_phone_hash IS NULL OR contact_phone_hash ~ '^[0-9a-f]{64}$'
+```
+
 The fact that an order actually contains physical/digital lines is cross-row and must be validated transactionally; a `cash` order having only physical lines is enforced by the database through the copied `order_items.payment_method` (§8.4).
 
 ### Rules
@@ -1049,9 +1056,10 @@ The fact that an order actually contains physical/digital lines is cross-row and
 ```text
 (user_id, placed_at DESC)
 (status, placed_at DESC)
+ix_orders_open_cash_phone: (contact_phone_hash) WHERE payment_method = 'cash' AND status = 'in_progress'
 ```
 
-The fulfillment queue excludes `pending_payment` orders (BR-148). The open-cash-order count matches `user_id` or `contact_phone_hash`; add `(contact_phone_hash) WHERE payment_method = 'cash'` if `EXPLAIN` shows the need. The "cash due" admin filter (unpaid cash orders) gets a partial index in VS-029 once `EXPLAIN` shows its shape.
+The fulfillment queue excludes `pending_payment` orders (BR-148). The open-cash-order count matches `user_id` (served by `(user_id, placed_at DESC)`) or `contact_phone_hash` (served by `ix_orders_open_cash_phone`, created by VS-028 PR A because `EXPLAIN` on an empty table cannot show the need; plan Q3). An unpaid, uncancelled cash order is exactly `payment_method = 'cash' AND status = 'in_progress'` (VS-028 plan D8). The "cash due" admin filter (unpaid cash orders) gets a partial index in VS-029 once `EXPLAIN` shows its shape.
 
 ---
 
@@ -1191,10 +1199,11 @@ batch_size_snapshot IS NULL
 |---|---|---:|---|
 | `id` | UUID | No | PK |
 | `user_id` | UUID | No | FK → `users.id` |
-| `contact_phone_hash` | TEXT | No | copied from `orders.contact_phone_hash`; the plaintext number is never stored here |
-| `order_id` | UUID | No | FK → `orders.id`; UNIQUE |
+| `contact_phone_hash` | TEXT | No | copied from `orders.contact_phone_hash`; the plaintext number is never stored here; CHECK `^[0-9a-f]{64}$` |
+| `order_id` | UUID | No | UNIQUE; composite FK `(order_id, order_payment_method)` → `orders(id, payment_method)` |
+| `order_payment_method` | `payment_method` | No | default `'cash'`, CHECK `= 'cash'`: with the composite FK, a block can only reference a cash order (VS-028 plan Q4) |
 | `reason` | `cancel_reason` | No | CHECK `reason IN ('refused', 'no_show')` |
-| `created_at` | TIMESTAMPTZ | No |  |
+| `created_at` | TIMESTAMPTZ | No | default `clock_timestamp()` |
 | `cleared_at` | TIMESTAMPTZ | Yes | set by an administrator |
 | `cleared_by` | UUID | Yes | FK → `users.id`; required with `cleared_at` |
 
@@ -1205,11 +1214,24 @@ batch_size_snapshot IS NULL
 - cash is unavailable while any uncleared row matches the customer **or** the phone hash;
 - cleared, never deleted.
 
+As built (VS-028 PR A, migration `fcd589e89e59`; every FK `RESTRICT`):
+
+```text
+uq_cash_payment_blocks_order                 UNIQUE (order_id)
+fk_cash_payment_blocks_order_payment_method  (order_id, order_payment_method) -> orders(id, payment_method)
+fk_cash_payment_blocks_user                  user_id -> users(id)
+fk_cash_payment_blocks_cleared_by            cleared_by -> users(id)
+ck_cash_payment_blocks_reason                reason IN ('refused', 'no_show')
+ck_cash_payment_blocks_cash_only             order_payment_method = 'cash'
+ck_cash_payment_blocks_cleared_pair          (cleared_at IS NULL) = (cleared_by IS NULL)
+ck_cash_payment_blocks_hash_format           contact_phone_hash ~ '^[0-9a-f]{64}$'
+```
+
 ### Indexes
 
 ```text
-(user_id) WHERE cleared_at IS NULL
-(contact_phone_hash) WHERE cleared_at IS NULL
+ix_cash_payment_blocks_user_active:  (user_id) WHERE cleared_at IS NULL
+ix_cash_payment_blocks_phone_active: (contact_phone_hash) WHERE cleared_at IS NULL
 ```
 
 ---
