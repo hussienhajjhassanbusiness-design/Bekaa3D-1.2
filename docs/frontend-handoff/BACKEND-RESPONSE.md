@@ -2096,7 +2096,7 @@ There is no total: compute one for display if you need it; checkout recomputes i
 - `409 CART_EMPTY` (with `dropped_lines`), `409 CART_PRICE_CHANGED` (with `price_changes: [{product_id, old_amount_cents, new_amount_cents, currency}]`; nothing is charged), `409 PRODUCT_ALREADY_OWNED` (with `product_ids`), `409 IDEMPOTENCY_KEY_CONFLICT`, `409 IDEMPOTENCY_REQUEST_IN_PROGRESS` (with `order_id`, `order_number`, `Retry-After: 2`).
 - `422 PRODUCT_NOT_PURCHASABLE` / `QUANTITY_EXCEEDS_LIMIT` (with `lines: [{product_id, reason, max_quantity?}]`, every offending line), `422 INVALID_FULFILLMENT`, `422 PAYMENT_METHOD_NOT_ALLOWED` (with `reason`), `422 VALIDATION_ERROR` (a missing `accept_digital_final_sale` points at that field).
 - `429 RATE_LIMITED` (30 per user per hour; a replay counts).
-- `502 PAYMENT_PROVIDER_UNAVAILABLE`: **the order exists**, unpaid (`order_id`, `order_number`); payment retry arrives with VS-024.
+- `502 PAYMENT_PROVIDER_UNAVAILABLE`: **the order exists**, unpaid (`order_id`, `order_number`); retry its payment with `POST /api/v1/me/orders/{order_id}/payments` ([C7](#domain--item-c7--payment-verification)).
 - `503 ORDERS_PAUSED`, `503 ONLINE_PAYMENT_UNAVAILABLE` (no online provider configured).
 
 **Auth/CSRF/MFA:** verified customer, `X-CSRF-Token`, and the `Idempotency-Key` header ([C12](#domain--item-c12--idempotency-key-mechanism)).
@@ -2120,7 +2120,7 @@ There is no total: compute one for display if you need it; checkout recomputes i
 
 ### Domain / item: C7 — Payment verification
 
-**Status:** server-side verification **built** in VS-023 (webhook, verification after the 200, the `verify_payments` job). The customer-facing read is VS-025 and retry VS-024: PROVISIONAL.
+**Status:** server-side verification **built** in VS-023 (webhook, verification after the 200, the `verify_payments` job). Payment retry **built** in VS-024 (below). The customer-facing read is VS-025: PROVISIONAL.
 
 **Built in VS-023:** the order becomes paid only when the provider itself confirms the exact amount. Typical delay after the provider's webhook: under a second against the mock; at worst about a minute when a background task is lost. With the mock, the return page is `{frontend}/checkout/return?order=<order_number>`; a real provider's return parameters are still undecided (VS-032).
 
@@ -2134,7 +2134,13 @@ There is no total: compute one for display if you need it; checkout recomputes i
 - Payment status: `"pending" | "processing" | "paid" | "partially_refunded" | "refunded" | "failed" | "expired"`. **There is no `cancelled` payment status.**
 - Order status: `"pending_payment" | "in_progress" | "completed" | "partially_refunded" | "refunded" | "cancelled"`.
 
-**Errors:** provisional: `404 NOT_FOUND` for another user's order; on retry `409 PAYMENT_ALREADY_ACTIVE`, `409 INVALID_STATE_TRANSITION`.
+**Retry (built, VS-024):** `POST /api/v1/me/orders/{order_id}/payments`, body `PaymentRetryRequest` (`payment_provider` optional; no amount is accepted, the order's total is charged), header `Idempotency-Key` (one key per retry of one order). `201 PaymentRetryRead`: `order` (with `hold_expires_at`) and `payment` (with `redirect_url`; send the customer there). Allowed only before the checkout hold ends (30 minutes after placement by default).
+
+**Errors:**
+- `404 NOT_FOUND`: no such order, or another user's (identical bodies).
+- `409 PAYMENT_ALREADY_ACTIVE`: the order already has a live attempt. **The body carries `payment_id`, `payment_status` (`"pending"` or `"processing"`) and `redirect_url`** (the live attempt's page while `pending`; `null` while `processing`, when there is nothing to resume). The field is `payment_status`, not `status`: every problem body's `status` member is the HTTP status (409), per RFC 9457. Resume with `redirect_url`, or poll the order while `processing`.
+- `409 INVALID_STATE_TRANSITION` with `reason`: `cash_order`, `order_cancelled`, `order_not_payable` (already paid, or a line is no longer pending), `checkout_hold_expired`.
+- `409 IDEMPOTENCY_KEY_CONFLICT`, `409 IDEMPOTENCY_REQUEST_IN_PROGRESS`, `422 PAYMENT_METHOD_NOT_ALLOWED` (with `reason`), `422 VALIDATION_ERROR`, `429 RATE_LIMITED` (10 per user per hour; a replay counts), `502 PAYMENT_PROVIDER_UNAVAILABLE` (the new attempt failed; the order is still payable; replayed for the same key), `503 ONLINE_PAYMENT_UNAVAILABLE`.
 
 **Auth/CSRF/MFA:** signed-in owner.
 
