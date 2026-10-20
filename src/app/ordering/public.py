@@ -50,6 +50,8 @@ __all__ = [
     "manual_release_available_at",
     "manual_release_refusal",
     "mark_order_paid",
+    "order_lines",
+    "orders_by_id",
     "recompute_order_status",
     "release_candidates",
     "release_unpaid_order",
@@ -210,3 +212,13 @@ async def release_candidates(
     return await SqlOrderStore(session).release_candidates(
         placed_before=placed_before, after=after, limit=limit
     )
+
+
+async def orders_by_id(session: AsyncSession, order_ids: list[UUID]) -> dict[UUID, Order]:
+    """Orders by id, no lock (VS-024 admin payment reads)."""
+    return await SqlOrderStore(session).orders_by_id(order_ids)
+
+
+async def order_lines(session: AsyncSession, order_id: UUID) -> list[OrderLine]:
+    """The order's lines by id, no lock (VS-024 admin payment detail)."""
+    return await SqlOrderStore(session).order_lines(order_id)

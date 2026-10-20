@@ -294,7 +294,7 @@ async def release_order_by_admin(
     early = (
         latest is not None
         and latest.provider_payment_id is None
-        and await _answered_unknown(session, latest)
+        and await answered_unknown(session, latest)
     )
     available_at = manual_release_available_at(deadline, MANUAL_RELEASE_GRACE, early=early)
     refusal = manual_release_refusal(
@@ -353,7 +353,7 @@ async def release_order_by_admin(
     return ManualRelease(order_id, now, expired, dismissed)
 
 
-async def _answered_unknown(session: AsyncSession, payment: Payment) -> bool:
+async def answered_unknown(session: AsyncSession, payment: Payment) -> bool:
     """Q7's early release: the `reference_unknown` alert row records an `unknown` answer."""
     return await SqlAuditWriter(session).recorded(
         action=ALERT_ACTION,

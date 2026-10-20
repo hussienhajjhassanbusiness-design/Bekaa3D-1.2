@@ -6,10 +6,12 @@ and from nowhere else in Platform (enforced by
 adapters; callers type against the ports.
 """
 
+from uuid import UUID
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.platform.application.services.settings_reader import SettingsReader
-from app.platform.domain.entities import IpHashSalt
+from app.platform.domain.entities import AuditLogEntry, IpHashSalt
 from app.platform.domain.idempotency import (
     IDEMPOTENCY_TTL,
     Claim,
@@ -21,10 +23,15 @@ from app.platform.domain.idempotency import (
 )
 from app.platform.infrastructure.audit_writer import SqlAuditWriter, SqlOutboxWriter
 from app.platform.infrastructure.idempotency import SqlIdempotencyStore
-from app.platform.infrastructure.repositories import SettingRepository, SqlIpHashSaltStore
+from app.platform.infrastructure.repositories import (
+    AuditLogRepository,
+    SettingRepository,
+    SqlIpHashSaltStore,
+)
 
 __all__ = [
     "IDEMPOTENCY_TTL",
+    "AuditLogEntry",
     "Claim",
     "Conflict",
     "InProgress",
@@ -34,6 +41,7 @@ __all__ = [
     "SettingsReader",
     "SqlAuditWriter",
     "SqlOutboxWriter",
+    "audit_history",
     "current_ip_hash_salt",
     "idempotency_store",
     "ip_hash_salt_store",
@@ -60,3 +68,12 @@ async def current_ip_hash_salt(session: AsyncSession) -> IpHashSalt | None:
 def idempotency_store(session: AsyncSession) -> SqlIdempotencyStore:
     """Idempotency claims on the caller's session (VS-023; reused by VS-030)."""
     return SqlIdempotencyStore(session)
+
+
+async def audit_history(
+    session: AsyncSession, *, entity_type: str, entity_id: UUID, limit: int
+) -> list[AuditLogEntry]:
+    """One entity's audit rows, newest first (`ix_audit_logs_entity`); VS-024 detail."""
+    return await AuditLogRepository(session).list_page(
+        limit=limit, entity_type=entity_type, entity_id=entity_id
+    )

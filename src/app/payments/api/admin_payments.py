@@ -2,12 +2,15 @@
 asked in a background task with no transaction open) and manual confirm (providers
 without a status API only). Mounted on the admin router: admin, MFA, CSRF, limits."""
 
-from datetime import datetime
+import base64
+import binascii
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal, Self
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response, status
-from pydantic import BaseModel, ConfigDict, Field
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, Response, status
+from fastapi.exceptions import RequestValidationError
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import client_ip, get_session
@@ -22,8 +25,17 @@ from app.identity.public import (
     require_admin,
     require_csrf,
 )
+from app.ordering.public import (
+    OrderStatus,
+    PaymentMethod,
+    hold_deadline,
+    manual_release_available_at,
+    manual_release_refusal,
+    order_lines,
+    orders_by_id,
+)
 from app.payments.domain import limits
-from app.payments.domain.enums import PaymentProvider
+from app.payments.domain.enums import PaymentProvider, PaymentStatus
 from app.payments.domain.exceptions import (
     ManualConfirmRefusedError,
     PaymentNotFoundError,
@@ -33,11 +45,20 @@ from app.payments.domain.manual import ConfirmRefusal
 from app.payments.domain.outcome import Outcome
 from app.payments.domain.payments import Payment
 from app.payments.domain.release import Capability
+from app.payments.infrastructure.admin_reads import (
+    AdminPaymentRow,
+    PaymentFilters,
+    payment_events,
+    payment_page,
+    payment_row,
+)
 from app.payments.infrastructure.manual import confirm_payment_manually
 from app.payments.infrastructure.payments import SqlPaymentStore
 from app.payments.infrastructure.reconcile import reconcile_in_background
+from app.payments.infrastructure.release import answered_unknown
 from app.payments.infrastructure.verification import capability
-from app.platform.public import SqlAuditWriter
+from app.payments.infrastructure.webhook_events import SqlWebhookEventStore
+from app.platform.public import SqlAuditWriter, audit_history, settings_reader
 
 admin_router = APIRouter(prefix="/payments", tags=["admin"], route_class=AdminBoundaryRoute)
 
@@ -265,4 +286,218 @@ def _refused(exc: ManualConfirmRefusedError) -> ApiError:
         title="Amount does not match",
         detail="The confirmed amount must equal the attempt's amount in USD.",
         extensions={"expected_amount_cents": exc.expected_amount_cents, "currency": "USD"},
+    )
+
+
+# --- Reads (plan 2.2): read-only, so no CSRF; the admin boundary and its 300/min apply ---
+
+HOLD_SETTING = "checkout_hold_period"
+_SEPARATOR = "|"
+
+
+class AdminPaymentRead(BaseModel):
+    """No provider metadata (so no redirect URL), event payloads or customer email."""
+
+    id: UUID
+    order_id: UUID
+    order_number: str | None
+    provider: PaymentProvider
+    status: PaymentStatus
+    amount_cents: int
+    currency: str
+    captured_amount_cents: int | None
+    captured_currency: str | None
+    provider_payment_id: str | None
+    initiated_at: datetime
+    verified_at: datetime | None
+    failed_at: datetime | None
+    expired_at: datetime | None
+    late_captured_at: datetime | None
+    needs_manual_confirmation: bool
+    unprocessed_event_count: int
+
+    @classmethod
+    def of(cls, row: AdminPaymentRow, order_number: str | None) -> Self:
+        return cls(**vars(row), order_number=order_number)
+
+
+class AdminPaymentPage(BaseModel):
+    items: list[AdminPaymentRead]
+    next_cursor: str | None = Field(description="Opaque; pass back as `cursor`. Null at the end.")
+
+
+class AdminPaymentOrderRead(BaseModel):
+    id: UUID
+    order_number: str
+    status: OrderStatus
+    total_cents: int
+    currency: str
+    placed_at: datetime
+    cancelled_at: datetime | None
+    hold_expires_at: datetime | None
+    manual_release_available_at: datetime | None
+
+
+class AdminPaymentEventRead(BaseModel):
+    id: UUID
+    event_type: str | None
+    signature_valid: bool | None
+    received_at: datetime
+    processed_at: datetime | None
+    processing_error: str | None
+
+
+class AdminPaymentHistoryRead(BaseModel):
+    action: str
+    actor_user_id: UUID | None
+    created_at: datetime
+    data: dict[str, Any] | None
+
+
+class AdminPaymentDetail(BaseModel):
+    payment: AdminPaymentRead
+    order: AdminPaymentOrderRead
+    events: list[AdminPaymentEventRead]
+    history: list[AdminPaymentHistoryRead]
+    available_actions: list[Literal["reconcile", "confirm", "release_order"]]
+
+
+def encode_cursor(initiated_at: datetime, payment_id: UUID) -> str:
+    raw = f"{initiated_at.isoformat()}{_SEPARATOR}{payment_id}"
+    return base64.urlsafe_b64encode(raw.encode()).decode().rstrip("=")
+
+
+def decode_cursor(raw: str | None) -> tuple[datetime, UUID] | None:
+    """Exactly the `(initiated_at, id)` encoded; anything else is a 422 on `cursor`."""
+    if raw is None:
+        return None
+    try:
+        text = base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4)).decode()
+        moment, row_id = text.split(_SEPARATOR)
+        parsed = datetime.fromisoformat(moment), UUID(row_id)
+        if parsed[0].tzinfo is None:
+            raise ValueError("a cursor's time is always aware")
+        parsed[0].astimezone(UTC)
+    except (ValueError, binascii.Error, UnicodeDecodeError, OverflowError) as exc:
+        raise RequestValidationError(
+            [{"loc": ("query", "cursor"), "msg": "not a valid cursor", "type": "value_error"}]
+        ) from exc
+    return parsed
+
+
+@admin_router.get(
+    "",
+    response_model=AdminPaymentPage,
+    summary="List payments, oldest first (`late_captured=true`: the refunds to make)",
+    responses={**_RESPONSES, 422: {"description": "VALIDATION_ERROR: a bad filter or cursor."}},
+)
+async def list_payments(
+    session: AsyncSession = Depends(get_session),
+    status_filter: Annotated[list[PaymentStatus] | None, Query(alias="status")] = None,
+    provider: PaymentProvider | None = None,
+    order_id: UUID | None = None,
+    late_captured: bool | None = None,
+    initiated_after: AwareDatetime | None = None,
+    initiated_before: AwareDatetime | None = None,
+    limit: Annotated[int, Query(ge=1, le=limits.ADMIN_PAGE_MAX)] = limits.ADMIN_PAGE_DEFAULT,
+    cursor: Annotated[str | None, Query(max_length=200)] = None,
+) -> AdminPaymentPage:
+    filters = PaymentFilters(
+        statuses=tuple(status_filter or ()),
+        provider=provider,
+        order_id=order_id,
+        late_captured=late_captured,
+        initiated_after=initiated_after,
+        initiated_before=initiated_before,
+    )
+    rows = await payment_page(session, filters, after=decode_cursor(cursor), limit=limit + 1)
+    page = rows[:limit]
+    orders = await orders_by_id(session, sorted({row.order_id for row in page}, key=str))
+    items = [
+        AdminPaymentRead.of(
+            row, order.order_number if (order := orders.get(row.order_id)) else None
+        )
+        for row in page
+    ]
+    last = page[-1] if len(rows) > limit else None
+    return AdminPaymentPage(
+        items=items, next_cursor=encode_cursor(last.initiated_at, last.id) if last else None
+    )
+
+
+@admin_router.get(
+    "/{payment_id}",
+    response_model=AdminPaymentDetail,
+    summary="One payment: its order, events (without payloads), history and actions",
+    responses=_RESPONSES,
+)
+async def get_payment(
+    payment_id: UUID, request: Request, session: AsyncSession = Depends(get_session)
+) -> AdminPaymentDetail:
+    row = await payment_row(session, payment_id)
+    if row is None:
+        raise not_found_error()
+    order = (await orders_by_id(session, [row.order_id]))[row.order_id]
+    attempts = await SqlPaymentStore(session).for_order(order.id)
+    latest = max(attempts, key=lambda p: (p.initiated_at, p.id), default=None)
+    deadline = available_at = None
+    if order.payment_method is PaymentMethod.ONLINE and order.status is OrderStatus.PENDING_PAYMENT:
+        seconds = await settings_reader(session).get_duration_seconds(HOLD_SETTING)
+        deadline = hold_deadline(
+            order.placed_at, latest.initiated_at if latest else None, timedelta(seconds=seconds)
+        )
+        early = (
+            latest is not None
+            and latest.provider_payment_id is None
+            and await answered_unknown(session, latest)
+        )
+        available_at = manual_release_available_at(
+            deadline, limits.MANUAL_RELEASE_GRACE, early=early
+        )
+    events = await payment_events(session, payment_id)
+    history = await audit_history(
+        session, entity_type="payment", entity_id=payment_id, limit=limits.ADMIN_PAGE_MAX
+    )
+    able = capability(request.app.state.payment_providers, row.provider.value)
+    actions: list[Literal["reconcile", "confirm", "release_order"]] = []
+    if row.provider is not PaymentProvider.CASH:
+        actions.append("reconcile" if able is Capability.STATUS_QUERY else "confirm")
+    if available_at is not None:
+        pending = await SqlWebhookEventStore(session).count_unprocessed_for_payments(
+            [p.id for p in attempts]
+        )
+        refusal = manual_release_refusal(
+            order,
+            await order_lines(session, order.id),
+            now=datetime.now(UTC),
+            available_at=available_at,
+            unprocessed_events=pending,
+            events_reviewed=True,
+        )
+        if refusal is None:
+            actions.append("release_order")
+    return AdminPaymentDetail(
+        payment=AdminPaymentRead.of(row, order.order_number),
+        order=AdminPaymentOrderRead(
+            id=order.id,
+            order_number=order.order_number,
+            status=order.status,
+            total_cents=order.total_cents,
+            currency=order.currency,
+            placed_at=order.placed_at,
+            cancelled_at=order.cancelled_at,
+            hold_expires_at=deadline,
+            manual_release_available_at=available_at,
+        ),
+        events=[AdminPaymentEventRead(**vars(event)) for event in events],
+        history=[
+            AdminPaymentHistoryRead(
+                action=entry.action,
+                actor_user_id=entry.actor_user_id,
+                created_at=entry.created_at,
+                data=entry.after_data,
+            )
+            for entry in history
+        ],
+        available_actions=actions,
     )

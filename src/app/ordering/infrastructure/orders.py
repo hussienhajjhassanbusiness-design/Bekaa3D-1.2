@@ -183,6 +183,13 @@ class SqlOrderStore:
         ).first()
         return _order(row) if row is not None else None
 
+    async def orders_by_id(self, order_ids: Sequence[UUID]) -> dict[UUID, Order]:
+        """Unlocked; the admin payment reads (VS-024 2.2)."""
+        if not order_ids:
+            return {}
+        rows = await self._session.execute(select(*_ORDER_COLUMNS).where(_O.id.in_(order_ids)))
+        return {row.id: _order(row) for row in rows}
+
     async def order_lines(self, order_id: UUID) -> list[OrderLine]:
         result = await self._session.execute(
             select(*_LINE_COLUMNS).where(_I.order_id == order_id).order_by(_I.id)
