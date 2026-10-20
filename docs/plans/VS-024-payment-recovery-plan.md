@@ -1,7 +1,8 @@
 # VS-024 — Payment Recovery: Retry, Reconciliation, Hold Release, Manual Confirm: Implementation Plan
 
-**Status:** IN PROGRESS (code): CP1 merged (PR #20, `8d15284`, migration `00ce1ce252a6`).
-CP2-CP6 are on branch `vs-024-recovery` from 2026-10-18. Revisions 1 and 2 hold the owner's decisions.
+**Status:** DONE (2026-10-20). CP1 merged (PR #20, `8d15284`, migration `00ce1ce252a6`); CP2-CP6 on branch
+`vs-024-recovery`. Decisions recorded in [ADR-036](../adr/ADR-036-payment-recovery.md) (this plan's "ADR-033":
+that number and 034-035 were taken on `origin` meanwhile). Revisions 1 and 2 hold the owner's decisions.
 **Date:** 2026-10-18
 **Planned against alembic head:** `03a4730dd046` (orders_payments_webhooks_idempotency,
 VS-023 PR A, merged before `42c3f63`).

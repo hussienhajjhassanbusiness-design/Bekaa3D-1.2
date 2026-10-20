@@ -38,6 +38,7 @@ Only expensive-to-reverse decisions belong here. Folder names and small refactor
 - [ADR-030: Bring Your Idea submission - optional images under code-constant caps, a pre-parse attempt limit, private storage, expiry stamped at submission, and an admin notification category](ADR-030-bring-your-idea-submission.md)
 - [ADR-031: Bring Your Idea pipeline - an API-streamed admin download until a server exists, a server-derived outcome, a bounded quote, and a cohort funnel](ADR-031-bring-your-idea-pipeline-and-api-streamed-download.md)
 - [ADR-032: Checkout, idempotency and payment verification - two transactions around the provider call, verification after the 200, paid only on an exact match (VS-023)](ADR-032-checkout-idempotency-and-payment-verification.md)
+- [ADR-036: Payment recovery - release only on an explicit failed or expired, a 24 h manual release, manual confirm refuses a differing amount, alerts de-duplicated under an advisory lock (VS-024)](ADR-036-payment-recovery.md)
 
 ## Governance
 

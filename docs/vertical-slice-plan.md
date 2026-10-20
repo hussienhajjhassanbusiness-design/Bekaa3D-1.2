@@ -26,7 +26,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 | VS-022 | Mixed cart | VS-013 | Done |
 | VS-023 | Checkout and verified payment for digital orders | VS-022, VS-008, VS-007 | Done |
 | VS-023b | STL delivery queue and mark-as-sent | VS-023 | Not started |
-| VS-024 | Payment recovery: reconciliation, stale checkouts, manual confirm | VS-023 | Not started |
+| VS-024 | Payment recovery: reconciliation, stale checkouts, manual confirm | VS-023 | Done |
 | VS-025 | Customer order history | VS-023 | Not started |
 | VS-026 | Address book | VS-008 | Done |
 | VS-027 | Shipping zones | — | Removed (ADR-024) |
@@ -594,7 +594,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - Every delivery records who and when, and the customer is notified.
 
 ## VS-024 — Payment recovery: reconciliation, stale checkouts, manual confirm
-**Status:** Not started
+**Status:** Done ([ADR-036](adr/ADR-036-payment-recovery.md), [`docs/payment-recovery.md`](payment-recovery.md), [plan](plans/VS-024-payment-recovery-plan.md)). As built: an order is released automatically only on an explicit `failed` or `expired` for its latest attempt; an administrator releases the rest after the hold plus 24 h; manual confirm refuses a differing amount (422) and only serves providers without a status API.
 **Depends on:** VS-023
 **Goal:**
 - A customer whose payment attempt failed or expired retries on the same order.
@@ -602,7 +602,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 - **Notes from VS-023:** `webhook_events.processed_at` is set once verification applied the provider's answer, or at receipt for an ignored event (`processing_error`); a provider that did not answer leaves the event unprocessed with its error. An attempt with no `provider_payment_id` older than the provider timeout is a reconciliation candidate (a crash between checkout's two transactions); reconcile it by our `payments.id` through `verify_payment()`, which stores the reference.
 - An unpaid order is cancelled when its checkout hold ends.
 - The administrator can confirm a payment by hand when automatic verification is unavailable.
-- **Model / migration:** None. The one-live-payment partial unique index from VS-023 enforces a single live attempt.
+- **Model / migration:** one additive migration, `00ce1ce252a6` (`payments.captured_amount_cents`, `captured_currency`; VS-024 PR A, #20). The one-live-payment partial unique index from VS-023 enforces a single live attempt.
 - **Endpoints / jobs:**
   - `POST /api/v1/me/orders/{id}/payments` (retry; requires an `Idempotency-Key` header; a new route, not yet in `api-endpoints.md`).
   - `GET /api/v1/admin/payments`, `GET /api/v1/admin/payments/{id}`, `POST …/{id}/reconcile`, `POST …/{id}/confirm`.
@@ -628,8 +628,8 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - A retry after the hold is released gives 409 `INVALID_STATE_TRANSITION`.
   - A missed callback is recovered in one run.
   - Reconciliation racing a webhook applies once.
-  - A hold expiring while a payment verifies: the payment wins.
-  - A manual confirm with the wrong amount gives 422.
+  - A hold expiring while a payment verifies: either the payment commits first and the release re-checks and skips, or the release commits first and the payment becomes a late capture; never both (as built: race 6 / 9 of the plan, ADR-024 appendix).
+  - A manual confirm with a differing amount or currency gives 422 `PAYMENT_AMOUNT_MISMATCH` and writes nothing (ADR-036).
   - A retry naming an unconfigured provider gives 422 `PAYMENT_METHOD_NOT_ALLOWED`.
   - `release_stale_checkouts` on a `pending_payment` order with physical lines finds them all `pending` and cancels them; no other line state is reachable before payment (BR-148).
   - A retry on a paid or refunded order gives 409 (the live-payment index counts them).
@@ -644,7 +644,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - A customer retries a failed or expired attempt on the same order, and never has two live attempts on it.
   - An order is cancelled only when its checkout hold ends unpaid.
   - No payment stays stuck without an alert.
-- **Must resolve before build** (final PR #8 review, both reviewers; recorded per the owner's stop rule, not yet decided):
+- **Must resolve before build:** both items are **resolved** by [ADR-036](adr/ADR-036-payment-recovery.md): item 1 by the manual admin release after the hold plus 24 h (decision 8), item 2 by the 422 amount guard with no late-capture path (decision 7). The original text follows.
   1. **No-status-API providers dead-end the hold release.** The release cancels only "when the provider confirms the attempt unpaid", and this section and the entities doc skip any order "whose provider has no status API". Admin cancel of a `pending_payment` order is 409, and manual confirm only applies or records a late capture. So an abandoned checkout stays `pending_payment` forever: the attempt stays live (retry gets `PAYMENT_ALREADY_ACTIVE`), its `pending` STL line holds the ownership index (the customer can never buy that STL again), and an alert repeats every run. The same trap catches a provider that keeps answering "pending", an order whose only attempt is a mismatched-amount late capture, and a provider-mismatch event that was "stored and ignored" if that leaves it unprocessed. This contradicts BR-039 and this slice's "Done when". Suggested fix: because a later success becomes a late capture anyway, release after the hold plus a grace period when the provider cannot answer and no webhook event exists, with an alert; or add an admin "expire attempt / release order" action. Define "unpaid" per provider state, and say that ignored or failed events set `processed_at`.
   2. **Manual confirm with a wrong amount: 422 or late capture?** This section ("A manual confirm with the wrong amount gives 422") and `api-endpoints.md` ("Server requires exact order-total match") refuse it. ADR-024 decision 15, SRS §9.2 and the late-capture rule above say a mismatched amount found by verification **or manual confirmation** is a late capture with an automatic refund. Scenario: a no-status-API provider, and the customer transfers $45 on a $50 order. The admin enters 4500 and gets 422, so no refund obligation exists, the attempt stays live, and with item 1 the order hangs. Suggested fix: separate an admin typo from a provider showing a different captured amount (for example a `captured_amount_cents` that must match the dashboard, plus an explicit "record mismatch as late capture" path), and align the API row and this slice's test.
 
@@ -791,7 +791,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 - **Endpoints / jobs:** `POST /api/v1/admin/orders/{id}/refunds` (requires an `Idempotency-Key` header), `GET /api/v1/admin/refunds`, `GET /api/v1/admin/refunds/{id}`, `POST …/{id}/settle`, `POST …/{id}/fail`, `POST …/{id}/reissue`.
 - **Logic:**
   - Reuses the idempotency service from VS-023.
-  - Adds the automatic `late_capture` refund to VS-024's late-capture path: no items, no requester, the captured amount; the item-sum check is waived for this kind.
+  - Adds the automatic `late_capture` refund to VS-024's late-capture path: no items, no requester, the captured amount; the item-sum check is waived for this kind. Cap a late-capture refund by `payments.captured_amount_cents` (an overpayment exceeds `amount_cents`), through VS-024's `LateCaptureSink` hook (ADR-036).
   - **Every refund is manual:** the administrator pays it in the provider dashboard or in cash, then settles it here. The platform never calls a provider refund API.
   - **Lock order (ADR-024):** the `orders` row, then the affected lines by `id`, then the payment, then the refund; balances are derived under those locks. Settle, fail and reissue take the same order.
   - **Paid lines only (BR-149):** a line is refundable only if it is a paid line. Its refundable balance is `line_total` minus its items in non-failed refunds and in failed refunds not yet reissued; a cancelled line of a cash order has 0. A request over any line's balance or the payment's balance gives 422 `REFUND_EXCEEDS_AVAILABLE`.
