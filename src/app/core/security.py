@@ -4,7 +4,8 @@ import secrets
 from dataclasses import dataclass, field
 from uuid import UUID
 
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
+from app.core.phone import E164_PATTERN
 
 
 def csrf_token_for_session(session_id: UUID) -> str:
@@ -74,3 +75,37 @@ def hash_ip(ip_address: str) -> str | None:
     if key is None:
         return None
     return hmac.new(key.material, ip_address.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+# The salt's weak values (VS-028 plan Q5); dev and test may run the .env.example placeholder.
+PHONE_HASH_SALT_MIN_LENGTH = 32
+PHONE_HASH_SALT_PLACEHOLDER_PREFIX = "generate_with__"
+_PHONE_HASH_SALT_LAX_ENVIRONMENTS = frozenset({"development", "test"})
+
+
+class ConfigurationError(RuntimeError):
+    """A setting that must stop the process at boot; the message never holds its value."""
+
+
+def check_phone_hash_salt(settings: Settings) -> None:
+    """Refuse a short or placeholder PHONE_HASH_SALT outside development and test, in
+    `main.py` and `worker.py` alike: it can never be rotated later (ADR-024 d6)."""
+    if settings.environment in _PHONE_HASH_SALT_LAX_ENVIRONMENTS:
+        return
+    salt = settings.phone_hash_salt.get_secret_value()
+    if len(salt) < PHONE_HASH_SALT_MIN_LENGTH or salt.startswith(
+        PHONE_HASH_SALT_PLACEHOLDER_PREFIX
+    ):
+        raise ConfigurationError(
+            f"PHONE_HASH_SALT must be a generated secret of at least "
+            f"{PHONE_HASH_SALT_MIN_LENGTH} characters in {settings.environment!r}."
+        )
+
+
+def hash_phone(e164: str) -> str:
+    """HMAC-SHA256 of a normalised E.164 phone keyed by PHONE_HASH_SALT, lowercase hex
+    (ADR-024 d6). A raw spelling raises ValueError, so two spellings never hash apart."""
+    if E164_PATTERN.fullmatch(e164) is None:
+        raise ValueError("hash_phone takes a normalised E.164 Lebanese number")
+    key = get_settings().phone_hash_salt.get_secret_value().encode("utf-8")
+    return hmac.new(key, e164.encode("utf-8"), hashlib.sha256).hexdigest()

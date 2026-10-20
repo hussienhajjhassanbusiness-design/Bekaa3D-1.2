@@ -28,6 +28,7 @@ _PLACEHOLDER_SETTINGS = {
     "JWT_SIGNING_KEY": "unit-test-jwt-signing-key-of-at-least-32-bytes",
     "CSRF_SECRET": "unit-test-csrf-secret",
     "IP_HASH_SALT": "unit-test-ip-hash-salt",
+    "PHONE_HASH_SALT": "unit-test-phone-hash-salt",
     "MFA_SECRET_KEY": "unit-test-mfa-secret-key",
 }
 

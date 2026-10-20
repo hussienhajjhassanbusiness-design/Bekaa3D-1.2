@@ -40,6 +40,8 @@ from tests.smoke.test_vs046_smoke import SMOKE_ELSEWHERE as VS046_SMOKE
 os.environ.setdefault("CAPTCHA_PROVIDER", "fake")
 # VS-023: the mock payment provider; boot refuses it outside development/test/staging.
 os.environ.setdefault("PAYMENT_PROVIDER", "mock")
+# VS-028: a local .env predating PHONE_HASH_SALT may not set it; a test-only value.
+os.environ.setdefault("PHONE_HASH_SALT", "test-only-phone-hash-salt-0123456789abcdef")
 
 _SMOKE_NODE_IDS = frozenset(
     node_id

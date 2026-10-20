@@ -16,9 +16,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.platform.domain.settings_registry import REGISTRY
 from app.platform.infrastructure.models import SettingModel
 
-# The five that are legitimately unconfigured at deploy time: the optional
-# free-shipping threshold, and three values still awaited from the client.
-UNCONFIGURED = ("free_shipping_threshold", "pickup_address", "pickup_hours", "whatsapp_number")
+# The three that are legitimately unconfigured at deploy time: values still awaited from
+# the client (the free-shipping threshold was removed by VS-028, ADR-024).
+UNCONFIGURED = ("pickup_address", "pickup_hours", "whatsapp_number")
 
 
 @pytest.mark.integration
@@ -29,7 +29,8 @@ async def test_every_registered_setting_is_seeded_and_nothing_else_is(
     extra row means a key exists that no code knows how to validate."""
     rows = (await db_session.scalars(select(SettingModel))).all()
     assert {row.key for row in rows} == set(REGISTRY)
-    assert len(rows) == 15
+    assert len(rows) == 17
+    assert "free_shipping_threshold" not in {row.key for row in rows}
 
 
 @pytest.mark.integration

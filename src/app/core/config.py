@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     # The IP-hash pepper (ADR-028); the env name predates the rotating DB salt.
     # Read only by `install_ip_hash_key`; a change needs a restart (lru_cache).
     ip_hash_salt: SecretStr
+    # The key of the contact-phone hash (ADR-024 d6). NEVER rotated: every cash block
+    # and open-cash-order match depends on it. Checked at boot (check_phone_hash_salt).
+    phone_hash_salt: SecretStr
     # Encrypts the stored TOTP secret (database-design.md 5.6 requires
     # `secret_ciphertext`). Distinct from jwt_signing_key and csrf_secret on
     # purpose: one key, one job, so rotating or leaking one does not widen

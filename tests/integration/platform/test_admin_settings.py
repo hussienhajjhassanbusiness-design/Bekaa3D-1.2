@@ -359,19 +359,42 @@ async def test_a_money_setting_round_trips_through_the_api(db_session: AsyncSess
     with TestClient(app) as client:
         await _admin_session(client, db_session)
         response = client.patch(
-            f"{SETTINGS_PATH}/free_shipping_threshold",
+            f"{SETTINGS_PATH}/cash_max_order_total",
             json={"value": {"amount_cents": 5_000, "currency": "USD"}},
             headers=csrf_headers(client),
         )
 
     assert response.status_code == 200, response.text
     assert response.json()["value"] == {"amount_cents": 5_000, "currency": "USD"}
-    assert await _value_of(db_session, "free_shipping_threshold") == {
+    assert await _value_of(db_session, "cash_max_order_total") == {
         "amount_cents": 5_000,
         "currency": "USD",
     }
 
-    await _restore(db_session, "free_shipping_threshold")
+    await _restore(db_session, "cash_max_order_total")
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("configured_app")
+async def test_the_removed_free_shipping_threshold_is_not_found(db_session: AsyncSession) -> None:
+    """VS-028 (ADR-024): the key left the registry and the table, so both verbs say 404."""
+    from app.main import app
+
+    with TestClient(app) as client:
+        await _admin_session(client, db_session)
+        read = client.get(f"{SETTINGS_PATH}/free_shipping_threshold")
+        write = client.patch(
+            f"{SETTINGS_PATH}/free_shipping_threshold",
+            json={"value": None},
+            headers=csrf_headers(client),
+        )
+
+    assert read.status_code == 404
+    assert write.status_code == 404
+    row = await db_session.scalar(
+        select(SettingModel).where(SettingModel.key == "free_shipping_threshold")
+    )
+    assert row is None
 
 
 @pytest.mark.integration

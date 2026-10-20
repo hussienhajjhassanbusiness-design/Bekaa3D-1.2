@@ -29,7 +29,9 @@ pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("configured_app")
 ORDERS = "/api/v1/me/orders"
 T0 = datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
 ADMIN_NOTE = "ADMIN-NOTE-SENTINEL"
-SECRETS = (ADMIN_NOTE, "mock_REFERENCE_SENTINEL", "HASH-SENTINEL", "REASON-SENTINEL")
+# A valid phone hash (ck_orders_phone_hash_format, VS-028) that must still never be shown.
+HASH_SENTINEL = "ab" * 32
+SECRETS = (ADMIN_NOTE, "mock_REFERENCE_SENTINEL", HASH_SENTINEL, "REASON-SENTINEL")
 
 SUMMARY_KEYS = {
     "id",
@@ -158,7 +160,7 @@ async def seed_order(
             "fulfillment_method": kind,
             "cash_terms_accepted_at": T0 if method == "cash" else None,
             "contact_phone_snapshot": "+96170123456",
-            "contact_phone_hash": "HASH-SENTINEL",
+            "contact_phone_hash": HASH_SENTINEL,
         }
         if kind == "delivery":
             order |= {

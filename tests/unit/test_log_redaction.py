@@ -99,3 +99,66 @@ def test_the_ip_hash_pepper_salt_and_key_are_redacted_by_key() -> None:
     out = redact_sensitive(None, "info", event)
     assert out["ip_hash_salt"] == out["Salt"] == out["pepper"] == out["ip_hash_key"] == REDACTED
     assert out["nested"] == {"salt": REDACTED}
+
+
+# --------------------------------------------------------------------------
+# VS-028: the contact phone, its hash and the hash key
+# --------------------------------------------------------------------------
+
+
+def test_the_phone_keys_and_the_phone_hash_salt_are_redacted_by_key() -> None:
+    event = {
+        "event": "x",
+        "phone_hash_salt": "salt-value",
+        "phone": "+9613123456",
+        "contact_phone": "+9613123456",
+        "Contact_Phone_Snapshot": "+9613123456",
+        "contact_phone_hash": "a" * 64,
+    }
+    out = redact_sensitive(None, "info", event)
+    for key in (
+        "phone_hash_salt",
+        "phone",
+        "contact_phone",
+        "Contact_Phone_Snapshot",
+        "contact_phone_hash",
+    ):
+        assert out[key] == REDACTED, key
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        'new row for relation "orders" violates check constraint: (+9613123456, cash)',
+        "DETAIL: Failing row contains (9613123456).",
+        "phone=+96171999888;",
+    ],
+    ids=["e164", "no-plus", "mobile"],
+)
+def test_a_lebanese_number_inside_text_is_redacted(raw: str) -> None:
+    out = redact_text(raw)
+    assert "[redacted-phone]" in out
+    assert "3123456" not in out and "71999888" not in out
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "order 961123ab-4e1f-4a2b-9c3d-961123456789 failed",
+        "user 01234567-89ab-4cde-8f01-9613123456ff",
+        "order B3D-9613ABCD placed",
+        "amount_cents=96131234567890",
+    ],
+    ids=["uuid-group", "uuid-tail", "order-number", "long-digit-run"],
+)
+def test_uuids_order_numbers_and_long_digit_runs_are_not_phones(text: str) -> None:
+    assert redact_text(text) == text
+
+
+def test_phone_redaction_is_linear_on_huge_digit_runs() -> None:
+    import time
+
+    started = time.perf_counter()
+    redact_text("961" * 100_000)
+    redact_text("+961" + "1" * 200_000)
+    assert time.perf_counter() - started < 1.0

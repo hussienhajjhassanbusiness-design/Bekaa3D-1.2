@@ -6197,21 +6197,18 @@
         "type": "object"
       },
       "PublicSettingsRead": {
-        "description": "The five allowlisted settings, and nothing else.\n\nThis is a **fixed schema, not a dictionary**, and that is the whole security\ndesign. A new row in the `settings` table has no field here to land in, so a\nsetting cannot become public by being added - it becomes public only when\nsomeone edits this class and its registry entry together, in a reviewed\nchange. The alternative shape - read every row and filter - leaks the moment\na filter is forgotten.\n\nEvery field except `accepting_orders` is nullable because the real values\nare still awaited from the client (SRS 30.2). Null means \"not configured\";\nthe frontend hides the element rather than showing invented data.",
+        "description": "The six allowlisted settings, and nothing else.\n\nThis is a **fixed schema, not a dictionary**, and that is the whole security\ndesign. A new row in the `settings` table has no field here to land in, so a\nsetting cannot become public by being added - it becomes public only when\nsomeone edits this class and its registry entry together, in a reviewed\nchange. The alternative shape - read every row and filter - leaks the moment\na filter is forgotten.\n\nThe three text fields are nullable because the real values are still\nawaited from the client (SRS 30.2). Null means \"not configured\"; the\nfrontend hides the element rather than showing invented data.\n`free_shipping_threshold` was removed by VS-028 (ADR-024: no shipping charge).",
         "properties": {
           "accepting_orders": {
             "title": "Accepting Orders",
             "type": "boolean"
           },
-          "free_shipping_threshold": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/MoneyRead"
-              },
-              {
-                "type": "null"
-              }
-            ]
+          "cash_max_order_total": {
+            "$ref": "#/components/schemas/MoneyRead"
+          },
+          "cash_payment_enabled": {
+            "title": "Cash Payment Enabled",
+            "type": "boolean"
           },
           "pickup_address": {
             "anyOf": [
@@ -6249,7 +6246,8 @@
         },
         "required": [
           "accepting_orders",
-          "free_shipping_threshold",
+          "cash_payment_enabled",
+          "cash_max_order_total",
           "pickup_address",
           "pickup_hours",
           "whatsapp_number"
@@ -18675,7 +18673,7 @@
     },
     "/api/v1/settings/public": {
       "get": {
-        "description": "The five allowlisted settings, read by key.\n\nTwo separate guarantees stop an internal setting leaking here, and both have\nto be removed for one to escape: only the allowlisted keys are queried at\nall, and the response model has a field for each of those five and nothing\nelse. Adding a row to the `settings` table therefore cannot make it public.\n\nA missing or invalid row raises rather than being defaulted. These are\nseeded by migration, so absence means a broken deployment - and silently\nreporting `accepting_orders: true` because the row could not be read would\ntell customers the shop is open when the server does not know that.",
+        "description": "The six allowlisted settings, read by key.\n\nTwo separate guarantees stop an internal setting leaking here, and both have\nto be removed for one to escape: only the allowlisted keys are queried at\nall, and the response model has a field for each of those six and nothing\nelse. Adding a row to the `settings` table therefore cannot make it public.\n\nA missing or invalid row raises rather than being defaulted. These are\nseeded by migration, so absence means a broken deployment - and silently\nreporting `accepting_orders: true` because the row could not be read would\ntell customers the shop is open when the server does not know that.",
         "operationId": "read_public_settings_api_v1_settings_public_get",
         "responses": {
           "200": {

@@ -24,6 +24,7 @@ CART_REVISION = "bde6135b2538"
 BYI_REVISION = "26d5d039d72c"
 ORDERS_REVISION = "03a4730dd046"
 CAPTURED_REVISION = "00ce1ce252a6"
+CASH_REVISION = "fcd589e89e59"
 EXPECTED_ENUMS = {"user_role", "outbox_status", "setting_type", "notification_type"}
 
 
@@ -149,6 +150,41 @@ def test_full_downgrade_and_upgrade_round_trips() -> None:
         command.upgrade(config, "head")
         assert asyncio.run(fetch(captured_columns)) == both_columns
         assert asyncio.run(fetch(captured_checks)) == both_checks
+
+        # VS-028 PR A: stepping back to its own parent (read from the chain, never pinned)
+        # drops the block table, the two orders CHECKs and the index, and the three cash
+        # settings, and restores free_shipping_threshold as JSON null.
+        cash_parent = chain[CASH_REVISION].down_revision
+        assert isinstance(cash_parent, str)
+        cash_checks = (
+            "SELECT conname FROM pg_constraint WHERE conrelid = 'orders'::regclass "
+            "AND conname IN ('ck_orders_contact_phone_e164', 'ck_orders_phone_hash_format')"
+        )
+        cash_index = (
+            "SELECT indexname FROM pg_indexes WHERE indexname = 'ix_orders_open_cash_phone'"
+        )
+        setting_keys = "SELECT key FROM settings"
+        cash_keys = {"cash_payment_enabled", "cash_max_open_orders", "cash_max_order_total"}
+        free_null = "SELECT jsonb_typeof(value) FROM settings WHERE key = 'free_shipping_threshold'"
+        both_cash_checks = {"ck_orders_contact_phone_e164", "ck_orders_phone_hash_format"}
+        assert "cash_payment_blocks" in asyncio.run(fetch(table_query))
+        assert asyncio.run(fetch(cash_checks)) == both_cash_checks
+        assert asyncio.run(fetch(cash_index)) == {"ix_orders_open_cash_phone"}
+        keys = asyncio.run(fetch(setting_keys))
+        assert cash_keys <= keys and "free_shipping_threshold" not in keys
+        command.downgrade(config, cash_parent)
+        assert "cash_payment_blocks" not in asyncio.run(fetch(table_query))
+        assert asyncio.run(fetch(cash_checks)) == set()
+        assert asyncio.run(fetch(cash_index)) == set()
+        keys = asyncio.run(fetch(setting_keys))
+        assert cash_keys.isdisjoint(keys) and "free_shipping_threshold" in keys
+        assert asyncio.run(fetch(free_null)) == {"null"}
+        assert "orders" in asyncio.run(fetch(table_query)), "the parent is untouched"
+        command.upgrade(config, "head")
+        assert "cash_payment_blocks" in asyncio.run(fetch(table_query))
+        assert asyncio.run(fetch(cash_checks)) == both_cash_checks
+        keys = asyncio.run(fetch(setting_keys))
+        assert cash_keys <= keys and "free_shipping_threshold" not in keys
 
         command.downgrade(config, "base")
 

@@ -202,7 +202,7 @@ async def test_a_physical_line_cannot_carry_an_offer(db_session: AsyncSession) -
             "fulfillment_method": "pickup",
             "cash_terms_accepted_at": now,
             "contact_phone_snapshot": "+96170123456",
-            "contact_phone_hash": "hash",
+            "contact_phone_hash": "c" * 64,
         },
         "order_items": {
             "order_id": order,

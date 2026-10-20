@@ -1,4 +1,4 @@
-"""`GET /api/v1/settings/public`: the five allowlisted keys, and nothing else.
+"""`GET /api/v1/settings/public`: the six allowlisted keys, and nothing else.
 
 This endpoint is unauthenticated and reads a table that also holds internal
 business parameters - the offer floor, the abuse cap, the purge period. The
@@ -22,7 +22,8 @@ PUBLIC_PATH = "/api/v1/settings/public"
 
 EXPECTED_FIELDS = {
     "accepting_orders",
-    "free_shipping_threshold",
+    "cash_payment_enabled",
+    "cash_max_order_total",
     "pickup_address",
     "pickup_hours",
     "whatsapp_number",
@@ -31,7 +32,7 @@ EXPECTED_FIELDS = {
 
 @pytest.mark.integration
 @pytest.mark.usefixtures("configured_app")
-def test_the_response_has_exactly_the_five_allowlisted_fields() -> None:
+def test_the_response_has_exactly_the_six_allowlisted_fields() -> None:
     from app.main import app
 
     with TestClient(app) as client:
@@ -61,6 +62,7 @@ def test_no_internal_setting_appears_in_the_response() -> None:
         "checkout_hold_period",
         "unverified_account_purge_period",
         "daily_download_cap",
+        "cash_max_open_orders",
     ):
         assert internal not in body, f"{internal} leaked to the public endpoint"
         assert REGISTRY[internal].is_public is False
@@ -124,7 +126,6 @@ def test_unconfigured_public_values_are_null_rather_than_invented() -> None:
     assert body["pickup_address"] is None
     assert body["pickup_hours"] is None
     assert body["whatsapp_number"] is None
-    assert body["free_shipping_threshold"] is None
     # The kill switch is not nullable - the shop is either open or closed.
     assert body["accepting_orders"] is False
 
@@ -141,3 +142,18 @@ async def test_the_endpoint_needs_no_authentication(db_session: AsyncSession) ->
         response = client.get(PUBLIC_PATH)
 
     assert response.status_code == 200
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("configured_app")
+def test_free_shipping_threshold_is_gone_and_the_cash_keys_are_served() -> None:
+    """VS-028 PR A (plan Q11): the field is absent, not null, and the two public cash
+    settings carry their seeded defaults."""
+    from app.main import app
+
+    with TestClient(app) as client:
+        body = client.get(PUBLIC_PATH).json()
+
+    assert "free_shipping_threshold" not in body
+    assert body["cash_payment_enabled"] is True
+    assert body["cash_max_order_total"] == {"amount_cents": 10_000, "currency": "USD"}

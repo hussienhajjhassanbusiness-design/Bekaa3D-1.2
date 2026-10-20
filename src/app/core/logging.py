@@ -44,6 +44,12 @@ _SENSITIVE_KEYS = frozenset(
         "signature",
         "x-mock-signature",
         "webhook_body",
+        # VS-028 (ADR-024 d6): the phone-hash key, and the contact phone and its hash.
+        "phone_hash_salt",
+        "phone",
+        "contact_phone",
+        "contact_phone_snapshot",
+        "contact_phone_hash",
     }
 )
 
@@ -75,6 +81,12 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (
         re.compile(r"(?<![A-Z0-9])[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}(?![A-Z0-9])"),
         "[redacted-code]",
+    ),
+    # VS-028: a Lebanese E.164 number (a CHECK violation carries it). Hex and '-' are
+    # excluded around it, so a UUID group of digits is never mistaken for a phone.
+    (
+        re.compile(r"(?<![0-9A-Fa-f+-])\+?961[0-9]{7,8}(?![0-9A-Fa-f-])"),
+        "[redacted-phone]",
     ),
 )
 

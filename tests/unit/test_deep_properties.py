@@ -252,8 +252,8 @@ def test_money_is_accepted_only_as_in_range_usd_cents(
     value: dict[str, Any] = {"amount_cents": cents, "currency": currency}
     if extra:
         value["note"] = "x"
-    ok, _ = _accepted("free_shipping_threshold", value)
-    assert ok is (0 <= cents <= 1_000_000 and currency == "USD" and not extra)
+    ok, _ = _accepted("cash_max_order_total", value)
+    assert ok is (1 <= cents <= 1_000_000 and currency == "USD" and not extra)
 
 
 # --------------------------------------------------------------------------

@@ -17,6 +17,7 @@ from app.core.config import get_settings
 from app.core.database import CONNECT_TIMEOUT_SECONDS, make_engine, make_session_factory
 from app.core.ip_hash_keyring import refresh_ip_hash_key
 from app.core.logging import configure_logging
+from app.core.security import check_phone_hash_salt
 from app.integrations.captcha.factory import captcha_verifier
 from app.payments.public import configured_payment_providers
 
@@ -27,6 +28,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     settings = get_settings()
     # Fail at boot, not on the first form, when captcha is misconfigured (ADR-026).
     captcha_verifier(settings)
+    # VS-028: a weak PHONE_HASH_SALT outside dev/test refuses to boot (plan Q5).
+    check_phone_hash_salt(settings)
     # VS-023: production + mock, or an unknown provider, refuses to boot (plan 3.9).
     app.state.payment_providers = configured_payment_providers(settings)
     app.state.db_engine = make_engine(settings.database_url)
