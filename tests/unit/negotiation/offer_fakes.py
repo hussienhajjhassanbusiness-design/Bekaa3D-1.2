@@ -14,7 +14,7 @@ from app.negotiation.application.ports import (
     QueuedOffer,
     QueueKey,
 )
-from app.negotiation.domain.enums import OfferStatus, OfferTurn
+from app.negotiation.domain.enums import LIVE_STATUSES, OfferStatus, OfferTurn
 from app.negotiation.domain.offers import NewOffer, NewRound, Offer, OfferRound
 
 NOW = datetime(2026, 10, 20, 12, tzinfo=UTC)
@@ -39,6 +39,7 @@ class FakeStore:
     rounds_by_offer: dict[UUID, list[NewRound]] = field(default_factory=dict)
     rejected_cooldowns: list[datetime] = field(default_factory=list)
     locked_elsewhere: set[UUID] = field(default_factory=set)
+    acquisition_locks: list[tuple[UUID, UUID]] = field(default_factory=list)
 
     async def add(self, offer: NewOffer, *, at: datetime) -> Offer:
         row = Offer(
@@ -90,7 +91,9 @@ class FakeStore:
     async def overdue_ids(self, now: datetime, limit: int) -> list[UUID]:
         return []
 
-    async def checkout_overdue_ids(self, now: datetime, limit: int) -> list[UUID]:
+    async def checkout_overdue_ids(
+        self, now: datetime, limit: int, *, after: tuple[datetime, UUID] | None = None
+    ) -> list[tuple[datetime, UUID]]:
         return []
 
     async def reminder_due_ids(self, now: datetime, limit: int) -> list[UUID]:
@@ -111,6 +114,24 @@ class FakeStore:
 
     async def next_sequence(self, offer_id: UUID) -> int:
         return len(self.rounds_by_offer.get(offer_id, [])) + 1
+
+    async def lock_acquisition(self, user_id: UUID, product_id: UUID) -> None:
+        self.acquisition_locks.append((user_id, product_id))
+
+    async def lock_live(self, user_id: UUID, product_id: UUID) -> list[Offer]:
+        live = (o for o in self.offers.values() if o.status in LIVE_STATUSES)
+        return sorted(
+            (o for o in live if (o.user_id, o.product_id) == (user_id, product_id)),
+            key=lambda o: o.id,
+        )
+
+
+@dataclass
+class FakeInFlight:
+    offer_ids: set[UUID] = field(default_factory=set)
+
+    async def in_flight(self, offer_id: UUID) -> bool:
+        return offer_id in self.offer_ids
 
 
 @dataclass

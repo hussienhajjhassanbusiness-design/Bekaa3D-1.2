@@ -23,6 +23,7 @@ from app.ordering.infrastructure.models import (
 ORDER_NUMBER_ATTEMPTS = 5
 ORDER_NUMBER_INDEX = "uq_orders_order_number"
 STL_OWNERSHIP_INDEX = "uq_order_items_stl_ownership"
+OFFER_ONCE_INDEX = "uq_order_items_offer_once"
 OWNED_STATES = (OrderItemStatus.AWAITING_DELIVERY, OrderItemStatus.DELIVERED)
 LIVE_STL_STATES = (OrderItemStatus.PENDING, *OWNED_STATES)
 
@@ -55,6 +56,7 @@ _LINE_COLUMNS = (
     _I.line_total_cents,
     _I.currency,
     _I.fulfillment_status,
+    _I.offer_id,
 )
 
 
@@ -114,12 +116,14 @@ class SqlOrderStore:
                 )
                 return [_line(row) for row in result.all()]
         except IntegrityError as exc:
-            if _constraint(exc) != STL_OWNERSHIP_INDEX:
+            violated = _constraint(exc)
+            if violated not in (STL_OWNERSHIP_INDEX, OFFER_ONCE_INDEX):
                 raise
-        held = await self._live_stl_product_ids(
-            order.user_id,
-            [line.product_id for line in lines if line.product_type is ProductType.STL],
-        )
+        stl = [line.product_id for line in lines if line.product_type is ProductType.STL]
+        held = await self._live_stl_product_ids(order.user_id, stl)
+        if violated == OFFER_ONCE_INDEX:
+            # The offer's earlier line may be refunded, so no longer live: name it anyway.
+            held |= {line.product_id for line in lines if line.offer_id is not None}
         raise ProductAlreadyOwnedError(tuple(sorted(held, key=str)))
 
     async def add_history(self, changes: Sequence[StatusChange]) -> None:
@@ -154,6 +158,18 @@ class SqlOrderStore:
             select(_O.order_number).where(_O.id == order_id)
         )
         return number
+
+    async def unpaid_offer_order(self, offer_id: UUID) -> UUID | None:
+        order_id: UUID | None = await self._session.scalar(
+            select(_I.order_id)
+            .join(_O, _O.id == _I.order_id)
+            .where(
+                _I.offer_id == offer_id,
+                _I.fulfillment_status == OrderItemStatus.PENDING,
+                _O.cancelled_at.is_(None),
+            )
+        )
+        return order_id
 
     async def lock_order(self, order_id: UUID) -> Order | None:
         row = (

@@ -46,6 +46,8 @@ async def submit_offer(
     if not await settings.get_bool("accepting_orders"):
         raise OffersPausedError()
     product = check_offerable((await products.get_many([product_id])).get(product_id), product_id)
+    # Serialises with a payment's auto-close, so no live offer outlives ownership (ADR-037).
+    await offers.lock_acquisition(user_id, product_id)
     if await ownership.owns(user_id, product_id):
         raise OfferProductOwnedError()
     new = open_offer(

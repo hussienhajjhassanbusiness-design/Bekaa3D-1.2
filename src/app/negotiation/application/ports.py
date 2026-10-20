@@ -71,8 +71,10 @@ class OfferStore(Protocol):
         """Awaiting offers with `responds_by <= now`, soonest first. Takes no lock."""
         ...
 
-    async def checkout_overdue_ids(self, now: datetime, limit: int) -> list[UUID]:
-        """Accepted offers with `checkout_expires_at <= now`, soonest first. No lock."""
+    async def checkout_overdue_ids(
+        self, now: datetime, limit: int, *, after: tuple[datetime, UUID] | None = None
+    ) -> list[tuple[datetime, UUID]]:
+        """Accepted offers past `checkout_expires_at`, keyset-paged after `after`. No lock."""
         ...
 
     async def reminder_due_ids(self, now: datetime, limit: int) -> list[UUID]:
@@ -94,6 +96,21 @@ class OfferStore(Protocol):
     async def add_round(self, offer_id: UUID, new: NewRound, *, at: datetime) -> None: ...
 
     async def next_sequence(self, offer_id: UUID) -> int: ...
+
+    async def lock_acquisition(self, user_id: UUID, product_id: UUID) -> None:
+        """Transaction-scoped advisory lock on (user, product): submission and the STL
+        purchase's auto-close serialise on it (ADR-037)."""
+        ...
+
+    async def lock_live(self, user_id: UUID, product_id: UUID) -> list[Offer]:
+        """Live offers for (user, product), `FOR UPDATE` in id order (at most one)."""
+        ...
+
+
+class PaymentInFlight(Protocol):
+    async def in_flight(self, offer_id: UUID) -> bool:
+        """A pending or processing attempt on an uncancelled order holding the offer's line."""
+        ...
 
 
 class StlOwnership(Protocol):

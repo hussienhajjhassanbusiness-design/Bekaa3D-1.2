@@ -85,3 +85,7 @@ class OfferAmountChangedError(NegotiationDomainError):
 
 class OfferExpiredError(NegotiationDomainError):
     """410 OFFER_EXPIRED: the turn's deadline has been reached (BR-084, ADR-034 d6)."""
+
+
+class OfferCheckoutExpiredError(NegotiationDomainError):
+    """410 OFFER_CHECKOUT_EXPIRED: the accepted offer's checkout window has closed (BR-086)."""

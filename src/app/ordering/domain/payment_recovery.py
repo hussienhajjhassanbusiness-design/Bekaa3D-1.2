@@ -4,9 +4,27 @@ timings arrive as parameters, so Ordering imports nothing from Payments here."""
 from collections.abc import Sequence
 from datetime import datetime, timedelta
 from enum import StrEnum
+from typing import Protocol
 
 from app.ordering.domain.enums import OrderItemStatus, OrderStatus, PaymentMethod
-from app.ordering.domain.orders import Order, OrderLine
+
+
+class PayableOrder(Protocol):
+    """An `Order` or a `CustomerOrder`: what the retry and release rules read."""
+
+    @property
+    def payment_method(self) -> PaymentMethod: ...
+    @property
+    def status(self) -> OrderStatus: ...
+    @property
+    def placed_at(self) -> datetime: ...
+    @property
+    def cancelled_at(self) -> datetime | None: ...
+
+
+class PayableLine(Protocol):
+    @property
+    def fulfillment_status(self) -> OrderItemStatus: ...
 
 
 class RetryRefusal(StrEnum):
@@ -16,6 +34,8 @@ class RetryRefusal(StrEnum):
     ORDER_CANCELLED = "order_cancelled"
     ORDER_NOT_PAYABLE = "order_not_payable"
     CHECKOUT_HOLD_EXPIRED = "checkout_hold_expired"
+    # VS-041: an offer order whose offer is no longer accepted or whose window closed.
+    OFFER_CHECKOUT_EXPIRED = "offer_checkout_expired"
 
 
 class ReleaseRefusal(StrEnum):
@@ -41,14 +61,14 @@ def manual_release_available_at(deadline: datetime, grace: timedelta, *, early: 
     return deadline if early else deadline + grace
 
 
-def _unpayable(order: Order, lines: Sequence[OrderLine]) -> bool:
+def _unpayable(order: PayableOrder, lines: Sequence[PayableLine]) -> bool:
     return order.status is not OrderStatus.PENDING_PAYMENT or any(
         line.fulfillment_status is not OrderItemStatus.PENDING for line in lines
     )
 
 
 def retry_refusal(
-    order: Order, lines: Sequence[OrderLine], *, now: datetime, hold: timedelta
+    order: PayableOrder, lines: Sequence[PayableLine], *, now: datetime, hold: timedelta
 ) -> RetryRefusal | None:
     """T1, first match wins; read under the orders lock. A live attempt is the index's job."""
     if order.payment_method is PaymentMethod.CASH:
@@ -63,15 +83,15 @@ def retry_refusal(
 
 
 def can_retry_payment(
-    order: Order, lines: Sequence[OrderLine], *, now: datetime, hold: timedelta
+    order: PayableOrder, lines: Sequence[PayableLine], *, now: datetime, hold: timedelta
 ) -> bool:
     """T1 without the lock, for VS-025's `OrderDetail`; the POST re-checks under the lock."""
     return retry_refusal(order, lines, now=now, hold=hold) is None
 
 
 def manual_release_refusal(
-    order: Order,
-    lines: Sequence[OrderLine],
+    order: PayableOrder,
+    lines: Sequence[PayableLine],
     *,
     now: datetime,
     available_at: datetime,

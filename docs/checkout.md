@@ -1,6 +1,6 @@
 # Checkout and verified payment (VS-023)
 
-A verified customer checks out a cart of STL products and pays online; the order is paid only once the provider itself confirms the exact amount. Decisions and rationale: [ADR-032](adr/ADR-032-checkout-idempotency-and-payment-verification.md). Requirements: SRS §7.3, §7.5, §9.2, §20.1, §20.2, BR-030, BR-031, BR-056, BR-058 to BR-060. Plan: [`plans/VS-023-digital-checkout-plan.md`](plans/VS-023-digital-checkout-plan.md). Physical lines, delivery, pickup and cash arrive with VS-028; payment retry and reconciliation with VS-024; STL delivery with VS-023b.
+A verified customer checks out a cart of STL products and pays online; the order is paid only once the provider itself confirms the exact amount. Decisions and rationale: [ADR-032](adr/ADR-032-checkout-idempotency-and-payment-verification.md). Requirements: SRS §7.3, §7.5, §9.2, §20.1, §20.2, BR-030, BR-031, BR-056, BR-058 to BR-060. Plan: [`plans/VS-023-digital-checkout-plan.md`](plans/VS-023-digital-checkout-plan.md). Physical lines, delivery, pickup and cash arrive with VS-028; payment retry and reconciliation with VS-024; STL delivery with VS-023b. An accepted offer is checked out at its agreed price through `POST /api/v1/me/offers/{offer_id}/checkout`, which shares this route's transactions, replay and rate limit ([`offers.md`](offers.md), VS-041). Paying an STL also settles the customer's offers on it: the one bought through becomes `paid`, any other live one `auto_closed`.
 
 ## Routes
 

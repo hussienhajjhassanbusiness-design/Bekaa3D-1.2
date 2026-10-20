@@ -3,13 +3,18 @@
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
 from app.catalog.application.ports import ProductType
-from app.ordering.application.ports import OrderFilters, OrderPaymentView, PaymentAttemptRef
-from app.ordering.application.services.order_history import get_order, list_orders
+from app.ordering.application.ports import (
+    AcceptedOffer,
+    OrderFilters,
+    OrderPaymentView,
+    PaymentAttemptRef,
+)
+from app.ordering.application.services.order_history import RetryContext, get_order, list_orders
 from app.ordering.domain.enums import (
     FulfillmentMethod,
     OrderItemStatus,
@@ -17,10 +22,31 @@ from app.ordering.domain.enums import (
     OrderStatus,
     PaymentMethod,
 )
+from app.ordering.domain.exceptions import OfferCheckoutExpiredError
 from app.ordering.domain.orders import CustomerOrder, CustomerOrderLine, HistoryEntry
 
 AT = datetime(2026, 10, 19, tzinfo=UTC)
 OWNER = uuid.uuid4()
+HOLD = timedelta(minutes=30)
+
+
+@dataclass
+class FakeOffers:
+    """`OfferCheckouts`: open unless the offer id is listed as closed."""
+
+    closed: set[UUID] = field(default_factory=set)
+
+    async def read(self, offer_id: UUID, user_id: UUID, *, now: datetime) -> AcceptedOffer:
+        if offer_id in self.closed:
+            raise OfferCheckoutExpiredError()
+        return AcceptedOffer(offer_id, uuid.uuid4(), 100, "USD", now + HOLD)
+
+    async def lock(self, *args: Any, **kwargs: Any) -> AcceptedOffer:
+        raise AssertionError("order detail never locks")
+
+
+def _retry(offers: FakeOffers | None = None, now: datetime = AT) -> RetryContext:
+    return RetryContext(offers or FakeOffers(), HOLD, now)
 
 
 def _order(**over: Any) -> CustomerOrder:
@@ -127,7 +153,7 @@ async def test_a_paid_cash_order_is_not_due() -> None:
 async def test_another_customers_order_is_none() -> None:
     order = _order()
     got = await get_order(
-        FakeOrders([order]), FakePayments(), user_id=uuid.uuid4(), order_id=order.id
+        FakeOrders([order]), FakePayments(), user_id=uuid.uuid4(), order_id=order.id, retry=_retry()
     )
     assert got is None
 
@@ -138,7 +164,9 @@ async def test_can_cancel_reads_the_unmasked_line_state() -> None:
     store = FakeOrders(
         [order], [_line(OrderItemStatus.PENDING), _line(OrderItemStatus.IN_PRODUCTION)]
     )
-    detail = await get_order(store, FakePayments(), user_id=OWNER, order_id=order.id)
+    detail = await get_order(
+        store, FakePayments(), user_id=OWNER, order_id=order.id, retry=_retry()
+    )
     assert detail is not None
     assert [line.fulfillment_status for line in detail.lines] == [OrderItemStatus.PENDING] * 2
     assert not detail.can_cancel
@@ -157,9 +185,78 @@ async def test_detail_masks_history_and_shows_the_chosen_payment() -> None:
         ],
     )
     payments = FakePayments({order.id: OrderPaymentView(reached_paid=True, shown=shown)})
-    detail = await get_order(store, payments, user_id=OWNER, order_id=order.id)
+    detail = await get_order(store, payments, user_id=OWNER, order_id=order.id, retry=_retry())
     assert detail is not None
     assert [(h.from_status, h.to_status) for h in detail.history] == [
         ("pending_payment", "in_progress")
     ]
     assert (detail.payment, detail.can_cancel, detail.payment_due) == (shown, True, False)
+
+
+def _unpaid(**over: Any) -> CustomerOrder:
+    unpaid: dict[str, Any] = {
+        "status": OrderStatus.PENDING_PAYMENT,
+        "payment_method": PaymentMethod.ONLINE,
+        "fulfillment_method": None,
+    }
+    return _order(**(unpaid | over))
+
+
+async def _detail(
+    order: CustomerOrder,
+    status: str | None,
+    *,
+    lines: list[CustomerOrderLine] | None = None,
+    latest: datetime | None = None,
+    offers: FakeOffers | None = None,
+    now: datetime = AT,
+) -> Any:
+    shown = PaymentAttemptRef(uuid.uuid4(), "mock", status, 100, "USD") if status else None
+    view = OrderPaymentView(reached_paid=False, shown=shown, latest_initiated_at=latest)
+    store = FakeOrders([order], lines or [_line(OrderItemStatus.PENDING)])
+    return await get_order(
+        store,
+        FakePayments({order.id: view}),
+        user_id=OWNER,
+        order_id=order.id,
+        retry=_retry(offers, now),
+    )
+
+
+async def test_can_retry_payment_after_a_failed_attempt_inside_the_hold() -> None:
+    detail = await _detail(_unpaid(), "failed", now=AT + HOLD - timedelta(seconds=1))
+    assert detail.can_retry_payment
+
+
+async def test_can_retry_payment_is_false_while_an_attempt_is_live() -> None:
+    for status in ("pending", "processing"):
+        assert not (await _detail(_unpaid(), status)).can_retry_payment
+
+
+async def test_can_retry_payment_is_false_once_the_hold_ends() -> None:
+    assert not (await _detail(_unpaid(), "failed", now=AT + HOLD)).can_retry_payment
+
+
+async def test_can_retry_payment_is_false_for_paid_cash_and_cancelled_orders() -> None:
+    for order in (_order(), _unpaid(status=OrderStatus.IN_PROGRESS), _unpaid(cancelled_at=AT)):
+        assert not (await _detail(order, "failed")).can_retry_payment
+
+
+async def test_can_retry_payment_follows_an_offer_orders_window() -> None:
+    offer_id = uuid.uuid4()
+    line = replace(_line(OrderItemStatus.PENDING), product_type=ProductType.STL, offer_id=offer_id)
+    order = _unpaid(source=OrderSource.OFFER)
+    assert (await _detail(order, "failed", lines=[line])).can_retry_payment
+    closed = FakeOffers({offer_id})
+    assert not (await _detail(order, "failed", lines=[line], offers=closed)).can_retry_payment
+
+
+async def test_hold_expires_at_runs_from_the_latest_attempt() -> None:
+    retried = AT + timedelta(minutes=10)
+    assert (await _detail(_unpaid(), "pending", latest=retried)).hold_expires_at == retried + HOLD
+    assert (await _detail(_unpaid(), "pending")).hold_expires_at == AT + HOLD
+
+
+async def test_hold_expires_at_is_none_unless_unpaid_online() -> None:
+    for order in (_order(), _unpaid(status=OrderStatus.IN_PROGRESS), _unpaid(cancelled_at=AT)):
+        assert (await _detail(order, "paid", latest=AT)).hold_expires_at is None

@@ -4417,6 +4417,41 @@
         "title": "OfferActor",
         "type": "string"
       },
+      "OfferCheckoutRequest": {
+        "additionalProperties": false,
+        "description": "api-endpoints.md 29.5; `payment_provider` as checkout and retry take it.",
+        "properties": {
+          "accept_digital_final_sale": {
+            "const": true,
+            "title": "Accept Digital Final Sale",
+            "type": "boolean"
+          },
+          "accept_terms": {
+            "const": true,
+            "title": "Accept Terms",
+            "type": "boolean"
+          },
+          "payment_provider": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment Provider"
+          }
+        },
+        "required": [
+          "accept_terms",
+          "accept_digital_final_sale"
+        ],
+        "title": "OfferCheckoutRequest",
+        "type": "object"
+      },
       "OfferCounterRequest": {
         "additionalProperties": false,
         "properties": {
@@ -4902,6 +4937,11 @@
             "title": "Can Cancel",
             "type": "boolean"
           },
+          "can_retry_payment": {
+            "description": "A new payment attempt may be started now; the POST re-checks.",
+            "title": "Can Retry Payment",
+            "type": "boolean"
+          },
           "cancelled_at": {
             "anyOf": [
               {
@@ -4992,6 +5032,19 @@
               }
             ]
           },
+          "hold_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "An unpaid online order: when it may be released if still unpaid.",
+            "title": "Hold Expires At"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -5064,6 +5117,8 @@
           "payment_method",
           "payment_due",
           "can_cancel",
+          "can_retry_payment",
+          "hold_expires_at",
           "subtotal",
           "tax",
           "total",
@@ -17034,6 +17089,178 @@
         ]
       }
     },
+    "/api/v1/me/offers/{offer_id}/checkout": {
+      "post": {
+        "description": "Tx1: claim (scope `offer_checkout:{offer_id}`), place the order, lock and re-check\nthe offer, COMMIT. The provider call with no transaction open. Tx2: the reference or\nthe failure, and the stored response.",
+        "operationId": "checkout_offer_api_v1_me_offers__offer_id__checkout_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "offer_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Offer Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "8-255 characters of [A-Za-z0-9._:-]; one key per checkout attempt.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "description": "8-255 characters of [A-Za-z0-9._:-]; one key per checkout attempt.",
+              "pattern": "^[A-Za-z0-9._:-]{8,255}$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OfferCheckoutRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckoutRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "MALFORMED_REQUEST: the body is not valid JSON."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No valid session cookie was presented."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "CSRF token missing or invalid, or EMAIL_VERIFICATION_REQUIRED."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "NOT_FOUND: no such offer among the caller's own."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INVALID_STATE_TRANSITION (with `offer_status`), PAYMENT_ALREADY_ACTIVE (with `payment_id`, `payment_status`, `redirect_url`), PRODUCT_ALREADY_OWNED (with `product_ids`), IDEMPOTENCY_KEY_CONFLICT, or IDEMPOTENCY_REQUEST_IN_PROGRESS."
+          },
+          "410": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "OFFER_CHECKOUT_EXPIRED: the checkout window has closed."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "PRODUCT_NOT_PURCHASABLE (with `lines`), PAYMENT_METHOD_NOT_ALLOWED (with `reason`), or VALIDATION_ERROR."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "RATE_LIMITED: shares cart checkout's hourly limit."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "PAYMENT_PROVIDER_UNAVAILABLE: the order exists unpaid (with `order_id`, `order_number`); replayed for the same key."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "ORDERS_PAUSED, or ONLINE_PAYMENT_UNAVAILABLE."
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Place the order for an accepted offer at its agreed price and start its payment",
+        "tags": [
+          "offers"
+        ]
+      }
+    },
     "/api/v1/me/offers/{offer_id}/counter": {
       "post": {
         "operationId": "counter_my_offer_api_v1_me_offers__offer_id__counter_post",
@@ -17676,7 +17903,7 @@
                 }
               }
             },
-            "description": "PAYMENT_ALREADY_ACTIVE (with `payment_id`, `payment_status`, `redirect_url`), INVALID_STATE_TRANSITION (with `reason`), IDEMPOTENCY_KEY_CONFLICT, or IDEMPOTENCY_REQUEST_IN_PROGRESS."
+            "description": "PAYMENT_ALREADY_ACTIVE (with `payment_id`, `payment_status`, `redirect_url`), INVALID_STATE_TRANSITION (with `reason`, including `offer_checkout_expired`), IDEMPOTENCY_KEY_CONFLICT, or IDEMPOTENCY_REQUEST_IN_PROGRESS."
           },
           "422": {
             "content": {

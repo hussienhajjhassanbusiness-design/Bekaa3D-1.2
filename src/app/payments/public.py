@@ -25,7 +25,7 @@ from app.payments.domain.exceptions import (
 from app.payments.domain.limits import CHECKOUT_RATE_LIMIT, CHECKOUT_RATE_WINDOW_SECONDS
 from app.payments.domain.outcome import Outcome, ProviderResult
 from app.payments.infrastructure.manual import confirm_payment_manually
-from app.payments.infrastructure.order_payments import SqlOrderPaymentReader
+from app.payments.infrastructure.order_payments import SqlOrderPaymentReader, SqlPaymentInFlight
 from app.payments.infrastructure.payments import SqlPaymentAttempts, SqlPaymentStore
 from app.payments.infrastructure.providers.factory import configured_payment_providers
 from app.payments.infrastructure.reconcile import reconcile_stuck
@@ -56,6 +56,7 @@ __all__ = [
     "limits",
     "order_payment_reader",
     "payment_attempts",
+    "payment_in_flight",
     "payment_store",
     "reconcile_stuck",
     "record_provider_reference",
@@ -83,3 +84,8 @@ def order_payment_reader(session: AsyncSession) -> SqlOrderPaymentReader:
 def payment_store(session: AsyncSession) -> SqlPaymentStore:
     """The payment repository on the caller's session (checkout Tx2)."""
     return SqlPaymentStore(session)
+
+
+def payment_in_flight(session: AsyncSession) -> SqlPaymentInFlight:
+    """Negotiation's `PaymentInFlight` for `expire_offers` (VS-041)."""
+    return SqlPaymentInFlight(session)

@@ -436,7 +436,7 @@ Removed by ADR-019: there is no STL library, entitlement or download endpoint, b
 | `POST /api/v1/me/offers/{offer_id}/counter` | Verified Customer; owner; customer turn | `OfferCounterRequest` | `200 OfferDetail` | 401, 403, 404, 409 `OFFER_NOT_YOUR_TURN` / `INVALID_STATE_TRANSITION`, 410, 422, 429 | — | Adds round; switches turn; resets `responds_by`; notification/outbox |
 | `POST /api/v1/me/offers/{offer_id}/accept` | Verified Customer; owner; customer turn | `OfferAcceptRequest` | `200 OfferDetail` | 401, 403, 404, 409 (incl. `OFFER_AMOUNT_CHANGED`), 410, 422, 429 | — | Freezes agreed price; creates checkout window; notification/outbox; `expected_amount_cents` must equal `current_amount` (ADR-035 d9) |
 | `POST /api/v1/me/offers/{offer_id}/withdraw` | Verified Customer; owner | `OfferWithdrawRequest` (optional) | `200 OfferDetail` | 401, 403, 404, 409, 410, 429 | — | Legal in both awaiting states, whoever's turn (ADR-034, ADR-035); append history |
-| `POST /api/v1/me/offers/{offer_id}/checkout` | Verified Customer; owner; accepted offer | `OfferCheckoutRequest` + `Idempotency-Key` | `201 CheckoutRead` | 401, 403, 404, 409 `IDEMPOTENCY_KEY_CONFLICT` / `PAYMENT_ALREADY_ACTIVE`, 410 `OFFER_CHECKOUT_EXPIRED`, 429, 502 | — | One-time agreed-price checkout; creates order/payment; price comes from immutable accepted offer |
+| `POST /api/v1/me/offers/{offer_id}/checkout` | Verified Customer; owner; accepted offer | `OfferCheckoutRequest` + `Idempotency-Key` | `201 CheckoutRead` | 401, 403, 404, 409 `INVALID_STATE_TRANSITION` / `PAYMENT_ALREADY_ACTIVE` / `PRODUCT_ALREADY_OWNED` / `IDEMPOTENCY_KEY_CONFLICT` / `IDEMPOTENCY_REQUEST_IN_PROGRESS`, 410 `OFFER_CHECKOUT_EXPIRED`, 422 `PRODUCT_NOT_PURCHASABLE` / `PAYMENT_METHOD_NOT_ALLOWED` / `VALIDATION_ERROR`, 429, 502, 503 `ORDERS_PAUSED` / `ONLINE_PAYMENT_UNAVAILABLE` | — | One-time agreed-price checkout; creates order/payment; price comes from immutable accepted offer. **As built (VS-041, ADR-037):** cart checkout's two transactions, replay and 30/hour bucket; the order is inserted before the offer is locked and re-checked; the window does not stretch over a pause. Contract: [`docs/offers.md`](../offers.md) |
 
 ---
 
@@ -872,6 +872,7 @@ Rules:
 ```text
 accept_terms: true
 accept_digital_final_sale: true
+payment_provider?: str      # as built (VS-041): as checkout and retry take it
 ```
 
 Price/product/customer derive from the accepted offer.
@@ -1320,7 +1321,7 @@ customer-visible status history (omits in_production)
 
 `admin_note` is never returned by customer endpoints.
 
-As built in VS-025 ([ADR-033](../adr/ADR-033-customer-order-read-model.md), [`docs/order-history.md`](../order-history.md)): `{id, order_number, source, status, fulfillment_method, payment_method, payment_due, can_cancel, subtotal, tax, total, delivery_address, contact_phone, delivery_fee_note, estimated_dispatch_at, placed_at, completed_at, cancelled_at, customer_note, lines[], payment, status_history[]}`. Each line is `{id, product_id, product_type, name, image_url, unit_price, quantity, line_total, fulfillment_status, fulfilled_at, cancelled_at}`; `payment` is `{status, provider, amount}` or null; each history entry is `{order_item_id, from_status, to_status, at}`. The refund summary arrives with VS-030; `can_retry_payment` and `hold_expires_at` with VS-024.
+As built in VS-025 ([ADR-033](../adr/ADR-033-customer-order-read-model.md), [`docs/order-history.md`](../order-history.md)): `{id, order_number, source, status, fulfillment_method, payment_method, payment_due, can_cancel, subtotal, tax, total, delivery_address, contact_phone, delivery_fee_note, estimated_dispatch_at, placed_at, completed_at, cancelled_at, customer_note, lines[], payment, status_history[]}`. Each line is `{id, product_id, product_type, name, image_url, unit_price, quantity, line_total, fulfillment_status, fulfilled_at, cancelled_at}`; `payment` is `{status, provider, amount}` or null; each history entry is `{order_item_id, from_status, to_status, at}`. The refund summary arrives with VS-030. VS-041 added `can_retry_payment` and `hold_expires_at` (ADR-037 d10).
 
 ## `OrderSummary`
 

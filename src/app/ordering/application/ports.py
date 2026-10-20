@@ -106,6 +106,32 @@ class PaymentAttempts(Protocol):
         ...
 
 
+@dataclass(frozen=True)
+class AcceptedOffer:
+    """An accepted offer as checkout sees it; Negotiation owns the row (VS-041)."""
+
+    id: UUID
+    product_id: UUID
+    agreed_amount_cents: int
+    currency: str
+    checkout_expires_at: datetime
+
+
+class OfferCheckouts(Protocol):
+    """Implemented by Negotiation (`app.negotiation.public`). Both raise
+    OfferCheckoutNotFoundError, OfferCheckoutExpiredError or OfferNotCheckoutableError."""
+
+    async def read(self, offer_id: UUID, user_id: UUID, *, now: datetime) -> AcceptedOffer:
+        """No lock: refusals before any insert."""
+        ...
+
+    async def lock(
+        self, offer_id: UUID, user_id: UUID, *, clock: Callable[[], datetime]
+    ) -> AcceptedOffer:
+        """`FOR UPDATE`, then re-checked with `clock()` read after the lock (ADR-037)."""
+        ...
+
+
 class SettingsSource(Protocol):
     """The slice of Platform's `SettingsReader` checkout needs."""
 
@@ -136,6 +162,10 @@ class OrderStore(Protocol):
         ...
 
     async def order_number(self, order_id: UUID) -> str | None: ...
+
+    async def unpaid_offer_order(self, offer_id: UUID) -> UUID | None:
+        """The uncancelled order whose line still awaits payment for this offer. No lock."""
+        ...
 
     async def lock_order(self, order_id: UUID) -> Order | None:
         """`SELECT ... FROM orders WHERE id = :id FOR UPDATE`."""
@@ -168,6 +198,7 @@ class OrderPaymentView:
 
     reached_paid: bool
     shown: PaymentAttemptRef | None
+    latest_initiated_at: datetime | None = None
 
 
 class OrderPaymentReader(Protocol):

@@ -99,7 +99,7 @@ _RESPONSES: dict[int | str, dict[str, Any]] = {
 }
 
 
-async def _checkout_rate_limit(
+async def checkout_rate_limit(
     request: Request, response: Response, user: User = Depends(verified_user_short_read)
 ) -> None:
     """Per user, fail closed, like the cart's (plan Q17). A replay counts too."""
@@ -113,7 +113,7 @@ async def _checkout_rate_limit(
     )
 
 
-def _translate(exc: OrderingDomainError) -> ApiError:
+def translate_checkout_error(exc: OrderingDomainError) -> ApiError:
     unprocessable = status.HTTP_422_UNPROCESSABLE_ENTITY
     if isinstance(exc, CartEmptyError):
         return ApiError(
@@ -214,7 +214,7 @@ def _translate(exc: OrderingDomainError) -> ApiError:
     raise exc
 
 
-_TRANSLATED = (
+CHECKOUT_ERRORS = (
     CartEmptyError,
     CartPriceChangedError,
     ProductAlreadyOwnedError,
@@ -227,7 +227,7 @@ _TRANSLATED = (
 )
 
 
-async def _in_progress(session: AsyncSession, claim: InProgress) -> ApiError:
+async def in_progress_error(session: AsyncSession, claim: InProgress) -> ApiError:
     order_id = claim.resource_id
     number = await SqlOrderStore(session).order_number(order_id) if order_id else None
     return ApiError(
@@ -240,7 +240,7 @@ async def _in_progress(session: AsyncSession, claim: InProgress) -> ApiError:
     )
 
 
-def _conflict() -> ApiError:
+def key_conflict_error() -> ApiError:
     return ApiError(
         status_code=status.HTTP_409_CONFLICT,
         code="IDEMPOTENCY_KEY_CONFLICT",
@@ -253,7 +253,7 @@ def _conflict() -> ApiError:
     "",
     status_code=status.HTTP_201_CREATED,
     response_model=CheckoutRead,
-    dependencies=[Depends(_checkout_rate_limit)],
+    dependencies=[Depends(checkout_rate_limit)],
     summary="Place an order from the cart and start its online payment",
     responses=_RESPONSES,
 )
@@ -283,9 +283,9 @@ async def checkout(
             if isinstance(claim, Replay):
                 return replay(request, claim)
             if isinstance(claim, InProgress):
-                raise await _in_progress(session, claim)
+                raise await in_progress_error(session, claim)
             if isinstance(claim, Conflict):
-                raise _conflict()
+                raise key_conflict_error()
             try:
                 placed = await place_order(
                     carts=SqlCartStore(session),
@@ -298,16 +298,16 @@ async def checkout(
                     command=body.command(),
                     now=now,
                 )
-            except _TRANSLATED as exc:
-                raise _translate(exc) from exc
+            except CHECKOUT_ERRORS as exc:
+                raise translate_checkout_error(exc) from exc
             await claims.attach(claim.record_id, resource_id=placed.order.id)
 
         try:
             created = await start_online_payment(
-                providers[placed.payment.provider], _create_request(placed)
+                providers[placed.payment.provider], create_payment_request(placed)
             )
         except ProviderUnavailableError:
-            failed = _provider_failed(request, placed)
+            failed = provider_failed(request, placed)
             async with session.begin():
                 await fail_attempt(
                     payment_store(session),
@@ -334,7 +334,7 @@ async def checkout(
     return JSONResponse(read, status_code=status.HTTP_201_CREATED)
 
 
-def _create_request(placed: PlacedOrder) -> CreatePayment:
+def create_payment_request(placed: PlacedOrder) -> CreatePayment:
     number = placed.order.order_number
     return CreatePayment(
         payment_id=placed.payment.id,
@@ -345,7 +345,7 @@ def _create_request(placed: PlacedOrder) -> CreatePayment:
     )
 
 
-def _provider_failed(request: Request, placed: PlacedOrder) -> JSONResponse:
+def provider_failed(request: Request, placed: PlacedOrder) -> JSONResponse:
     return problem_response(
         request,
         status_code=status.HTTP_502_BAD_GATEWAY,
