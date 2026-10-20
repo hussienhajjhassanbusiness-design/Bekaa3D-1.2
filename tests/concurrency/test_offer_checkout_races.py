@@ -187,8 +187,9 @@ async def test_the_window_closing_while_a_payment_is_applied_ends_paid(
     )
 
     async def job_side(self: SqlPaymentInFlight, offer_id: uuid.UUID) -> bool:
-        await meet_or_fail(barrier)
-        await asyncio.sleep(_delay.get())
+        if offer_id == offer:  # other tests' overdue offers pass straight through
+            await meet_or_fail(barrier)
+            await asyncio.sleep(_delay.get())
         return await real_in_flight(self, offer_id)
 
     async def payment_side(*args: Any, **kwargs: Any) -> None:

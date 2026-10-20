@@ -246,6 +246,72 @@ async def test_a_window_lapsed_while_paused_frees_a_new_offer_without_cooldown(
     assert again.status_code == 201, again.text
 
 
+async def test_offers_left_for_a_payment_in_flight_never_stall_the_rest(
+    db_session: AsyncSession, db_engine: AsyncEngine
+) -> None:
+    """A page full of in-flight offers is passed over, so a later one still expires."""
+    now = datetime.now(UTC)
+    for n in range(3):
+        await _accepted_with_order(db_session, closes_at=now - timedelta(hours=3, minutes=n))
+    _, later, _, _ = await _accepted_with_order(
+        db_session, closes_at=now - timedelta(hours=1), attempt="failed"
+    )
+    result = await expire_offers(_ctx(db_engine), now=now, limit=2)
+    assert (await offer_state(db_engine, later))["status"] == "checkout_expired"
+    assert result["checkout_expired"] >= 1
+
+
+async def test_one_cart_payment_closes_the_live_offers_on_each_of_its_stls(
+    db_session: AsyncSession, db_engine: AsyncEngine
+) -> None:
+    user = (await create_user(db_session)).id
+    first, second = await stl(db_session), await stl(db_session)
+    offers = [
+        await seed_offer(db_session, user_id=user, product_id=first),
+        await seed_offer(db_session, user_id=user, product_id=second, status="awaiting_customer"),
+    ]
+    order, payment = await seed_order_with_attempt(db_session, user_id=user, product_id=first)
+    async with db_engine.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO order_items (order_id, user_id, payment_method, product_id,"
+                " product_type, product_name_snapshot, unit_price_cents, quantity,"
+                " line_total_cents, fulfillment_status)"
+                " VALUES (:o, :u, 'online', :p, 'stl', 'Second', 0, 1, 0, 'pending')"
+            ),
+            {"o": order, "u": user, "p": second},
+        )
+    assert await pay(db_engine, payment) is Outcome.APPLY_PAID
+    assert [(await offer_state(db_engine, o))["status"] for o in offers] == ["auto_closed"] * 2
+
+
+async def test_after_a_hold_release_the_offer_can_be_checked_out_again(
+    client: TestClient, db_session: AsyncSession, db_engine: AsyncEngine
+) -> None:
+    """A line cancelled unpaid frees the offer (`uq_order_items_offer_once`) in its window."""
+    user, offer, order, _ = await _accepted_with_order(db_session, attempt="failed")
+    async with db_engine.begin() as conn:
+        await conn.execute(
+            text("UPDATE orders SET cancelled_at = now(), status = 'cancelled' WHERE id = :o"),
+            {"o": order},
+        )
+        await conn.execute(
+            text(
+                "UPDATE order_items SET fulfillment_status = 'cancelled', cancelled_at = now()"
+                " WHERE order_id = :o"
+            ),
+            {"o": order},
+        )
+    await _login(client, db_session, user)
+    again = client.post(
+        f"/api/v1/me/offers/{offer}/checkout",
+        json={"accept_terms": True, "accept_digital_final_sale": True},
+        headers=csrf(client) | {"Idempotency-Key": new_key()},
+    )
+    assert again.status_code == 201, again.text
+    assert again.json()["order"]["id"] != str(order)
+
+
 # ---------------------------------------------------------------------- retry
 
 
@@ -292,3 +358,15 @@ async def test_retry_of_an_offer_order_after_the_window_is_refused(
             text("SELECT count(*) FROM payments WHERE order_id = :o"), {"o": order}
         )
     assert attempts == 1
+
+
+async def test_retry_past_the_window_with_an_attempt_in_flight_resumes_it(
+    client: TestClient, db_session: AsyncSession
+) -> None:
+    """That attempt is honoured (ADR-037 d7), so retry hands back its link, not a refusal."""
+    closed = datetime.now(UTC) - timedelta(seconds=1)
+    user, _, order, payment = await _accepted_with_order(db_session, closes_at=closed)
+    await _login(client, db_session, user)
+    response = _retry(client, order)
+    assert_problem(response, 409, "PAYMENT_ALREADY_ACTIVE")
+    assert response.json()["payment_id"] == str(payment)

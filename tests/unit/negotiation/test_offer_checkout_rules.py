@@ -196,4 +196,5 @@ async def test_settle_never_refuses_a_payment_when_its_offer_is_not_accepted() -
         now=NOW,
     )
     assert store.offers[offer.id].status is OfferStatus.CHECKOUT_EXPIRED
-    assert not audit.rows
+    [row] = audit.rows
+    assert (row["action"], row["entity_id"]) == ("offer.paid_out_of_state", offer.id)

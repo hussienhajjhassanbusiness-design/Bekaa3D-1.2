@@ -64,6 +64,13 @@ async def _settle(
     if purchase.offer_id is not None and not paid_through_offer:
         # Unreachable while retry and the expiry job hold the offer lock (ADR-037); the
         # line is paid at its agreed price regardless, so this is reported, not refused.
+        await audit.record(
+            actor_user_id=None,
+            action="offer.paid_out_of_state",
+            entity_type=ENTITY_TYPE,
+            entity_id=purchase.offer_id,
+            after_data={"order_id": str(purchase.order_id)},
+        )
         await logger.aerror(
             "offer_paid_out_of_state",
             offer_id=str(purchase.offer_id),

@@ -17,6 +17,7 @@ from app.ordering.domain.checkout_rules import choose_provider
 from app.ordering.domain.exceptions import (
     LiveAttemptExistsError,
     OfferCheckoutExpiredError,
+    OfferCheckoutNotFoundError,
     OfferNotCheckoutableError,
     OnlinePaymentUnavailableError,
     PaymentAlreadyActiveError,
@@ -57,12 +58,13 @@ async def start_retry(
     refusal = retry_refusal(order, lines, now=now, hold=hold)
     if refusal is not None:
         raise RetryRefusedError(refusal.value)
-    await _require_open_offer(offers, lines, user_id=user_id, clock=clock)
     configured = attempts.configured_providers()
     if not configured:
         raise OnlinePaymentUnavailableError("No online payment provider is configured.")
+    # Before the offer: an attempt in flight past the window is honoured, so resume it.
     if (live := await attempts.live_attempt(order_id)) is not None:
         raise already_active(live)
+    await _require_open_offer(offers, lines, user_id=user_id, clock=clock)
     provider = choose_provider(
         requested_provider, configured, await attempts.previous_provider(order_id)
     )
@@ -98,7 +100,11 @@ async def _require_open_offer(
     for offer_id in sorted({line.offer_id for line in lines if line.offer_id}, key=str):
         try:
             await offers.lock(offer_id, user_id, clock=clock)
-        except (OfferCheckoutExpiredError, OfferNotCheckoutableError) as exc:
+        except (
+            OfferCheckoutExpiredError,
+            OfferNotCheckoutableError,
+            OfferCheckoutNotFoundError,
+        ) as exc:
             raise RetryRefusedError(RetryRefusal.OFFER_CHECKOUT_EXPIRED.value) from exc
 
 

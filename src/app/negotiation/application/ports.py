@@ -71,8 +71,10 @@ class OfferStore(Protocol):
         """Awaiting offers with `responds_by <= now`, soonest first. Takes no lock."""
         ...
 
-    async def checkout_overdue_ids(self, now: datetime, limit: int) -> list[UUID]:
-        """Accepted offers with `checkout_expires_at <= now`, soonest first. No lock."""
+    async def checkout_overdue_ids(
+        self, now: datetime, limit: int, *, after: tuple[datetime, UUID] | None = None
+    ) -> list[tuple[datetime, UUID]]:
+        """Accepted offers past `checkout_expires_at`, keyset-paged after `after`. No lock."""
         ...
 
     async def reminder_due_ids(self, now: datetime, limit: int) -> list[UUID]:

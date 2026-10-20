@@ -128,15 +128,37 @@ async def expire_overdue_offers(
     async with session_factory() as session, session.begin():
         store = SqlOfferStore(session)
         overdue = await store.overdue_ids(now, limit)
-        checkouts = await store.checkout_overdue_ids(now, limit)
         reminders = await store.reminder_due_ids(now, limit)
+    expired = await _each(session_factory, overdue, expire_one)
+    seen, closed = await _checkout_pass(session_factory, now, limit, close_checkout)
     return {
         "candidates": len(overdue),
-        "expired": await _each(session_factory, overdue, expire_one),
-        "checkout_candidates": len(checkouts),
-        "checkout_expired": await _each(session_factory, checkouts, close_checkout),
+        "expired": expired,
+        "checkout_candidates": seen,
+        "checkout_expired": closed,
         "reminded": await _each(session_factory, reminders, remind),
     }
+
+
+async def _checkout_pass(
+    session_factory: async_sessionmaker[AsyncSession],
+    now: datetime,
+    limit: int,
+    close: Callable[[AsyncSession, UUID], Awaitable[bool]],
+) -> tuple[int, int]:
+    """Pages past offers left for a payment in flight, so they never stall the rest
+    (ADR-037 d7); stops at `limit` closed or at a short page."""
+    seen = closed = 0
+    after: tuple[datetime, UUID] | None = None
+    while closed < limit:
+        async with session_factory() as session, session.begin():
+            page = await SqlOfferStore(session).checkout_overdue_ids(now, limit, after=after)
+        seen += len(page)
+        closed += await _each(session_factory, [offer_id for _, offer_id in page], close)
+        if len(page) < limit:
+            break
+        after = page[-1]
+    return seen, closed
 
 
 async def _each(

@@ -166,3 +166,7 @@ class OfferNotCheckoutableError(OrderingDomainError):
     def __init__(self, offer_status: str) -> None:
         super().__init__(f"An offer that is {offer_status} cannot be checked out.")
         self.offer_status = offer_status
+
+
+class OfferChangedError(OrderingDomainError):
+    """The locked offer differs from the one priced: a 500, never a charge (ADR-037 d3)."""

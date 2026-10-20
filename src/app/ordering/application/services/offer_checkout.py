@@ -27,6 +27,7 @@ from app.ordering.domain.enums import OrderItemStatus, OrderSource, PaymentMetho
 from app.ordering.domain.exceptions import (
     CheckoutLinesRefusedError,
     LineRefusal,
+    OfferChangedError,
     OnlinePaymentUnavailableError,
     OrdersPausedError,
 )
@@ -108,7 +109,8 @@ async def place_offer_order(
         at=now,
     )
     # The decision: a closing window or a racing job refuses here and rolls it all back.
-    await offers.lock(offer.id, customer.id, clock=clock)
+    if await offers.lock(offer.id, customer.id, clock=clock) != offer:
+        raise OfferChangedError(str(offer.id))  # immutable once accepted (BR-085)
     await orders.add_history(
         [StatusChange(order.id, None, status.value, actor_user_id=customer.id)]
     )

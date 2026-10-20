@@ -91,7 +91,9 @@ class FakeStore:
     async def overdue_ids(self, now: datetime, limit: int) -> list[UUID]:
         return []
 
-    async def checkout_overdue_ids(self, now: datetime, limit: int) -> list[UUID]:
+    async def checkout_overdue_ids(
+        self, now: datetime, limit: int, *, after: tuple[datetime, UUID] | None = None
+    ) -> list[tuple[datetime, UUID]]:
         return []
 
     async def reminder_due_ids(self, now: datetime, limit: int) -> list[UUID]:

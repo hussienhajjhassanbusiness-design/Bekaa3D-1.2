@@ -187,14 +187,16 @@ class SqlOfferStore:
         )
         return list((await self._session.scalars(stmt)).all())
 
-    async def checkout_overdue_ids(self, now: datetime, limit: int) -> list[UUID]:
-        stmt = (
-            select(_O.id)
-            .where(_O.status == OfferStatus.ACCEPTED, _O.checkout_expires_at <= now)
-            .order_by(_O.checkout_expires_at, _O.id)
-            .limit(limit)
+    async def checkout_overdue_ids(
+        self, now: datetime, limit: int, *, after: tuple[datetime, UUID] | None = None
+    ) -> list[tuple[datetime, UUID]]:
+        stmt = select(_O.checkout_expires_at, _O.id).where(
+            _O.status == OfferStatus.ACCEPTED, _O.checkout_expires_at <= now
         )
-        return list((await self._session.scalars(stmt)).all())
+        if after is not None:
+            stmt = stmt.where(tuple_(_O.checkout_expires_at, _O.id) > tuple_(*after))
+        stmt = stmt.order_by(_O.checkout_expires_at, _O.id).limit(limit)
+        return [(row.checkout_expires_at, row.id) for row in await self._session.execute(stmt)]
 
     async def reminder_due_ids(self, now: datetime, limit: int) -> list[UUID]:
         stmt = (
