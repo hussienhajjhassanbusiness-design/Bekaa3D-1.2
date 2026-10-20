@@ -1451,6 +1451,7 @@ Removed by ADR-024. The courier sets and collects the delivery fee, so the platf
 | `checkout_expires_at` | TIMESTAMPTZ | Yes | accepted offer |
 | `rejected_at` | TIMESTAMPTZ | Yes |  |
 | `cooldown_until` | TIMESTAMPTZ | Yes | rejection cooldown |
+| `remind_at` | TIMESTAMPTZ | Yes | when the "expiring soon" email is due; only on `awaiting_customer` (VS-040, ADR-035) |
 | `created_at` | TIMESTAMPTZ | No |  |
 | `updated_at` | TIMESTAMPTZ | No |  |
 

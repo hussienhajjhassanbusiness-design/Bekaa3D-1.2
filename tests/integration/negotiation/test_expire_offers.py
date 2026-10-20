@@ -140,7 +140,7 @@ async def test_a_capped_run_leaves_the_rest_for_the_next_tick(
         for i in range(3)
     ]
     first = await expire_offers(_ctx(db_engine), now=datetime.now(UTC), limit=2)
-    assert first == {"candidates": 2, "expired": 2}
+    assert (first["candidates"], first["expired"]) == (2, 2)
     assert [(await _state(db_engine, o))["status"] for o in offers] == [
         "awaiting_admin",
         "expired",

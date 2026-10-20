@@ -20,6 +20,11 @@ def _price(cents: int | None, currency: str) -> PriceRead | None:
     return PriceRead(amount_cents=cents, currency=currency) if cents is not None else None
 
 
+def _trim(value: object) -> object:
+    """Before the length check: the 1 000-character limit counts the trimmed text."""
+    return (value.strip() or None) if isinstance(value, str) else value
+
+
 class OfferCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -30,11 +35,29 @@ class OfferCreate(BaseModel):
     currency: Literal["USD"]
     message: MultilineStr | None = Field(default=None, max_length=MAX_MESSAGE_LENGTH)
 
-    @field_validator("message", mode="before")
-    @classmethod
-    def _trimmed(cls, value: object) -> object:
-        """Before the length check: the 1 000-character limit counts the trimmed text."""
-        return (value.strip() or None) if isinstance(value, str) else value
+    _trimmed = field_validator("message", mode="before")(_trim)
+
+
+class OfferCounterRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    amount_cents: AmountCents = Field(
+        description="At most today's list price; a customer's also meets the minimum."
+    )
+    currency: Literal["USD"]
+    message: MultilineStr | None = Field(default=None, max_length=MAX_MESSAGE_LENGTH)
+
+    _trimmed = field_validator("message", mode="before")(_trim)
+
+
+class OfferReasonRequest(BaseModel):
+    """Body of reject and withdraw; the reason is kept as the round's message."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    reason: MultilineStr | None = Field(default=None, max_length=MAX_MESSAGE_LENGTH)
+
+    _trimmed = field_validator("reason", mode="before")(_trim)
 
 
 class OfferProductRead(BaseModel):
@@ -77,7 +100,8 @@ class OfferSummaryRead(BaseModel):
     current_amount: PriceRead
     agreed_amount: PriceRead | None
     responds_by: datetime | None = Field(
-        description="The turn's deadline; the offer expires once it is reached."
+        description="The turn's deadline; the offer expires once it is reached. Null once "
+        "accepted, when only the checkout window applies."
     )
     checkout_expires_at: datetime | None
     created_at: datetime
@@ -114,7 +138,7 @@ class OfferDetailRead(OfferSummaryRead):
     updated_at: datetime
     rounds: list[OfferRoundRead] = Field(description="The complete, append-only history.")
     allowed_actions: list[str] = Field(
-        description="Empty until VS-040 adds counter, accept, reject and withdraw."
+        description="What the caller may do now: counter, accept, reject or withdraw."
     )
 
     @classmethod
@@ -126,7 +150,7 @@ class OfferDetailRead(OfferSummaryRead):
             "cooldown_until": o.cooldown_until,
             "updated_at": o.updated_at,
             "rounds": [OfferRoundRead.of(row) for row in view.rounds],
-            "allowed_actions": [],
+            "allowed_actions": list(view.allowed_actions),
         }
 
     @classmethod

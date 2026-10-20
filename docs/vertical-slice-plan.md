@@ -42,7 +42,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 | VS-037 | Review moderation | VS-036 | Not started |
 | VS-038 | Wishlist and wishlist analytics | VS-013 | Done |
 | VS-039 | Offer submission and inactivity expiry | VS-023, VS-007 | Done |
-| VS-040 | Offer counter, accept, reject, withdraw | VS-039 | Not started |
+| VS-040 | Offer counter, accept, reject, withdraw | VS-039 | Done |
 | VS-041 | Accepted-offer checkout and auto-close | VS-040, VS-023, VS-024 | Not started |
 | VS-042 | Download statistics rollup | — | Removed (ADR-019) |
 | VS-043 | Business analytics | VS-029, VS-030, VS-031, VS-036, VS-039 | Not started |
@@ -1082,7 +1082,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - Stale offers expire.
 
 ## VS-040 — Offer counter, accept, reject, withdraw
-**Status:** Not started
+**Status:** Done ([ADR-035](adr/ADR-035-offer-negotiation.md), [`docs/offers.md`](offers.md)). Owner decisions 2026-10-20: the agreed amount is capped at today's list price; customer counters meet the floor; `offers.remind_at` (migration `8d2f6a1c3e57`, against "Model / migration: None") sends the expiring-soon email once.
 **Depends on:** VS-039
 **Goal:** The customer and the administrator negotiate turn by turn until the offer is accepted, rejected, withdrawn or expired.
 - **Model / migration:** None.

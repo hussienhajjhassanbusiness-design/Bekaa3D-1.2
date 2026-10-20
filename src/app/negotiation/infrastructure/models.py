@@ -32,7 +32,7 @@ def _pg_enum(enum: type[StrEnum], name: str) -> Enum:
 
 
 class OfferModel(Base):
-    """database-design.md 11.1; migration 4b7e2c9d1f30 (VS-039)."""
+    """database-design.md 11.1; migrations 4b7e2c9d1f30 (VS-039), 8d2f6a1c3e57."""
 
     __tablename__ = "offers"
 
@@ -58,6 +58,7 @@ class OfferModel(Base):
     checkout_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     cooldown_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    remind_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -90,6 +91,14 @@ class OfferModel(Base):
             "status <> 'rejected' OR (rejected_at IS NOT NULL AND cooldown_until IS NOT NULL)",
             name="ck_offers_rejected_shape",
         ),
+        CheckConstraint(
+            "remind_at IS NULL OR status = 'awaiting_customer'",
+            name="ck_offers_remind_at_awaiting_customer",
+        ),
+        CheckConstraint(
+            "agreed_amount_cents IS NULL OR agreed_amount_cents <= current_amount_cents",
+            name="ck_offers_agreed_within_current",
+        ),
         Index(
             "uq_offers_live",
             "user_id",
@@ -106,6 +115,7 @@ class OfferModel(Base):
             "cooldown_until",
             postgresql_where=text("status = 'rejected'"),
         ),
+        Index("ix_offers_remind_at", "remind_at", postgresql_where=text("remind_at IS NOT NULL")),
     )
 
 

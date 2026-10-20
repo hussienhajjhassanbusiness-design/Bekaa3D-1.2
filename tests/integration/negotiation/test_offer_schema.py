@@ -251,3 +251,50 @@ async def test_timestamps_are_timestamptz(db_session: AsyncSession) -> None:
     )
     types = {(t, c): d for t, c, d in rows.all()}
     assert types and set(types.values()) == {"timestamp with time zone"}
+
+
+@pytest.mark.parametrize("status", [s for s in LIVE + CLOSED if s != "awaiting_customer"])
+async def test_only_the_customers_turn_carries_a_reminder(
+    db_session: AsyncSession, status: str
+) -> None:
+    """VS-040: SRS 16.1 reminds only the customer; ADR-035."""
+    await _refused(
+        db_session,
+        "ck_offers_remind_at_awaiting_customer",
+        status=status,
+        remind_at=datetime.now(UTC),
+    )
+
+
+async def test_the_customers_turn_may_carry_a_reminder(db_session: AsyncSession) -> None:
+    user, product = await _pair(db_session)
+    await seed_offer(
+        db_session,
+        user_id=user,
+        product_id=product,
+        status="awaiting_customer",
+        remind_at=datetime.now(UTC),
+    )
+
+
+@pytest.mark.parametrize("status", ["accepted", "paid", "checkout_expired"])
+async def test_the_agreed_price_never_exceeds_the_amount_accepted(
+    db_session: AsyncSession, status: str
+) -> None:
+    """ADR-035 d1: accept takes min(amount on the table, list price); nothing raises it."""
+    await _refused(
+        db_session,
+        "ck_offers_agreed_within_current",
+        status=status,
+        current_amount_cents=800,
+        agreed_amount_cents=801,
+    )
+    user, product = await _pair(db_session)
+    await seed_offer(
+        db_session,
+        user_id=user,
+        product_id=product,
+        status=status,
+        current_amount_cents=800,
+        agreed_amount_cents=800,
+    )
