@@ -136,3 +136,58 @@ async def offer_rows(engine: AsyncEngine, user_id: uuid.UUID) -> OfferRows:
     async with engine.connect() as conn:
         row = (await conn.execute(text(sql), {"u": user_id})).one()
     return OfferRows(**row._mapping)
+
+
+def act(
+    client: TestClient,
+    offer_id: uuid.UUID,
+    action: str,
+    body: dict[str, Any] | None = None,
+    *,
+    admin: bool = False,
+) -> httpx.Response:
+    """POST one VS-040 action, with CSRF, as the customer or the administrator."""
+    base = ADMIN_OFFERS if admin else MY_OFFERS
+    response: httpx.Response = client.post(
+        f"{base}/{offer_id}/{action}", json=body, headers=csrf(client)
+    )
+    return response
+
+
+async def offer_state(engine: AsyncEngine, offer_id: uuid.UUID) -> dict[str, Any]:
+    """The offer row plus its rounds as `sequence:actor:action:amount`."""
+    async with engine.connect() as conn:
+        row = (
+            await conn.execute(text("SELECT * FROM offers WHERE id = :o"), {"o": offer_id})
+        ).one()
+        rounds: list[str] = list(
+            (
+                await conn.execute(
+                    text(
+                        "SELECT sequence || ':' || actor || ':' || action || ':' "
+                        "|| coalesce(amount_cents::text, '-') FROM offer_rounds "
+                        "WHERE offer_id = :o ORDER BY sequence"
+                    ),
+                    {"o": offer_id},
+                )
+            ).scalars()
+        )
+        return dict(row._mapping) | {"rounds": rounds}
+
+
+async def side_effects(engine: AsyncEngine, offer_id: uuid.UUID) -> dict[str, list[str]]:
+    """Audit actions, notification `event`s and outbox templates written for this offer."""
+    sql = {
+        "audits": "SELECT action FROM audit_logs WHERE entity_id = :o ORDER BY created_at",
+        "notifications": "SELECT payload->>'event' FROM notifications "
+        "WHERE payload->>'offer_id' = :s ORDER BY created_at",
+        "emails": "SELECT template FROM email_outbox "
+        "WHERE payload->>'offer_id' = :s ORDER BY created_at",
+    }
+    async with engine.connect() as conn:
+        return {
+            key: list(
+                (await conn.execute(text(query), {"o": offer_id, "s": str(offer_id)})).scalars()
+            )
+            for key, query in sql.items()
+        }

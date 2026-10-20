@@ -39,6 +39,7 @@ _OFFER_COLUMNS = (
     _O.cooldown_until,
     _O.created_at,
     _O.updated_at,
+    _O.remind_at,
 )
 _ROUND_COLUMNS = (
     _R.id,
@@ -185,6 +186,31 @@ class SqlOfferStore:
         )
         return list((await self._session.scalars(stmt)).all())
 
+    async def checkout_overdue_ids(self, now: datetime, limit: int) -> list[UUID]:
+        stmt = (
+            select(_O.id)
+            .where(_O.status == OfferStatus.ACCEPTED, _O.checkout_expires_at <= now)
+            .order_by(_O.checkout_expires_at, _O.id)
+            .limit(limit)
+        )
+        return list((await self._session.scalars(stmt)).all())
+
+    async def reminder_due_ids(self, now: datetime, limit: int) -> list[UUID]:
+        stmt = (
+            select(_O.id)
+            .where(_O.remind_at.is_not(None), _O.remind_at <= now)
+            .order_by(_O.remind_at, _O.id)
+            .limit(limit)
+        )
+        return list((await self._session.scalars(stmt)).all())
+
+    async def lock(self, offer_id: UUID, *, user_id: UUID | None = None) -> Offer | None:
+        stmt = select(*_OFFER_COLUMNS).where(_O.id == offer_id)
+        if user_id is not None:
+            stmt = stmt.where(_O.user_id == user_id)
+        row = (await self._session.execute(stmt.with_for_update())).first()
+        return _offer(row) if row is not None else None
+
     async def lock_unless_locked(self, offer_id: UUID) -> Offer | None:
         stmt = select(*_OFFER_COLUMNS).where(_O.id == offer_id).with_for_update(skip_locked=True)
         row = (await self._session.execute(stmt)).first()
@@ -194,7 +220,19 @@ class SqlOfferStore:
         await self._session.execute(
             update(_O)
             .where(_O.id == offer.id)
-            .values(status=offer.status, turn=offer.turn, updated_at=offer.updated_at)
+            .values(
+                status=offer.status,
+                turn=offer.turn,
+                current_amount_cents=offer.current_amount_cents,
+                agreed_amount_cents=offer.agreed_amount_cents,
+                responds_by=offer.responds_by,
+                accepted_at=offer.accepted_at,
+                checkout_expires_at=offer.checkout_expires_at,
+                rejected_at=offer.rejected_at,
+                cooldown_until=offer.cooldown_until,
+                remind_at=offer.remind_at,
+                updated_at=offer.updated_at,
+            )
         )
 
     async def add_round(self, offer_id: UUID, new: NewRound, *, at: datetime) -> None:

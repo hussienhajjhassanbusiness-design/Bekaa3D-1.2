@@ -15,11 +15,15 @@ from app.negotiation.domain.enums import (
     OfferTurn,
 )
 from app.negotiation.domain.exceptions import (
+    NegotiationDomainError,
     OfferAboveListPriceError,
     OfferBelowMinimumError,
     OfferCooldownActiveError,
+    OfferExpiredError,
+    OfferInvalidTransitionError,
     OfferNotAllowedError,
     OfferNotExpirableError,
+    OfferNotYourTurnError,
 )
 
 ENTITY_TYPE = "Offer"
@@ -31,6 +35,22 @@ class OfferRefusal(StrEnum):
     NOT_LISTED = "not_listed"
     UNAVAILABLE = "unavailable"
     NOT_NEGOTIABLE = "not_negotiable"
+
+
+class OfferMove(StrEnum):
+    """What a party may do; also the strings `allowed_actions` lists."""
+
+    COUNTER = "counter"
+    ACCEPT = "accept"
+    REJECT = "reject"
+    WITHDRAW = "withdraw"
+
+
+# SRS 20.6: the customer never rejects (they withdraw); the administrator never withdraws.
+MOVES: dict[OfferActor, tuple[OfferMove, ...]] = {
+    OfferActor.CUSTOMER: (OfferMove.COUNTER, OfferMove.ACCEPT, OfferMove.WITHDRAW),
+    OfferActor.ADMIN: (OfferMove.COUNTER, OfferMove.ACCEPT, OfferMove.REJECT),
+}
 
 
 @dataclass(frozen=True)
@@ -51,6 +71,7 @@ class Offer:
     cooldown_until: datetime | None
     created_at: datetime
     updated_at: datetime
+    remind_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -171,5 +192,156 @@ def expire(offer: Offer, *, next_sequence: int, now: datetime) -> tuple[Offer, N
     """`awaiting_* -> expired` with its `system` round; `responds_by` keeps the deadline."""
     if not is_overdue(offer, now):
         raise OfferNotExpirableError(offer.status)
-    expired = replace(offer, status=OfferStatus.EXPIRED, turn=None, updated_at=now)
+    expired = replace(offer, status=OfferStatus.EXPIRED, turn=None, remind_at=None, updated_at=now)
     return expired, NewRound(next_sequence, OfferActor.SYSTEM, OfferAction.EXPIRED)
+
+
+def check_move(offer: Offer, actor: OfferActor, move: OfferMove, now: datetime) -> None:
+    """ADR-035 order: expired (410), then closed or accepted (409), then the turn (409)."""
+    if move not in MOVES[actor]:
+        raise OfferInvalidTransitionError(offer.status)
+    if offer.status is OfferStatus.EXPIRED or is_overdue(offer, now):
+        raise OfferExpiredError()
+    if offer.status not in AWAITING_STATUSES:
+        raise OfferInvalidTransitionError(offer.status)
+    # BR-092: a pending offer may be withdrawn whoever's turn it is (ADR-034 d8).
+    if move is not OfferMove.WITHDRAW and (offer.turn is None or offer.turn.value != actor.value):
+        raise OfferNotYourTurnError()
+
+
+def allowed_moves(offer: Offer, actor: OfferActor, now: datetime) -> list[OfferMove]:
+    allowed = []
+    for move in MOVES[actor]:
+        try:
+            check_move(offer, actor, move, now)
+        except NegotiationDomainError:
+            continue
+        allowed.append(move)
+    return allowed
+
+
+def check_negotiable(product: CartProduct | None, product_id: UUID) -> CartProduct:
+    """At counter and accept: still offerable, and not free (no positive amount fits under 0)."""
+    product = check_offerable(product, product_id)
+    if product.price_cents <= 0:
+        raise OfferNotAllowedError(product_id, str(OfferRefusal.NOT_NEGOTIABLE))
+    return product
+
+
+def reminder_at(start: datetime, deadline: datetime) -> datetime:
+    """75 % of the way through the customer's turn (VS-040)."""
+    return deadline - (deadline - start) / 4
+
+
+def counter(
+    offer: Offer,
+    *,
+    actor: OfferActor,
+    amount_cents: int,
+    message: str | None,
+    list_price_cents: int,
+    percentage: int,
+    response_window_seconds: int,
+    next_sequence: int,
+    now: datetime,
+) -> tuple[Offer, NewRound]:
+    """Switches the turn and resets `responds_by` (BR-083); only a customer meets the floor."""
+    check_move(offer, actor, OfferMove.COUNTER, now)
+    if actor is OfferActor.CUSTOMER:
+        check_amount(amount_cents, list_price_cents=list_price_cents, percentage=percentage)
+    elif amount_cents > list_price_cents:
+        raise OfferAboveListPriceError(list_price_cents)
+    deadline = now + timedelta(seconds=response_window_seconds)
+    to_customer = actor is OfferActor.ADMIN
+    countered = replace(
+        offer,
+        status=OfferStatus.AWAITING_CUSTOMER if to_customer else OfferStatus.AWAITING_ADMIN,
+        turn=OfferTurn.CUSTOMER if to_customer else OfferTurn.ADMIN,
+        current_amount_cents=amount_cents,
+        responds_by=deadline,
+        remind_at=reminder_at(now, deadline) if to_customer else None,
+        updated_at=now,
+    )
+    return countered, NewRound(next_sequence, actor, OfferAction.COUNTERED, amount_cents, message)
+
+
+def accept(
+    offer: Offer,
+    *,
+    actor: OfferActor,
+    list_price_cents: int,
+    checkout_window_seconds: int,
+    next_sequence: int,
+    now: datetime,
+) -> tuple[Offer, NewRound]:
+    """Freezes the agreed price (BR-085), never above today's list price (ADR-035)."""
+    check_move(offer, actor, OfferMove.ACCEPT, now)
+    agreed = min(offer.current_amount_cents, list_price_cents)
+    accepted = replace(
+        offer,
+        status=OfferStatus.ACCEPTED,
+        turn=None,
+        agreed_amount_cents=agreed,
+        accepted_at=now,
+        checkout_expires_at=now + timedelta(seconds=checkout_window_seconds),
+        responds_by=None,
+        remind_at=None,
+        updated_at=now,
+    )
+    return accepted, NewRound(next_sequence, actor, OfferAction.ACCEPTED, agreed)
+
+
+def reject(
+    offer: Offer, *, reason: str | None, cooldown_seconds: int, next_sequence: int, now: datetime
+) -> tuple[Offer, NewRound]:
+    """Arms the cooldown in the same write as the status (BR-089, ADR-034 d5)."""
+    check_move(offer, OfferActor.ADMIN, OfferMove.REJECT, now)
+    rejected = replace(
+        offer,
+        status=OfferStatus.REJECTED,
+        turn=None,
+        rejected_at=now,
+        cooldown_until=now + timedelta(seconds=cooldown_seconds),
+        remind_at=None,
+        updated_at=now,
+    )
+    round_ = NewRound(next_sequence, OfferActor.ADMIN, OfferAction.REJECTED, message=reason)
+    return rejected, round_
+
+
+def withdraw(
+    offer: Offer, *, reason: str | None, next_sequence: int, now: datetime
+) -> tuple[Offer, NewRound]:
+    check_move(offer, OfferActor.CUSTOMER, OfferMove.WITHDRAW, now)
+    withdrawn = replace(
+        offer, status=OfferStatus.WITHDRAWN, turn=None, remind_at=None, updated_at=now
+    )
+    round_ = NewRound(next_sequence, OfferActor.CUSTOMER, OfferAction.WITHDRAWN, message=reason)
+    return withdrawn, round_
+
+
+def is_checkout_over(offer: Offer, now: datetime) -> bool:
+    """BR-086: the window has closed once `now >= checkout_expires_at`."""
+    return (
+        offer.status is OfferStatus.ACCEPTED
+        and offer.checkout_expires_at is not None
+        and now >= offer.checkout_expires_at
+    )
+
+
+def expire_checkout(offer: Offer, *, next_sequence: int, now: datetime) -> tuple[Offer, NewRound]:
+    """`accepted -> checkout_expired`; the agreed price and the deadline stay."""
+    if not is_checkout_over(offer, now):
+        raise OfferNotExpirableError(offer.status)
+    closed = replace(offer, status=OfferStatus.CHECKOUT_EXPIRED, updated_at=now)
+    return closed, NewRound(next_sequence, OfferActor.SYSTEM, OfferAction.CHECKOUT_EXPIRED)
+
+
+def is_reminder_due(offer: Offer, now: datetime) -> bool:
+    """Due at `remind_at`, and only while the turn is still open; past it, expiry takes over."""
+    return (
+        offer.status is OfferStatus.AWAITING_CUSTOMER
+        and offer.remind_at is not None
+        and now >= offer.remind_at
+        and not is_overdue(offer, now)
+    )

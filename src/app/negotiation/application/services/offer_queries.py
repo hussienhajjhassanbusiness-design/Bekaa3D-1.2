@@ -14,7 +14,8 @@ from app.negotiation.application.ports import (
     QueuedOffer,
     QueueKey,
 )
-from app.negotiation.domain.offers import Offer, OfferRound
+from app.negotiation.domain.enums import OfferActor
+from app.negotiation.domain.offers import Offer, OfferRound, allowed_moves
 
 
 @dataclass(frozen=True)
@@ -23,6 +24,7 @@ class OfferView:
     product: CartProduct | None
     rounds: tuple[OfferRound, ...] = ()
     customer_email: str | None = None
+    allowed_actions: tuple[str, ...] = ()
 
 
 async def customer_offers(
@@ -46,14 +48,19 @@ async def offer_detail(
     offer_id: UUID,
     user_id: UUID | None = None,
     customers: CustomerDirectory | None = None,
+    now: datetime | None = None,
 ) -> OfferView | None:
-    """`user_id` scopes it to that customer (404 otherwise); `customers` adds the email."""
+    """`user_id` scopes it to that customer (404 otherwise), else the administrator's view
+    with the email; `now` fills `allowed_actions` for that viewer."""
     offer = await offers.get(offer_id, user_id=user_id)
     if offer is None:
         return None
     product = (await products.get_many([offer.product_id])).get(offer.product_id)
     email = (await customers.emails([offer.user_id])).get(offer.user_id) if customers else None
-    return OfferView(offer, product, tuple(await offers.rounds(offer.id)), email)
+    viewer = OfferActor.CUSTOMER if user_id is not None else OfferActor.ADMIN
+    moves = allowed_moves(offer, viewer, now) if now is not None else []
+    rounds = tuple(await offers.rounds(offer.id))
+    return OfferView(offer, product, rounds, email, tuple(move.value for move in moves))
 
 
 async def admin_queue(

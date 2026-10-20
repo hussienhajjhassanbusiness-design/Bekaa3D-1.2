@@ -65,7 +65,7 @@ async def test_submit_opens_an_offer_on_the_admins_turn(
         body["current_amount"] == body["initial_amount"] == {"amount_cents": 800, "currency": "USD"}
     )
     assert datetime.fromisoformat(body["responds_by"]) == at + timedelta(seconds=172_800)
-    assert body["agreed_amount"] is None and body["allowed_actions"] == []
+    assert body["agreed_amount"] is None and body["allowed_actions"] == ["withdraw"]
     assert body["product"]["id"] == str(product) and body["product"]["name"] == "Lamp"
     [first] = body["rounds"]
     assert first | {"created_at": None} == {

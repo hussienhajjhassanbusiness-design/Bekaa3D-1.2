@@ -61,3 +61,19 @@ class OfferNotExpirableError(NegotiationDomainError):
     def __init__(self, status: OfferStatus) -> None:
         super().__init__(f"An offer in {status} cannot expire from inactivity.")
         self.status = status
+
+
+class OfferInvalidTransitionError(NegotiationDomainError):
+    """409 INVALID_STATE_TRANSITION: the offer is closed or accepted (SRS 20.6)."""
+
+    def __init__(self, status: OfferStatus) -> None:
+        super().__init__(f"An offer in {status} cannot be answered.")
+        self.status = status
+
+
+class OfferNotYourTurnError(NegotiationDomainError):
+    """409 OFFER_NOT_YOUR_TURN: only the party whose turn it is may answer (FR-13)."""
+
+
+class OfferExpiredError(NegotiationDomainError):
+    """410 OFFER_EXPIRED: the turn's deadline has been reached (BR-084, ADR-034 d6)."""

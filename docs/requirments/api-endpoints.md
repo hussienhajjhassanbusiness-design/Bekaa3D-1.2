@@ -430,7 +430,7 @@ Removed by ADR-019: there is no STL library, entitlement or download endpoint, b
 | `GET /api/v1/me/offers/{offer_id}` | Authenticated; owner | — | `200 OfferDetail` | 401, 404 | — | Includes append-only rounds and current deadline |
 | `POST /api/v1/me/offers/{offer_id}/counter` | Verified Customer; owner; customer turn | `OfferCounterRequest` | `200 OfferDetail` | 401, 403, 404, 409 `OFFER_NOT_YOUR_TURN` / `INVALID_STATE_TRANSITION`, 410, 422, 429 | — | Adds round; switches turn; resets `responds_by`; notification/outbox |
 | `POST /api/v1/me/offers/{offer_id}/accept` | Verified Customer; owner; customer turn | — | `200 OfferDetail` | 401, 403, 404, 409, 410, 429 | — | Freezes agreed price; creates checkout window; notification/outbox |
-| `POST /api/v1/me/offers/{offer_id}/withdraw` | Verified Customer; owner | `OfferWithdrawRequest` | `200 OfferDetail` | 401, 403, 404, 409, 410 | — | Legal only in pending negotiation states; append history |
+| `POST /api/v1/me/offers/{offer_id}/withdraw` | Verified Customer; owner | `OfferWithdrawRequest` (optional) | `200 OfferDetail` | 401, 403, 404, 409, 410, 429 | — | Legal in both awaiting states, whoever's turn (ADR-034, ADR-035); append history |
 | `POST /api/v1/me/offers/{offer_id}/checkout` | Verified Customer; owner; accepted offer | `OfferCheckoutRequest` + `Idempotency-Key` | `201 CheckoutRead` | 401, 403, 404, 409 `IDEMPOTENCY_KEY_CONFLICT` / `PAYMENT_ALREADY_ACTIVE`, 410 `OFFER_CHECKOUT_EXPIRED`, 429, 502 | — | One-time agreed-price checkout; creates order/payment; price comes from immutable accepted offer |
 
 ---
@@ -1327,7 +1327,7 @@ rounds[]
 allowed_actions[]
 ```
 
-As built in VS-039 ([ADR-034](../adr/ADR-034-offer-submission-and-expiry.md), [`docs/offers.md`](../offers.md)): `{id, product {id, name, slug, cover_image}, status, turn, initial_amount, current_amount, agreed_amount, responds_by, checkout_expires_at, cooldown_until, created_at, updated_at, rounds[], allowed_actions[]}`; each round is `{sequence, actor, action, amount, message, created_at}`. `allowed_actions` is `[]` until VS-040. The admin shapes add `customer {id, email}`; list rows (`OfferSummary`) omit `initial_amount`, `cooldown_until`, `updated_at`, `rounds` and `allowed_actions`. An amount above the list price is `422 VALIDATION_ERROR`, and the kill switch refuses `POST /offers` with `503 ORDERS_PAUSED`.
+As built in VS-039 ([ADR-034](../adr/ADR-034-offer-submission-and-expiry.md), [`docs/offers.md`](../offers.md)): `{id, product {id, name, slug, cover_image}, status, turn, initial_amount, current_amount, agreed_amount, responds_by, checkout_expires_at, cooldown_until, created_at, updated_at, rounds[], allowed_actions[]}`; each round is `{sequence, actor, action, amount, message, created_at}`. `allowed_actions` lists what the caller may do now (`counter`, `accept`, `reject`, `withdraw`; VS-040, [ADR-035](../adr/ADR-035-offer-negotiation.md)); `responds_by` is null once accepted. The admin shapes add `customer {id, email}`; list rows (`OfferSummary`) omit `initial_amount`, `cooldown_until`, `updated_at`, `rounds` and `allowed_actions`. An amount above the list price is `422 VALIDATION_ERROR`, and the kill switch refuses `POST /offers` with `503 ORDERS_PAUSED`.
 
 ## `StlDeliveryItem` (admin queue row)
 
