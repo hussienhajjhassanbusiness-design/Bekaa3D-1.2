@@ -47,6 +47,7 @@ from app.identity.public import (
     not_found_error,
     require_admin,
 )
+from app.negotiation.api.admin_offers import admin_router as offers_router
 from app.platform.api.audit_logs import admin_router as audit_logs_router
 from app.platform.api.settings import admin_router as settings_router
 
@@ -104,6 +105,8 @@ router.include_router(contact_messages_router)
 router.include_router(custom_requests_router)
 # VS-038 wishlist totals and the VS-035 Bring Your Idea funnel.
 router.include_router(engagement_analytics_router)
+# VS-039. The offer queue and offer detail (api-endpoints.md 21).
+router.include_router(offers_router)
 
 
 def _allowed_methods(request: Request) -> list[str]:

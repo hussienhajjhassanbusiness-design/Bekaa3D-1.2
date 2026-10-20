@@ -48,6 +48,8 @@ Rules enforced by `app.engagement.domain.payload`:
 | --- | --- | --- | --- | --- |
 | `custom_request.submitted` | `custom_request` | every active administrator | `custom_request_id`, `project_title`, `title` | VS-034 |
 | `payment.confirmed` | `payment` | the customer | `order_id`, `order_number` | VS-023 |
+| `offer.submitted` | `offer` | every active administrator | `offer_id`, `product_id`, `product_name`, `amount_cents`, `currency` | VS-039 |
+| `offer.expired` | `offer` | the customer | `offer_id`, `product_id` | VS-039 |
 | `stl.delivered` (planned) | `download` | the customer | provisional | VS-023b |
 
 ### On `event`

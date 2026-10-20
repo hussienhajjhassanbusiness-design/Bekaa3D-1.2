@@ -425,7 +425,7 @@ Removed by ADR-019: there is no STL library, entitlement or download endpoint, b
 
 | Method + Path | Auth / Authorization | Request | Success | Errors | Pagination / Filter / Sort | Side Effects / Notes |
 |---|---|---|---|---|---|---|
-| `POST /api/v1/offers` | Verified Customer | `OfferCreate` | `201 OfferDetail` | 401, 403, 409 `PRODUCT_ALREADY_OWNED` / `OFFER_ALREADY_ACTIVE`, 422 `OFFER_BELOW_MINIMUM` / `OFFER_COOLDOWN_ACTIVE` / `PRODUCT_NOT_PURCHASABLE`, 429 | — | STL only; first round appended; admin notification/email |
+| `POST /api/v1/offers` | Verified Customer | `OfferCreate` | `201 OfferDetail` | 401, 403, 409 `PRODUCT_ALREADY_OWNED` / `OFFER_ALREADY_ACTIVE`, 422 `OFFER_BELOW_MINIMUM` / `OFFER_COOLDOWN_ACTIVE` / `PRODUCT_NOT_PURCHASABLE`, 429, 503 `ORDERS_PAUSED` | — | STL only; first round appended; admin in-app notification (no email, SRS §16.1; ADR-034) |
 | `GET /api/v1/me/offers` | Authenticated | query params | `200 OfferPage` | 401 | Cursor; optional `status`, `product_id`; default `-created_at` | Own offer history |
 | `GET /api/v1/me/offers/{offer_id}` | Authenticated; owner | — | `200 OfferDetail` | 401, 404 | — | Includes append-only rounds and current deadline |
 | `POST /api/v1/me/offers/{offer_id}/counter` | Verified Customer; owner; customer turn | `OfferCounterRequest` | `200 OfferDetail` | 401, 403, 404, 409 `OFFER_NOT_YOUR_TURN` / `INVALID_STATE_TRANSITION`, 410, 422, 429 | — | Adds round; switches turn; resets `responds_by`; notification/outbox |
@@ -1326,6 +1326,8 @@ checkout_expires_at
 rounds[]
 allowed_actions[]
 ```
+
+As built in VS-039 ([ADR-034](../adr/ADR-034-offer-submission-and-expiry.md), [`docs/offers.md`](../offers.md)): `{id, product {id, name, slug, cover_image}, status, turn, initial_amount, current_amount, agreed_amount, responds_by, checkout_expires_at, cooldown_until, created_at, updated_at, rounds[], allowed_actions[]}`; each round is `{sequence, actor, action, amount, message, created_at}`. `allowed_actions` is `[]` until VS-040. The admin shapes add `customer {id, email}`; list rows (`OfferSummary`) omit `initial_amount`, `cooldown_until`, `updated_at`, `rounds` and `allowed_actions`. An amount above the list price is `422 VALIDATION_ERROR`, and the kill switch refuses `POST /offers` with `503 ORDERS_PAUSED`.
 
 ## `StlDeliveryItem` (admin queue row)
 

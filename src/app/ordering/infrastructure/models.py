@@ -205,7 +205,7 @@ class OrderModel(Base):
 
 
 class OrderItemModel(Base):
-    """database-design.md 8.4; migration 03a4730dd046. `offer_id` gets its FK in VS-039."""
+    """database-design.md 8.4; migration 03a4730dd046 (`offer_id` FK: 4b7e2c9d1f30)."""
 
     __tablename__ = "order_items"
 
@@ -259,6 +259,17 @@ class OrderItemModel(Base):
             name="fk_order_items_order_payment_method",
             ondelete="RESTRICT",
             onupdate="RESTRICT",
+        ),
+        # VS-039 / ADR-034: a line's offer is its own customer's, on its own product.
+        ForeignKeyConstraint(
+            ["offer_id", "user_id", "product_id"],
+            ["offers.id", "offers.user_id", "offers.product_id"],
+            name="fk_order_items_offer_owner",
+            ondelete="RESTRICT",
+            onupdate="RESTRICT",
+        ),
+        CheckConstraint(
+            "offer_id IS NULL OR product_type = 'stl'", name="ck_order_items_offer_is_stl"
         ),
         ForeignKeyConstraint(
             ["product_id", "product_type"],
