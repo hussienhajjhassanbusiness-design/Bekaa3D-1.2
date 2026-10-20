@@ -50,6 +50,12 @@ Rules enforced by `app.engagement.domain.payload`:
 | `payment.confirmed` | `payment` | the customer | `order_id`, `order_number` | VS-023 |
 | `offer.submitted` | `offer` | every active administrator | `offer_id`, `product_id`, `product_name`, `amount_cents`, `currency` | VS-039 |
 | `offer.expired` | `offer` | the customer | `offer_id`, `product_id` | VS-039 |
+| `offer.countered` | `offer` | the customer (admin counter) or every active administrator (customer counter) | `offer_id`, `product_id`, `product_name`, `amount_cents`, `currency`, `responds_by` | VS-040 |
+| `offer.accepted` | `offer` | the customer, and every active administrator when the customer accepted | `offer_id`, `product_id`, `product_name`, `agreed_amount_cents`, `currency`, `checkout_expires_at` | VS-040 |
+| `offer.rejected` | `offer` | the customer | `offer_id`, `product_id`, `product_name`, `cooldown_until` | VS-040 |
+| `offer.withdrawn` | `offer` | every active administrator | `offer_id`, `product_id`, `product_name` | VS-040 |
+| `offer.expiring_soon` | `offer` | the customer | `offer_id`, `product_id`, `product_name`, `amount_cents`, `currency`, `responds_by` | VS-040 |
+| `offer.checkout_expired` | `offer` | the customer | `offer_id`, `product_id` | VS-040 |
 | `stl.delivered` (planned) | `download` | the customer | provisional | VS-023b |
 
 ### On `event`
