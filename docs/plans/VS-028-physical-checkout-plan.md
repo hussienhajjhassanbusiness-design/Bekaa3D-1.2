@@ -33,6 +33,31 @@ and `require_online` (`src/app/ordering/domain/checkout_rules.py:83`, `:91`); th
 
 ---
 
+## Revision 3 (2026-10-20): PR A as built
+
+- **Two `RESTRICT` foreign keys to `users`**, as database-design §14 lists them:
+  `cash_payment_blocks.user_id` (`database-design.md:1953`, `fk_cash_payment_blocks_user`)
+  and `cash_payment_blocks.cleared_by` (`database-design.md:1955`,
+  `fk_cash_payment_blocks_cleared_by`). Both join `RESTRICT_TO_USERS_ALLOWED` in
+  `tests/integration/test_deep_db_constraints_and_migrations.py` (owner-approved; ADR-032
+  Consequences). The purge of never-verified accounts cannot reach them: a block needs a
+  cash order from a verified customer, and `cleared_by` is an administrator. A test asserts
+  that deleting such a user is refused (`23503`, each FK by name). Recorded in
+  [ADR-037](../adr/ADR-037-physical-checkout-and-cash-eligibility.md) d3; the plan missed
+  this guard.
+- **ADR-037 is created in PR A** with the schema decisions (owner request); PR B adds the
+  checkout decisions (§7).
+- **Seeds fixed (owner-approved):** two existing tests seeded `contact_phone_hash` values
+  that `ck_orders_phone_hash_format` now refuses (`"HASH-SENTINEL"`, `"hash"`); they now
+  seed valid 64-hex values with every assertion unchanged.
+- **Deviations from the §8 PR A file list:** `tests/conftest.py` (a test-only
+  `PHONE_HASH_SALT` default, like its `CAPTCHA_PROVIDER` line);
+  `tests/integration/test_model_migration_parity.py` (the new table);
+  `tests/integration/test_deep_db_constraints_and_migrations.py` (the allowlist);
+  `tests/integration/ordering/test_order_history_api.py` and
+  `tests/integration/negotiation/test_offer_schema.py` (the seeds); `docs/adr/ADR-037-…`
+  and `docs/adr/README.md`. Migration id `fcd589e89e59`.
+
 ## Revision 2 (2026-10-20): owner decisions before PR A
 
 - **Q1–Q16:** as recommended (§10).

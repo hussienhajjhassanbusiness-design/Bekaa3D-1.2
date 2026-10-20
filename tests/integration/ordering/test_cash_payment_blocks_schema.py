@@ -241,3 +241,27 @@ async def test_the_partial_indexes_exist(db_engine: AsyncEngine) -> None:
     for name, fragment in expected.items():
         assert fragment in found[name].replace("'cash'::payment_method", "'cash'"), name
     assert "in_progress" in found["ix_orders_open_cash_phone"]
+
+
+@pytest.mark.parametrize(
+    ("column", "constraint"),
+    [
+        ("user_id", "fk_cash_payment_blocks_user"),
+        ("cleared_by", "fk_cash_payment_blocks_cleared_by"),
+    ],
+)
+async def test_deleting_a_user_with_a_block_row_is_refused(
+    db_engine: AsyncEngine, db_session: AsyncSession, ctx: Ctx, column: str, constraint: str
+) -> None:
+    """Both keys are RESTRICT (database-design.md:1953, :1955). The referenced user owns no
+    order here, so the refusal can only come from the block's own foreign key."""
+    other = await create_user(db_session)
+    oid = uuid.uuid4()
+    row: dict[str, Any] = (
+        {"user_id": other.id}
+        if column == "user_id"
+        else {"cleared_by": other.id, "cleared_at": NOW}
+    )
+    setup = [pickup_order(ctx, oid), block(ctx, oid, **row)]
+    probe: Stmt = ("DELETE FROM users WHERE id = :u", {"u": other.id})
+    assert await run(db_engine, setup, probe) == ("23503", constraint)
