@@ -15,7 +15,10 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from app.catalog.infrastructure.cart_product_reader import SqlCartProductReader
 from app.identity.domain.enums import UserRole
 from app.negotiation.api.wiring import offer_deps
-from app.negotiation.application.services.expire_offers import expire_offer
+from app.negotiation.application.services.expire_offers import (
+    expire_checkout_offer,
+    expire_offer,
+)
 from app.negotiation.application.services.respond_to_offer import (
     OfferDeps,
     Responder,
@@ -94,11 +97,10 @@ async def _rounds_and_audits(engine: AsyncEngine, offer: uuid.UUID) -> tuple[int
 
 async def test_accept_racing_reject_one_wins(db_engine: AsyncEngine) -> None:
     _, admin, offer = await _seed(db_engine)
-    now = datetime.now(UTC)
     results = await _race(
         db_engine,
-        lambda d: accept_offer(d, admin, offer_id=offer, now=now),
-        lambda d: reject_offer(d, admin, offer_id=offer, reason=None, now=now),
+        lambda d: accept_offer(d, admin, offer_id=offer),
+        lambda d: reject_offer(d, admin, offer_id=offer, reason=None),
     )
     assert sum(isinstance(r, Offer) for r in results) == 1
     assert sum(isinstance(r, OfferInvalidTransitionError) for r in results) == 1
@@ -108,11 +110,10 @@ async def test_accept_racing_reject_one_wins(db_engine: AsyncEngine) -> None:
 async def test_withdraw_racing_admin_accept_one_wins(db_engine: AsyncEngine) -> None:
     user, admin, offer = await _seed(db_engine)
     customer = Responder(OfferActor.CUSTOMER, user)
-    now = datetime.now(UTC)
     results = await _race(
         db_engine,
-        lambda d: withdraw_offer(d, customer, offer_id=offer, reason=None, now=now),
-        lambda d: accept_offer(d, admin, offer_id=offer, now=now),
+        lambda d: withdraw_offer(d, customer, offer_id=offer, reason=None),
+        lambda d: accept_offer(d, admin, offer_id=offer),
     )
     assert sum(isinstance(r, Offer) for r in results) == 1
     assert sum(isinstance(r, OfferInvalidTransitionError) for r in results) == 1
@@ -122,10 +123,9 @@ async def test_withdraw_racing_admin_accept_one_wins(db_engine: AsyncEngine) -> 
 async def test_a_double_clicked_counter_counts_once(db_engine: AsyncEngine) -> None:
     """The second sees the turn already passed: 409, never a second round."""
     _, admin, offer = await _seed(db_engine)
-    now = datetime.now(UTC)
 
     def counter(deps: OfferDeps) -> Awaitable[Offer]:
-        return counter_offer(deps, admin, offer_id=offer, amount_cents=900, message=None, now=now)
+        return counter_offer(deps, admin, offer_id=offer, amount_cents=900, message=None)
 
     results = await _race(db_engine, counter, counter)
     assert sum(isinstance(r, Offer) for r in results) == 1
@@ -139,14 +139,8 @@ async def test_a_last_second_answer_racing_the_expiry_job(db_engine: AsyncEngine
     _, admin, offer = await _seed(db_engine, responds_by=deadline)
 
     async def answer(deps: OfferDeps) -> object:
-        return await counter_offer(
-            deps,
-            admin,
-            offer_id=offer,
-            amount_cents=900,
-            message=None,
-            now=deadline - timedelta(seconds=1),
-        )
+        late = replace(deps, clock=lambda: deadline - timedelta(seconds=1))
+        return await counter_offer(late, admin, offer_id=offer, amount_cents=900, message=None)
 
     async def job(deps: OfferDeps) -> object:
         return await expire_offer(
@@ -163,3 +157,50 @@ async def test_a_last_second_answer_racing_the_expiry_job(db_engine: AsyncEngine
             text("SELECT status::text FROM offers WHERE id = :o"), {"o": offer}
         )
     assert status == ("awaiting_customer" if isinstance(answered, Offer) else "expired")
+
+
+@pytest.mark.parametrize("second", ["accept", "counter"])
+async def test_two_tabs_withdraw_racing_an_answer(db_engine: AsyncEngine, second: str) -> None:
+    """The customer's two tabs serialise: withdrawing after an accept is refused, while
+    withdrawing after a counter is still legal (BR-092), so then both land, in order."""
+    user, _, offer = await _seed(db_engine, status="awaiting_customer")
+    customer = Responder(OfferActor.CUSTOMER, user)
+
+    def answer(deps: OfferDeps) -> Awaitable[Offer]:
+        if second == "accept":
+            return accept_offer(deps, customer, offer_id=offer)
+        return counter_offer(deps, customer, offer_id=offer, amount_cents=900, message=None)
+
+    results = await _race(
+        db_engine,
+        lambda d: withdraw_offer(d, customer, offer_id=offer, reason=None),
+        answer,
+    )
+    withdrawn, answered = results
+    counted = await _rounds_and_audits(db_engine, offer)
+    if isinstance(answered, Offer) and isinstance(withdrawn, Offer):
+        assert second == "counter" and counted == (3, 2)
+    else:
+        assert sum(isinstance(r, NegotiationDomainError) for r in results) == 1
+        assert counted == (2, 1)
+    async with db_engine.connect() as conn:
+        status = await conn.scalar(
+            text("SELECT status::text FROM offers WHERE id = :o"), {"o": offer}
+        )
+    assert status in {"withdrawn", "accepted"}
+    assert (status == "accepted") is isinstance(withdrawn, NegotiationDomainError)
+
+
+async def test_overlapping_checkout_expiry_runs_close_once(db_engine: AsyncEngine) -> None:
+    closes_at = datetime.now(UTC) - timedelta(minutes=1)
+    _, _, offer = await _seed(
+        db_engine, status="accepted", responds_by=None, checkout_expires_at=closes_at
+    )
+
+    async def run(deps: OfferDeps) -> object:
+        return await expire_checkout_offer(
+            deps.offers, deps.notifier, deps.audit, offer_id=offer, now=datetime.now(UTC)
+        )
+
+    assert sorted(map(bool, await _race(db_engine, run, run))) == [False, True]
+    assert await _rounds_and_audits(db_engine, offer) == (2, 1)

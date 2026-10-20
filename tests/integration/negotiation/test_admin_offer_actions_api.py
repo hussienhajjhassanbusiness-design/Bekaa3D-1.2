@@ -212,6 +212,11 @@ async def test_out_of_turn_is_409(
     response = act(client, offer, action, _body(action), admin=True)
     assert_problem(response, 409, "OFFER_NOT_YOUR_TURN")
     assert await offer_state(db_engine, offer) == before
+    assert await side_effects(db_engine, offer) == {
+        "audits": [],
+        "notifications": [],
+        "emails": [],
+    }
 
 
 @pytest.mark.parametrize("status", ["accepted", "rejected", "withdrawn", "paid", "auto_closed"])

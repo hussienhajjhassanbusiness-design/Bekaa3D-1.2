@@ -1,6 +1,7 @@
 """Counter, accept, reject, withdraw (FR-13, VS-040; ADR-035). Each locks the offer, checks it
 under the lock, and writes round, audit, notification and email in the caller's transaction."""
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -46,6 +47,8 @@ class OfferDeps:
     notifier: OfferNotifier
     mailer: OfferMailer
     audit: AuditWriter
+    # Read only once the row lock is held: a wait on the lock must not outlast the deadline.
+    clock: Callable[[], datetime]
 
 
 @dataclass(frozen=True)
@@ -68,9 +71,8 @@ async def counter_offer(
     offer_id: UUID,
     amount_cents: int,
     message: str | None,
-    now: datetime,
 ) -> Offer:
-    offer = await _locked(deps, who, offer_id, OfferMove.COUNTER, now)
+    offer, now = await _locked(deps, who, offer_id, OfferMove.COUNTER)
     product = await _negotiable(deps, offer)
     countered, round_ = counter(
         offer,
@@ -95,8 +97,8 @@ async def counter_offer(
     return countered
 
 
-async def accept_offer(deps: OfferDeps, who: Responder, *, offer_id: UUID, now: datetime) -> Offer:
-    offer = await _locked(deps, who, offer_id, OfferMove.ACCEPT, now)
+async def accept_offer(deps: OfferDeps, who: Responder, *, offer_id: UUID) -> Offer:
+    offer, now = await _locked(deps, who, offer_id, OfferMove.ACCEPT)
     product = await _negotiable(deps, offer)
     # FR-13: acquisition racing acceptance is re-checked here; VS-041 closes the offer.
     if await deps.ownership.owns(offer.user_id, offer.product_id):
@@ -116,13 +118,22 @@ async def accept_offer(deps: OfferDeps, who: Responder, *, offer_id: UUID, now: 
     }
     await _write(deps, who, offer, accepted, round_, "offer.accepted", details, now)
     await _tell(deps, who, accepted, product.name, "offer.accepted", details, ACCEPTED_TEMPLATE)
+    if who.actor is OfferActor.CUSTOMER:
+        # ADR-035 d7: the customer's own list shows the checkout deadline too.
+        body = {
+            "event": "offer.accepted",
+            "offer_id": str(accepted.id),
+            "product_id": str(accepted.product_id),
+            "product_name": product.name,
+        } | details
+        await deps.notifier.notify_customer(accepted.user_id, body)
     return accepted
 
 
 async def reject_offer(
-    deps: OfferDeps, who: Responder, *, offer_id: UUID, reason: str | None, now: datetime
+    deps: OfferDeps, who: Responder, *, offer_id: UUID, reason: str | None
 ) -> Offer:
-    offer = await _locked(deps, who, offer_id, OfferMove.REJECT, now)
+    offer, now = await _locked(deps, who, offer_id, OfferMove.REJECT)
     rejected, round_ = reject(
         offer,
         reason=reason,
@@ -138,9 +149,9 @@ async def reject_offer(
 
 
 async def withdraw_offer(
-    deps: OfferDeps, who: Responder, *, offer_id: UUID, reason: str | None, now: datetime
+    deps: OfferDeps, who: Responder, *, offer_id: UUID, reason: str | None
 ) -> Offer:
-    offer = await _locked(deps, who, offer_id, OfferMove.WITHDRAW, now)
+    offer, now = await _locked(deps, who, offer_id, OfferMove.WITHDRAW)
     withdrawn, round_ = withdraw(
         offer, reason=reason, next_sequence=await deps.offers.next_sequence(offer.id), now=now
     )
@@ -151,13 +162,15 @@ async def withdraw_offer(
 
 
 async def _locked(
-    deps: OfferDeps, who: Responder, offer_id: UUID, move: OfferMove, now: datetime
-) -> Offer:
+    deps: OfferDeps, who: Responder, offer_id: UUID, move: OfferMove
+) -> tuple[Offer, datetime]:
+    """The offer under its row lock, and the time read after taking it."""
     offer = await deps.offers.lock(offer_id, user_id=who.scope)
     if offer is None:
         raise OfferNotFoundError()
+    now = deps.clock()
     check_move(offer, who.actor, move, now)
-    return offer
+    return offer, now
 
 
 async def _negotiable(deps: OfferDeps, offer: Offer) -> CartProduct:

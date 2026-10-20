@@ -1,6 +1,8 @@
 """What every offer write route builds: the adapters on the request's session and the
 request's audit context."""
 
+from datetime import UTC, datetime
+
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,6 +29,7 @@ def offer_deps(session: AsyncSession, products: CartProductReader) -> OfferDeps:
         notifier=EngagementOfferNotifier(session),
         mailer=PlatformOfferMailer(session),
         audit=SqlAuditWriter(session),
+        clock=lambda: datetime.now(UTC),
     )
 
 

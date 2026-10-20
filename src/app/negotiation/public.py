@@ -5,6 +5,8 @@ from collections.abc import Awaitable, Callable
 from datetime import datetime
 from uuid import UUID
 
+import structlog
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.catalog.public import cart_product_reader
@@ -18,6 +20,8 @@ from app.negotiation.infrastructure.offers import SqlOfferStore
 from app.platform.public import SqlAuditWriter
 
 __all__ = ["expire_overdue_offers"]
+
+logger = structlog.get_logger()
 
 
 async def expire_overdue_offers(
@@ -67,8 +71,16 @@ async def _each(
     ids: list[UUID],
     step: Callable[[AsyncSession, UUID], Awaitable[bool]],
 ) -> int:
+    """One rolled-back failure is logged and skipped, so one bad row never stalls the rest."""
     done = 0
     for offer_id in ids:
-        async with session_factory() as session, session.begin():
-            done += await step(session, offer_id)
+        try:
+            async with session_factory() as session, session.begin():
+                done += await step(session, offer_id)
+        except (OSError, DBAPIError) as exc:
+            if isinstance(exc, OSError) or exc.connection_invalidated:
+                raise
+            await logger.aexception("expire_offers_step_failed", offer_id=str(offer_id))
+        except Exception:
+            await logger.aexception("expire_offers_step_failed", offer_id=str(offer_id))
     return done

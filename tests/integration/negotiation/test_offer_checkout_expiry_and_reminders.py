@@ -9,6 +9,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.jobs.expire_offers import expire_offers
+from app.negotiation import public as negotiation_public
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
 from tests.integration.deep_support import create_user
 from tests.integration.negotiation.offer_support import (
@@ -20,6 +21,7 @@ from tests.integration.negotiation.offer_support import (
 
 pytestmark = pytest.mark.integration
 SECOND = timedelta(seconds=1)
+NOW_MINUS = datetime(2001, 1, 1, tzinfo=UTC)
 
 
 def _ctx(engine: AsyncEngine) -> dict[str, Any]:
@@ -135,3 +137,23 @@ async def test_an_offer_already_past_its_deadline_expires_without_a_reminder(
     state = await offer_state(db_engine, offer)
     assert (state["status"], state["remind_at"]) == ("expired", None)
     assert (await side_effects(db_engine, offer))["emails"] == []
+
+
+async def test_one_failing_offer_never_stalls_the_other_passes(
+    db_session: AsyncSession, db_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A row that fails every run is logged and skipped; checkout expiry still happens."""
+    user = (await create_user(db_session)).id
+    stuck = await seed_offer(
+        db_session, user_id=user, product_id=await stl(db_session), responds_by=NOW_MINUS
+    )
+    accepted = await _accepted(db_session, datetime.now(UTC) - SECOND)
+
+    async def broken(*_: Any, offer_id: uuid.UUID, **__: Any) -> bool:
+        raise RuntimeError(f"offer {offer_id} is unreadable")
+
+    monkeypatch.setattr(negotiation_public, "expire_offer", broken)
+    result = await expire_offers(_ctx(db_engine), now=datetime.now(UTC))
+    assert result["expired"] == 0 and result["checkout_expired"] >= 1
+    assert (await offer_state(db_engine, stuck))["status"] == "awaiting_admin"
+    assert (await offer_state(db_engine, accepted))["status"] == "checkout_expired"

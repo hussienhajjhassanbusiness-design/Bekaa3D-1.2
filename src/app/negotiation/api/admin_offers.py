@@ -147,7 +147,7 @@ async def counter(
     session: AsyncSession = Depends(get_session),
     products: CartProductReader = Depends(cart_product_reader),
 ) -> AdminOfferDetailRead:
-    deps, now = offer_deps(session, products), datetime.now(UTC)
+    deps = offer_deps(session, products)
     who = Responder(OfferActor.ADMIN, claims.user_id, request_context(request))
     try:
         await counter_offer(
@@ -156,11 +156,10 @@ async def counter(
             offer_id=offer_id,
             amount_cents=body.amount_cents,
             message=body.message,
-            now=now,
         )
     except NegotiationDomainError as exc:
         raise translate(exc) from exc
-    return await _detail(deps.offers, products, session, offer_id, now)
+    return await _detail(deps.offers, products, session, offer_id, datetime.now(UTC))
 
 
 @admin_router.post(
@@ -177,13 +176,13 @@ async def accept(
     session: AsyncSession = Depends(get_session),
     products: CartProductReader = Depends(cart_product_reader),
 ) -> AdminOfferDetailRead:
-    deps, now = offer_deps(session, products), datetime.now(UTC)
+    deps = offer_deps(session, products)
     who = Responder(OfferActor.ADMIN, claims.user_id, request_context(request))
     try:
-        await accept_offer(deps, who, offer_id=offer_id, now=now)
+        await accept_offer(deps, who, offer_id=offer_id)
     except NegotiationDomainError as exc:
         raise translate(exc) from exc
-    return await _detail(deps.offers, products, session, offer_id, now)
+    return await _detail(deps.offers, products, session, offer_id, datetime.now(UTC))
 
 
 @admin_router.post(
@@ -201,11 +200,11 @@ async def reject(
     session: AsyncSession = Depends(get_session),
     products: CartProductReader = Depends(cart_product_reader),
 ) -> AdminOfferDetailRead:
-    deps, now = offer_deps(session, products), datetime.now(UTC)
+    deps = offer_deps(session, products)
     who = Responder(OfferActor.ADMIN, claims.user_id, request_context(request))
     reason = body.reason if body is not None else None
     try:
-        await reject_offer(deps, who, offer_id=offer_id, reason=reason, now=now)
+        await reject_offer(deps, who, offer_id=offer_id, reason=reason)
     except NegotiationDomainError as exc:
         raise translate(exc) from exc
-    return await _detail(deps.offers, products, session, offer_id, now)
+    return await _detail(deps.offers, products, session, offer_id, datetime.now(UTC))

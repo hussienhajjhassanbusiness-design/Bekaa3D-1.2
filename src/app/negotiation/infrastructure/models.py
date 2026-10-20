@@ -95,6 +95,10 @@ class OfferModel(Base):
             "remind_at IS NULL OR status = 'awaiting_customer'",
             name="ck_offers_remind_at_awaiting_customer",
         ),
+        CheckConstraint(
+            "agreed_amount_cents IS NULL OR agreed_amount_cents <= current_amount_cents",
+            name="ck_offers_agreed_within_current",
+        ),
         Index(
             "uq_offers_live",
             "user_id",

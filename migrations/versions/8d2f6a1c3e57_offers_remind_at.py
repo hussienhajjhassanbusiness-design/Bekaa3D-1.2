@@ -1,5 +1,5 @@
-"""offers.remind_at: when the customer's "expiring soon" email is due (VS-040, ADR-035).
-Revision ID: 8d2f6a1c3e57, revises 4b7e2c9d1f30."""
+"""offers.remind_at (when the "expiring soon" email is due) and the agreed price bounded by
+the amount accepted (VS-040, ADR-035). Revision ID: 8d2f6a1c3e57, revises 4b7e2c9d1f30."""
 
 from collections.abc import Sequence
 
@@ -21,6 +21,12 @@ def upgrade() -> None:
         "offers",
         "remind_at IS NULL OR status = 'awaiting_customer'",
     )
+    # Accept takes min(amount on the table, list price), and nothing raises it afterwards.
+    op.create_check_constraint(
+        "ck_offers_agreed_within_current",
+        "offers",
+        "agreed_amount_cents IS NULL OR agreed_amount_cents <= current_amount_cents",
+    )
     op.create_index(
         "ix_offers_remind_at",
         "offers",
@@ -36,5 +42,6 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index("ix_offers_remind_at", table_name="offers")
+    op.drop_constraint("ck_offers_agreed_within_current", "offers", type_="check")
     op.drop_constraint("ck_offers_remind_at_awaiting_customer", "offers", type_="check")
     op.drop_column("offers", "remind_at")

@@ -281,6 +281,11 @@ async def test_accepting_an_stl_bought_meanwhile_is_409(
     )
     assert_problem(act(client, offer, "accept"), 409, "PRODUCT_ALREADY_OWNED")
     assert (await offer_state(db_engine, offer))["status"] == "awaiting_customer"
+    assert await side_effects(db_engine, offer) == {
+        "audits": [],
+        "notifications": [],
+        "emails": [],
+    }
 
 
 async def test_the_kill_switch_never_blocks_an_answer(
@@ -326,7 +331,8 @@ async def test_actions_are_rate_limited_per_user(
 ) -> None:
     user, offer = await _offer(client, db_session)
     store = redis_asyncio.from_url(os.environ["REDIS_URL"])  # type: ignore[no-untyped-call]
-    await store.set(f"ratelimit:offer_actions:{user}", 60, ex=3600)
+    await store.set(f"ratelimit:offer_actions:{user}", 59, ex=3600)
     await store.aclose()
-    assert_problem(act(client, offer, "accept"), 429, "RATE_LIMITED")
+    assert act(client, offer, "counter", COUNTER).status_code == 200
+    assert_problem(act(client, offer, "withdraw"), 429, "RATE_LIMITED")
     assert client.get(f"{MY_OFFERS}/{offer}").status_code == 200
