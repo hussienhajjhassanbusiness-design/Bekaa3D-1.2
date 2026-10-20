@@ -21,6 +21,7 @@ from app.ordering.public import (
 from app.platform.public import SqlOutboxWriter
 
 CONFIRMATION_TEMPLATE = "order_payment_confirmed"
+RELEASE_TEMPLATE = "order_checkout_expired"
 
 
 class SqlOrderSide:
@@ -82,4 +83,21 @@ class SqlPaymentNotices:
                 "order_id": str(order.id),
                 "order_number": order.order_number,
             },
+        )
+
+    async def checkout_released(self, locked: LockedOrder) -> None:
+        """VS-024 owner question 5: the hold ended unpaid; a late payment is refunded."""
+        order = locked.order
+        payload = {"order_id": str(order.id), "order_number": order.order_number}
+        await SqlOutboxWriter(self._session).add(
+            user_id=order.user_id,
+            recipient_email=order.customer_email_snapshot,
+            template=RELEASE_TEMPLATE,
+            payload=payload,
+        )
+        await create_notification(
+            self._session,
+            user_id=order.user_id,
+            notification_type=NotificationType.ORDER,
+            payload={"event": "order.checkout_expired"} | payload,
         )

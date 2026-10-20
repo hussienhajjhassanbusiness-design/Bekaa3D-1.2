@@ -183,7 +183,9 @@ These codes are implementation additions needed to give the frontend determinist
 | 409 | `CART_PRICE_CHANGED` | Current product price differs from unconfirmed cart snapshot |
 | 409 | `INVALID_STATE_TRANSITION` | Requested state-machine transition is illegal |
 | 409 | `ORDER_NOT_CANCELLABLE` | Customer/admin cancellation cannot legally occur |
-| 409 | `PAYMENT_ALREADY_ACTIVE` | Live payment already exists (VS-024 retry; cannot occur on a fresh checkout) |
+| 409 | `PAYMENT_ALREADY_ACTIVE` | Live payment already exists (VS-024 retry; cannot occur on a fresh checkout); body carries `payment_id`, `payment_status` and `redirect_url` (null while `processing`) |
+| 409 | `PAYMENT_REFERENCE_MISMATCH` | Manual confirm: the typed provider reference differs from the stored one, or belongs to another payment (VS-024) |
+| 409 | `MANUAL_CONFIRMATION_NOT_ALLOWED` | Manual confirm on a provider that has a status API; reconcile it instead (VS-024, ADR-036) |
 | 409 | `IDEMPOTENCY_REQUEST_IN_PROGRESS` | Same `Idempotency-Key` and body while the first request is still running, or crashed between placing the order and starting the payment; body carries `order_id`, `order_number`; `Retry-After: 2` (VS-023, ADR-032) |
 | 409 | `CATEGORY_IN_USE` | Category, material or colour cannot be archived while a live product uses it (VS-013) |
 | 409 | `SLUG_CONFLICT` | Live slug already exists |
@@ -208,6 +210,7 @@ These codes are implementation additions needed to give the frontend determinist
 | 502 | `PAYMENT_PROVIDER_UNAVAILABLE` | The order was placed but its online payment could not be started (provider down or timed out after the order committed); body carries `order_id`, `order_number`; replayed for the same key (VS-023, ADR-032) |
 | 503 | `ONLINE_PAYMENT_UNAVAILABLE` | No online payment provider is configured (`PAYMENT_PROVIDER=none`); nothing written (VS-023) |
 | 503 | `PAYMENT_VERIFICATION_UNAVAILABLE` | Automated verification unavailable and manual verification is required |
+| 422 | `PAYMENT_AMOUNT_MISMATCH` | Manual confirm: the typed amount or currency differs from the attempt's; body carries `expected_amount_cents`, `currency`; nothing is written and nothing becomes a late capture (VS-024, ADR-036) |
 | 405 | `METHOD_NOT_ALLOWED` | Route exists but not for this method; response carries `Allow`. Under `/api/v1/admin` only an MFA-complete administrator ever sees it (VS-011); everyone else gets 401/404 per SEC-10 |
 | 500 | `INTERNAL_ERROR` | Unexpected server fault; details are logged, never returned |
 | 503 | `SERVICE_UNAVAILABLE` | A required dependency (database, Redis, the captcha provider) is unreachable or timed out; retrying later is safe. A captcha outage carries `Retry-After` (ADR-026) |
@@ -402,6 +405,7 @@ A materially changed retry uses a **new** idempotency key.
 | Method + Path | Auth / Authorization | Request | Success | Errors | Pagination / Filter / Sort | Side Effects / Notes |
 |---|---|---|---|---|---|---|
 | `GET /api/v1/me/orders` | Authenticated | query params | `200 OrderPage` | 401, 422 | Cursor; optional `status`, `placed_after` (inclusive), `placed_before` (exclusive), both with a timezone; fixed `-placed_at, -id` | Own orders only. **As built (VS-025):** items are `OrderSummary`; see [`docs/order-history.md`](../order-history.md) |
+| `POST /api/v1/me/orders/{order_id}/payments` | Verified Customer; owner; CSRF | `PaymentRetryRequest` + required `Idempotency-Key` | `201 PaymentRetryRead` | 401, 403, 404, 409 `PAYMENT_ALREADY_ACTIVE` / `INVALID_STATE_TRANSITION` / `IDEMPOTENCY_KEY_CONFLICT` / `IDEMPOTENCY_REQUEST_IN_PROGRESS`, 422 `PAYMENT_METHOD_NOT_ALLOWED` / `VALIDATION_ERROR`, 429, 502 `PAYMENT_PROVIDER_UNAVAILABLE`, 503 `ONLINE_PAYMENT_UNAVAILABLE` | — | **As built (VS-024, ADR-036):** retry on the same order before `placed_at + checkout_hold_period`; the order's own total is charged; key scoped `payment_retry:{order_id}` per user; two transactions around the provider call; 10/hour. Full contract: [`docs/payment-recovery.md`](../payment-recovery.md) |
 | `GET /api/v1/me/orders/{order_id}` | Authenticated; owner | — | `200 OrderDetail` | 401, 404 | — | Includes lines, payment method, `payment_due`, `can_cancel`, payment projection, refund summary and status history needed by customer; `in_production` is shown as `pending` and omitted from the history. **As built (VS-025, ADR-033):** no refund summary until VS-030; another customer's order is the same 404 as an unknown id |
 | `POST /api/v1/me/orders/{order_id}/cancel` | Verified Customer; owner | `CustomerOrderCancelRequest` | `200 OrderDetail` | 401, 403, 404, 409 `ORDER_NOT_CANCELLABLE` / `INVALID_STATE_TRANSITION` | — | V1 decision: cancels all still-self-cancellable physical lines atomically; digital lines are never cancelled; allowed only when `can_cancel` is true (a live physical line, a cash order or a payment that reached `paid`, every live (not cancelled) physical line `pending`; already-cancelled lines are ignored, ADR-033); if cancellation is no longer legally possible, no partial silent cancellation occurs |
 | `POST /api/v1/me/orders/{order_id}/confirm-receipt` | Verified Customer; owner; CSRF | — | `200 OrderDetail` | 401, 403, 404, 409 `INVALID_STATE_TRANSITION` | — | Sets `receipt_confirmed_at` on delivered / picked-up lines; idempotent; no state change (ADR-024, VS-029b) |
@@ -586,10 +590,11 @@ Refund settlement is explicit because the SRS requires obligations to remain tra
 
 | Method + Path | Request | Success | Errors | Pagination / Filter / Sort | Side Effects / Notes |
 |---|---|---|---|---|---|
-| `GET /api/v1/admin/payments` | query params | `200 PaymentPage` | 401/404 | Cursor; filters status/provider/order/date; processing oldest first | Includes payments needing manual confirmation and recorded `cash` payments |
-| `GET /api/v1/admin/payments/{payment_id}` | — | `200 PaymentDetail` | 401/404 | — | Provider references/verification history; sensitive provider secrets never returned |
-| `POST /api/v1/admin/payments/{payment_id}/reconcile` | — | `200 PaymentDetail` | 401/404, 409, 502, 503 `PAYMENT_VERIFICATION_UNAVAILABLE` | — | Queries provider outside DB lock, then applies verified result transactionally |
-| `POST /api/v1/admin/payments/{payment_id}/confirm` | `ManualPaymentConfirmRequest` | `200 PaymentDetail` | 401/404, 409, 422 | — | Online payments only. On a live attempt of an uncancelled order it applies the payment; on an attempt no longer live, or on a cancelled order, it records a late capture (automatic refund, alert) instead. Manual fallback when automatic provider status verification is unavailable; verified amount must equal order total; STL delivery queue/status/audit/outbox side effects. Cash is recorded by the cash handover instead |
+| `GET /api/v1/admin/payments` | query params | `200 AdminPaymentPage` | 401/404, 422 | Cursor `(initiated_at, id)`, oldest first; filters `status` (repeatable), `provider`, `order_id`, `late_captured`, `initiated_after`, `initiated_before` | **As built (VS-024):** `late_captured=true` lists late captures; no provider metadata, payload or customer email; `needs_attention` and `last_provider_answer` are not built (ADR-036) |
+| `GET /api/v1/admin/payments/{payment_id}` | — | `200 AdminPaymentDetail` | 401/404 | — | **As built (VS-024):** the order with `hold_expires_at` and `manual_release_available_at`, events without payloads, the audit history (newest first, at most 100) and `available_actions` |
+| `POST /api/v1/admin/payments/{payment_id}/reconcile` | — | `202 ReconcileQueued` | 401/404, 409 `INVALID_STATE_TRANSITION` (cash), 429, 503 `PAYMENT_VERIFICATION_UNAVAILABLE` | — | **As built (VS-024):** answers 202 after its audit row commits; the provider is queried afterwards in a background task with no transaction open; no answer or `unknown` is audited as `payment.reconcile_deferred`; 60/hour per admin |
+| `POST /api/v1/admin/payments/{payment_id}/confirm` | `ManualPaymentConfirmRequest` | `200 ManualConfirmRead` | 401/404, 409 `MANUAL_CONFIRMATION_NOT_ALLOWED` / `PAYMENT_REFERENCE_MISMATCH` / `INVALID_STATE_TRANSITION`, 422 `PAYMENT_AMOUNT_MISMATCH` / `VALIDATION_ERROR`, 429 | — | Online payments on a provider without a status API only (VS-024, ADR-036). A typed amount or currency that differs from the attempt is 422 and writes nothing. Otherwise, on a live attempt of an uncancelled order it applies the payment; on an attempt no longer live, or on a cancelled order, it records a late capture (alert) instead. STL delivery queue/status/audit/outbox side effects; 30/hour per admin. Cash is recorded by the cash handover instead |
+| `POST /api/v1/admin/orders/{order_id}/release` | `OrderReleaseRequest` | `200 OrderReleaseRead` | 401/404, 409 `INVALID_STATE_TRANSITION` (`cash_order`, `order_cancelled`, `order_not_payable`, `grace_not_elapsed` with `release_available_at`, `unprocessed_events` with `count`), 422, 429 | — | **As built (VS-024, ADR-036):** the manual hold release, from the hold deadline plus 24 h; mandatory `reason`; `events_reviewed` dismisses unprocessed events; expires the live attempt; never calls the provider; 30/hour per admin |
 
 A callback alone never authorizes these state changes.
 
@@ -1163,12 +1168,13 @@ Used only when manual/provider workflow reaches confirmed settlement.
 ### `ManualPaymentConfirmRequest`
 
 ```text
-provider_reference: str
-verified_amount_cents: int
-evidence_note: str
+provider_reference: str (1..255)
+verified_amount_cents: int (>= 0)
+verified_currency: str(3) = "USD"
+reason: str (10..1000)            # was `evidence_note`
 ```
 
-Server requires exact order-total match and records the admin actor/audit trail.
+A typed amount or currency that differs from the attempt is `422 PAYMENT_AMOUNT_MISMATCH` (with `expected_amount_cents`), refused before any write and never recorded as a late capture. The admin actor, request id, IP hash, typed amount, reference and reason are audited (VS-024, ADR-036).
 
 ---
 

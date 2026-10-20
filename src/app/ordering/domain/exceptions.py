@@ -122,3 +122,31 @@ class ProductAlreadyOwnedError(OrderingDomainError):
 
 class OrderNumberExhaustedError(OrderingDomainError):
     """Every generated order number collided; a defect, surfaced as a 500."""
+
+
+class OrderNotReleasableError(OrderingDomainError):
+    """A hold release on an order that is not an unpaid, uncancelled online order."""
+
+
+class RetryOrderNotFoundError(OrderingDomainError):
+    """Unknown, or not the caller's: the same 404 either way (VS-024 2.1)."""
+
+
+class RetryRefusedError(OrderingDomainError):
+    """409 INVALID_STATE_TRANSITION; `reason` is a T1 `RetryRefusal` value."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(f"Payment retry refused: {reason}.")
+        self.reason = reason
+
+
+class LiveAttemptExistsError(OrderingDomainError):
+    """`uq_payments_one_live` refused the new attempt (raised inside its SAVEPOINT)."""
+
+
+class PaymentAlreadyActiveError(OrderingDomainError):
+    """409 PAYMENT_ALREADY_ACTIVE: the live attempt the customer can resume."""
+
+    def __init__(self, payment_id: UUID | None, status: str | None, redirect_url: str | None):
+        super().__init__("A payment for this order is already in progress.")
+        self.payment_id, self.status, self.redirect_url = payment_id, status, redirect_url

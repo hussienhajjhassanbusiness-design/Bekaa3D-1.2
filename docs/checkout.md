@@ -52,7 +52,7 @@ Every refusal before the order commits leaves the cart, the order tables and the
 
 **Two transactions.** The first claims the key, locks the cart, revalidates every line, inserts the order, lines, pending payment, history and audit row, and clears the cart. The provider is then called with no transaction open (10 s timeout). The second stores the provider reference, or fails the attempt.
 
-**A stuck claim** (a crash between the two): the order stays `pending_payment` with its pending attempt; for 24 h the key answers `409 IDEMPOTENCY_REQUEST_IN_PROGRESS` naming the order; after the daily purge the same key is a new request, and the cart is already empty, so it gets `409 CART_EMPTY`. Recovery is VS-024's reconciliation and payment retry.
+**A stuck claim** (a crash between the two): the order stays `pending_payment` with its pending attempt; for 24 h the key answers `409 IDEMPOTENCY_REQUEST_IN_PROGRESS` naming the order; after the daily purge the same key is a new request, and the cart is already empty, so it gets `409 CART_EMPTY`. Recovery is VS-024's reconciliation and payment retry ([`payment-recovery.md`](payment-recovery.md)).
 
 ## Webhook and verification
 
@@ -66,7 +66,7 @@ Every refusal before the order commits leaves the cart, the order tables and the
 
 **Delay from webhook to paid:** typically one provider query after the `200` (0.16 s against the mock); at worst about 60 s when the background task is lost, and up to about 560 s with a degraded provider.
 
-**Late captures until VS-030.** The only supported view is this SQL listing, run by an operator:
+**Late captures until VS-030.** Each one raises a `late_capture` alert to every administrator and is listed by `GET /api/v1/admin/payments?late_captured=true` (VS-024, [`payment-recovery.md`](payment-recovery.md)). This SQL listing still works, run by an operator:
 
 ```sql
 SELECT id, order_id, provider, amount_cents, status, late_captured_at
@@ -75,7 +75,7 @@ FROM payments WHERE late_captured_at IS NOT NULL ORDER BY late_captured_at;
 
 Each late capture also has an audit row (`payment.late_capture`, with its reason). VS-030 turns late captures into refund obligations.
 
-**Go-live gate:** no real online provider is configured in production before VS-024 and VS-030 are merged, unless an operational alert on late captures and stuck payments exists (ADR-032). Production accepts only `PAYMENT_PROVIDER=none` until VS-032 adds a real adapter.
+**Go-live gate:** no real online provider is configured in production before VS-024 and VS-030 are merged, unless an operational alert on late captures and stuck payments exists (ADR-032). VS-024's alerts meet that clause only if someone reads them ([ADR-036](adr/ADR-036-payment-recovery.md)). Production accepts only `PAYMENT_PROVIDER=none` until VS-032 adds a real adapter.
 
 ## The mock provider (development)
 

@@ -18,6 +18,7 @@ from app.ordering.application.services.cart import clear_cart, lock_cart_for_che
 from app.ordering.domain.checkout_rules import (
     DIGITAL_TERMS_VERSION,
     CheckoutCommand,
+    choose_provider,
     collect_refusals,
     price_changes,
     price_lines,
@@ -53,16 +54,6 @@ class PlacedOrder:
     lines: tuple[OrderLine, ...]
     payment: PaymentAttemptRef
     dropped: tuple[UUID, ...]
-
-
-def _provider(command: CheckoutCommand, configured: frozenset[str]) -> str:
-    if command.payment_provider is not None:
-        if command.payment_provider not in configured:
-            raise PaymentMethodNotAllowedError("provider_not_configured")
-        return command.payment_provider
-    if len(configured) != 1:
-        raise PaymentMethodNotAllowedError("provider_required")
-    return next(iter(configured))
 
 
 async def place_order(
@@ -106,7 +97,7 @@ async def place_order(
     money = totals(new_lines)
     if money.total_cents == 0:
         raise PaymentMethodNotAllowedError("zero_total")
-    provider = _provider(command, configured)
+    provider = choose_provider(command.payment_provider, configured)
 
     status = derive_order_status(
         OrderStatusInputs(

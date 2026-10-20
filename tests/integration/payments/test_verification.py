@@ -222,6 +222,8 @@ async def test_a_provider_timeout_defers_the_event_to_the_next_run(
     event_id = await _event(db_engine, seeded)
 
     class Down:
+        supports_status_query = True
+
         async def query_status(self, ref: Any) -> Any:
             raise ProviderUnavailableError("timed out")
 

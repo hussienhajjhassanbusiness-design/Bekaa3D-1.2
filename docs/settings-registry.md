@@ -35,7 +35,7 @@ to apply now.
 | `offer_checkout_window` | duration | seconds | `86400` (24 h) | 3 600 – 604 800 | ❌ |
 | `offer_rejection_cooldown` | duration | seconds | `604800` (7 d) | 0 – 2 592 000 | ❌ |
 | `minimum_offer_percentage` | integer | percent | `70` | 0 – 100 | ❌ |
-| `checkout_hold_period` | duration | seconds | `1800` (30 min) | 300 – 7 200 | ❌ |
+| `checkout_hold_period` | duration | seconds | `1800` (30 min) | 300 – 7 200 | ❌ — also bounds payment retry (from `placed_at`); the release deadline runs from the later of placement and the latest attempt (VS-024) |
 | `unverified_account_purge_period` | duration | seconds | `2592000` (30 d) | 604 800 – 7 776 000 | ❌ |
 | `daily_download_cap` | integer | downloads / customer / UTC day | `20` | 1 – 1 000 | ❌ — obsolete since ADR-019 (no downloads); removed by VS-023b |
 | `free_shipping_threshold` | money | cents | `null` | 0 – 1 000 000 cents | ✅ — obsolete since ADR-024 (the platform charges no shipping); removed by VS-028 |

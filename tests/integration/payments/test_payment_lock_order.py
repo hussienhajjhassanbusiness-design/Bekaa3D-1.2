@@ -8,12 +8,14 @@ from typing import Any
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from app.identity.domain.enums import UserRole
+from app.identity.public import active_administrator_contacts
 from app.main import app as main_app
 from app.payments.domain.outcome import ProviderResult
 from app.payments.infrastructure.providers.mock import MockPaymentProvider
 from app.payments.infrastructure.verification import apply_provider_result, verify_event
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
-from tests.integration.deep_support import client_for
+from tests.integration.deep_support import client_for, create_user
 from tests.integration.ordering.test_lock_order import captured, locks, tables
 from tests.integration.payments.test_verification import _event
 from tests.integration.payments.verification_support import (
@@ -26,6 +28,8 @@ from tests.integration.payments.verification_support import (
 
 pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("configured_app")]
 _WRITE = re.compile(r"^(INSERT INTO|UPDATE|DELETE FROM) (\w+)")
+# VS-024 3.5: the late-capture alert's audit row, then a notification and an email per admin.
+ALERT = "alert"
 
 
 def writes(statements: list[str]) -> list[str]:
@@ -51,7 +55,7 @@ def writes(statements: list[str]) -> list[str]:
         (ProviderResult("expired", None, None), ["UPDATE payments", "INSERT audit_logs"]),
         (
             ProviderResult("paid", 900, "USD"),
-            ["UPDATE payments", "INSERT audit_logs"],
+            ["UPDATE payments", "INSERT audit_logs", ALERT],
         ),
     ],
     ids=["paid", "expiry", "late-capture"],
@@ -64,6 +68,11 @@ async def test_apply_locks_orders_then_lines_then_payments_and_nothing_else(
     expected_writes: list[str],
 ) -> None:
     seeded = await pending_payment(db_session, mock)
+    await create_user(db_session, role=UserRole.ADMIN)
+    admins = len(await active_administrator_contacts(db_session))
+    await db_session.commit()
+    alert = ["INSERT audit_logs", *["INSERT notifications", "INSERT email_outbox"] * admins]
+    expected_writes = [w for e in expected_writes for w in (alert if e == ALERT else [e])]
     with captured(db_engine.sync_engine) as statements:
         async with async_sessionmaker(db_engine)() as session, session.begin():
             await apply_provider_result(

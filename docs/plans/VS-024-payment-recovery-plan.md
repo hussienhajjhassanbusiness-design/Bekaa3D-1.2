@@ -1,7 +1,8 @@
 # VS-024 — Payment Recovery: Retry, Reconciliation, Hold Release, Manual Confirm: Implementation Plan
 
-**Status:** IN PROGRESS: CP1 (schema PR, branch `vs-024-schema`) started 2026-10-18.
-Revisions 1 and 2 hold the owner's decisions.
+**Status:** DONE (2026-10-20). CP1 merged (PR #20, `8d15284`, migration `00ce1ce252a6`); CP2-CP6 on branch
+`vs-024-recovery`. Decisions recorded in [ADR-036](../adr/ADR-036-payment-recovery.md) (this plan's "ADR-033":
+that number and 034-035 were taken on `origin` meanwhile). Revisions 1 and 2 hold the owner's decisions.
 **Date:** 2026-10-18
 **Planned against alembic head:** `03a4730dd046` (orders_payments_webhooks_idempotency,
 VS-023 PR A, merged before `42c3f63`).
@@ -874,7 +875,15 @@ def hold_deadline(placed_at, live_initiated_at, hold) -> datetime # VS-025 hold_
     `ordering/application/services/checkout.py:58-66`) serves checkout and retry when the
     setting becomes a list;
   - contract fixtures add "unknown reference", "status timeout" and "no status API";
-  - `PaymentAlerts` is the alert the go-live gate refers to.
+  - `PaymentAlerts` is the alert the go-live gate refers to;
+  - an adapter that does not declare `supports_status_query` is treated as having no
+    status API (step 8): it must set the flag to be asked at all;
+  - captured currencies must be upper-case ISO 4217 codes
+    (`test_a_capture_names_its_currency_in_upper_case_iso_4217`); anything else breaks
+    `ck_payments_captured_shape` and rolls back Tx B, so the event is retried, never applied;
+  - `previous_provider`'s latest-attempt ordering becomes testable once a second online
+    provider exists (today `mock` is the only one, so the oldest-attempt mutant is
+    equivalent).
 - **VS-025:** `can_retry_payment`, `hold_deadline`, `order_payment_state`.
 - **VS-028:** nothing new. Its test "a cash order is never selected by release,
   reconciliation or retry" (`docs/vertical-slice-plan.md:723`) runs against VS-024's

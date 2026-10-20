@@ -164,12 +164,14 @@ async def test_no_route_reached_by_anyone_marks_a_mock_payment_paid(
     assert len(routes) > 60, routes
     customer = await create_user(db_session)
     probe = {"payment_id": str(seeded.payment_id), "status": "paid", "state": "paid"}
-    with (
-        client_for(main_app, raise_server_exceptions=False) as anonymous,
-        client_for(main_app, raise_server_exceptions=False) as signed_in,
-    ):
-        login(signed_in, customer.email)
-        for client, headers in ((anonymous, {}), (signed_in, csrf(signed_in))):
+    # One client at a time: each runs its own lifespan and loop, and two open together
+    # share app.state's Redis and engine across loops (the flake fixed here).
+    for as_customer in (False, True):
+        with client_for(main_app, raise_server_exceptions=False) as client:
+            headers: dict[str, str] = {}
+            if as_customer:
+                login(client, customer.email)
+                headers = csrf(client)
             for method, path in routes:
                 for body in (None, probe):
                     client.request(method, _concrete(path), json=body, headers=headers)

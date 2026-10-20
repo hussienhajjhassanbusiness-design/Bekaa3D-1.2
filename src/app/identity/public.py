@@ -28,6 +28,7 @@ __all__ = [
     "AccessTokenClaims",
     "AdminBoundaryRoute",
     "User",
+    "active_administrator_contacts",
     "active_administrator_ids",
     "current_user",
     "current_verified_user",
@@ -42,6 +43,12 @@ __all__ = [
 async def active_administrator_ids(session: AsyncSession) -> list[UUID]:
     """Active, live administrators, read in the caller's transaction (VS-034 notifications)."""
     return await UserRepository(session).active_administrator_ids()
+
+
+async def active_administrator_contacts(session: AsyncSession) -> list[tuple[UUID, str]]:
+    """Active, verified administrators and their emails (VS-024 payment alerts). The
+    emails go to the outbox only; never log them."""
+    return await UserRepository(session).active_administrator_contacts()
 
 
 async def user_emails(session: AsyncSession, user_ids: list[UUID]) -> dict[UUID, str]:

@@ -72,13 +72,21 @@ async def test_simulate_other_states_capture_nothing(mock: MockPaymentProvider, 
     )
 
 
-async def test_a_payment_the_mock_never_created_is_pending_and_cannot_be_simulated(
+async def test_a_payment_the_mock_never_created_is_unknown_and_cannot_be_simulated(
     mock: MockPaymentProvider,
 ) -> None:
     status = await mock.query_status(PaymentRef(uuid.uuid4(), None))
-    assert (status.result.state, status.provider_payment_id) == ("pending", None)
+    assert status.result == ProviderResult("unknown", None, None)
+    assert status.provider_payment_id is None
     with pytest.raises(LookupError):
         await mock.simulate(uuid.uuid4(), "paid")
+
+
+async def test_unknown_can_never_be_stored(mock: MockPaymentProvider) -> None:
+    payment_id = await _create(mock)
+    with pytest.raises(ValueError, match="cannot be simulated"):
+        await mock.simulate(payment_id, "unknown")
+    assert (await mock.query_status(PaymentRef(payment_id, None))).result.state == "pending"
 
 
 def test_parse_webhook_checks_the_signature_before_reading(mock: MockPaymentProvider) -> None:

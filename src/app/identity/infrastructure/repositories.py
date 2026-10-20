@@ -300,6 +300,21 @@ class UserRepository:
         )
         return list((await self._session.scalars(stmt)).all())
 
+    async def active_administrator_contacts(self) -> list[tuple[UUID, str]]:
+        """Active, live administrators with a verified email: who gets a payment alert."""
+        stmt = (
+            select(UserModel.id, UserModel.email)
+            .where(
+                UserModel.role == UserRole.ADMIN,
+                UserModel.is_active.is_(True),
+                UserModel.email_verified_at.is_not(None),
+                UserModel.anonymized_at.is_(None),
+                UserModel.deleted_at.is_(None),
+            )
+            .order_by(UserModel.created_at, UserModel.id)
+        )
+        return [(row.id, row.email) for row in await self._session.execute(stmt)]
+
     async def emails_by_id(self, user_ids: list[UUID]) -> dict[UUID, str]:
         """One query; unknown ids are absent. Anonymised users carry their placeholder."""
         if not user_ids:

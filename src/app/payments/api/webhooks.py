@@ -17,6 +17,12 @@ from app.core.rate_limit import enforce_rate_limit
 from app.payments.application.services.webhooks import receive_webhook
 from app.payments.domain.enums import PaymentProvider
 from app.payments.domain.exceptions import InvalidSignatureError, MalformedEventError
+from app.payments.domain.limits import (
+    WEBHOOK_MAX_BODY_BYTES,
+    WEBHOOK_UNVERIFIED_LIMIT,
+    WEBHOOK_VERIFIED_LIMIT,
+    WEBHOOK_WINDOW_SECONDS,
+)
 from app.payments.infrastructure.payments import SqlPaymentStore
 from app.payments.infrastructure.verification import verify_in_background
 from app.payments.infrastructure.webhook_events import SqlWebhookEventStore
@@ -25,8 +31,9 @@ logger = structlog.get_logger()
 
 router = APIRouter(prefix="/webhooks/payments", tags=["payments"])
 
-MAX_BODY_BYTES = 64 * 1024
-UNVERIFIED_LIMIT, VERIFIED_LIMIT, WINDOW_SECONDS = 30, 600, 60
+MAX_BODY_BYTES = WEBHOOK_MAX_BODY_BYTES
+UNVERIFIED_LIMIT, VERIFIED_LIMIT = WEBHOOK_UNVERIFIED_LIMIT, WEBHOOK_VERIFIED_LIMIT
+WINDOW_SECONDS = WEBHOOK_WINDOW_SECONDS
 
 _RESPONSES: dict[int | str, dict[str, Any]] = {
     400: {"description": "VALIDATION_ERROR: body over 64 KiB, or a signed body unreadable."},

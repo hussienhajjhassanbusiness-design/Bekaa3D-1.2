@@ -1041,6 +1041,7 @@ The fact that an order actually contains physical/digital lines is cross-row and
 - dispatch estimate uses lead time × `ceil(quantity / batch_size)` across physical lines;
 - kill switch stops new checkout only, cash included;
 - unpaid online checkout expires according to settings; a cash order has no hold and no payment until its handover;
+- the hold deadline is `max(placed_at, latest attempt's initiated_at) + checkout_hold_period`, and an order is released automatically only on the provider's explicit `failed` or `expired` for its latest attempt; an administrator can release it from the deadline plus 24 h (VS-024, ADR-036);
 - order snapshots do not change when the catalogue changes.
 
 ### Indexes
@@ -1300,7 +1301,7 @@ WHERE status IN ('pending', 'processing')   -- VS-023: reconciliation covers bot
 (late_captured_at) WHERE late_captured_at IS NOT NULL   -- late captures visible before VS-030
 ```
 
-Until VS-030 builds refund obligations, the only supported view of late captures is this listing, served by `ix_payments_late_captured` (VS-023, ADR-032 decision 21). Each one also has a `payment.late_capture` audit row with its reason. The automatic refund in the `late_captured_at` row above is VS-030's.
+Until VS-030 builds refund obligations, late captures are listed by `GET /api/v1/admin/payments?late_captured=true` (VS-024) and by this listing, both served by `ix_payments_late_captured` (VS-023, ADR-032 decision 21). Each one also has a `payment.late_capture` audit row with its reason. The automatic refund in the `late_captured_at` row above is VS-030's.
 
 ```sql
 SELECT id, order_id, provider, amount_cents, status, late_captured_at
@@ -1336,6 +1337,8 @@ UNIQUE(provider, provider_event_id)
 Duplicate webhook delivery must not apply a payment twice or repeat state transitions.
 
 As built (VS-023): `provider` is the `payment_provider` enum; `octet_length(payload::text) <= 65536`; indexes `(received_at) WHERE processed_at IS NULL` and `(payment_id) WHERE processed_at IS NULL`. An event that is ignored (unknown payment, provider mismatch) or definitively verified gets `processed_at`; only a provider outage leaves it unprocessed.
+
+VS-024 adds three `processing_error` values: `manual_confirmation_required` (the payment's provider has no status API; the event stays unprocessed and `verify_payments` skips it until a manual confirm closes it), `provider_unknown_reference` (the provider has no record; retried by the job) and `dismissed_by_admin` (closed by a manual release with `events_reviewed`).
 
 ---
 

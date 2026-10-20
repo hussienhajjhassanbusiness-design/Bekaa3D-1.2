@@ -2,7 +2,6 @@
 call between them, so no lock or transaction is held across the network. Only 201 and
 the post-commit 502 are stored for replay; any other refusal rolls the claim back."""
 
-import json
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
@@ -21,6 +20,7 @@ from app.ordering.api.checkout_schemas import (
     CheckoutRead,
     CheckoutRequest,
 )
+from app.ordering.api.idempotent import replay, stored
 from app.ordering.api.problems import already_owned_error
 from app.ordering.application.services.checkout import (
     CheckoutCustomer,
@@ -42,6 +42,8 @@ from app.ordering.domain.exceptions import (
 from app.ordering.infrastructure.carts import SqlCartStore
 from app.ordering.infrastructure.orders import SqlOrderStore
 from app.payments.public import (
+    CHECKOUT_RATE_LIMIT,
+    CHECKOUT_RATE_WINDOW_SECONDS,
     CreatePayment,
     ProviderUnavailableError,
     fail_attempt,
@@ -64,11 +66,8 @@ from app.platform.public import (
 router = APIRouter(prefix="/checkout", tags=["checkout"])
 
 SCOPE = "checkout"
-REPLAYED_HEADER = "Idempotent-Replayed"
-_RATE_LIMIT = 30
-_RATE_WINDOW_SECONDS = 3600
-_UNSTORED = ("instance", "request_id")
-_PROBLEM_FIELDS = {"type", "title", "status", "detail", "instance", "code", "request_id", "errors"}
+_RATE_LIMIT = CHECKOUT_RATE_LIMIT
+_RATE_WINDOW_SECONDS = CHECKOUT_RATE_WINDOW_SECONDS
 
 IdempotencyKey = Annotated[
     str,
@@ -228,23 +227,6 @@ _TRANSLATED = (
 )
 
 
-def _replay(request: Request, record: Replay) -> Response:
-    headers = {REPLAYED_HEADER: "true"}
-    if record.status_code < 400:
-        return JSONResponse(record.body, status_code=record.status_code, headers=headers)
-    body = record.body
-    return problem_response(
-        request,
-        status_code=record.status_code,
-        code=body["code"],
-        title=body["title"],
-        detail=body["detail"],
-        errors=body["errors"],
-        headers=headers,
-        extensions={k: v for k, v in body.items() if k not in _PROBLEM_FIELDS},
-    )
-
-
 async def _in_progress(session: AsyncSession, claim: InProgress) -> ApiError:
     order_id = claim.resource_id
     number = await SqlOrderStore(session).order_number(order_id) if order_id else None
@@ -299,7 +281,7 @@ async def checkout(
                 expires_at=now + IDEMPOTENCY_TTL,
             )
             if isinstance(claim, Replay):
-                return _replay(request, claim)
+                return replay(request, claim)
             if isinstance(claim, InProgress):
                 raise await _in_progress(session, claim)
             if isinstance(claim, Conflict):
@@ -336,7 +318,7 @@ async def checkout(
                     at=datetime.now(UTC),
                 )
                 await claims.complete(
-                    claim.record_id, status_code=failed.status_code, body=_stored(failed)
+                    claim.record_id, status_code=failed.status_code, body=stored(failed)
                 )
             return failed
 
@@ -373,8 +355,3 @@ def _provider_failed(request: Request, placed: PlacedOrder) -> JSONResponse:
         "from your order.",
         extensions={"order_id": str(placed.order.id), "order_number": placed.order.order_number},
     )
-
-
-def _stored(response: JSONResponse) -> dict[str, Any]:
-    body: dict[str, Any] = json.loads(bytes(response.body))
-    return {k: v for k, v in body.items() if k not in _UNSTORED}

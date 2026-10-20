@@ -2,7 +2,7 @@
 while the caller holds `CartStore.lock` on that cart (VS-022 plan §3.3 invariant)."""
 
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal, Protocol, overload
 from uuid import UUID
@@ -77,6 +77,8 @@ class PaymentAttemptRef:
     status: str
     amount_cents: int
     currency: str
+    # Never logged or audited (VS-024 2.1).
+    redirect_url: str | None = field(default=None, repr=False)
 
 
 class PaymentAttempts(Protocol):
@@ -84,9 +86,24 @@ class PaymentAttempts(Protocol):
 
     def configured_providers(self) -> frozenset[str]: ...
 
+    async def live_attempt(self, order_id: UUID) -> PaymentAttemptRef | None:
+        """The `pending` or `processing` attempt, with its `redirect_url`. No lock."""
+        ...
+
+    async def previous_provider(self, order_id: UUID) -> str | None:
+        """The provider of the order's latest attempt. No lock."""
+        ...
+
     async def open_attempt(
         self, *, order_id: UUID, amount_cents: int, currency: str, provider: str, at: datetime
     ) -> PaymentAttemptRef: ...
+
+    async def open_retry_attempt(
+        self, *, order_id: UUID, amount_cents: int, currency: str, provider: str, at: datetime
+    ) -> PaymentAttemptRef:
+        """The INSERT in a SAVEPOINT; `uq_payments_one_live` raises LiveAttemptExistsError,
+        any other integrity error propagates (VS-024 2.1)."""
+        ...
 
 
 class SettingsSource(Protocol):
@@ -126,6 +143,14 @@ class OrderStore(Protocol):
 
     async def lock_lines(self, order_id: UUID) -> list[OrderLine]:
         """`SELECT ... FROM order_items WHERE order_id = :id ORDER BY id FOR UPDATE`."""
+        ...
+
+    async def lock_owned_order(self, order_id: UUID, user_id: UUID) -> Order | None:
+        """`orders` FOR UPDATE with the ownership predicate (VS-024 2.1)."""
+        ...
+
+    async def order_lines(self, order_id: UUID) -> list[OrderLine]:
+        """The order's lines by id, no lock (the retry holds the orders row)."""
         ...
 
     async def set_line_status(

@@ -15,7 +15,10 @@ KNOWN_WRITERS = {
     ("ordering/infrastructure/orders.py", "set_line_status"): "only under the orders lock",
 }
 # Callers of `set_line_status`: each must hold `lock_order_for_change`'s locks.
-KNOWN_LINE_STATUS_CALLERS = {("ordering/public.py", "mark_order_paid")}
+KNOWN_LINE_STATUS_CALLERS = {
+    ("ordering/public.py", "mark_order_paid"),
+    ("ordering/public.py", "release_unpaid_order"),  # VS-024 plan 6.1
+}
 
 
 def _aliases(tree: ast.Module) -> set[str]:

@@ -2,6 +2,7 @@
 `ADAPTERS`; VS-032 adds its sandbox adapter here and gets the whole suite."""
 
 import json
+import re
 import uuid
 from collections.abc import AsyncIterator, Callable
 from typing import Any
@@ -86,6 +87,26 @@ async def test_query_reports_each_state(
     payment_id = await _created(adapter)
     await _drive(adapter, payment_id, state, **kw)
     assert (await adapter.query_status(PaymentRef(payment_id, None))).result == expected
+
+
+async def test_a_reference_the_provider_never_saw_is_unknown(
+    adapter: PaymentProviderPort,
+) -> None:
+    """VS-024 3.2a: "no record" is `unknown`, never `pending`, and carries no capture."""
+    status = await adapter.query_status(PaymentRef(uuid.uuid4(), None))
+    assert status.result == ProviderResult("unknown", None, None)
+    assert status.provider_payment_id is None
+
+
+@pytest.mark.parametrize("kw", [{}, {"currency": "EUR"}], ids=["default", "foreign"])
+async def test_a_capture_names_its_currency_in_upper_case_iso_4217(
+    adapter: PaymentProviderPort, kw: dict[str, Any]
+) -> None:
+    """`ck_payments_captured_shape` refuses anything else, rolling back Tx B (VS-024 3.4)."""
+    payment_id = await _created(adapter)
+    await _drive(adapter, payment_id, "paid", **kw)
+    currency = (await adapter.query_status(PaymentRef(payment_id, None))).result.currency
+    assert currency is not None and re.fullmatch(r"[A-Z]{3}", currency), currency
 
 
 async def test_a_late_success_after_expiry_reports_paid(adapter: PaymentProviderPort) -> None:

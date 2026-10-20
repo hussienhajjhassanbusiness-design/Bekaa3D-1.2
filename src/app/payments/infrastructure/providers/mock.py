@@ -24,11 +24,12 @@ from app.payments.domain.exceptions import (
     MalformedEventError,
     ProviderUnavailableError,
 )
+from app.payments.domain.limits import MOCK_REDIS_TIMEOUT_SECONDS, MOCK_STATE_TTL_SECONDS
 from app.payments.domain.outcome import ProviderResult, ProviderState
 
 SIGNATURE_HEADER = "x-mock-signature"
-STATE_TTL_SECONDS = 7 * 24 * 3600
-TIMEOUT_SECONDS = 10.0
+STATE_TTL_SECONDS = MOCK_STATE_TTL_SECONDS
+TIMEOUT_SECONDS = MOCK_REDIS_TIMEOUT_SECONDS
 _STATES = frozenset({"pending", "processing", "paid", "failed", "expired"})
 
 
@@ -86,13 +87,13 @@ class MockPaymentProvider:
         )
 
     async def query_status(self, ref: PaymentRef) -> ProviderStatus:
-        """Unknown to the mock (never created): `pending`, so nothing is ever marked."""
+        """Never created (or its state expired): `unknown`, which writes nothing (3.2a)."""
         try:
             state = await self._read(ref.payment_id)
         except redis.RedisError as exc:
             raise ProviderUnavailableError("mock state store unavailable") from exc
         if not state:
-            return ProviderStatus(ProviderResult("pending", None, None), None)
+            return ProviderStatus(ProviderResult("unknown", None, None), None)
         captured = state.get("captured_amount_cents")
         return ProviderStatus(
             ProviderResult(
@@ -129,7 +130,10 @@ class MockPaymentProvider:
         currency: str | None = None,
     ) -> None:
         """Tests and `scripts/mock_pay.py` only. `paid` captures the full amount unless
-        `captured_amount_cents` says otherwise (under- or overpayment)."""
+        `captured_amount_cents` says otherwise (under- or overpayment). `unknown` is never
+        stored: it is only the answer for a payment the mock has no state for."""
+        if state not in _STATES:
+            raise ValueError(f"mock state {state!r} cannot be simulated")
         current = await self._read(payment_id)
         if not current:
             raise LookupError(f"mock payment {payment_id} was never created")

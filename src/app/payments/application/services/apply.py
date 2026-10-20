@@ -2,6 +2,7 @@
 verification, and VS-024's manual confirm. Locks, in this order and no others: the
 order, its lines by id (`OrderSide.lock`), then the payment (ADR-024 d9)."""
 
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
@@ -9,7 +10,12 @@ from uuid import UUID
 import structlog
 
 from app.ordering.public import LockedOrder
-from app.payments.application.ports import OrderSide, PaymentNotices, PaymentStore
+from app.payments.application.ports import (
+    LateCaptureSink,
+    OrderSide,
+    PaymentNotices,
+    PaymentStore,
+)
 from app.payments.domain.enums import PaymentStatus
 from app.payments.domain.exceptions import PaymentNotFoundError
 from app.payments.domain.outcome import LIVE, Outcome, ProviderResult, decide
@@ -18,7 +24,7 @@ from app.platform.application.ports import AuditWriter
 
 logger = structlog.get_logger()
 
-Source = Literal["webhook", "reconcile", "manual"]
+Source = Literal["webhook", "reconcile", "manual", "release", "admin_release", "manual_reconcile"]
 
 
 async def apply_result(
@@ -33,6 +39,7 @@ async def apply_result(
     actor_user_id: UUID | None,
     provider_payment_id: str | None,
     at: datetime,
+    late_captures: LateCaptureSink | None = None,
 ) -> Outcome:
     """Decide from the locked rows, then write. A missing `provider_payment_id` (the
     checkout Tx2 crash) is stored here, under the same locks (Revision 5 item 1)."""
@@ -55,13 +62,24 @@ async def apply_result(
         already_late_captured=payment.late_captured_at is not None,
         result=result,
     )
+    by = _By(source, actor_user_id)
     if outcome is Outcome.APPLY_PAID:
-        await _paid(payments, orders, audit, notices, locked, payment, source, at)
+        await _paid(payments, orders, audit, notices, locked, payment, result, by, at)
     elif outcome in (Outcome.MARK_FAILED, Outcome.MARK_EXPIRED, Outcome.MARK_PROCESSING):
-        await _status(payments, orders, audit, locked, payment, outcome, source, at)
+        await _status(payments, orders, audit, locked, payment, outcome, by, at)
     elif outcome in (Outcome.LATE_CAPTURE, Outcome.LATE_CAPTURE_AND_FAIL):
-        await _late_capture(payments, audit, locked, payment, outcome, result, source, at)
+        await _late_capture(
+            payments, audit, late_captures, locked, payment, outcome, result, by, at
+        )
     return outcome
+
+
+@dataclass(frozen=True)
+class _By:
+    """Who applied the answer: the source, and the admin for an admin action (else None)."""
+
+    source: Source
+    actor_user_id: UUID | None
 
 
 async def _paid(
@@ -71,14 +89,21 @@ async def _paid(
     notices: PaymentNotices,
     locked: LockedOrder,
     payment: Payment,
-    source: Source,
+    result: ProviderResult,
+    by: _By,
     at: datetime,
 ) -> None:
-    await payments.mark_paid(payment.id, at=at)
+    """`decide` returned APPLY_PAID, so the captured amount is exactly the attempt's, in USD."""
+    await payments.mark_paid(
+        payment.id,
+        at=at,
+        captured_amount_cents=result.captured_amount_cents,
+        captured_currency=result.currency,
+    )
     moved = await orders.mark_paid(locked, at=at)
     order = locked.order
     await audit.record(
-        actor_user_id=None,
+        actor_user_id=by.actor_user_id,
         action="payment.verified",
         entity_type="payment",
         entity_id=payment.id,
@@ -87,7 +112,7 @@ async def _paid(
             "order_number": order.order_number,
             "amount_cents": payment.amount_cents,
             "lines_awaiting_delivery": [str(line_id) for line_id in moved],
-            "source": source,
+            "source": by.source,
         },
     )
     await notices.payment_confirmed(locked)
@@ -107,7 +132,7 @@ async def _status(
     locked: LockedOrder,
     payment: Payment,
     outcome: Outcome,
-    source: Source,
+    by: _By,
     at: datetime,
 ) -> None:
     """The order stays `pending_payment` (BR-058); the projection is recomputed anyway."""
@@ -115,11 +140,11 @@ async def _status(
     await payments.mark_status(payment.id, status, at=at)
     if action is not None:
         await audit.record(
-            actor_user_id=None,
+            actor_user_id=by.actor_user_id,
             action=action,
             entity_type="payment",
             entity_id=payment.id,
-            after_data={"order_id": str(locked.order.id), "source": source},
+            after_data={"order_id": str(locked.order.id), "source": by.source},
         )
     await orders.recompute_unpaid(locked)
 
@@ -127,11 +152,12 @@ async def _status(
 async def _late_capture(
     payments: PaymentStore,
     audit: AuditWriter,
+    late_captures: LateCaptureSink | None,
     locked: LockedOrder,
     payment: Payment,
     outcome: Outcome,
     result: ProviderResult,
-    source: Source,
+    by: _By,
     at: datetime,
 ) -> None:
     """Money arrived that must not pay the order: recorded once, lines untouched. VS-030
@@ -144,7 +170,11 @@ async def _late_capture(
     else:
         reason = "amount_mismatch"
     await payments.mark_late_capture(
-        payment.id, at=at, fail=outcome is Outcome.LATE_CAPTURE_AND_FAIL
+        payment.id,
+        at=at,
+        fail=outcome is Outcome.LATE_CAPTURE_AND_FAIL,
+        captured_amount_cents=result.captured_amount_cents,
+        captured_currency=result.currency,
     )
     details: dict[str, Any] = {
         "order_id": str(order.id),
@@ -154,10 +184,10 @@ async def _late_capture(
         "expected_amount_cents": payment.amount_cents,
         "attempt_status": payment.status.value,
         "reason": reason,
-        "source": source,
+        "source": by.source,
     }
     await audit.record(
-        actor_user_id=None,
+        actor_user_id=by.actor_user_id,
         action="payment.late_capture",
         entity_type="payment",
         entity_id=payment.id,
@@ -166,3 +196,12 @@ async def _late_capture(
     await logger.aerror(
         "payment_late_capture", payment_id=str(payment.id), order_id=str(order.id), reason=reason
     )
+    if late_captures is not None:
+        await late_captures.late_capture_recorded(
+            locked,
+            payment,
+            captured_amount_cents=result.captured_amount_cents,
+            captured_currency=result.currency,
+            reason=reason,
+            at=at,
+        )
