@@ -71,12 +71,24 @@ class OfferStore(Protocol):
         """Awaiting offers with `responds_by <= now`, soonest first. Takes no lock."""
         ...
 
+    async def checkout_overdue_ids(self, now: datetime, limit: int) -> list[UUID]:
+        """Accepted offers with `checkout_expires_at <= now`, soonest first. No lock."""
+        ...
+
+    async def reminder_due_ids(self, now: datetime, limit: int) -> list[UUID]:
+        """Offers with `remind_at <= now`, soonest first. No lock."""
+        ...
+
+    async def lock(self, offer_id: UUID, *, user_id: UUID | None = None) -> Offer | None:
+        """`FOR UPDATE`, waiting for a racing action or expiry; `user_id` scopes as `get`."""
+        ...
+
     async def lock_unless_locked(self, offer_id: UUID) -> Offer | None:
         """`FOR UPDATE SKIP LOCKED`: None if absent or another transaction holds it."""
         ...
 
     async def save_state(self, offer: Offer) -> None:
-        """Writes `status`, `turn` and `updated_at`; the caller holds the row lock."""
+        """Writes every mutable column (never `initial_amount_cents`); caller holds the lock."""
         ...
 
     async def add_round(self, offer_id: UUID, new: NewRound, *, at: datetime) -> None: ...
@@ -106,6 +118,12 @@ class OfferNotifier(Protocol):
     async def notify_administrators(self, payload: dict[str, Any]) -> None: ...
 
     async def notify_customer(self, user_id: UUID, payload: dict[str, Any]) -> None: ...
+
+
+class OfferMailer(Protocol):
+    """Customer email through Platform's outbox, in the caller's transaction (ADR-011)."""
+
+    async def send(self, user_id: UUID, template: str, payload: dict[str, Any]) -> None: ...
 
 
 class CustomerDirectory(Protocol):
