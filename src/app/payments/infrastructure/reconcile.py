@@ -29,6 +29,7 @@ from app.payments.infrastructure.verification import (
     capability,
     verify_payment_answer,
 )
+from app.platform.public import SqlAuditWriter
 
 logger = structlog.get_logger()
 Keyset = tuple[datetime, UUID]
@@ -156,4 +157,34 @@ async def _one(
         counts["stuck"] += 1
         await alert(
             factory, AlertKind.STUCK, **ids, details={"attempt_status": payment.status.value}
+        )
+
+
+async def reconcile_in_background(
+    factory: Factory, providers: Providers, payment_id: UUID, admin_id: UUID
+) -> None:
+    """The admin reconcile after its 202 (plan 2.2 steps 5-6): Tx A, the question with no
+    transaction open, Tx B. No answer or `unknown` is recorded as deferred; nothing moves."""
+    try:
+        result, _ = await verify_payment_answer(
+            factory, providers, payment_id, source="manual_reconcile", actor_user_id=admin_id
+        )
+    except ProviderUnavailableError:
+        await _deferred(factory, payment_id, admin_id, "provider_unavailable")
+        return
+    except Exception:
+        await logger.aexception("payment_reconcile_background_failed", payment_id=str(payment_id))
+        return
+    if result is not None and result.state == "unknown":
+        await _deferred(factory, payment_id, admin_id, "unknown")
+
+
+async def _deferred(factory: Factory, payment_id: UUID, admin_id: UUID, reason: str) -> None:
+    async with factory() as session, session.begin():
+        await SqlAuditWriter(session).record(
+            actor_user_id=admin_id,
+            action="payment.reconcile_deferred",
+            entity_type="payment",
+            entity_id=payment_id,
+            after_data={"reason": reason},
         )

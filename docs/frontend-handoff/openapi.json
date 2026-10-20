@@ -3173,6 +3173,58 @@
         "title": "LoginRequest",
         "type": "object"
       },
+      "ManualConfirmRead": {
+        "properties": {
+          "outcome": {
+            "$ref": "#/components/schemas/Outcome"
+          },
+          "payment": {
+            "$ref": "#/components/schemas/PaymentSummary"
+          }
+        },
+        "required": [
+          "outcome",
+          "payment"
+        ],
+        "title": "ManualConfirmRead",
+        "type": "object"
+      },
+      "ManualPaymentConfirmRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "provider_reference": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Provider Reference",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 10,
+            "title": "Reason",
+            "type": "string"
+          },
+          "verified_amount_cents": {
+            "minimum": 0.0,
+            "title": "Verified Amount Cents",
+            "type": "integer"
+          },
+          "verified_currency": {
+            "default": "USD",
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Verified Currency",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider_reference",
+          "verified_amount_cents",
+          "reason"
+        ],
+        "title": "ManualPaymentConfirmRequest",
+        "type": "object"
+      },
       "MaterialCreate": {
         "additionalProperties": false,
         "properties": {
@@ -3599,6 +3651,71 @@
         "title": "OrderItemStatus",
         "type": "string"
       },
+      "OrderReleaseRead": {
+        "properties": {
+          "attempts_expired": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Attempts Expired",
+            "type": "array"
+          },
+          "cancelled_at": {
+            "format": "date-time",
+            "title": "Cancelled At",
+            "type": "string"
+          },
+          "events_dismissed": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Events Dismissed",
+            "type": "array"
+          },
+          "order_id": {
+            "format": "uuid",
+            "title": "Order Id",
+            "type": "string"
+          },
+          "status": {
+            "const": "cancelled",
+            "default": "cancelled",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "order_id",
+          "cancelled_at",
+          "attempts_expired",
+          "events_dismissed"
+        ],
+        "title": "OrderReleaseRead",
+        "type": "object"
+      },
+      "OrderReleaseRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "events_reviewed": {
+            "default": false,
+            "title": "Events Reviewed",
+            "type": "boolean"
+          },
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 10,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "OrderReleaseRequest",
+        "type": "object"
+      },
       "OrderSource": {
         "enum": [
           "cart",
@@ -3618,6 +3735,19 @@
           "in_progress"
         ],
         "title": "OrderStatus",
+        "type": "string"
+      },
+      "Outcome": {
+        "enum": [
+          "apply_paid",
+          "mark_processing",
+          "mark_failed",
+          "mark_expired",
+          "late_capture",
+          "late_capture_and_fail",
+          "noop"
+        ],
+        "title": "Outcome",
         "type": "string"
       },
       "PasswordResetAccepted": {
@@ -3685,6 +3815,15 @@
         "title": "PaymentMethod",
         "type": "string"
       },
+      "PaymentProvider": {
+        "description": "`cash` has no adapter; VS-032 adds the real online value(s).",
+        "enum": [
+          "mock",
+          "cash"
+        ],
+        "title": "PaymentProvider",
+        "type": "string"
+      },
       "PaymentRetryRead": {
         "properties": {
           "order": {
@@ -3719,6 +3858,108 @@
           }
         },
         "title": "PaymentRetryRequest",
+        "type": "object"
+      },
+      "PaymentSummary": {
+        "description": "No provider metadata (so no redirect URL), event payloads or customer email.",
+        "properties": {
+          "amount_cents": {
+            "title": "Amount Cents",
+            "type": "integer"
+          },
+          "captured_amount_cents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Captured Amount Cents"
+          },
+          "captured_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Captured Currency"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "initiated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Initiated At"
+          },
+          "late_captured_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Late Captured At"
+          },
+          "order_id": {
+            "format": "uuid",
+            "title": "Order Id",
+            "type": "string"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/PaymentProvider"
+          },
+          "provider_payment_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Payment Id"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "order_id",
+          "provider",
+          "status",
+          "amount_cents",
+          "currency",
+          "captured_amount_cents",
+          "captured_currency",
+          "provider_payment_id",
+          "initiated_at",
+          "late_captured_at"
+        ],
+        "title": "PaymentSummary",
         "type": "object"
       },
       "PriceIn": {
@@ -4404,6 +4645,24 @@
           "commit"
         ],
         "title": "ReadinessRead",
+        "type": "object"
+      },
+      "ReconcileQueued": {
+        "properties": {
+          "payment": {
+            "$ref": "#/components/schemas/PaymentSummary"
+          },
+          "reconcile": {
+            "const": "queued",
+            "default": "queued",
+            "title": "Reconcile",
+            "type": "string"
+          }
+        },
+        "required": [
+          "payment"
+        ],
+        "title": "ReconcileQueued",
         "type": "object"
       },
       "RegisterRequest": {
@@ -8254,6 +8513,407 @@
           }
         ],
         "summary": "Update a material",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/orders/{order_id}/release": {
+      "post": {
+        "operationId": "release_order_api_v1_admin_orders__order_id__release_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Order Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderReleaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderReleaseRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "MALFORMED_REQUEST: the body is not valid JSON."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "AUTH_REQUIRED, or MFA_REQUIRED for an administrator."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "CSRF_INVALID."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "NOT_FOUND: no such order (customers always get this)."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INVALID_STATE_TRANSITION with `reason`: `cash_order`, `order_cancelled`, `order_not_payable`, `grace_not_elapsed` (with `release_available_at`) or `unprocessed_events` (with `count`)."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "VALIDATION_ERROR (a missing or short `reason`)."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "RATE_LIMITED: this action's per-administrator hourly limit."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the database or Redis is unreachable; retry later."
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Release an unpaid order's hold by hand",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/payments/{payment_id}/confirm": {
+      "post": {
+        "operationId": "confirm_payment_api_v1_admin_payments__payment_id__confirm_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "payment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Payment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManualPaymentConfirmRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManualConfirmRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "MALFORMED_REQUEST: the body is not valid JSON."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "AUTH_REQUIRED, or MFA_REQUIRED for an administrator."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "CSRF_INVALID."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "NOT_FOUND: no such payment (customers always get this)."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "MANUAL_CONFIRMATION_NOT_ALLOWED (the provider has a status API), PAYMENT_REFERENCE_MISMATCH, or INVALID_STATE_TRANSITION (`cash_payment`)."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "PAYMENT_AMOUNT_MISMATCH (with `expected_amount_cents`, `currency`): nothing is written; or VALIDATION_ERROR."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "RATE_LIMITED: this action's per-administrator hourly limit."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the database or Redis is unreachable; retry later."
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Confirm a payment by hand from the provider's dashboard",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/payments/{payment_id}/reconcile": {
+      "post": {
+        "description": "Nothing here calls the provider. The unit of work commits before the 202 is sent;\nStarlette runs the task only after the body (plan 2.2 steps 3-5).",
+        "operationId": "reconcile_payment_api_v1_admin_payments__payment_id__reconcile_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "payment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Payment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconcileQueued"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "AUTH_REQUIRED, or MFA_REQUIRED for an administrator."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "CSRF_INVALID."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "NOT_FOUND: no such payment (customers always get this)."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INVALID_STATE_TRANSITION (`reason`: `cash_payment`)."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "RATE_LIMITED: this action's per-administrator hourly limit."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "PAYMENT_VERIFICATION_UNAVAILABLE: the provider has no status API."
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Ask the provider about a payment, after answering 202",
         "tags": [
           "admin",
           "admin"

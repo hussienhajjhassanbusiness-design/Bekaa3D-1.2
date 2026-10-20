@@ -16,7 +16,12 @@ from app.payments.application.services.payments import (
     start_online_payment,
 )
 from app.payments.domain import limits
-from app.payments.domain.exceptions import PaymentConfigurationError, ProviderUnavailableError
+from app.payments.domain.exceptions import (
+    ManualReleaseRefusedError,
+    OrderNotFoundError,
+    PaymentConfigurationError,
+    ProviderUnavailableError,
+)
 from app.payments.domain.limits import CHECKOUT_RATE_LIMIT, CHECKOUT_RATE_WINDOW_SECONDS
 from app.payments.domain.outcome import Outcome, ProviderResult
 from app.payments.infrastructure.manual import confirm_payment_manually
@@ -36,6 +41,8 @@ __all__ = [
     "CHECKOUT_RATE_WINDOW_SECONDS",
     "CreatePayment",
     "CreatedPayment",
+    "ManualReleaseRefusedError",
+    "OrderNotFoundError",
     "Outcome",
     "PaymentConfigurationError",
     "PaymentProviderPort",
