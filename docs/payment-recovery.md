@@ -19,7 +19,7 @@ Schemas are in [`frontend-handoff/openapi.json`](frontend-handoff/openapi.json).
 
 ## Retry
 
-- Allowed only before `placed_at + checkout_hold_period` (30 min by default), on an unpaid online order whose lines are all `pending`; `409 INVALID_STATE_TRANSITION` with `reason` `cash_order`, `order_cancelled`, `order_not_payable` or `checkout_hold_expired` otherwise.
+- Allowed only before `placed_at + checkout_hold_period` (30 min by default), on an unpaid online order whose lines are all `pending`; `409 INVALID_STATE_TRANSITION` with `reason` `cash_order`, `order_cancelled`, `order_not_payable` or `checkout_hold_expired` otherwise. An offer order (VS-041) also needs its offer still `accepted` and inside its checkout window, else `reason: offer_checkout_expired` ([ADR-037](adr/ADR-037-accepted-offer-checkout.md)).
 - The new attempt charges the order's own total; the body cannot name an amount. `payment_provider` defaults to the previous attempt's, while still configured.
 - A live attempt is `409 PAYMENT_ALREADY_ACTIVE` with `payment_id`, `payment_status` and `redirect_url` (null while `processing`). `payment_status`, not `status`: a problem body's `status` is the HTTP status.
 - One `Idempotency-Key` is one retry of one order by one user (scope `payment_retry:{order_id}`). The `201` and the `502 PAYMENT_PROVIDER_UNAVAILABLE` are replayed for the same key.

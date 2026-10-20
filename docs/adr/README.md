@@ -42,6 +42,7 @@ Only expensive-to-reverse decisions belong here. Folder names and small refactor
 - [ADR-034: Offer submission and expiry - a list-price ceiling, the kill switch on new offers, the cooldown read after the insert, and a lock-then-recheck expiry job (VS-039)](ADR-034-offer-submission-and-expiry.md)
 - [ADR-035: Offer negotiation - the agreed price capped at today's list price, a floor on customer counters, a stored reminder time, and one error order (VS-040)](ADR-035-offer-negotiation.md)
 - [ADR-036: Payment recovery - release only on an explicit failed or expired, a 24 h manual release, manual confirm refuses a differing amount, alerts de-duplicated under an advisory lock (VS-024)](ADR-036-payment-recovery.md)
+- [ADR-037: Accepted-offer checkout - the agreed price, the order inserted before the offer is locked, paid and auto-close inside the payment, and no stretch over a pause (VS-041)](ADR-037-accepted-offer-checkout.md)
 
 ## Governance
 

@@ -43,7 +43,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 | VS-038 | Wishlist and wishlist analytics | VS-013 | Done |
 | VS-039 | Offer submission and inactivity expiry | VS-023, VS-007 | Done |
 | VS-040 | Offer counter, accept, reject, withdraw | VS-039 | Done |
-| VS-041 | Accepted-offer checkout and auto-close | VS-040, VS-023, VS-024 | Not started |
+| VS-041 | Accepted-offer checkout and auto-close | VS-040, VS-023, VS-024 | Done |
 | VS-042 | Download statistics rollup | — | Removed (ADR-019) |
 | VS-043 | Business analytics | VS-029, VS-030, VS-031, VS-036, VS-039 | Not started |
 | VS-044 | Customer data export | VS-023b, VS-025, VS-026, VS-036, VS-039 | Not started |
@@ -647,7 +647,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 - **Must resolve before build:** both items are **resolved** by [ADR-036](adr/ADR-036-payment-recovery.md): item 1 by the manual admin release after the hold plus 24 h (decision 8), item 2 by the 422 amount guard with no late-capture path (decision 7). The original text follows.
   1. **No-status-API providers dead-end the hold release.** The release cancels only "when the provider confirms the attempt unpaid", and this section and the entities doc skip any order "whose provider has no status API". Admin cancel of a `pending_payment` order is 409, and manual confirm only applies or records a late capture. So an abandoned checkout stays `pending_payment` forever: the attempt stays live (retry gets `PAYMENT_ALREADY_ACTIVE`), its `pending` STL line holds the ownership index (the customer can never buy that STL again), and an alert repeats every run. The same trap catches a provider that keeps answering "pending", an order whose only attempt is a mismatched-amount late capture, and a provider-mismatch event that was "stored and ignored" if that leaves it unprocessed. This contradicts BR-039 and this slice's "Done when". Suggested fix: because a later success becomes a late capture anyway, release after the hold plus a grace period when the provider cannot answer and no webhook event exists, with an alert; or add an admin "expire attempt / release order" action. Define "unpaid" per provider state, and say that ignored or failed events set `processed_at`.
   2. **Manual confirm with a wrong amount: 422 or late capture?** This section ("A manual confirm with the wrong amount gives 422") and `api-endpoints.md` ("Server requires exact order-total match") refuse it. ADR-024 decision 15, SRS §9.2 and the late-capture rule above say a mismatched amount found by verification **or manual confirmation** is a late capture with an automatic refund. Scenario: a no-status-API provider, and the customer transfers $45 on a $50 order. The admin enters 4500 and gets 422, so no refund obligation exists, the attempt stays live, and with item 1 the order hangs. Suggested fix: separate an admin typo from a provider showing a different captured amount (for example a `captured_amount_cents` that must match the dashboard, plus an explicit "record mismatch as late capture" path), and align the API row and this slice's test.
-- **Wire in when VS-024 merges:** VS-025 ships `OrderDetail` without `can_retry_payment` and `hold_expires_at`. Whichever of VS-024 and VS-025 merges second adds both to `src/app/ordering/api/order_schemas.py` (`OrderDetailRead`) with a test for each; VS-025's payment read is `app.payments.public.order_payment_reader` ([ADR-033](adr/ADR-033-customer-order-read-model.md)).
+- **Wire in when VS-024 merges:** done in VS-041 ([ADR-037](adr/ADR-037-accepted-offer-checkout.md) d10). VS-025 shipped `OrderDetail` without `can_retry_payment` and `hold_expires_at`. Whichever of VS-024 and VS-025 merged second was to add both to `src/app/ordering/api/order_schemas.py` (`OrderDetailRead`) with a test for each; VS-025's payment read is `app.payments.public.order_payment_reader` ([ADR-033](adr/ADR-033-customer-order-read-model.md)).
 
 
 ## VS-025 — Customer order history
@@ -668,7 +668,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - Pagination is stable.
 - **Done when:** A customer sees exactly what they bought, at the price they paid.
 - **As built:** [ADR-033](adr/ADR-033-customer-order-read-model.md), [`docs/order-history.md`](order-history.md). No refund summary until VS-030 (no `refunds` table yet).
-- **Wire in when VS-024 merges:** `OrderDetail` gains `can_retry_payment` and `hold_expires_at` from VS-024's `can_retry_payment` and `hold_deadline`. Whichever of VS-024 and VS-025 merges second adds them, with a test for each, in `src/app/ordering/api/order_schemas.py`.
+- **Wire in when VS-024 merges:** done in VS-041 ([ADR-037](adr/ADR-037-accepted-offer-checkout.md) d10). `OrderDetail` gains `can_retry_payment` and `hold_expires_at` from VS-024's `can_retry_payment` and `hold_deadline`. Whichever of VS-024 and VS-025 merges second adds them, with a test for each, in `src/app/ordering/api/order_schemas.py`.
 
 ## VS-026 — Address book
 **Status:** Done
@@ -1104,7 +1104,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 - **Done when:** Every transition follows SRS §20.6, and every round is kept permanently.
 
 ## VS-041 — Accepted-offer checkout and auto-close
-**Status:** Not started
+**Status:** Done ([ADR-037](adr/ADR-037-accepted-offer-checkout.md), [`docs/offers.md`](offers.md)). Owner decisions 2026-10-20: migration `d5507ee63176` (`uq_order_items_offer_once`, against "Model / migration: None"); auto-close from every live state, with the SRS §20.6 and database-design §17.6 diagrams amended; a (customer, product) advisory lock shared by submission and the payment's auto-close (SRS §20.8 extended); retry of an offer order follows the offer's window; the window does not stretch over a pause. Also wired the `can_retry_payment` and `hold_expires_at` that VS-024 owed `OrderDetail`.
 **Depends on:** VS-040, VS-023, VS-024
 **Goal:** An accepted offer is paid once at the agreed price, and buying the product any other way closes the offer.
 - **Model / migration:** None.

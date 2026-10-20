@@ -1242,6 +1242,8 @@ awaiting_admin ───┴──> accepted ──┬──> paid
 
 Either party accepts on its own turn: the administrator from `awaiting_admin`, the customer from `awaiting_customer` (F-092, FR-13). Once accepted, only the checkout window applies.
 
+`auto_closed` is reachable from every live state (`awaiting_admin`, `awaiting_customer`, `accepted`): buying the STL by another route closes any live offer (BR-088, §11.4; ADR-037).
+
 ### 20.7 Custom Request
 
 ```
@@ -1251,7 +1253,7 @@ new ──> contacted ──> quoted ──> in_progress ──> completed ─�
 
 ### 20.8 Lock Order
 
-Every write that changes an order's lines, payment or refunds locks the `orders` row first, then the lines it reads or changes in `id` order, then the payment row, and recomputes the order status under those locks: line transitions, customer self-cancel, admin cancel, cash handover, payment apply (including late captures), payment retry, reconciliation marking an attempt failed or expired, manual confirmation, refund creation, refund settlement or failure, chargeback recording, receipt confirmation and problem reports, and `release_stale_checkouts`. Nothing locks `payments` before `orders`, including batch selection: a job selects candidate ids without locking, then locks each order and re-reads. Locking a line before its order would deadlock against the handover, and two parallel line changes could each derive the order status from a stale view of the other (ADR-024).
+Every write that changes an order's lines, payment or refunds locks the `orders` row first, then the lines it reads or changes in `id` order, then the payment row, and recomputes the order status under those locks: line transitions, customer self-cancel, admin cancel, cash handover, payment apply (including late captures), payment retry, reconciliation marking an attempt failed or expired, manual confirmation, refund creation, refund settlement or failure, chargeback recording, receipt confirmation and problem reports, and `release_stale_checkouts`. Nothing locks `payments` before `orders`, including batch selection: a job selects candidate ids without locking, then locks each order and re-reads. Locking a line before its order would deadlock against the handover, and two parallel line changes could each derive the order status from a stale view of the other (ADR-024). A payment that pays an STL then takes a transaction-scoped advisory lock on (customer, product) and that product's live offers by id, last (ADR-037); offer submission takes the same advisory lock, and offer checkout inserts its order before it locks the offer.
 
 ---
 

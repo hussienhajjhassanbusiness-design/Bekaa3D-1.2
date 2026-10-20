@@ -31,6 +31,8 @@ The contract for `GET /api/v1/me/orders` and `GET /api/v1/me/orders/{order_id}`.
 - **`payment`**: `{status, provider, amount}` of the live or paid attempt, else of the most recent one. `null` while a cash order is unpaid. No provider reference.
 - **`payment_due`**: an unpaid cash order (`in_progress`). Pay the courier, or pay at pickup. `total` is the total at checkout: if a line was cancelled, the amount due is the sum of the lines still live, not `total`. VS-028 adds `amount_due_cents` for exactly that.
 - **`can_cancel`**: true only when the order has a live (not cancelled) physical line, is cash or has a payment that reached paid, is `in_progress` or `partially_refunded`, and every live physical line is still `pending`. Lines an administrator already cancelled are ignored. It is false for STL-only orders and unpaid online orders. Self-cancel itself is VS-031. The flag is advisory: the cancel route re-checks under its locks.
+- **`can_retry_payment`** (VS-041): a new payment attempt may be started now with `POST /api/v1/me/orders/{order_id}/payments`. It means an unpaid online order, every line `pending`, inside `placed_at + checkout_hold_period`, and no attempt `pending` or `processing`. On an offer order (`source: "offer"`) the offer must also still be inside its checkout window. The flag is advisory; the POST re-checks under its locks.
+- **`hold_expires_at`** (VS-041): for an unpaid online order, when it may be released if still unpaid. That is the later of placement and the latest attempt, plus `checkout_hold_period` ([`payment-recovery.md`](payment-recovery.md)). It is null for every other order. It can be later than the last moment `can_retry_payment` allows, because retry is bounded from placement.
 - **`delivery_address`** and `delivery_fee_note` are set for delivery orders only. `contact_phone` is set for physical orders.
 - **`status_history`**: oldest first, `{order_item_id, from_status, to_status, at}`. `order_item_id` is null for the order's own status. Entries into `in_production` are left out, and the next one out of it reads as from the state before it (`pending`, or `returned` when a returned item is reprinted). No actor and no reason.
 - **Never returned:** `admin_note`, the checkout email, the phone hash, the delivering administrator, provider references or metadata.
@@ -38,5 +40,4 @@ The contract for `GET /api/v1/me/orders` and `GET /api/v1/me/orders/{order_id}`.
 ## Not yet
 
 - Refund summary: VS-030.
-- `can_retry_payment`, `hold_expires_at`: VS-024 (see the slice plan's "Wire in when VS-024 merges").
 - Receipt confirmation and problem report fields: VS-029b.

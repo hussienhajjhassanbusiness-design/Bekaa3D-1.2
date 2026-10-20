@@ -1,6 +1,6 @@
-# Offers (VS-039, VS-040)
+# Offers (VS-039, VS-040, VS-041)
 
-The contract for offer submission, negotiation, offer reads and expiry. Decisions and their reasons: [ADR-034](adr/ADR-034-offer-submission-and-expiry.md) (submission, expiry) and [ADR-035](adr/ADR-035-offer-negotiation.md) (negotiation). Shapes: [`api-endpoints.md`](requirments/api-endpoints.md) §13, §21 and `OfferDetail`, and the OpenAPI file in [`frontend-handoff/`](frontend-handoff/openapi.json). VS-041 adds offer checkout.
+The contract for offer submission, negotiation, offer reads and expiry. Decisions and their reasons: [ADR-034](adr/ADR-034-offer-submission-and-expiry.md) (submission, expiry) and [ADR-035](adr/ADR-035-offer-negotiation.md) (negotiation). Offer checkout and auto-close: [ADR-037](adr/ADR-037-accepted-offer-checkout.md). Shapes: [`api-endpoints.md`](requirments/api-endpoints.md) §13, §21 and `OfferDetail`, and the OpenAPI file in [`frontend-handoff/`](frontend-handoff/openapi.json).
 
 ## `POST /api/v1/offers`
 
@@ -120,6 +120,56 @@ A refused action writes nothing. The kill switch never blocks an answer.
 | Rejected | email `offer_rejected` + in-app `offer.rejected` | none |
 | Withdrawn | none | in-app `offer.withdrawn` |
 
+## Offer checkout (VS-041)
+
+`POST /api/v1/me/offers/{offer_id}/checkout`. Verified email, CSRF header, an `Idempotency-Key` (8-255 characters of `[A-Za-z0-9._:-]`), and cart checkout's 30 per user per hour.
+
+```json
+{"accept_terms": true, "accept_digital_final_sale": true, "payment_provider": "optional"}
+```
+
+`201` returns `CheckoutRead`, the same shape as `POST /checkout` ([`checkout.md`](checkout.md)):
+- the order is `pending_payment` with `source: "offer"`;
+- its one STL line is priced at the offer's `agreed_amount`. The list price is never read, so a later price change, up or down, is ignored;
+- the payment is `pending`, with the provider's `redirect_url`;
+- `dropped_lines` is `[]`.
+
+The offer stays `accepted` until the payment is verified. A replay of the same key and body returns the stored `201` (or `502`) with `Idempotent-Replayed: true`.
+
+| Refusal (checked in this order) | Status and code |
+|---|---|
+| Bad body: a missing or false consent, any amount, an unknown field | `422 VALIDATION_ERROR` |
+| Unknown, or another customer's | `404` |
+| `checkout_expired`, or accepted with `now >= checkout_expires_at` | `410 OFFER_CHECKOUT_EXPIRED` |
+| Any other status | `409 INVALID_STATE_TRANSITION`, with `offer_status` |
+| Shop paused (`accepting_orders` off) | `503 ORDERS_PAUSED` |
+| `PAYMENT_PROVIDER=none` | `503 ONLINE_PAYMENT_UNAVAILABLE` |
+| The STL is hidden or unavailable | `422 PRODUCT_NOT_PURCHASABLE`, with `lines[{product_id, reason}]` |
+| The offer's unpaid order has a live attempt | `409 PAYMENT_ALREADY_ACTIVE`, with `payment_id`, `payment_status`, `redirect_url` |
+| The offer's unpaid order has no live attempt, or the STL is already owned | `409 PRODUCT_ALREADY_OWNED`, with `product_ids`. Retry that order with `POST /api/v1/me/orders/{order_id}/payments` |
+| An unknown `payment_provider` | `422 PAYMENT_METHOD_NOT_ALLOWED`, with `reason` |
+| Same key, different body / still running | `409 IDEMPOTENCY_KEY_CONFLICT` / `409 IDEMPOTENCY_REQUEST_IN_PROGRESS` |
+| The provider could not start the payment | `502 PAYMENT_PROVIDER_UNAVAILABLE`; the order exists unpaid |
+| Anonymous / unverified / no CSRF / over the limit | `401` / `403 EMAIL_VERIFICATION_REQUIRED` / `403 CSRF_INVALID` / `429 RATE_LIMITED` |
+
+A refused checkout writes nothing.
+
+**The window does not stretch over a pause.** If the shop is paused, checkout answers `503` while the window keeps running. An offer that lapses meanwhile becomes `checkout_expired`, and the customer may submit a new offer at once: there is no cooldown, which follows a rejection only.
+
+**A retry of an offer order** works as for any order ([`payment-recovery.md`](payment-recovery.md)), but only while the offer is still `accepted` and inside its window. Otherwise it answers `409 INVALID_STATE_TRANSITION` with `reason: offer_checkout_expired`. An attempt still in flight answers `409 PAYMENT_ALREADY_ACTIVE` first, with its `redirect_url`, even past the window, because that payment is honoured. Retry is bounded by the hold from placement (30 min by default). After that, a second checkout answers `409 PRODUCT_ALREADY_OWNED` until the hold release cancels the unpaid order, about one hold after its last attempt.
+
+**At most once.** An offer pays for one order line, ever (`uq_order_items_offer_once`). Only a line cancelled unpaid, by the hold release, frees it for another checkout inside the window.
+
+## When the STL is paid (VS-041)
+
+Inside the verified payment's own transaction, for every STL line it moves to `awaiting_delivery`:
+- the offer the line was bought through becomes `paid`, with a `system` / `paid` round carrying the agreed amount;
+- any other live offer (`awaiting_admin`, `awaiting_customer` or `accepted`) for that customer and product becomes `auto_closed`, with a `system` / `auto_closed` round (BR-088).
+
+Each writes an audit row (`offer.paid` or `offer.auto_closed`, naming the order). Neither sends a notification: the payment's own receipt tells the customer.
+
+A submission and a payment's auto-close serialise on one (customer, product) lock, so a live offer never survives on an owned STL.
+
 ## `expire_offers` (every 5 minutes)
 
 An `awaiting_admin` or `awaiting_customer` offer expires once `now >= responds_by`. Expiry:
@@ -131,7 +181,7 @@ An `awaiting_admin` or `awaiting_customer` offer expires once `now >= responds_b
 An accepted offer never expires from inactivity. Rerunning the job, or running it twice at once, expires each offer once. The kill switch does not stop it.
 
 Since VS-040, each run makes two more passes, each one locking, re-checking and writing per offer:
-- **Checkout window.** An `accepted` offer becomes `checkout_expired` once `now >= checkout_expires_at`. It gets a `system` round, an audit row and an in-app `offer.checkout_expired`. The agreed amount and the deadline stay.
+- **Checkout window.** An `accepted` offer becomes `checkout_expired` once `now >= checkout_expires_at`. It gets a `system` round, an audit row and an in-app `offer.checkout_expired`. The agreed amount and the deadline stay. An offer whose order has a `pending` or `processing` attempt is left alone, so that payment completes (VS-041). The first run after the attempt ends unpaid expires it.
 - **Expiring soon.** An administrator's counter sets `remind_at` to 75 % of the customer's turn. Once `now >= remind_at`, the customer gets the `offer_expiring_soon` email and an in-app `offer.expiring_soon`, once, and `remind_at` is cleared. A reminder found past the deadline is dropped unsent.
 
 ## Rounds
