@@ -1,7 +1,7 @@
 # ADR-035: Offer negotiation - the agreed price capped at today's list price, a floor on customer counters, a stored reminder time, and one error order
 
 **Status:** Accepted
-**Date:** 2026-10-20; amended 2026-10-20 (decision 9, VS-040 follow-up)
+**Date:** 2026-10-20; amended 2026-10-20 (decision 9, VS-040 follow-up); amended 2026-10-21 (decision 9, PR #25 questions)
 **Source basis:** Owner decisions of 2026-10-20 on the VS-040 plan (the open item of [ADR-034](ADR-034-offer-submission-and-expiry.md), and Q1 to Q8); SRS §11, §16.1, §20.6; BR-040, BR-082 to BR-092; FR-13; api-endpoints.md §13, §21, §29.7; database-design.md §11, §17.6
 
 ## Context
@@ -64,6 +64,9 @@ VS-040 adds counter, accept and withdraw for the customer, and counter, accept a
    - It is compared with the amount on the table, not the capped agreed amount of decision 1, so a price cut never makes a correct page look stale.
    - It is checked under the row lock, after the refusals of decision 5 and before the product and ownership rechecks of decision 4.
    - Withdraw-and-resubmit stays as it is: a resubmission is a new offer with a new id, so a page showing the old one gets `409 INVALID_STATE_TRANSITION`.
+   - **The two questions PR #25 left open are decided as built** (owner, 2026-10-21):
+     - The accept body carries no `currency`. The database forces USD (`ck_offers_money`), so a currency field could only ever repeat it.
+     - The amount guard is enough; there is no version guard. Accepting the amount actually on the table is correct, even if the offer changed and changed back in between.
 
 ## Consequences
 
