@@ -41,7 +41,8 @@ pytestmark = [
     pytest.mark.usefixtures("configured_app", "shop_open"),
 ]
 ACTIONS = ["counter", "accept", "reject"]
-COUNTER = {"amount_cents": 950, "currency": "USD"}
+COUNTER: dict[str, Any] = {"amount_cents": 950, "currency": "USD"}
+ACCEPT: dict[str, Any] = {"expected_amount_cents": 800}
 
 
 @pytest.fixture
@@ -71,7 +72,7 @@ def _amount(cents: int) -> dict[str, Any]:
 
 
 def _body(action: str) -> dict[str, Any] | None:
-    return COUNTER if action == "counter" else None
+    return {"counter": COUNTER, "accept": ACCEPT}.get(action)
 
 
 async def _offer(db: AsyncSession, status: str = "awaiting_admin", **over: Any) -> uuid.UUID:
@@ -152,7 +153,7 @@ async def test_admin_accept_caps_at_todays_list_price(
     await mfa_admin(client, db_session)
     at = datetime.now(UTC).replace(microsecond=0)
     with time_machine.travel(at, tick=False):
-        body = act(client, offer, "accept", admin=True).json()
+        body = act(client, offer, "accept", ACCEPT, admin=True).json()
     assert (body["status"], body["agreed_amount"]["amount_cents"]) == ("accepted", agreed)
     assert datetime.fromisoformat(body["checkout_expires_at"]) == at + timedelta(hours=24)
     effects = await side_effects(db_engine, offer)
@@ -264,7 +265,7 @@ async def test_a_whole_negotiation_is_kept_round_by_round(
         as_customer(email, lambda c: act(c, offer, "counter", _amount(800))),
         await as_admin(db_session, lambda c: act(c, offer, "counter", _amount(900), admin=True)),
         as_customer(email, lambda c: c.get(f"/api/v1/me/offers/{offer}")),
-        as_customer(email, lambda c: act(c, offer, "accept")),
+        as_customer(email, lambda c: act(c, offer, "accept", {"expected_amount_cents": 900})),
         await as_admin(db_session, lambda c: c.get(f"{ADMIN_OFFERS}/{offer}")),
     ]
     assert all(step.status_code == 200 for step in steps), [s.text for s in steps]
@@ -281,3 +282,48 @@ async def test_a_whole_negotiation_is_kept_round_by_round(
     assert detail["initial_amount"]["amount_cents"] == 700
     effects = await side_effects(db_engine, offer)
     assert effects["emails"] == ["offer_countered", "offer_countered", "offer_accepted"]
+
+
+async def test_accepting_from_a_stale_admin_page_is_409_and_writes_nothing(
+    db_session: AsyncSession, db_engine: AsyncEngine
+) -> None:
+    """ADR-035 d9: the page showed 700; meanwhile another tab countered and the customer
+    countered back lower, so accepting the page's amount must not bind the shop to 850."""
+    customer = await create_user(db_session)
+    product = await stl(db_session)
+    email = customer.email
+    offer = uuid.UUID(as_customer(email, lambda c: submit(c, product, 700)).json()["id"])
+    page = await as_admin(db_session, lambda c: c.get(f"{ADMIN_OFFERS}/{offer}"))
+    seen = page.json()["current_amount"]["amount_cents"]
+    steps = [
+        await as_admin(db_session, lambda c: act(c, offer, "counter", _amount(950), admin=True)),
+        as_customer(email, lambda c: act(c, offer, "counter", _amount(850))),
+    ]
+    assert all(step.status_code == 200 for step in steps), [s.text for s in steps]
+    before = await offer_state(db_engine, offer)
+    effects = await side_effects(db_engine, offer)
+    stale = await as_admin(
+        db_session,
+        lambda c: act(c, offer, "accept", {"expected_amount_cents": seen}, admin=True),
+    )
+    assert_problem(stale, 409, "OFFER_AMOUNT_CHANGED")
+    assert stale.json()["current_amount"] == {"amount_cents": 850, "currency": "USD"}
+    assert await offer_state(db_engine, offer) == before
+    assert await side_effects(db_engine, offer) == effects
+    fresh = await as_admin(
+        db_session, lambda c: act(c, offer, "accept", {"expected_amount_cents": 850}, admin=True)
+    )
+    assert fresh.status_code == 200, fresh.text
+    assert fresh.json()["agreed_amount"]["amount_cents"] == 850
+
+
+async def test_admin_accept_requires_the_amount_seen(
+    client: TestClient, db_session: AsyncSession, db_engine: AsyncEngine
+) -> None:
+    offer = await _offer(db_session)
+    await mfa_admin(client, db_session)
+    before = await offer_state(db_engine, offer)
+    for body in (None, {}, {"expected_amount_cents": -1}, {"expected_amount_cents": 800.0}):
+        response = act(client, offer, "accept", body, admin=True)
+        assert_problem(response, 422, "VALIDATION_ERROR")
+    assert await offer_state(db_engine, offer) == before

@@ -4376,6 +4376,23 @@
         "title": "NotificationUpdate",
         "type": "object"
       },
+      "OfferAcceptRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_amount_cents": {
+            "description": "`current_amount` as the caller last saw it; any other is 409.",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 1.0,
+            "title": "Expected Amount Cents",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expected_amount_cents"
+        ],
+        "title": "OfferAcceptRequest",
+        "type": "object"
+      },
       "OfferAction": {
         "enum": [
           "submitted",
@@ -10485,6 +10502,16 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OfferAcceptRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -10495,6 +10522,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "MALFORMED_REQUEST: the body is not valid JSON."
           },
           "401": {
             "content": {
@@ -10534,7 +10571,7 @@
                 }
               }
             },
-            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), or PRODUCT_ALREADY_OWNED (accept)."
+            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED (accept)."
           },
           "410": {
             "content": {
@@ -10674,7 +10711,7 @@
                 }
               }
             },
-            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), or PRODUCT_ALREADY_OWNED (accept)."
+            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED (accept)."
           },
           "410": {
             "content": {
@@ -10821,7 +10858,7 @@
                 }
               }
             },
-            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), or PRODUCT_ALREADY_OWNED (accept)."
+            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED (accept)."
           },
           "410": {
             "content": {
@@ -16863,6 +16900,16 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OfferAcceptRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -16873,6 +16920,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "MALFORMED_REQUEST: the body is not valid JSON."
           },
           "401": {
             "content": {
@@ -16912,7 +16969,7 @@
                 }
               }
             },
-            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), or PRODUCT_ALREADY_OWNED (accept)."
+            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED (accept)."
           },
           "410": {
             "content": {
@@ -17061,7 +17118,7 @@
                 }
               }
             },
-            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), or PRODUCT_ALREADY_OWNED (accept)."
+            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED (accept)."
           },
           "410": {
             "content": {
@@ -17217,7 +17274,7 @@
                 }
               }
             },
-            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), or PRODUCT_ALREADY_OWNED (accept)."
+            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED (accept)."
           },
           "410": {
             "content": {

@@ -1115,8 +1115,10 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - Payment marks the offer `paid`, and the STL line enters `awaiting_delivery` like any other purchase.
   - Paying for an STL by any route closes any live offer for that user and product as `auto_closed`.
   - A payment already in flight completes even if the checkout window closes meanwhile.
+  - The `accepting_orders` kill switch refuses offer checkout with 503 `ORDERS_PAUSED`, like any new checkout (ADR-035).
 - **Tests:**
   - A list-price change is ignored.
+  - Offer checkout while the shop is paused gives 503.
   - A second checkout while a payment is live gives 409.
   - Buying through the cart auto-closes the offer.
   - Offer checkout racing cart checkout yields one owning line (the ownership index).

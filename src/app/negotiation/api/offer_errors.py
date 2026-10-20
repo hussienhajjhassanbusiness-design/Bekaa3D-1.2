@@ -9,6 +9,7 @@ from app.negotiation.domain.exceptions import (
     NegotiationDomainError,
     OfferAboveListPriceError,
     OfferAlreadyActiveError,
+    OfferAmountChangedError,
     OfferBelowMinimumError,
     OfferCooldownActiveError,
     OfferExpiredError,
@@ -92,6 +93,16 @@ def translate(exc: NegotiationDomainError) -> ApiError | RequestValidationError:
             code="OFFER_NOT_YOUR_TURN",
             title="Not your turn",
             detail="The other party has to answer this offer first.",
+        )
+    if isinstance(exc, OfferAmountChangedError):
+        return ApiError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="OFFER_AMOUNT_CHANGED",
+            title="Offer amount changed",
+            detail="The amount on the table changed; nothing was accepted.",
+            extensions={
+                "current_amount": {"amount_cents": exc.current_amount_cents, "currency": "USD"}
+            },
         )
     if isinstance(exc, OfferInvalidTransitionError):
         return ApiError(

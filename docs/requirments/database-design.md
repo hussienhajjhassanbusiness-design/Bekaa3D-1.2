@@ -2137,6 +2137,7 @@ awaiting_admin
               -> auto_closed
   -> awaiting_customer
        -> awaiting_admin
+       -> accepted (the customer accepts on their own turn)
        -> withdrawn
        -> expired
 

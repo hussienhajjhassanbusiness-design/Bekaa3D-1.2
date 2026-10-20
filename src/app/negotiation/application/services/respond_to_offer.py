@@ -26,6 +26,7 @@ from app.negotiation.domain.offers import (
     Offer,
     OfferMove,
     accept,
+    check_amount_seen,
     check_move,
     check_negotiable,
     counter,
@@ -97,8 +98,11 @@ async def counter_offer(
     return countered
 
 
-async def accept_offer(deps: OfferDeps, who: Responder, *, offer_id: UUID) -> Offer:
+async def accept_offer(
+    deps: OfferDeps, who: Responder, *, offer_id: UUID, expected_amount_cents: int
+) -> Offer:
     offer, now = await _locked(deps, who, offer_id, OfferMove.ACCEPT)
+    check_amount_seen(offer, expected_amount_cents)
     product = await _negotiable(deps, offer)
     # FR-13: acquisition racing acceptance is re-checked here; VS-041 closes the offer.
     if await deps.ownership.owns(offer.user_id, offer.product_id):
@@ -106,6 +110,7 @@ async def accept_offer(deps: OfferDeps, who: Responder, *, offer_id: UUID) -> Of
     accepted, round_ = accept(
         offer,
         actor=who.actor,
+        expected_amount_cents=expected_amount_cents,
         list_price_cents=product.price_cents,
         checkout_window_seconds=await deps.settings.get_duration_seconds("offer_checkout_window"),
         next_sequence=await deps.offers.next_sequence(offer.id),

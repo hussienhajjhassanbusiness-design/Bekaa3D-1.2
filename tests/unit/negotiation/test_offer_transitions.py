@@ -14,6 +14,7 @@ from app.negotiation.domain.enums import (
 )
 from app.negotiation.domain.exceptions import (
     OfferAboveListPriceError,
+    OfferAmountChangedError,
     OfferBelowMinimumError,
     OfferExpiredError,
     OfferInvalidTransitionError,
@@ -62,10 +63,13 @@ def _counter(offer: Offer, actor: OfferActor, amount: int, list_price: int = 100
     return countered
 
 
-def _accept(offer: Offer, actor: OfferActor, list_price: int = 1000) -> tuple[Offer, int | None]:
+def _accept(
+    offer: Offer, actor: OfferActor, list_price: int = 1000, expected: int | None = None
+) -> tuple[Offer, int | None]:
     accepted, round_ = accept(
         offer,
         actor=actor,
+        expected_amount_cents=offer.current_amount_cents if expected is None else expected,
         list_price_cents=list_price,
         checkout_window_seconds=3600,
         next_sequence=3,
@@ -160,6 +164,37 @@ def test_accept_never_agrees_above_todays_list_price(
     accepted, round_amount = _accept(offer, actor, list_price=list_price)
     assert accepted.agreed_amount_cents == round_amount == agreed
     assert accepted.current_amount_cents == 800
+
+
+@pytest.mark.parametrize("actor", [ADMIN, CUSTOMER])
+@pytest.mark.parametrize("expected", [799, 801])
+def test_accept_refuses_an_amount_no_longer_on_the_table(actor: OfferActor, expected: int) -> None:
+    """ADR-035 d9: a stale page cannot bind either party to an amount it never showed."""
+    offer = make_offer() if actor is ADMIN else _customer_turn()
+    with pytest.raises(OfferAmountChangedError) as caught:
+        _accept(offer, actor, expected=expected)
+    assert caught.value.current_amount_cents == 800
+
+
+@pytest.mark.parametrize(
+    ("offer", "error"),
+    [
+        (_customer_turn(), OfferNotYourTurnError),
+        (make_offer(responds_by=NOW), OfferExpiredError),
+        (make_offer(status=OfferStatus.WITHDRAWN, turn=None), OfferInvalidTransitionError),
+    ],
+)
+def test_the_move_is_checked_before_the_amount_seen(offer: Offer, error: type[Exception]) -> None:
+    """ADR-035 d9: a stale amount on an offer that cannot be accepted reports the real reason."""
+    with pytest.raises(error):
+        _accept(offer, ADMIN, expected=1)
+
+
+def test_the_amount_seen_is_the_one_on_the_table_not_the_capped_one() -> None:
+    """Under a lowered list price the caller still names `current_amount`, not the cap."""
+    assert _accept(make_offer(), ADMIN, list_price=700, expected=800)[1] == 700
+    with pytest.raises(OfferAmountChangedError):
+        _accept(make_offer(), ADMIN, list_price=700, expected=700)
 
 
 @pytest.mark.parametrize(("cooldown", "until"), [(600, NOW + timedelta(minutes=10)), (0, NOW)])

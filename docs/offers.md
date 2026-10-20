@@ -63,10 +63,10 @@ Filters: `status`, `product_id`, `user_id`, and `responds_before`. `responds_bef
 | Route | Who | Allowed from | Body |
 |---|---|---|---|
 | `POST /api/v1/me/offers/{id}/counter` | the customer | `awaiting_customer` | `{amount_cents, currency, message?}` |
-| `POST /api/v1/me/offers/{id}/accept` | the customer | `awaiting_customer` | none |
+| `POST /api/v1/me/offers/{id}/accept` | the customer | `awaiting_customer` | `{expected_amount_cents}` |
 | `POST /api/v1/me/offers/{id}/withdraw` | the customer | either awaiting state, whoever's turn | `{reason?}` or none |
 | `POST /api/v1/admin/offers/{id}/counter` | an administrator | `awaiting_admin` | `{amount_cents, currency, message?}` |
-| `POST /api/v1/admin/offers/{id}/accept` | an administrator | `awaiting_admin` | none |
+| `POST /api/v1/admin/offers/{id}/accept` | an administrator | `awaiting_admin` | `{expected_amount_cents}` |
 | `POST /api/v1/admin/offers/{id}/reject` | an administrator | `awaiting_admin` | `{reason?}` or none |
 
 Each returns `200` with the offer detail (`AdminOfferDetail` on admin routes).
@@ -81,6 +81,7 @@ Each returns `200` with the offer detail (`AdminOfferDetail` on admin routes).
   - must be at most today's list price;
   - a customer's counter must also meet `minimum_offer_percentage`; an administrator's needn't.
 - **Accept:**
+  - names `expected_amount_cents`, the `current_amount` the caller's page showed. Any other value is refused, so a stale page never binds either party to an amount other than the one it showed, apart from the list-price cap below (ADR-035 d9);
   - freezes `agreed_amount = min(amount on the table, today's list price)`;
   - sets `checkout_expires_at` to now + `offer_checkout_window` (24 h by default);
   - clears `responds_by`, since the inactivity timer no longer applies.
@@ -101,10 +102,11 @@ Each returns `200` with the offer detail (`AdminOfferDetail` on admin routes).
 | `expired`, or awaiting with `now >= responds_by` | `410 OFFER_EXPIRED` |
 | Any other closed status, or `accepted` | `409 INVALID_STATE_TRANSITION`, with `offer_status` |
 | The other party's turn | `409 OFFER_NOT_YOUR_TURN` |
+| Accept whose `expected_amount_cents` is not `current_amount` | `409 OFFER_AMOUNT_CHANGED`, with `current_amount: {amount_cents, currency}` |
 | Counter or accept on an unlisted, unavailable or zero-priced product | `422 PRODUCT_NOT_PURCHASABLE`, with `reason` |
 | Accept when the customer already owns the STL | `409 PRODUCT_ALREADY_OWNED` |
 | Customer counter below the floor | `422 OFFER_BELOW_MINIMUM`, with `minimum` |
-| Counter above today's list price; bad body | `422 VALIDATION_ERROR` |
+| Counter above today's list price; bad body, including an accept without `expected_amount_cents` | `422 VALIDATION_ERROR` |
 
 A refused action writes nothing. The kill switch never blocks an answer.
 

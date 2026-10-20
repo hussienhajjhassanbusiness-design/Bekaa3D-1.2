@@ -1,7 +1,7 @@
 # ADR-035: Offer negotiation - the agreed price capped at today's list price, a floor on customer counters, a stored reminder time, and one error order
 
 **Status:** Accepted
-**Date:** 2026-10-20
+**Date:** 2026-10-20; amended 2026-10-20 (decision 9, VS-040 follow-up)
 **Source basis:** Owner decisions of 2026-10-20 on the VS-040 plan (the open item of [ADR-034](ADR-034-offer-submission-and-expiry.md), and Q1 to Q8); SRS §11, §16.1, §20.6; BR-040, BR-082 to BR-092; FR-13; api-endpoints.md §13, §21, §29.7; database-design.md §11, §17.6
 
 ## Context
@@ -58,6 +58,12 @@ VS-040 adds counter, accept and withdraw for the customer, and counter, accept a
    - Customer actions share a bucket of 60 per user per hour, separate from submission's 20 (SEC-11). Administrator actions need CSRF and sit behind the admin boundary.
    - Reject and withdraw take an optional `reason`, and a counter an optional `message`. Each is kept as the round's message under the 1 000-character rule.
    - `allowed_actions` lists what the viewer may do now.
+9. **Accept names the amount it accepts** (owner decision, VS-040 follow-up).
+   - Both accept routes require `{"expected_amount_cents": …}`: the `current_amount` the caller's page showed. A missing or malformed value is `422 VALIDATION_ERROR`.
+   - If it is not the offer's `current_amount_cents`, the answer is `409 OFFER_AMOUNT_CHANGED` with `current_amount`, and nothing is written. Without it, an administrator accepting from a stale page after the customer countered lower would bind the shop to the lower amount, and a customer's stale tab could do the same to them.
+   - It is compared with the amount on the table, not the capped agreed amount of decision 1, so a price cut never makes a correct page look stale.
+   - It is checked under the row lock, after the refusals of decision 5 and before the product and ownership rechecks of decision 4.
+   - Withdraw-and-resubmit stays as it is: a resubmission is a new offer with a new id, so a page showing the old one gets `409 INVALID_STATE_TRANSITION`.
 
 ## Consequences
 
@@ -65,7 +71,7 @@ VS-040 adds counter, accept and withdraw for the customer, and counter, accept a
 - **For VS-041:**
   - `expire_offers` will expire an accepted offer whose payment is in flight. VS-041 must exempt an offer with a live payment from the checkout-expiry pass, as its slice says ("a payment already in flight completes").
   - VS-041 also owns the auto-close that decision 4's ownership refusal leaves to it.
-- **SRS conflict, flagged.** SRS §20.6 and database-design.md §17.6 draw `accepted` only from `awaiting_admin`. FR-13 ("Awaiting state → accepted"), F-092 (customer accept) and api-endpoints.md §13 let the customer accept on their own turn. The code follows F-092 and FR-13, and the diagram should gain the `awaiting_customer → accepted` arrow.
-- **Not built, for the owner.** Accept carries no "amount I saw" guard. An administrator accepting from a stale page after the customer counters lower binds the shop to the lower amount. Guarding it needs a body on both accept routes (for example `expected_amount_cents`, `409` on mismatch), which is a contract change.
+  - The `accepting_orders` kill switch blocks offer checkout like any new checkout (`503 ORDERS_PAUSED`). Decision 4 keeps answers open while paused, so an offer may be accepted then and its checkout refused until the shop reopens. Whether the checkout window should stretch over a pause is VS-041's question, not decided here.
+- **SRS conflict, resolved.** SRS §20.6 and database-design.md §17.6 drew `accepted` only from `awaiting_admin`, while FR-13, F-092 and api-endpoints.md §13 let the customer accept on their own turn. Both diagrams now carry the `awaiting_customer → accepted` arrow.
 - The customer's turn has a reminder and the administrator's does not. If the shop later wants admin reminders, that needs a second column or a wider CHECK, not a reinterpretation of this one.
 - Each two-party integration test opens one test client at a time. A client's lifespan rebinds the app's engine to its own event loop, so two clients used alternately mix loops and hang.

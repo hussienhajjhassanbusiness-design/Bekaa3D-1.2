@@ -75,5 +75,13 @@ class OfferNotYourTurnError(NegotiationDomainError):
     """409 OFFER_NOT_YOUR_TURN: only the party whose turn it is may answer (FR-13)."""
 
 
+class OfferAmountChangedError(NegotiationDomainError):
+    """409 OFFER_AMOUNT_CHANGED: accept named an amount no longer on the table (ADR-035 d9)."""
+
+    def __init__(self, current_amount_cents: int) -> None:
+        super().__init__(f"The amount on the table is now {current_amount_cents} cents.")
+        self.current_amount_cents = current_amount_cents
+
+
 class OfferExpiredError(NegotiationDomainError):
     """410 OFFER_EXPIRED: the turn's deadline has been reached (BR-084, ADR-034 d6)."""
