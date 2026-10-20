@@ -406,4 +406,4 @@ def test_the_cash_switch_is_a_strict_boolean() -> None:
     assert validate_value("cash_payment_enabled", False) is False
     for refused in (0, 1, "true", None):
         with pytest.raises(InvalidSettingValueError):
-            validate_value("cash_payment_enabled", refused)  # type: ignore[arg-type]
+            validate_value("cash_payment_enabled", refused)
