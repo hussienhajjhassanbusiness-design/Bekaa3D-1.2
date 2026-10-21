@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from app.jobs.purge_idempotency import purge_expired_idempotency_records
 from app.platform.domain.idempotency import Conflict, InProgress, NewClaim, Replay
 from app.platform.infrastructure.idempotency import SqlIdempotencyStore
 from tests.integration.deep_support import create_user
@@ -127,6 +128,41 @@ async def test_the_purge_deletes_only_expired_claims(
             text("SELECT id FROM idempotency_records WHERE id = ANY(:ids)"), {"ids": ids}
         )
         assert [row.id for row in rows] == [ids[-1]]
+
+
+@pytest.mark.parametrize(
+    ("max_batches", "deleted", "truncated", "left"), [(50, 5, 0, 1), (2, 4, 1, 2)]
+)
+async def test_the_purge_job_deletes_expired_claims_in_batches(
+    db_engine: AsyncEngine,
+    db_session: AsyncSession,
+    max_batches: int,
+    deleted: int,
+    truncated: int,
+    left: int,
+) -> None:
+    """Dated in 2000, so the job's `now` sees only this test's claims as expired."""
+    user = await create_user(db_session)
+    now = datetime(2000, 1, 2, tzinfo=UTC)
+    old = [
+        await _claim(db_engine, user.id, uuid.uuid4().hex, expires_at=now - timedelta(days=1))
+        for _ in range(5)
+    ]
+    live = await _claim(db_engine, user.id, uuid.uuid4().hex, expires_at=now + timedelta(days=1))
+    result = await purge_expired_idempotency_records(
+        {"session_factory": async_sessionmaker(db_engine)},
+        now=now,
+        batch_size=2,
+        max_batches=max_batches,
+    )
+    assert result == {"deleted": deleted, "truncated": truncated}
+    ids = [c.record_id for c in [*old, live] if isinstance(c, NewClaim)]
+    async with db_engine.connect() as conn:
+        kept = await conn.scalars(
+            text("SELECT id FROM idempotency_records WHERE id = ANY(:ids)"), {"ids": ids}
+        )
+        remaining = set(kept.all())
+    assert len(remaining) == left and ids[-1] in remaining
 
 
 async def test_the_purge_skips_a_locked_claim(
