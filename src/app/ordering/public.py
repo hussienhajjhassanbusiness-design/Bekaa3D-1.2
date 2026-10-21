@@ -18,7 +18,13 @@ from app.ordering.domain.enums import (
     OrderStatus,
     PaymentMethod,
 )
-from app.ordering.domain.exceptions import LiveAttemptExistsError, OrderNotReleasableError
+from app.ordering.domain.exceptions import (
+    LiveAttemptExistsError,
+    OfferCheckoutExpiredError,
+    OfferCheckoutNotFoundError,
+    OfferNotCheckoutableError,
+    OrderNotReleasableError,
+)
 from app.ordering.domain.order_status import LineState, OrderStatusInputs, derive_order_status
 from app.ordering.domain.orders import Order, OrderLine, StatusChange
 from app.ordering.domain.payment_recovery import (
@@ -36,6 +42,9 @@ __all__ = [
     "LineState",
     "LiveAttemptExistsError",
     "LockedOrder",
+    "OfferCheckoutExpiredError",
+    "OfferCheckoutNotFoundError",
+    "OfferNotCheckoutableError",
     "OrderItemStatus",
     "OrderNotReleasableError",
     "OrderSource",
@@ -56,6 +65,7 @@ __all__ = [
     "release_candidates",
     "release_unpaid_order",
     "stl_owned",
+    "unpaid_offer_order",
 ]
 
 
@@ -222,3 +232,8 @@ async def orders_by_id(session: AsyncSession, order_ids: list[UUID]) -> dict[UUI
 async def order_lines(session: AsyncSession, order_id: UUID) -> list[OrderLine]:
     """The order's lines by id, no lock (VS-024 admin payment detail)."""
     return await SqlOrderStore(session).order_lines(order_id)
+
+
+async def unpaid_offer_order(session: AsyncSession, offer_id: UUID) -> UUID | None:
+    """The uncancelled order whose line still awaits payment for this offer. No lock."""
+    return await SqlOrderStore(session).unpaid_offer_order(offer_id)

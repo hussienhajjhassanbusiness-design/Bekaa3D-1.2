@@ -7,7 +7,7 @@ PR B not started. Owner decisions: Q1–Q16 as recommended; Q17 decided (Revisio
 - Derived statically from `revision` / `down_revision` in `migrations/versions/`: 24
   files, one linear chain, one head. No file names `8d2f6a1c3e57` as its `down_revision`.
   No merge revisions.
-- This slice's migration (PR A, §4) therefore has `down_revision = "8d2f6a1c3e57"`.
+- This slice's migration (PR A, §4) was planned with `down_revision = "8d2f6a1c3e57"`; after merging VS-041 it is re-parented onto `d5507ee63176` (`order_items_offer_once`), the single head.
 - Re-derive the head immediately before `alembic revision`: VS-023b also plans a
   migration (`docs/vertical-slice-plan.md:575-578`).
 
@@ -18,7 +18,7 @@ PR B not started. Owner decisions: Q1–Q16 as recommended; Q17 decided (Revisio
 `vs-039-offer-submission`, `vs-040-offer-negotiation`, `vs-046-security-retention`. None
 names VS-028, physical, cash, shipping or a new checkout, and no ref holds a
 `VS-028` file or an ADR above 036. Highest ADR on `origin/main`: **ADR-036**, so this
-slice's ADR is **ADR-037** (re-check before writing it).
+slice's ADR is **ADR-038** (re-check before writing it).
 
 **Format:** follows [`VS-024-payment-recovery-plan.md`](VS-024-payment-recovery-plan.md).
 Every `file:line` below is on `main` at `bf0abd1`.
@@ -43,9 +43,9 @@ and `require_online` (`src/app/ordering/domain/checkout_rules.py:83`, `:91`); th
   Consequences). The purge of never-verified accounts cannot reach them: a block needs a
   cash order from a verified customer, and `cleared_by` is an administrator. A test asserts
   that deleting such a user is refused (`23503`, each FK by name). Recorded in
-  [ADR-037](../adr/ADR-037-physical-checkout-and-cash-eligibility.md) d3; the plan missed
+  [ADR-038](../adr/ADR-038-physical-checkout-and-cash-eligibility.md) d3; the plan missed
   this guard.
-- **ADR-037 is created in PR A** with the schema decisions (owner request); PR B adds the
+- **ADR-038 is created in PR A** with the schema decisions (owner request); PR B adds the
   checkout decisions (§7).
 - **Seeds fixed (owner-approved):** two existing tests seeded `contact_phone_hash` values
   that `ck_orders_phone_hash_format` now refuses (`"HASH-SENTINEL"`, `"hash"`); they now
@@ -55,7 +55,7 @@ and `require_online` (`src/app/ordering/domain/checkout_rules.py:83`, `:91`); th
   `tests/integration/test_model_migration_parity.py` (the new table);
   `tests/integration/test_deep_db_constraints_and_migrations.py` (the allowlist);
   `tests/integration/ordering/test_order_history_api.py` and
-  `tests/integration/negotiation/test_offer_schema.py` (the seeds); `docs/adr/ADR-037-…`
+  `tests/integration/negotiation/test_offer_schema.py` (the seeds); `docs/adr/ADR-038-…`
   and `docs/adr/README.md`. Migration id `fcd589e89e59`.
 
 ## Revision 2 (2026-10-20): owner decisions before PR A
@@ -123,7 +123,7 @@ These are recorded as decided. They bind PR A and PR B.
 |---|---|---|
 | D1 | One migration (PR A): `cash_payment_blocks`, three cash settings seeded, `free_shipping_threshold` deleted, two format CHECKs and one partial index on `orders`. Reversible; one head. | §4 |
 | D2 | PR A merges first (migration lock, `CONTRIBUTING.md:42-47`). Because deleting the settings row breaks `GET /settings/public` for code that still lists it, PR A also carries the registry, `PublicSettingsRead`, the `PHONE_HASH_SALT` setting and their tests. No checkout code. | §4.1, §8 |
-| D3 | `ONLINE_PAYMENT_UNAVAILABLE` (503) is raised only for `payment_method = online`. A cash checkout works with `PAYMENT_PROVIDER=none`. ADR-037 amends ADR-032 d12 to say so. | §2.1, §3.4 |
+| D3 | `ONLINE_PAYMENT_UNAVAILABLE` (503) is raised only for `payment_method = online`. A cash checkout works with `PAYMENT_PROVIDER=none`. ADR-038 amends ADR-032 d12 to say so. | §2.1, §3.4 |
 | D4 | A cash checkout is **one** transaction: claim, place, complete the claim, COMMIT. No payment row, no provider call, no Tx2. | §2.1 |
 | D5 | Lock order on the cash path: `idempotency_records → carts → addresses (FOR SHARE, delivery only) → phone advisory lock`, then reads and INSERTs only. No existing `orders` row is locked. | §8.1 |
 | D6 | The phone lock is `pg_advisory_xact_lock(CASH_PHONE_LOCK_NS, hashtext(phone_hash))`, the two-int form. Its key space does not overlap the one-bigint locks already in use. VS-031's block insert takes the same lock through the same function. | §3.5, §8.1 |
@@ -337,7 +337,7 @@ amount_due_cents(lines) -> int   # sum of line_total_cents over non-cancelled li
   `partially_refunded`, and `status = 'in_progress'` on a cash order means unpaid and
   uncancelled.
   - A unit test pins this over every terminal line combination.
-  - ADR-037 records that a future edge out of `delivered` / `picked_up` must revisit the
+  - ADR-038 records that a future edge out of `delivered` / `picked_up` must revisit the
     count.
 
 ### 3.2 Catalog (`app.catalog`)
@@ -989,7 +989,7 @@ guarantee covered by an [M] test.
 
 ## 7. Docs and ADRs
 
-- **ADR-037** "Physical checkout and cash eligibility" (new), plus its line in
+- **ADR-038** "Physical checkout and cash eligibility" (new), plus its line in
   `docs/adr/README.md:44`. Decisions:
   - D3, which **amends ADR-032 d12** (`ADR-032:44`): `PAYMENT_PROVIDER=none` means no
     online payment; cash checkout still works.
@@ -1095,9 +1095,9 @@ Report any precedence change in the existing `test_checkout_api.py` refusals
 **Checkpoint 3:** all [M] tests are green in sequential chunks. Report each guard shown
 failing once removed.
 
-13. Docs and ADR-037 §7; regenerate openapi.
+13. Docs and ADR-038 §7; regenerate openapi.
 
-**Checkpoint 4:** owner review of ADR-037 and the docs diff, then merge.
+**Checkpoint 4:** owner review of ADR-038 and the docs diff, then merge.
 
 ### 8.1 Lock order per path (resolves item 2)
 
@@ -1163,7 +1163,7 @@ next one holds.
    and a cancel order cart before phone (point 2).
 4. **Addresses** are locked only by checkout (share, after carts) and by address writers
    (exclusive, after `users`). Address writers take no cart, phone or order lock.
-5. **Invariant recorded in ADR-037:** no path holding a cart lock may wait on an existing
+5. **Invariant recorded in ADR-038:** no path holding a cart lock may wait on an existing
    `orders` row. Breaking it (for example VS-041 locking an order while holding a cart)
    would create a cycle with VS-031's `orders → cart` order, and VS-041's plan must
    re-check this.
@@ -1197,8 +1197,8 @@ Checkout reads blocks only after taking both locks.
 | # | Risk | Mitigation |
 |---|---|---|
 | R1 | A leaked `PHONE_HASH_SALT` lets the about 10^8 Lebanese numbers be brute-forced from block hashes. | SecretStr, redaction, boot check, never in the database; CONTRIBUTING guidance. |
-| R2 | The salt must never rotate. Losing it breaks phone matching for every block. | Orders keep `contact_phone_snapshot`, so order hashes can be recomputed with a new salt. Blocks keep `user_id` matching. ADR-037 records the recovery procedure. |
-| R3 | D8 relies on "no edge out of delivered/picked_up". A future slice (VS-029b, returns) adding one would let a paid cash order count as open. | The D8 unit test fails on such a change; ADR-037 names the condition. |
+| R2 | The salt must never rotate. Losing it breaks phone matching for every block. | Orders keep `contact_phone_snapshot`, so order hashes can be recomputed with a new salt. Blocks keep `user_id` matching. ADR-038 records the recovery procedure. |
+| R3 | D8 relies on "no edge out of delivered/picked_up". A future slice (VS-029b, returns) adding one would let a paid cash order count as open. | The D8 unit test fails on such a change; ADR-038 names the condition. |
 | R4 | The `PublicSettingsRead` field removal breaks a frontend still reading `free_shipping_threshold`. | The handoff already says to treat it as absent (`BACKEND-RESPONSE.md:310`). |
 | R5 | `CheckoutRead.payment` becomes nullable; a client that assumes a redirect breaks on cash. | Documented in openapi and the handoff; cash is new, so no existing client sends it. |
 | R6 | Error precedence shifts for online carts with fulfillment fields (today: 422 `INVALID_FULFILLMENT` before price checks, `checkout.py` service `:84`). | Checkpoint 2 reports every changed precedence. |

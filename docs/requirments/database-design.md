@@ -1495,6 +1495,7 @@ WHERE status IN ('awaiting_admin', 'awaiting_customer', 'accepted')
 - acceptance freezes price;
 - after acceptance only checkout expiry matters;
 - acquiring product by another route auto-closes the offer;
+- an offer pays for at most one order line, ever: `uq_order_items_offer_once` on `order_items (offer_id) WHERE offer_id IS NOT NULL AND fulfillment_status <> 'cancelled'` (VS-041, ADR-037);
 - rejection sets cooldown.
 
 The rule “product must be STL” is cross-table and enforced by the offer service.
@@ -2164,7 +2165,11 @@ awaiting_admin
        -> expired
 
 awaiting_admin -> expired
+awaiting_admin -> auto_closed
+awaiting_customer -> auto_closed
 ```
+
+Buying the STL by any other route closes a live offer from any of its three live states (BR-088, SRS 11.4; ADR-037).
 
 Once accepted, the inactivity timer no longer controls the offer; only checkout expiry applies.
 

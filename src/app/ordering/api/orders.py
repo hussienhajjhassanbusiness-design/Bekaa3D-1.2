@@ -3,7 +3,7 @@ Reads: a session is enough, no verified email and no rate limit, like `GET /cart
 
 import base64
 import binascii
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -15,12 +15,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_session
 from app.core.config import get_settings
 from app.identity.public import User, current_user, not_found_error
+from app.negotiation.public import SqlOfferCheckouts
 from app.ordering.api.order_schemas import OrderDetailRead, OrderPage, OrderSummaryRead
 from app.ordering.application.ports import OrderFilters
-from app.ordering.application.services.order_history import get_order, list_orders
+from app.ordering.application.services.order_history import (
+    RetryContext,
+    get_order,
+    list_orders,
+)
 from app.ordering.domain.enums import OrderStatus
 from app.ordering.infrastructure.order_history import SqlOrderHistory
 from app.payments.public import order_payment_reader
+from app.platform.public import settings_reader
 
 router = APIRouter(prefix="/me/orders", tags=["orders"])
 
@@ -28,6 +34,7 @@ _DEFAULT_PAGE_SIZE = 20
 _MAX_PAGE_SIZE = 100
 _CURSOR_SEPARATOR = "|"
 _BAD_CURSOR = "cursor is not a valid pagination cursor"
+HOLD_SETTING = "checkout_hold_period"
 
 _RESPONSES: dict[int | str, dict[str, Any]] = {
     401: {"description": "No valid session cookie was presented."},
@@ -127,8 +134,13 @@ async def get_my_order(
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
 ) -> OrderDetailRead:
+    hold = await settings_reader(session).get_duration_seconds(HOLD_SETTING)
     view = await get_order(
-        SqlOrderHistory(session), order_payment_reader(session), user_id=user.id, order_id=order_id
+        SqlOrderHistory(session),
+        order_payment_reader(session),
+        user_id=user.id,
+        order_id=order_id,
+        retry=RetryContext(SqlOfferCheckouts(session), timedelta(seconds=hold), datetime.now(UTC)),
     )
     if view is None:
         raise not_found_error()

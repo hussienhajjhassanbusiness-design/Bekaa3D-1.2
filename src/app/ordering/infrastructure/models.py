@@ -288,6 +288,13 @@ class OrderItemModel(Base):
         CheckConstraint(
             "offer_id IS NULL OR product_type = 'stl'", name="ck_order_items_offer_is_stl"
         ),
+        # VS-041 / ADR-037: an offer pays for at most one line, ever.
+        Index(
+            "uq_order_items_offer_once",
+            "offer_id",
+            unique=True,
+            postgresql_where=text("offer_id IS NOT NULL AND fulfillment_status <> 'cancelled'"),
+        ),
         ForeignKeyConstraint(
             ["product_id", "product_type"],
             ["products.id", "products.type"],

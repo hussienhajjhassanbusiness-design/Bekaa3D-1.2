@@ -1,6 +1,6 @@
 """Payment paths' locks, read from the SQL they send (VS-023 plan 8.1; ADR-024 d9):
-receipt and Tx A lock nothing; Tx B locks orders, then lines by id, then payments, and
-no other row; the event is marked processed last."""
+receipt and Tx A lock nothing; Tx B locks orders, lines by id, payments and, once an STL is
+paid, the (user, product) advisory lock and its live offers (ADR-037); the event goes last."""
 
 import re
 from typing import Any
@@ -81,9 +81,24 @@ async def test_apply_locks_orders_then_lines_then_payments_and_nothing_else(
     order = locks(statements)
     print(f"\nAPPLY {result.state}/{result.captured_amount_cents}", *order, sep="\n  ")
     print("  writes:", writes(statements))
-    assert tables(order) == ["orders", "order_items", "payments"]
+    paid = writes(statements)[1:2] == ["UPDATE order_items"]
+    assert tables(order) == ["orders", "order_items", "payments", *(["offers"] if paid else [])]
     assert order[1].endswith("ORDER BY order_items.id FOR UPDATE")
     assert writes(statements) == expected_writes
+    if paid:
+        assert_acquisition_lock_between_payments_and_offers(statements)
+
+
+def assert_acquisition_lock_between_payments_and_offers(statements: list[str]) -> None:
+    """ADR-037: the advisory lock after the payment row and before any offer row."""
+    at = [i for i, s in enumerate(statements) if "pg_advisory_xact_lock" in s]
+    payment = max(
+        i for i, s in enumerate(statements) if s.endswith("FOR UPDATE") and "FROM payments" in s
+    )
+    offer = next(
+        i for i, s in enumerate(statements) if s.endswith("FOR UPDATE") and "FROM offers" in s
+    )
+    assert len(at) == 1 and payment < at[0] < offer
 
 
 async def test_receipt_and_tx_a_lock_nothing_and_the_event_is_processed_last(
@@ -109,7 +124,8 @@ async def test_receipt_and_tx_a_lock_nothing_and_the_event_is_processed_last(
         await verify_event(async_sessionmaker(db_engine), {"mock": mock}, event_id)
     order = locks(verification)
     print("VERIFY", *order, sep="\n  ")
-    assert tables(order) == ["orders", "order_items", "payments"]
+    assert tables(order) == ["orders", "order_items", "payments", "offers"]
+    assert_acquisition_lock_between_payments_and_offers(verification)
     first_lock = next(i for i, s in enumerate(verification) if "FOR UPDATE" in s)
     assert not any("FOR UPDATE" in s for s in verification[:first_lock]), "Tx A locks nothing"
     assert writes(verification)[-1] == "UPDATE webhook_events"

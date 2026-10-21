@@ -52,6 +52,8 @@ DETAIL_KEYS = {
     "payment_method",
     "payment_due",
     "can_cancel",
+    "can_retry_payment",
+    "hold_expires_at",
     "subtotal",
     "tax",
     "total",
@@ -500,6 +502,54 @@ async def test_the_payment_shown_is_the_live_or_paid_one_else_the_latest(
 
 
 # -------------------------------------------------------------- flags through the real reader
+
+
+HOLD = timedelta(seconds=1800)  # `checkout_hold_period`'s default
+
+
+async def test_a_failed_attempt_inside_the_hold_can_be_retried(
+    db_session: AsyncSession, ctx: Ctx, client: TestClient
+) -> None:
+    placed = datetime.now(UTC).replace(microsecond=0)
+    oid = await seed_order(db_session, ctx, placed_at=placed)
+    await seed_payment(db_session, oid, "failed", at=placed + timedelta(minutes=1))
+    detail = _detail(client, oid)
+    assert detail["can_retry_payment"] is True
+    expires = datetime.fromisoformat(detail["hold_expires_at"])
+    assert expires == placed + timedelta(minutes=1) + HOLD
+
+
+@pytest.mark.parametrize("status", ["pending", "processing"])
+async def test_a_live_attempt_cannot_be_retried_but_shows_its_hold(
+    db_session: AsyncSession, ctx: Ctx, client: TestClient, status: str
+) -> None:
+    placed = datetime.now(UTC).replace(microsecond=0)
+    oid = await seed_order(db_session, ctx, placed_at=placed)
+    await seed_payment(db_session, oid, status, at=placed)
+    detail = _detail(client, oid)
+    assert detail["can_retry_payment"] is False
+    assert datetime.fromisoformat(detail["hold_expires_at"]) == placed + HOLD
+
+
+async def test_after_the_hold_an_unpaid_order_cannot_be_retried(
+    db_session: AsyncSession, ctx: Ctx, client: TestClient
+) -> None:
+    oid = await seed_order(db_session, ctx)  # placed at T0, long ago
+    await seed_payment(db_session, oid, "failed")
+    detail = _detail(client, oid)
+    assert detail["can_retry_payment"] is False
+    assert datetime.fromisoformat(detail["hold_expires_at"]) == T0 + HOLD
+
+
+async def test_a_paid_or_cash_order_has_no_retry_and_no_hold(
+    db_session: AsyncSession, ctx: Ctx, client: TestClient
+) -> None:
+    paid = await seed_order(db_session, ctx, line_status="awaiting_delivery", status="in_progress")
+    await seed_payment(db_session, paid, "paid")
+    cash = await seed_order(db_session, ctx, kind="pickup", status="in_progress")
+    for oid in (paid, cash):
+        detail = _detail(client, oid)
+        assert (detail["can_retry_payment"], detail["hold_expires_at"]) == (False, None)
 
 
 async def test_a_paid_cash_order_still_in_progress_is_not_due(

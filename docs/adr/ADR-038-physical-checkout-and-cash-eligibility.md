@@ -1,4 +1,4 @@
-# ADR-037: Physical checkout and cash eligibility - a hash-only cash block table that can only reference a cash order, canonical phone spellings in the database, and a never-rotated phone-hash key (VS-028)
+# ADR-038: Physical checkout and cash eligibility - a hash-only cash block table that can only reference a cash order, canonical phone spellings in the database, and a never-rotated phone-hash key (VS-028)
 
 **Status:** Accepted in part. The schema decisions below are built in VS-028 PR A (migration `fcd589e89e59`). The checkout decisions (VS-028 plan D3-D13: the online-only `ONLINE_PAYMENT_UNAVAILABLE`, the one-transaction cash path, the lock order, open cash orders as `status = 'in_progress'`) are added to this ADR by VS-028 PR B.
 **Date:** 2026-10-20

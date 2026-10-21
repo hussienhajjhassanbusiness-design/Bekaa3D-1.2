@@ -1,6 +1,6 @@
 """cash_payment_blocks, the three cash settings, free_shipping_threshold removed, and the
 contact-phone format CHECKs (VS-028 PR A, ADR-024). Revision ID: fcd589e89e59, revises
-8d2f6a1c3e57."""
+d5507ee63176."""
 
 from collections.abc import Sequence
 from typing import Any
@@ -10,7 +10,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "fcd589e89e59"
-down_revision: str | None = "8d2f6a1c3e57"
+down_revision: str | None = "d5507ee63176"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

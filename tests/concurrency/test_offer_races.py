@@ -14,7 +14,7 @@ from app.catalog.infrastructure.cart_product_reader import SqlCartProductReader
 from app.negotiation.application.services.expire_offers import expire_offer
 from app.negotiation.application.services.submit_offer import OfferRequestContext, submit_offer
 from app.negotiation.domain.exceptions import OfferAlreadyActiveError, OfferCooldownActiveError
-from app.negotiation.domain.offers import NewOffer, Offer
+from app.negotiation.domain.offers import Offer
 from app.negotiation.infrastructure.adapters import EngagementOfferNotifier, OrderingStlOwnership
 from app.negotiation.infrastructure.offers import SqlOfferStore
 from app.platform.public import SqlAuditWriter, settings_reader
@@ -33,9 +33,11 @@ class _SyncedStore(SqlOfferStore):
         super().__init__(session)
         self._barrier = barrier
 
-    async def add(self, offer: NewOffer, *, at: datetime) -> Offer:
+    async def lock_acquisition(self, user_id: uuid.UUID, product_id: uuid.UUID) -> None:
+        # Since ADR-037 submissions queue on this lock, so they meet here; each insert
+        # then still relies on `uq_offers_live`, as no application check precedes it.
         await meet_or_fail(self._barrier)
-        return await super().add(offer, at=at)
+        await super().lock_acquisition(user_id, product_id)
 
     async def lock_unless_locked(self, offer_id: uuid.UUID) -> Offer | None:
         await meet_or_fail(self._barrier)

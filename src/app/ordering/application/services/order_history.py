@@ -2,10 +2,11 @@
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import UUID
 
 from app.ordering.application.ports import (
+    OfferCheckouts,
     OrderFilters,
     OrderHistoryStore,
     OrderPaymentReader,
@@ -14,9 +15,17 @@ from app.ordering.application.ports import (
 )
 from app.ordering.domain.customer_view import (
     can_cancel,
+    can_retry_payment,
     customer_history,
     customer_lines,
+    hold_expires_at,
     payment_due,
+)
+from app.ordering.domain.enums import OrderSource
+from app.ordering.domain.exceptions import (
+    OfferCheckoutExpiredError,
+    OfferCheckoutNotFoundError,
+    OfferNotCheckoutableError,
 )
 from app.ordering.domain.orders import CustomerOrder, CustomerOrderLine, HistoryEntry
 
@@ -37,6 +46,17 @@ class OrderDetailView:
     payment: PaymentAttemptRef | None
     payment_due: bool
     can_cancel: bool
+    can_retry_payment: bool
+    hold_expires_at: datetime | None
+
+
+@dataclass(frozen=True)
+class RetryContext:
+    """What `can_retry_payment` and `hold_expires_at` need beyond the order (VS-024, VS-041)."""
+
+    offers: OfferCheckouts
+    hold: timedelta
+    now: datetime
 
 
 async def list_orders(
@@ -62,7 +82,12 @@ def _summary(order: CustomerOrder, view: OrderPaymentView) -> OrderSummaryView:
 
 
 async def get_order(
-    orders: OrderHistoryStore, payments: OrderPaymentReader, *, user_id: UUID, order_id: UUID
+    orders: OrderHistoryStore,
+    payments: OrderPaymentReader,
+    *,
+    user_id: UUID,
+    order_id: UUID,
+    retry: RetryContext,
 ) -> OrderDetailView | None:
     """None for an unknown order and for another customer's alike."""
     order = await orders.get(user_id, order_id)
@@ -82,4 +107,32 @@ async def get_order(
             reached_paid=view.reached_paid,
             lines=lines,
         ),
+        can_retry_payment=can_retry_payment(
+            order,
+            lines,
+            attempt_status=view.shown.status if view.shown else None,
+            offer_open=await _offer_open(retry, order, lines, user_id),
+            now=retry.now,
+            hold=retry.hold,
+        ),
+        hold_expires_at=hold_expires_at(
+            order, latest_initiated_at=view.latest_initiated_at, hold=retry.hold
+        ),
     )
+
+
+async def _offer_open(
+    retry: RetryContext,
+    order: CustomerOrder,
+    lines: Sequence[CustomerOrderLine],
+    user_id: UUID,
+) -> bool:
+    """An offer order can take a new attempt only inside the offer's window (ADR-037)."""
+    if order.source is not OrderSource.OFFER:
+        return True
+    try:
+        for offer_id in {line.offer_id for line in lines if line.offer_id is not None}:
+            await retry.offers.read(offer_id, user_id, now=retry.now)
+    except (OfferCheckoutNotFoundError, OfferCheckoutExpiredError, OfferNotCheckoutableError):
+        return False
+    return True

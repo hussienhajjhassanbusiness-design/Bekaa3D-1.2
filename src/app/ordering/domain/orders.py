@@ -26,6 +26,7 @@ class NewOrderLine:
     quantity: int
     line_total_cents: int
     currency: str
+    offer_id: UUID | None = None
 
 
 @dataclass(frozen=True)
@@ -78,6 +79,7 @@ class OrderLine:
     line_total_cents: int
     currency: str
     fulfillment_status: OrderItemStatus
+    offer_id: UUID | None = None
 
 
 @dataclass(frozen=True)
@@ -134,6 +136,7 @@ class CustomerOrderLine:
     fulfillment_status: OrderItemStatus
     fulfilled_at: datetime | None
     cancelled_at: datetime | None
+    offer_id: UUID | None = None
 
 
 @dataclass(frozen=True)
