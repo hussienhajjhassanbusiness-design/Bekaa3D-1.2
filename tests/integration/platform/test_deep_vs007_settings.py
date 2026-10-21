@@ -85,8 +85,10 @@ async def test_non_integers_are_setting_invalid_never_a_500(
 @pytest.mark.parametrize(
     ("value", "status"),
     [
-        pytest.param(None, 200, id="null-disables"),
-        pytest.param({"amount_cents": 0, "currency": "USD"}, 200, id="zero"),
+        # VS-028: the only money setting is now cash_max_order_total, never null nor 0.
+        pytest.param(None, 422, id="null"),
+        pytest.param({"amount_cents": 0, "currency": "USD"}, 422, id="zero"),
+        pytest.param({"amount_cents": 1, "currency": "USD"}, 200, id="min"),
         pytest.param({"amount_cents": 1_000_000, "currency": "USD"}, 200, id="max"),
         pytest.param({"amount_cents": 1_000_001, "currency": "USD"}, 422, id="max-plus-1"),
         pytest.param({"amount_cents": -1, "currency": "USD"}, 422, id="negative"),
@@ -103,8 +105,8 @@ async def test_non_integers_are_setting_invalid_never_a_500(
 async def test_money_shapes(value: Any, status: int, db_session: AsyncSession) -> None:
     with client_for(main_app) as client:
         await mfa_admin(client, db_session)
-        response = _patch(client, "free_shipping_threshold", value)
-        _patch(client, "free_shipping_threshold", None)
+        response = _patch(client, "cash_max_order_total", value)
+        _patch(client, "cash_max_order_total", REGISTRY["cash_max_order_total"].default)
     assert response.status_code == status, response.text
 
 

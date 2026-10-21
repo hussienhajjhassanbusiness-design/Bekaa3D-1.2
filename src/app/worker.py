@@ -8,6 +8,7 @@ from app.core import models as _models  # noqa: F401 - registers models onto Bas
 from app.core.config import get_settings
 from app.core.database import make_engine, make_session_factory
 from app.core.logging import configure_logging
+from app.core.security import check_phone_hash_salt
 from app.integrations.email.factory import get_email_provider
 from app.jobs.registry import CRON_JOBS, FUNCTIONS
 from app.payments.public import configured_payment_providers
@@ -38,6 +39,8 @@ async def on_startup(ctx: dict[str, Any]) -> None:
     # just stops, indistinguishable from an idle one. Failing at startup is loud
     # and the container restart loop makes it impossible to miss.
     get_email_provider(settings)
+    # VS-028: the same PHONE_HASH_SALT refusal as the API's lifespan (plan Q5).
+    check_phone_hash_salt(settings)
     # VS-023: the same payment refusal as the API's lifespan (plan 3.9).
     ctx["payment_providers"] = configured_payment_providers(settings)
 

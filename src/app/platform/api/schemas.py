@@ -122,7 +122,7 @@ class AuditLogPage(BaseModel):
 
 
 class PublicSettingsRead(BaseModel):
-    """The five allowlisted settings, and nothing else.
+    """The six allowlisted settings, and nothing else.
 
     This is a **fixed schema, not a dictionary**, and that is the whole security
     design. A new row in the `settings` table has no field here to land in, so a
@@ -131,13 +131,15 @@ class PublicSettingsRead(BaseModel):
     change. The alternative shape - read every row and filter - leaks the moment
     a filter is forgotten.
 
-    Every field except `accepting_orders` is nullable because the real values
-    are still awaited from the client (SRS 30.2). Null means "not configured";
-    the frontend hides the element rather than showing invented data.
+    The three text fields are nullable because the real values are still
+    awaited from the client (SRS 30.2). Null means "not configured"; the
+    frontend hides the element rather than showing invented data.
+    `free_shipping_threshold` was removed by VS-028 (ADR-024: no shipping charge).
     """
 
     accepting_orders: bool
-    free_shipping_threshold: MoneyRead | None
+    cash_payment_enabled: bool
+    cash_max_order_total: MoneyRead
     pickup_address: str | None
     pickup_hours: str | None
     whatsapp_number: str | None

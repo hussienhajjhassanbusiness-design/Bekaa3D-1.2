@@ -285,7 +285,8 @@ Never `FLUSHALL`: the same Redis holds MFA challenges and the job queue.
 ```json
 {
   "accepting_orders": true,
-  "free_shipping_threshold": null,
+  "cash_payment_enabled": true,
+  "cash_max_order_total": { "amount_cents": 10000, "currency": "USD" },
   "pickup_address": null,
   "pickup_hours": null,
   "whatsapp_number": "+96170000000"
@@ -304,11 +305,11 @@ Never `FLUSHALL`: the same Redis holds MFA challenges and the job queue.
 |---|---|---|
 | WhatsApp business number | `whatsapp_number` | E.164 string such as `"+96170000000"`, or `null` |
 | Kill switch | `accepting_orders` | boolean; `false` means checkout will answer `503 ORDERS_PAUSED` |
-| Free-shipping threshold | `free_shipping_threshold` | always `null` today; **removed**, see below |
+| Free-shipping threshold | — | **removed on 2026-10-20**, see below |
 
 - There is no "message" setting for WhatsApp. The frontend builds the `wa.me` link and any prefilled text itself.
-- **`free_shipping_threshold` is obsolete.** ADR-024 removed all shipping charges, so there is no threshold. The field is still in the response only because the slice that deletes it (VS-028) is not built. Do not build UI on it; treat it as absent.
-- VS-028 will add two fields: `cash_payment_enabled` (boolean) and `cash_max_order_total` (`{amount_cents, currency}`). Provisional until built.
+- **2026-10-20 (VS-028 PR A): `free_shipping_threshold` removed** from `GET /api/v1/settings/public` and from the admin settings (its `GET`/`PATCH /api/v1/admin/settings/free_shipping_threshold` now answer `404`). `cash_payment_enabled` (bool) and `cash_max_order_total` (`{amount_cents, currency}`, never `null`) added. Remove any read of the old field. ADR-024 removed all shipping charges, so there is no threshold.
+- `cash_payment_enabled` and `cash_max_order_total` are live in the response; checkout starts honouring them with VS-028 PR B (cash checkout is still refused until then).
 - `pickup_address` and `pickup_hours` are strings or `null`. Hide the element when `null`.
 - The home page can read this on every load today; cache headers arrive with VS-020.
 
@@ -1147,7 +1148,7 @@ Set-Cookie: csrf_token=<redacted>; Max-Age=2592000; Path=/; SameSite=lax
 }
 ```
 
-**Fixture/test account:** the seeded administrator. A fresh database has fourteen settings.
+**Fixture/test account:** the seeded administrator. A fresh database has seventeen settings (since VS-028, 2026-10-20).
 
 **Authoritative source/OpenAPI file:** [`openapi.json`](openapi.json). **The authoritative key registry is [`../settings-registry.md`](../settings-registry.md)** (code: `src/app/platform/domain/settings_registry.py`).
 
@@ -1155,7 +1156,7 @@ Set-Cookie: csrf_token=<redacted>; Max-Age=2592000; Path=/; SameSite=lax
 - Build the editor from the list response. Each row tells you its control: `boolean` is a switch, `integer` and `duration` are numbers within `minimum`/`maximum` (`duration` is in seconds), `string` is text, `money` is `{"amount_cents": int, "currency": "USD"}`. Where `nullable` is true, `null` means "not set".
 - **Which keys need a confirmation step?** The backend has none: every `PATCH` applies at once. Confirmation is a frontend decision. `accepting_orders` deserves one, because it stops or opens checkout for everybody.
 - Keys cannot be created or deleted through the API.
-- Two keys are obsolete and will be deleted by later slices; do not build special UI for them: `daily_download_cap` (ADR-019) and `free_shipping_threshold` (ADR-024). VS-028 will add `cash_payment_enabled`, `cash_max_open_orders` and `cash_max_order_total`.
+- `daily_download_cap` (ADR-019) is obsolete and will be deleted by VS-023b; do not build special UI for it. `free_shipping_threshold` (ADR-024) was deleted on 2026-10-20 (VS-028); `cash_payment_enabled`, `cash_max_open_orders` (integer 1 – 10) and `cash_max_order_total` (money, 1 – 1 000 000 cents, never `null`) were added the same day.
 
 ### Domain / item: P1-4 — Admin customer management
 

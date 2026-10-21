@@ -12,6 +12,7 @@ _FAKE_ENV = {
     "JWT_SIGNING_KEY": "test-jwt-signing-key",
     "CSRF_SECRET": "test-csrf-secret",
     "IP_HASH_SALT": "test-ip-hash-salt",
+    "PHONE_HASH_SALT": "test-phone-hash-salt",
 }
 
 

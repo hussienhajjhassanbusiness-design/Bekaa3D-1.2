@@ -31,6 +31,9 @@ from app.ordering.domain.enums import (
     PaymentMethod,
 )
 
+# Lowercase hex HMAC-SHA256 (`app.core.security.hash_phone`, ADR-024 d6).
+PHONE_HASH_FORMAT = "^[0-9a-f]{64}$"
+
 
 def _pg_enum(enum: type[StrEnum], name: str) -> Enum:
     """A PostgreSQL type created by a migration, never by the ORM."""
@@ -199,8 +202,22 @@ class OrderModel(Base):
             "(digital_terms_accepted_at IS NULL) = (digital_terms_version IS NULL)",
             name="ck_orders_digital_terms_version",
         ),
+        # VS-028 (fcd589e89e59): the canonical spellings cash matching depends on.
+        CheckConstraint(
+            "contact_phone_snapshot IS NULL OR contact_phone_snapshot ~ '^\\+961[0-9]{7,8}$'",
+            name="ck_orders_contact_phone_e164",
+        ),
+        CheckConstraint(
+            f"contact_phone_hash IS NULL OR contact_phone_hash ~ '{PHONE_HASH_FORMAT}'",
+            name="ck_orders_phone_hash_format",
+        ),
         Index("ix_orders_user_placed", "user_id", text("placed_at DESC")),
         Index("ix_orders_status_placed", "status", text("placed_at DESC")),
+        Index(
+            "ix_orders_open_cash_phone",
+            "contact_phone_hash",
+            postgresql_where=text("payment_method = 'cash' AND status = 'in_progress'"),
+        ),
     )
 
 
@@ -368,3 +385,69 @@ class OrderStatusHistoryModel(Base):
     )
 
     __table_args__ = (Index("ix_order_status_history_order", "order_id", "created_at"),)
+
+
+class CashPaymentBlockModel(Base):
+    """database-design.md 8.6; migration fcd589e89e59. Holds only the phone's keyed hash;
+    VS-031 inserts rows, VS-029 lists and clears them (cleared, never deleted)."""
+
+    __tablename__ = "cash_payment_blocks"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    contact_phone_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    order_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    # Always 'cash' (plan Q4): the composite FK then refuses a block on an online order.
+    order_payment_method: Mapped[PaymentMethod] = mapped_column(
+        _pg_enum(PaymentMethod, "payment_method"), nullable=False, server_default=text("'cash'")
+    )
+    reason: Mapped[CancelReason] = mapped_column(
+        _pg_enum(CancelReason, "cancel_reason"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("clock_timestamp()")
+    )
+    cleared_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cleared_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["user_id"], ["users.id"], name="fk_cash_payment_blocks_user", ondelete="RESTRICT"
+        ),
+        ForeignKeyConstraint(
+            ["cleared_by"],
+            ["users.id"],
+            name="fk_cash_payment_blocks_cleared_by",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["order_id", "order_payment_method"],
+            ["orders.id", "orders.payment_method"],
+            name="fk_cash_payment_blocks_order_payment_method",
+            ondelete="RESTRICT",
+            onupdate="RESTRICT",
+        ),
+        UniqueConstraint("order_id", name="uq_cash_payment_blocks_order"),
+        CheckConstraint("reason IN ('refused', 'no_show')", name="ck_cash_payment_blocks_reason"),
+        CheckConstraint("order_payment_method = 'cash'", name="ck_cash_payment_blocks_cash_only"),
+        CheckConstraint(
+            "(cleared_at IS NULL) = (cleared_by IS NULL)",
+            name="ck_cash_payment_blocks_cleared_pair",
+        ),
+        CheckConstraint(
+            f"contact_phone_hash ~ '{PHONE_HASH_FORMAT}'",
+            name="ck_cash_payment_blocks_hash_format",
+        ),
+        Index(
+            "ix_cash_payment_blocks_user_active",
+            "user_id",
+            postgresql_where=text("cleared_at IS NULL"),
+        ),
+        Index(
+            "ix_cash_payment_blocks_phone_active",
+            "contact_phone_hash",
+            postgresql_where=text("cleared_at IS NULL"),
+        ),
+    )

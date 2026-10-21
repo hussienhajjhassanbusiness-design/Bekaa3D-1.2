@@ -4,7 +4,7 @@ Two routers, deliberately separate. The admin one is mounted inside
 `/api/v1/admin`, whose router-level `require_admin` already enforces
 authenticated + administrator + MFA-complete (VS-005), so nothing here
 re-implements authorization. The public one is unauthenticated and returns a
-fixed five-field schema.
+fixed six-field schema.
 """
 
 import base64
@@ -261,11 +261,11 @@ async def update_setting(
 async def read_public_settings(
     session: AsyncSession = Depends(get_session),
 ) -> PublicSettingsRead:
-    """The five allowlisted settings, read by key.
+    """The six allowlisted settings, read by key.
 
     Two separate guarantees stop an internal setting leaking here, and both have
     to be removed for one to escape: only the allowlisted keys are queried at
-    all, and the response model has a field for each of those five and nothing
+    all, and the response model has a field for each of those six and nothing
     else. Adding a row to the `settings` table therefore cannot make it public.
 
     A missing or invalid row raises rather than being defaulted. These are

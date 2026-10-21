@@ -112,10 +112,15 @@ uv pip compile pyproject.toml --extra dev --universal --python-version 3.13 --ge
 
 `.env` is git-ignored and must never be committed. Copying `.env.example` is not enough: replace every placeholder with a locally generated value before the stack is trusted with anything but throwaway data.
 
-`IP_HASH_SALT` matters most. It is the pepper of the keyed hash of the IP addresses stored in `audit_logs` and `sessions` ([ADR-028](docs/adr/ADR-028-keyed-monthly-rotated-ip-hashes.md)). The IPv4 space is small (about 4 billion addresses), so reversing those hashes by brute force needs both the pepper and the database salt, which is replaced and deleted every month. Changing the pepper needs a restart. Generate it, and the other secrets, locally:
+`IP_HASH_SALT` matters most. It is the pepper of the keyed hash of the IP addresses stored in `audit_logs` and `sessions` ([ADR-028](docs/adr/ADR-028-keyed-monthly-rotated-ip-hashes.md)). The IPv4 space is small (about 4 billion addresses), so reversing those hashes by brute force needs both the pepper and the database salt, which is replaced and deleted every month. Changing the pepper needs a restart.
+
+`PHONE_HASH_SALT` is the key of the keyed hash of contact phones that cash limits and cash blocks match on ([ADR-024](docs/adr/ADR-024-cash-on-delivery-and-courier-priced-shipping.md) d6). Lebanese numbers are few (about 10^8), so anyone holding the key can reverse every stored hash: keep it secret, never reuse it across environments, and **never rotate it**, because every existing block and open-order match would stop matching. Outside development and test, the API and the worker refuse to start with a value shorter than 32 characters or the `.env.example` placeholder.
+
+Generate them, and the other secrets, locally:
 
 ```bash
 python -c "import secrets; print(secrets.token_hex(16))"   # IP_HASH_SALT
+python -c "import secrets; print(secrets.token_hex(32))"   # PHONE_HASH_SALT
 python -c "import secrets; print(secrets.token_hex(32))"   # JWT_SIGNING_KEY, CSRF_SECRET, MFA_SECRET_KEY
 ```
 

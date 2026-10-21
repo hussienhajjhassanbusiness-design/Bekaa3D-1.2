@@ -1,5 +1,6 @@
 """The ORM models match the migrated schema for VS-023's six tables (03a4730dd046, plus
-VS-024's payments.captured_* in 00ce1ce252a6): Alembic's autogenerate diff must be empty."""
+VS-024's payments.captured_* in 00ce1ce252a6) and VS-028's cash_payment_blocks and orders
+index (fcd589e89e59): Alembic's autogenerate diff must be empty."""
 
 from typing import Any
 
@@ -21,6 +22,7 @@ VS023_TABLES = {
     "payments",
     "webhook_events",
     "idempotency_records",
+    "cash_payment_blocks",
 }
 
 

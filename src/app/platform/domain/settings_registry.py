@@ -163,21 +163,38 @@ _DEFINITIONS: Final[tuple[SettingDefinition, ...]] = (
         minimum=1,
         maximum=1_000,
     ),
+    # VS-028 (ADR-024 d7, BR-145). `free_shipping_threshold` was removed: no shipping is charged.
     SettingDefinition(
-        key="free_shipping_threshold",
-        type=SettingType.MONEY,
+        key="cash_payment_enabled",
+        type=SettingType.BOOLEAN,
         description=(
-            "Order value at or above which delivery is free. JSON null disables free shipping."
+            "Whether checkout offers cash on delivery or at pickup. Existing cash orders "
+            "are unaffected."
         ),
-        # BR-076 calls this optional, so "off" has to be representable. JSON
-        # null is that, and it is the honest default: any number here would be
-        # a business decision nobody has made.
-        default=None,
+        default=True,
+        is_public=True,
+    ),
+    SettingDefinition(
+        key="cash_max_open_orders",
+        type=SettingType.INTEGER,
+        description=(
+            "Unpaid, uncancelled cash orders allowed per customer or contact phone at once."
+        ),
+        default=1,
+        unit="cash orders per customer or contact phone",
+        minimum=1,
+        maximum=10,
+    ),
+    SettingDefinition(
+        key="cash_max_order_total",
+        type=SettingType.MONEY,
+        description="Highest recomputed order total that may be paid in cash.",
+        # Public: checkout must say why cash is unavailable. At least 1 cent (no $0 cash).
+        default={"amount_cents": 10_000, "currency": "USD"},
         is_public=True,
         unit="cents",
-        minimum=0,
+        minimum=1,
         maximum=1_000_000,
-        nullable=True,
     ),
     SettingDefinition(
         key="pickup_address",

@@ -19,7 +19,8 @@ from app.platform.domain.settings_registry import (
     validate_value,
 )
 
-# The twelve SRS 15.4 requires plus VS-046's two retention periods, written out
+# SRS 15.4's keys, VS-046's retention periods, VS-034's attachment retention and VS-028's
+# three cash keys (free_shipping_threshold removed by ADR-024), written out
 # rather than derived from the registry: a test that builds its expectation from
 # the thing under test would pass just as happily if a key were deleted.
 REQUIRED_KEYS = (
@@ -31,7 +32,9 @@ REQUIRED_KEYS = (
     "checkout_hold_period",
     "unverified_account_purge_period",
     "daily_download_cap",
-    "free_shipping_threshold",
+    "cash_payment_enabled",
+    "cash_max_open_orders",
+    "cash_max_order_total",
     "pickup_address",
     "pickup_hours",
     "whatsapp_number",
@@ -51,8 +54,8 @@ def test_the_registry_holds_exactly_the_required_settings() -> None:
     assert len(ALL_KEYS) == len(REQUIRED_KEYS)
 
 
-def test_the_public_allowlist_is_exactly_the_five_documented_keys() -> None:
-    """api-endpoints.md lists these five under PublicSettingsRead.
+def test_the_public_allowlist_is_exactly_the_six_documented_keys() -> None:
+    """settings-registry.md lists these six under PublicSettingsRead (VS-028).
 
     Hard-coded rather than filtered out of the registry, because the whole
     security property is that this set does not drift: a test that recomputed it
@@ -60,7 +63,8 @@ def test_the_public_allowlist_is_exactly_the_five_documented_keys() -> None:
     """
     assert PUBLIC_KEYS == (
         "accepting_orders",
-        "free_shipping_threshold",
+        "cash_payment_enabled",
+        "cash_max_order_total",
         "pickup_address",
         "pickup_hours",
         "whatsapp_number",
@@ -78,6 +82,7 @@ def test_no_internal_setting_is_marked_public() -> None:
         "checkout_hold_period",
         "unverified_account_purge_period",
         "daily_download_cap",
+        "cash_max_open_orders",
         "security_token_retention_period",
         "session_retention_period",
         "custom_request_attachment_retention",
@@ -211,13 +216,18 @@ def test_the_retention_periods_are_one_to_ninety_days(key: str, default: int) ->
 
 def test_money_accepts_the_standard_shape() -> None:
     value = {"amount_cents": 5_000, "currency": "USD"}
-    assert validate_value("free_shipping_threshold", value) == value
+    assert validate_value("cash_max_order_total", value) == value
 
 
-def test_money_may_be_null_because_free_shipping_is_optional() -> None:
-    """BR-076 calls the threshold optional, so "off" has to be representable.
-    JSON null is that."""
-    assert validate_value("free_shipping_threshold", None) is None
+def test_the_cash_maximum_is_never_null_and_never_zero() -> None:
+    """BR-145: a cash order's recomputed total is above 0, so the cap is at least 1 cent;
+    null would leave cash with no cap at all."""
+    with pytest.raises(InvalidSettingValueError):
+        validate_value("cash_max_order_total", None)
+    with pytest.raises(InvalidSettingValueError):
+        validate_value("cash_max_order_total", {"amount_cents": 0, "currency": "USD"})
+    one = {"amount_cents": 1, "currency": "USD"}
+    assert validate_value("cash_max_order_total", one) == one
 
 
 @pytest.mark.parametrize(
@@ -234,14 +244,14 @@ def test_money_may_be_null_because_free_shipping_is_optional() -> None:
 )
 def test_money_rejects_malformed_amounts(value: object) -> None:
     with pytest.raises(InvalidSettingValueError):
-        validate_value("free_shipping_threshold", value)  # type: ignore[arg-type]
+        validate_value("cash_max_order_total", value)  # type: ignore[arg-type]
 
 
 def test_a_money_value_reports_every_problem_at_once() -> None:
     """An admin fixing a value should see all of it, not discover the second
     fault only after fixing the first."""
     with pytest.raises(InvalidSettingValueError) as raised:
-        validate_value("free_shipping_threshold", {"amount_cents": -5, "currency": "EUR"})
+        validate_value("cash_max_order_total", {"amount_cents": -5, "currency": "EUR"})
     assert len(raised.value.reasons) == 2
 
 
@@ -330,7 +340,9 @@ def test_each_setting_declares_the_type_its_consumers_expect() -> None:
         "checkout_hold_period": SettingType.DURATION,
         "unverified_account_purge_period": SettingType.DURATION,
         "daily_download_cap": SettingType.INTEGER,
-        "free_shipping_threshold": SettingType.MONEY,
+        "cash_payment_enabled": SettingType.BOOLEAN,
+        "cash_max_open_orders": SettingType.INTEGER,
+        "cash_max_order_total": SettingType.MONEY,
         "pickup_address": SettingType.STRING,
         "pickup_hours": SettingType.STRING,
         "whatsapp_number": SettingType.STRING,
@@ -350,3 +362,48 @@ def test_attachment_retention_is_ninety_days_editable_from_one_to_365() -> None:
     for refused in (86_399, 31_536_001):
         with pytest.raises(InvalidSettingValueError):
             validate_value(key, refused)
+
+
+# --------------------------------------------------------------------------
+# VS-028: the cash settings, and the removed free-shipping threshold
+# --------------------------------------------------------------------------
+
+
+def test_free_shipping_threshold_is_no_longer_a_setting() -> None:
+    """ADR-024: the courier prices delivery, so there is no threshold to configure."""
+    assert "free_shipping_threshold" not in REGISTRY
+    assert "free_shipping_threshold" not in PUBLIC_KEYS
+    with pytest.raises(SettingNotFoundError):
+        definition_for("free_shipping_threshold")
+
+
+def test_the_cash_defaults_are_the_documented_ones() -> None:
+    """docs/settings-registry.md: on, one open order, 100 USD."""
+    assert REGISTRY["cash_payment_enabled"].default is True
+    assert REGISTRY["cash_max_open_orders"].default == 1
+    assert REGISTRY["cash_max_order_total"].default == {"amount_cents": 10_000, "currency": "USD"}
+    assert REGISTRY["cash_max_order_total"].nullable is False
+
+
+def test_cash_max_open_orders_is_one_to_ten() -> None:
+    key = "cash_max_open_orders"
+    assert validate_value(key, 1) == 1
+    assert validate_value(key, 10) == 10
+    for refused in (0, 11, -1):
+        with pytest.raises(InvalidSettingValueError):
+            validate_value(key, refused)
+
+
+def test_cash_max_order_total_is_one_cent_to_ten_thousand_dollars() -> None:
+    key = "cash_max_order_total"
+    top = {"amount_cents": 1_000_000, "currency": "USD"}
+    assert validate_value(key, top) == top
+    with pytest.raises(InvalidSettingValueError):
+        validate_value(key, {"amount_cents": 1_000_001, "currency": "USD"})
+
+
+def test_the_cash_switch_is_a_strict_boolean() -> None:
+    assert validate_value("cash_payment_enabled", False) is False
+    for refused in (0, 1, "true", None):
+        with pytest.raises(InvalidSettingValueError):
+            validate_value("cash_payment_enabled", refused)
