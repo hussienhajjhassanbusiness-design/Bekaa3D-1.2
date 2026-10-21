@@ -112,8 +112,10 @@ New `src/app/ordering/domain/line_transitions.py`:
 class TransitionRefusal(StrEnum):  # the 409 `reason` values
     ALREADY_DELIVERED, LINE_CLOSED, NOT_AWAITING_DELIVERY, NOT_AN_STL_LINE
 
-def stl_transition_refusal(product_type: ProductType, current: OrderItemStatus,
-                           target: OrderItemStatus) -> TransitionRefusal | None:
+
+def stl_transition_refusal(
+    product_type: ProductType, current: OrderItemStatus, target: OrderItemStatus
+) -> TransitionRefusal | None:
     """None when (stl, awaiting_delivery -> delivered); else the refusal."""
 ```
 
@@ -208,10 +210,14 @@ def upgrade() -> None:
     )
     op.execute(_settings.delete().where(_settings.c.key == "daily_download_cap"))
 
+
 def downgrade() -> None:
     # Restored exactly as de1d8a23512f seeded it (type integer, value 20, same description).
-    op.execute(postgresql.insert(_settings).values([_DAILY_DOWNLOAD_CAP])
-               .on_conflict_do_nothing(index_elements=["key"]))
+    op.execute(
+        postgresql.insert(_settings)
+        .values([_DAILY_DOWNLOAD_CAP])
+        .on_conflict_do_nothing(index_elements=["key"])
+    )
     op.drop_index("ix_order_items_stl_awaiting", table_name="order_items")
 ```
 
