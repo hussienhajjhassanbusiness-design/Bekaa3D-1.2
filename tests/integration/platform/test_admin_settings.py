@@ -432,3 +432,17 @@ async def test_the_write_and_its_audit_row_are_one_transaction(
 
     assert response.status_code == 500
     assert await _value_of(db_session, "minimum_offer_percentage") == 70
+
+
+@pytest.mark.integration
+async def test_the_removed_daily_download_cap_is_an_unknown_key(db_session: AsyncSession) -> None:
+    from app.main import app
+
+    with TestClient(app) as client:
+        await _admin_session(client, db_session)
+        response = client.patch(
+            f"{SETTINGS_PATH}/daily_download_cap",
+            json={"value": 5},
+            headers=csrf_headers(client),
+        )
+    assert response.status_code == 404, response.text
