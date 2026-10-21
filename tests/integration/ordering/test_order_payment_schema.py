@@ -778,6 +778,7 @@ _NON_UNIQUE_INDEXES = {
     "ix_orders_status_placed": "orders",
     "ix_order_items_order_id": "order_items",
     "ix_order_items_physical_status": "order_items",
+    "ix_order_items_stl_awaiting": "order_items",
     "ix_order_status_history_order": "order_status_history",
     "ix_payments_order": "payments",
     "ix_payments_unsettled": "payments",
@@ -797,14 +798,32 @@ async def test_every_lookup_index_exists(db_engine: AsyncEngine) -> None:
         assert {row.indexname: row.tablename for row in rows} == _NON_UNIQUE_INDEXES
 
 
-async def test_the_stl_delivery_queue_index_is_left_to_vs023b(db_engine: AsyncEngine) -> None:
+async def test_the_stl_delivery_queue_index_is_partial_on_created_at_and_id(
+    db_engine: AsyncEngine,
+) -> None:
     async with db_engine.connect() as conn:
-        found = await conn.scalar(
+        definition = await conn.scalar(
+            text("SELECT indexdef FROM pg_indexes WHERE indexname = 'ix_order_items_stl_awaiting'")
+        )
+        others = await conn.scalar(
             text(
                 "SELECT count(*) FROM pg_indexes WHERE tablename = 'order_items' "
-                "AND indexdef LIKE '%awaiting_delivery%' AND indexname <> "
-                "'uq_order_items_stl_ownership'"
+                "AND indexdef LIKE '%awaiting_delivery%' AND indexname NOT IN "
+                "('uq_order_items_stl_ownership', 'ix_order_items_stl_awaiting')"
             )
+        )
+    assert definition is not None
+    assert "UNIQUE" not in definition
+    assert "(created_at, id)" in definition
+    assert "product_type = 'stl'" in definition
+    assert "fulfillment_status = 'awaiting_delivery'" in definition
+    assert others == 0
+
+
+async def test_the_obsolete_daily_download_cap_setting_is_gone(db_engine: AsyncEngine) -> None:
+    async with db_engine.connect() as conn:
+        found = await conn.scalar(
+            text("SELECT count(*) FROM settings WHERE key = 'daily_download_cap'")
         )
     assert found == 0
 

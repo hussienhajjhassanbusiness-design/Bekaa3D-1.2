@@ -31,7 +31,6 @@ REQUIRED_KEYS = (
     "minimum_offer_percentage",
     "checkout_hold_period",
     "unverified_account_purge_period",
-    "daily_download_cap",
     "cash_payment_enabled",
     "cash_max_open_orders",
     "cash_max_order_total",
@@ -81,7 +80,6 @@ def test_no_internal_setting_is_marked_public() -> None:
         "minimum_offer_percentage",
         "checkout_hold_period",
         "unverified_account_purge_period",
-        "daily_download_cap",
         "cash_max_open_orders",
         "security_token_retention_period",
         "session_retention_period",
@@ -166,7 +164,7 @@ def test_true_is_not_an_integer() -> None:
     with pytest.raises(InvalidSettingValueError):
         validate_value("minimum_offer_percentage", True)
     with pytest.raises(InvalidSettingValueError):
-        validate_value("daily_download_cap", True)
+        validate_value("cash_max_open_orders", True)
     with pytest.raises(InvalidSettingValueError):
         validate_value("offer_response_window", True)
 
@@ -339,7 +337,6 @@ def test_each_setting_declares_the_type_its_consumers_expect() -> None:
         "minimum_offer_percentage": SettingType.INTEGER,
         "checkout_hold_period": SettingType.DURATION,
         "unverified_account_purge_period": SettingType.DURATION,
-        "daily_download_cap": SettingType.INTEGER,
         "cash_payment_enabled": SettingType.BOOLEAN,
         "cash_max_open_orders": SettingType.INTEGER,
         "cash_max_order_total": SettingType.MONEY,

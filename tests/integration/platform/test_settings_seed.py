@@ -29,8 +29,9 @@ async def test_every_registered_setting_is_seeded_and_nothing_else_is(
     extra row means a key exists that no code knows how to validate."""
     rows = (await db_session.scalars(select(SettingModel))).all()
     assert {row.key for row in rows} == set(REGISTRY)
-    assert len(rows) == 17
+    assert len(rows) == 16
     assert "free_shipping_threshold" not in {row.key for row in rows}
+    assert "daily_download_cap" not in {row.key for row in rows}
 
 
 @pytest.mark.integration
@@ -108,7 +109,7 @@ async def test_deleting_the_editing_administrator_keeps_the_setting(
     await db_session.flush()
 
     setting = await db_session.scalar(
-        select(SettingModel).where(SettingModel.key == "daily_download_cap")
+        select(SettingModel).where(SettingModel.key == "minimum_offer_percentage")
     )
     assert setting is not None
     setting.updated_by = admin.id
@@ -119,5 +120,5 @@ async def test_deleting_the_editing_administrator_keeps_the_setting(
     await db_session.refresh(setting)
 
     assert setting.updated_by is None
-    assert setting.value == 20
+    assert setting.value == 70
     await db_session.rollback()
