@@ -13,6 +13,7 @@ RAW_SQL = re.compile(r"\b(?:UPDATE|DELETE\s+FROM|INSERT\s+INTO)\s+order_items\b"
 KNOWN_WRITERS = {
     ("ordering/infrastructure/orders.py", "insert_lines"): "new rows, invisible until commit",
     ("ordering/infrastructure/orders.py", "set_line_status"): "only under the orders lock",
+    ("ordering/infrastructure/orders.py", "set_line_delivered"): "only under the orders lock",
 }
 # Callers of `set_line_status`: each must hold `lock_order_for_change`'s locks.
 KNOWN_LINE_STATUS_CALLERS = {
@@ -100,3 +101,20 @@ def test_line_statuses_change_only_under_the_orders_lock() -> None:
     source = (SRC / "ordering" / "public.py").read_text(encoding="utf-8")
     mark = next(f for f in _functions(ast.parse(source)) if f.name == "mark_order_paid")
     assert any(arg.arg == "locked" for arg in mark.args.args), "takes a LockedOrder"
+
+
+def test_a_delivery_is_written_only_under_the_orders_lock() -> None:
+    assert _callers("set_line_delivered") == {("ordering/public.py", "mark_stl_line_delivered")}
+    source = (SRC / "ordering" / "public.py").read_text(encoding="utf-8")
+    mark = next(f for f in _functions(ast.parse(source)) if f.name == "mark_stl_line_delivered")
+    assert any(arg.arg == "locked" for arg in mark.args.args), "takes a LockedOrder"
+
+
+def test_only_the_delivery_writer_sets_fulfilled_at_or_delivered_by() -> None:
+    pattern = re.compile(r"\.values\([^)]*(fulfilled_at|delivered_by)")
+    hits = {
+        path.relative_to(SRC).as_posix()
+        for path in SRC.rglob("*.py")
+        if pattern.search(path.read_text("utf-8"))
+    }
+    assert hits == {"ordering/infrastructure/orders.py"}

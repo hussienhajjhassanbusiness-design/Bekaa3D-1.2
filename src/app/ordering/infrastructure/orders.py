@@ -13,7 +13,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.catalog.application.ports import ProductType
 from app.ordering.domain.enums import OrderItemStatus, OrderStatus, PaymentMethod
 from app.ordering.domain.exceptions import OrderNumberExhaustedError, ProductAlreadyOwnedError
-from app.ordering.domain.orders import NewOrder, NewOrderLine, Order, OrderLine, StatusChange
+from app.ordering.domain.orders import (
+    NewOrder,
+    NewOrderLine,
+    Order,
+    OrderLine,
+    StatusChange,
+    StlDeliveryRow,
+)
 from app.ordering.infrastructure.models import (
     OrderItemModel,
     OrderModel,
@@ -57,6 +64,8 @@ _LINE_COLUMNS = (
     _I.currency,
     _I.fulfillment_status,
     _I.offer_id,
+    _I.fulfilled_at,
+    _I.delivered_by,
 )
 
 
@@ -180,9 +189,8 @@ class SqlOrderStore:
         return _order(row) if row is not None else None
 
     async def lock_lines(self, order_id: UUID) -> list[OrderLine]:
-        # Redundant today: every writer of existing lines already holds the orders lock
-        # (test_order_item_writers.py). Kept, per ADR-024 d9, for the future writers in
-        # VS-023b, VS-024, VS-028 and VS-030.
+        # Every writer of existing lines holds the orders lock first (ADR-024 d9,
+        # test_order_item_writers.py); VS-023b reads the state it locks here.
         result = await self._session.execute(
             select(*_LINE_COLUMNS).where(_I.order_id == order_id).order_by(_I.id).with_for_update()
         )
@@ -226,6 +234,50 @@ class SqlOrderStore:
                 values["cancelled_at"] = cancelled_at
             await self._session.execute(update(_I).where(_I.id.in_(line_ids)).values(**values))
 
+    async def set_line_delivered(self, line_id: UUID, *, at: datetime, delivered_by: UUID) -> int:
+        """STL `awaiting_delivery -> delivered`; `fulfilled_at` and `delivered_by` together."""
+        result = await self._session.execute(
+            update(_I)
+            .where(
+                _I.id == line_id,
+                _I.product_type == ProductType.STL,
+                _I.fulfillment_status == OrderItemStatus.AWAITING_DELIVERY,
+            )
+            .values(
+                fulfillment_status=OrderItemStatus.DELIVERED,
+                fulfilled_at=at,
+                delivered_by=delivered_by,
+                updated_at=at,
+            )
+        )
+        return int(getattr(result, "rowcount", 0))
+
+    async def stl_delivery_page(
+        self,
+        *,
+        after: tuple[datetime, UUID] | None,
+        limit: int,
+        product_id: UUID | None,
+        user_id: UUID | None,
+    ) -> list[StlDeliveryRow]:
+        """The delivery queue, keyset-paged by `(created_at, id)`. No lock."""
+        query = stl_delivery_query(after=after, limit=limit, product_id=product_id, user_id=user_id)
+        return [
+            StlDeliveryRow(
+                item_id=row.id,
+                order_id=row.order_id,
+                order_number=row.order_number,
+                product_id=row.product_id,
+                product_name=row.product_name_snapshot,
+                customer_id=row.user_id,
+                customer_email=row.customer_email_snapshot,
+                line_total_cents=row.line_total_cents,
+                currency=row.currency,
+                queued_at=row.created_at,
+            )
+            for row in await self._session.execute(query)
+        ]
+
     async def set_cancelled(self, order_id: UUID, *, at: datetime) -> None:
         """The first writer of `orders.cancelled_at`; only under the orders lock."""
         await self._session.execute(
@@ -260,3 +312,39 @@ def release_candidates_query(
     if after is not None:
         query = query.where(tuple_(_O.placed_at, _O.id) > after)
     return query.order_by(_O.placed_at, _O.id).limit(limit)
+
+
+def stl_delivery_query(
+    *,
+    after: tuple[datetime, UUID] | None,
+    limit: int,
+    product_id: UUID | None,
+    user_id: UUID | None,
+) -> Select[*tuple[Any, ...]]:
+    """The queue selection, also EXPLAINed by its test (matches `ix_order_items_stl_awaiting`)."""
+    query = (
+        select(
+            _I.id,
+            _I.order_id,
+            _O.order_number,
+            _I.product_id,
+            _I.product_name_snapshot,
+            _O.user_id,
+            _O.customer_email_snapshot,
+            _I.line_total_cents,
+            _I.currency,
+            _I.created_at,
+        )
+        .join(_O, _O.id == _I.order_id)
+        .where(
+            _I.product_type == ProductType.STL,
+            _I.fulfillment_status == OrderItemStatus.AWAITING_DELIVERY,
+        )
+    )
+    if product_id is not None:
+        query = query.where(_I.product_id == product_id)
+    if user_id is not None:
+        query = query.where(_I.user_id == user_id)
+    if after is not None:
+        query = query.where(tuple_(_I.created_at, _I.id) > after)
+    return query.order_by(_I.created_at, _I.id).limit(limit)

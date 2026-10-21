@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 from uuid import UUID
 
 from app.catalog.application.ports import PurchaseRefusal
@@ -170,3 +171,16 @@ class OfferNotCheckoutableError(OrderingDomainError):
 
 class OfferChangedError(OrderingDomainError):
     """The locked offer differs from the one priced: a 500, never a charge (ADR-037 d3)."""
+
+
+class LineNotFoundError(OrderingDomainError):
+    """404: the item is not a line of the order (or the order does not exist)."""
+
+
+class InvalidLineTransitionError(OrderingDomainError):
+    """409 INVALID_STATE_TRANSITION with `reason` (VS-023b)."""
+
+    def __init__(self, reason: str, *, fulfilled_at: datetime | None = None) -> None:
+        super().__init__(f"The line cannot make this transition: {reason}.")
+        self.reason = reason
+        self.fulfilled_at = fulfilled_at
