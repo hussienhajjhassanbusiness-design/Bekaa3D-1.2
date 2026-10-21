@@ -40,6 +40,8 @@ from app.core.rate_limit import enforce_rate_limit
 from app.engagement.api.admin_analytics import admin_router as engagement_analytics_router
 from app.engagement.api.contact_messages import admin_router as contact_messages_router
 from app.engagement.api.custom_request_admin import admin_router as custom_requests_router
+from app.fulfillment.api.item_transition import admin_router as item_transition_router
+from app.fulfillment.api.stl_deliveries import admin_router as stl_deliveries_router
 from app.identity.api.admin_users import router as admin_users_router
 from app.identity.public import (
     AccessTokenClaims,
@@ -110,6 +112,9 @@ router.include_router(engagement_analytics_router)
 # VS-024. Payment reconcile and manual confirm; the manual hold release.
 router.include_router(admin_payments_router)
 router.include_router(order_release_router)
+# VS-023b. The STL delivery queue and mark-as-sent.
+router.include_router(stl_deliveries_router)
+router.include_router(item_transition_router)
 # VS-039. The offer queue and offer detail (api-endpoints.md 21).
 router.include_router(offers_router)
 

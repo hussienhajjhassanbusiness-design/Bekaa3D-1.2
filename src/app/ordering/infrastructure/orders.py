@@ -322,29 +322,31 @@ def stl_delivery_query(
     user_id: UUID | None,
 ) -> Select[*tuple[Any, ...]]:
     """The queue selection, also EXPLAINed by its test (matches `ix_order_items_stl_awaiting`)."""
-    query = (
-        select(
-            _I.id,
-            _I.order_id,
-            _O.order_number,
-            _I.product_id,
-            _I.product_name_snapshot,
-            _O.user_id,
-            _O.customer_email_snapshot,
-            _I.line_total_cents,
-            _I.currency,
-            _I.created_at,
-        )
-        .join(_O, _O.id == _I.order_id)
-        .where(
-            _I.product_type == ProductType.STL,
-            _I.fulfillment_status == OrderItemStatus.AWAITING_DELIVERY,
-        )
+    lines = select(_I).where(
+        _I.product_type == ProductType.STL,
+        _I.fulfillment_status == OrderItemStatus.AWAITING_DELIVERY,
     )
     if product_id is not None:
-        query = query.where(_I.product_id == product_id)
+        lines = lines.where(_I.product_id == product_id)
     if user_id is not None:
-        query = query.where(_I.user_id == user_id)
+        lines = lines.where(_I.user_id == user_id)
     if after is not None:
-        query = query.where(tuple_(_I.created_at, _I.id) > after)
-    return query.order_by(_I.created_at, _I.id).limit(limit)
+        lines = lines.where(tuple_(_I.created_at, _I.id) > after)
+    # Page the lines first, so the partial index orders and limits before orders is joined.
+    page = lines.order_by(_I.created_at, _I.id).limit(limit).subquery("page")
+    return (
+        select(
+            page.c.id,
+            page.c.order_id,
+            _O.order_number,
+            page.c.product_id,
+            page.c.product_name_snapshot,
+            _O.user_id,
+            _O.customer_email_snapshot,
+            page.c.line_total_cents,
+            page.c.currency,
+            page.c.created_at,
+        )
+        .join(_O, _O.id == page.c.order_id)
+        .order_by(page.c.created_at, page.c.id)
+    )

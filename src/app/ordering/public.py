@@ -51,6 +51,7 @@ __all__ = [
     "OfferCheckoutNotFoundError",
     "OfferNotCheckoutableError",
     "OrderItemStatus",
+    "OrderLine",
     "OrderNotReleasableError",
     "OrderSource",
     "OrderStatus",
@@ -176,7 +177,7 @@ def status_inputs_for(locked: LockedOrder, lines: tuple[LineState, ...]) -> Orde
 
 async def mark_stl_line_delivered(
     session: AsyncSession, locked: LockedOrder, *, line_id: UUID, admin_id: UUID, at: datetime
-) -> OrderLine:
+) -> tuple[OrderLine, OrderStatus]:
     """Admin sent the file: STL `awaiting_delivery -> delivered`, history, recomputed status.
     The caller holds the orders and lines locks; the state is read from `locked`."""
     line = next((item for item in locked.lines if item.id == line_id), None)
@@ -205,15 +206,16 @@ async def mark_stl_line_delivered(
         LineState(OrderItemStatus.DELIVERED if item.id == line_id else item.fulfillment_status)
         for item in locked.lines
     )
-    await recompute_order_status(
+    order_status = await recompute_order_status(
         session, locked, status_inputs_for(locked, states), actor_user_id=admin_id
     )
-    return replace(
+    delivered = replace(
         line,
         fulfillment_status=OrderItemStatus.DELIVERED,
         fulfilled_at=at,
         delivered_by=admin_id,
     )
+    return delivered, order_status
 
 
 async def stl_delivery_page(
