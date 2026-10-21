@@ -25,7 +25,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 | VS-019 | Protected STL download through nginx | — | Removed (ADR-019) |
 | VS-022 | Mixed cart | VS-013 | Done |
 | VS-023 | Checkout and verified payment for digital orders | VS-022, VS-008, VS-007 | Done |
-| VS-023b | STL delivery queue and mark-as-sent | VS-023 | Not started |
+| VS-023b | STL delivery queue and mark-as-sent | VS-023 | Done |
 | VS-024 | Payment recovery: reconciliation, stale checkouts, manual confirm | VS-023 | Done |
 | VS-025 | Customer order history | VS-023 | Done |
 | VS-026 | Address book | VS-008 | Done |
@@ -569,7 +569,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - `scripts/mock_pay.py` is the only way to pay a mock payment outside the tests.
 
 ## VS-023b — STL delivery queue and mark-as-sent
-**Status:** Not started
+**Status:** Done ([ADR-039](adr/ADR-039-stl-delivery-workflow.md), [`docs/stl-delivery.md`](stl-delivery.md), [plan](plans/VS-023b-stl-delivery-queue-plan.md)). As built: Fulfillment owns the routes and use case, Ordering keeps every `order_items` write; the queue is ordered by placement time.
 **Depends on:** VS-023
 **Goal:** The administrator sees every paid STL still owed to a customer, emails it from their own drive, marks it sent, and the customer is told (ADR-019).
 - **Model / migration:**
@@ -581,7 +581,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - Reuses the admin boundary, `AuditWriter`, `create_notification` (category `download`, `payload.event = "stl.delivered"`), the outbox, and `derive_order_status`.
   - Marking delivered locks the order and then the line (ADR-024 lock order), sets `fulfilled_at` and `delivered_by`, recomputes the order status, and writes history, audit, an in-app notification and a "your STL file has been sent" email in one transaction.
   - The queue shows order number, product, customer and `customer_email_snapshot`, oldest first.
-  - Removes the empty `src/app/digital_assets` package and its test folders, and the stale VS-019 references (`jobs/partitions.py`, `identity/api/admin_users.py`, `test_deep_architecture.py`'s context list).
+  - Removes the empty `src/app/digital_assets` package and its test folders, and the stale VS-019 references (`jobs/partitions.py`, `test_deep_architecture.py`'s context list).
 - **Tests:**
   - Only `awaiting_delivery` lines appear; a pending (unpaid) line never does.
   - Delivered, refunded or physical lines give 409 `INVALID_STATE_TRANSITION`.
@@ -592,6 +592,11 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 - **Done when:**
   - No paid STL can be forgotten: each one sits in the queue until marked delivered or refunded.
   - Every delivery records who and when, and the customer is notified.
+- **As built:**
+  - Migration `7a1c3e9b5d24`: `ix_order_items_stl_awaiting` on `(created_at, id)` (partial), and `daily_download_cap` deleted (the downgrade re-seeds it). No columns were added: `fulfilled_at` and `delivered_by` came with VS-023. The plan's `delivered_at` is `fulfilled_at` in the code.
+  - The queue pages the lines first and joins `orders` after, so the index orders and limits. `created_at` is the placement time; no paid timestamp exists on a line or an order.
+  - The transition response is the provisional `OrderItemTransitionRead`; VS-029 replaces it with `AdminOrderDetail` and adds the physical edges to `ordering/domain/line_transitions.py`.
+  - STOP-GAP: `ordering.public.status_inputs_for` sets `refund_present` for a `partially_refunded` order; VS-030 must replace it with the real refund query.
 
 ## VS-024 — Payment recovery: reconciliation, stale checkouts, manual confirm
 **Status:** Done ([ADR-036](adr/ADR-036-payment-recovery.md), [`docs/payment-recovery.md`](payment-recovery.md), [plan](plans/VS-024-payment-recovery-plan.md)). As built: an order is released automatically only on an explicit `failed` or `expired` for its latest attempt; an administrator releases the rest after the hold plus 24 h; manual confirm refuses a differing amount (422) and only serves providers without a status API.

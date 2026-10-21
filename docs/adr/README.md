@@ -44,6 +44,7 @@ Only expensive-to-reverse decisions belong here. Folder names and small refactor
 - [ADR-036: Payment recovery - release only on an explicit failed or expired, a 24 h manual release, manual confirm refuses a differing amount, alerts de-duplicated under an advisory lock (VS-024)](ADR-036-payment-recovery.md)
 - [ADR-037: Accepted-offer checkout - the agreed price, the order inserted before the offer is locked, paid and auto-close inside the payment, and no stretch over a pause (VS-041)](ADR-037-accepted-offer-checkout.md)
 - [ADR-038: Physical checkout and cash eligibility - a hash-only cash block table that can only reference a cash order, canonical phone spellings in the database, and a never-rotated phone-hash key (VS-028)](ADR-038-physical-checkout-and-cash-eligibility.md)
+- [ADR-039: STL delivery workflow - Fulfillment owns the use case, Ordering keeps every `order_items` write, one transaction writes the delivery and its notices, the queue is keyset-paged by placement time (VS-023b)](ADR-039-stl-delivery-workflow.md)
 
 ## Governance
 

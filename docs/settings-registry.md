@@ -37,7 +37,6 @@ to apply now.
 | `minimum_offer_percentage` | integer | percent | `70` | 0 – 100 | ❌ |
 | `checkout_hold_period` | duration | seconds | `1800` (30 min) | 300 – 7 200 | ❌ — also bounds payment retry (from `placed_at`); the release deadline runs from the later of placement and the latest attempt (VS-024) |
 | `unverified_account_purge_period` | duration | seconds | `2592000` (30 d) | 604 800 – 7 776 000 | ❌ |
-| `daily_download_cap` | integer | downloads / customer / UTC day | `20` | 1 – 1 000 | ❌ — obsolete since ADR-019 (no downloads); removed by VS-023b |
 | `cash_payment_enabled` | boolean | — | `true` | — | ✅ |
 | `cash_max_open_orders` | integer | unpaid, uncancelled cash orders / customer or contact phone | `1` | 1 – 10 | ❌ |
 | `cash_max_order_total` | money | cents (USD) | `10000` (100 USD) | 1 – 1 000 000 cents | ✅ |
@@ -134,9 +133,8 @@ VS-028 changed the allowlist this way (ADR-024): `free_shipping_threshold` left 
 `cash_payment_enabled` and `cash_max_order_total` joined it, through the registry and
 `PublicSettingsRead` together, as described above.
 
-Of today's seventeen seeded keys, the eleven not in the six-key list are internal. `daily_download_cap` was deliberately private
-(publishing an abuse limit tells an abuser how to pace themselves); it is now
-obsolete, because ADR-019 removed downloads, and VS-023b deletes it.
+Of today's sixteen seeded keys, the ten not in the six-key list are internal. `daily_download_cap` was deleted by VS-023b (ADR-019: no files are downloaded).
+Its migration, `7a1c3e9b5d24`, re-seeds it on downgrade.
 
 ## Validation
 

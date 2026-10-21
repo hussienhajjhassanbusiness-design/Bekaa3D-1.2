@@ -1,6 +1,6 @@
 # VS-023b — STL Delivery Queue and Mark-as-Sent: Implementation Plan
 
-**Status:** IN PROGRESS (2026-10-21). Branch `vs-023b-stl-delivery`.
+**Status:** DONE (2026-10-21), see [ADR-039](../adr/ADR-039-stl-delivery-workflow.md). Branch `vs-023b-stl-delivery`.
 **Owner decisions (2026-10-21):**
 - Q1 yes, as a thin interface only: `fulfillment` owns routes and the use case; no `order_items` SQL moves out of `ordering`.
 - Q2 the interim `OrderItemTransitionRead` response stands; VS-029 replaces it with `AdminOrderDetail`.
