@@ -9,7 +9,7 @@ start and on the first of every month.
 The set of tables is a fixed code-level tuple. Table names are interpolated
 into DDL (identifiers cannot be bound parameters), which is safe only because
 they never come from input; `ensure_partitions` refuses any name not in
-`PARTITIONED_TABLES`. VS-019 adds `downloads` here.
+`PARTITIONED_TABLES`.
 
 Concurrency: one transaction, serialised by a transaction-scoped advisory lock,
 so two workers (or a worker start racing the monthly tick) cannot both try to

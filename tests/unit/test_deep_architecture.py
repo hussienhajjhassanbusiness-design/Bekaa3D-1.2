@@ -18,7 +18,6 @@ import pytest
 SRC = Path(__file__).resolve().parents[2] / "src" / "app"
 CONTEXTS = (
     "catalog",
-    "digital_assets",
     "engagement",
     "fulfillment",
     "identity",

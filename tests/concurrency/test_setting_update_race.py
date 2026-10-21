@@ -39,7 +39,7 @@ from app.platform.domain.entities import Setting
 from app.platform.infrastructure.models import AuditLogModel, SettingModel
 from app.platform.infrastructure.repositories import AuditLogRepository, SettingRepository
 
-KEY = "daily_download_cap"
+KEY = "minimum_offer_percentage"
 
 # Long enough for a genuine racer to arrive; short enough that the locked case -
 # where the second racer is blocked inside PostgreSQL and cannot arrive - does
@@ -202,7 +202,7 @@ async def test_two_administrators_racing_produce_a_truthful_audit_chain(
     assert row.value == second[1], "the stored value must be whatever committed last"
     assert row.value in (20, 30)
 
-    await _reset_to(session_factory, 20)
+    await _reset_to(session_factory, 70)
 
 
 @pytest.mark.integration
@@ -221,7 +221,7 @@ async def test_a_no_op_update_is_audited_without_touching_the_metadata(
     """
     session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
     admin = await _seed_admin(session_factory)
-    await _reset_to(session_factory, 20)
+    await _reset_to(session_factory, 70)
 
     async with session_factory() as db:
         before_row = await db.scalar(select(SettingModel).where(SettingModel.key == KEY))
@@ -233,7 +233,7 @@ async def test_a_no_op_update_is_audited_without_touching_the_metadata(
         result = await UpdateSetting(
             settings_repo=SettingRepository(db),
             audit_repo=AuditLogRepository(db),
-        ).execute(key=KEY, value=20, actor_user_id=admin, request_id=None, ip_hash=None)
+        ).execute(key=KEY, value=70, actor_user_id=admin, request_id=None, ip_hash=None)
     assert result.changed is False
 
     async with session_factory() as db:
@@ -245,6 +245,6 @@ async def test_a_no_op_update_is_audited_without_touching_the_metadata(
     # Scoped to this test's own administrator, so it cannot be satisfied - or
     # broken - by a row another test happened to write for the same key.
     transitions = await _audit_transitions(session_factory, (admin,))
-    assert transitions == [(20, 20)], (
+    assert transitions == [(70, 70)], (
         f"a no-op must still be audited exactly once, with equal before/after; got {transitions}"
     )

@@ -126,11 +126,11 @@ async def test_a_patch_without_the_csrf_header_is_rejected(db_session: AsyncSess
 
     with TestClient(app) as client:
         await _admin_session(client, db_session)
-        response = client.patch(f"{SETTINGS_PATH}/daily_download_cap", json={"value": 50})
+        response = client.patch(f"{SETTINGS_PATH}/minimum_offer_percentage", json={"value": 50})
 
     assert response.status_code == 403
     assert response.json()["code"] == "CSRF_INVALID"
-    assert await _value_of(db_session, "daily_download_cap") == 20
+    assert await _value_of(db_session, "minimum_offer_percentage") == 70
 
 
 # --------------------------------------------------------------------------
@@ -266,14 +266,14 @@ async def test_a_valid_change_is_stored_and_audited(db_session: AsyncSession) ->
     with TestClient(app) as client:
         admin_id = await _admin_session(client, db_session)
         response = client.patch(
-            f"{SETTINGS_PATH}/daily_download_cap",
+            f"{SETTINGS_PATH}/minimum_offer_percentage",
             json={"value": 50},
             headers=csrf_headers(client),
         )
 
     assert response.status_code == 200, response.text
     assert response.json()["value"] == 50
-    assert await _value_of(db_session, "daily_download_cap") == 50
+    assert await _value_of(db_session, "minimum_offer_percentage") == 50
 
     entry = await db_session.scalar(
         select(AuditLogModel)
@@ -283,13 +283,13 @@ async def test_a_valid_change_is_stored_and_audited(db_session: AsyncSession) ->
     assert entry is not None
     assert entry.entity_type == "Setting"
     assert entry.actor_user_id == admin_id
-    assert entry.before_data == {"key": "daily_download_cap", "value": 20}
-    assert entry.after_data == {"key": "daily_download_cap", "value": 50}
+    assert entry.before_data == {"key": "minimum_offer_percentage", "value": 70}
+    assert entry.after_data == {"key": "minimum_offer_percentage", "value": 50}
     # BR-132 admin-action conventions: correlation and the hashed caller IP.
     assert entry.request_id is not None
     assert entry.ip_hash is not None
 
-    await _restore(db_session, "daily_download_cap")
+    await _restore(db_session, "minimum_offer_percentage")
 
 
 @pytest.mark.integration
@@ -423,7 +423,7 @@ async def test_the_write_and_its_audit_row_are_one_transaction(
         monkey.setattr(AuditLogRepository, "add", _explode)
         try:
             response = client.patch(
-                f"{SETTINGS_PATH}/daily_download_cap",
+                f"{SETTINGS_PATH}/minimum_offer_percentage",
                 json={"value": 99},
                 headers=csrf_headers(client),
             )
@@ -431,4 +431,18 @@ async def test_the_write_and_its_audit_row_are_one_transaction(
             monkey.undo()
 
     assert response.status_code == 500
-    assert await _value_of(db_session, "daily_download_cap") == 20
+    assert await _value_of(db_session, "minimum_offer_percentage") == 70
+
+
+@pytest.mark.integration
+async def test_the_removed_daily_download_cap_is_an_unknown_key(db_session: AsyncSession) -> None:
+    from app.main import app
+
+    with TestClient(app) as client:
+        await _admin_session(client, db_session)
+        response = client.patch(
+            f"{SETTINGS_PATH}/daily_download_cap",
+            json={"value": 5},
+            headers=csrf_headers(client),
+        )
+    assert response.status_code == 404, response.text

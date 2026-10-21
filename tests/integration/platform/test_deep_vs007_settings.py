@@ -76,7 +76,7 @@ async def test_non_integers_are_setting_invalid_never_a_500(
 ) -> None:
     with client_for(main_app) as client:
         await mfa_admin(client, db_session)
-        response = _patch(client, "daily_download_cap", value)
+        response = _patch(client, "minimum_offer_percentage", value)
     assert_problem(response, 422, "SETTING_INVALID")
 
 
@@ -317,10 +317,10 @@ async def test_a_change_is_public_immediately_and_only_for_allowlisted_keys(
     with client_for(main_app) as client:
         await mfa_admin(client, db_session)
         assert _patch(client, "whatsapp_number", "+9613123456").status_code == 200
-        assert _patch(client, "daily_download_cap", 42).status_code == 200
+        assert _patch(client, "minimum_offer_percentage", 42).status_code == 200
         public = client.get(PUBLIC).json()
         _patch(client, "whatsapp_number", None)
-        _patch(client, "daily_download_cap", REGISTRY["daily_download_cap"].default)
+        _patch(client, "minimum_offer_percentage", REGISTRY["minimum_offer_percentage"].default)
     assert set(public) == set(PUBLIC_KEYS)
     assert public["whatsapp_number"] == "+9613123456"
     assert "42" not in str(public)
@@ -328,7 +328,7 @@ async def test_a_change_is_public_immediately_and_only_for_allowlisted_keys(
 
 @pytest.mark.integration
 @pytest.mark.usefixtures("configured_app")
-@pytest.mark.parametrize("query", ["?key=daily_download_cap", "?include=all", "?fields=*"])
+@pytest.mark.parametrize("query", ["?key=minimum_offer_percentage", "?include=all", "?fields=*"])
 def test_the_public_endpoint_ignores_every_widening_parameter(query: str) -> None:
     with client_for(main_app) as client:
         body = client.get(PUBLIC + query).json()
@@ -423,7 +423,7 @@ async def test_twenty_parallel_patches_leave_a_gapless_audit_chain(
 async def test_the_audit_log_chronology_matches_the_order_of_changes(
     make_app: Callable[[], FastAPI], db_session: AsyncSession
 ) -> None:
-    rows = await _race_twenty_patches(make_app, db_session, "daily_download_cap")
+    rows = await _race_twenty_patches(make_app, db_session, "minimum_offer_percentage")
     chain = _causal_chain(rows)
     stamps = [row.created_at for row in chain]
     assert stamps == sorted(stamps), "the log's time order disagrees with the causal order"

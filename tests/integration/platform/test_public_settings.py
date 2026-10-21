@@ -61,7 +61,6 @@ def test_no_internal_setting_appears_in_the_response() -> None:
         "minimum_offer_percentage",
         "checkout_hold_period",
         "unverified_account_purge_period",
-        "daily_download_cap",
         "cash_max_open_orders",
     ):
         assert internal not in body, f"{internal} leaked to the public endpoint"

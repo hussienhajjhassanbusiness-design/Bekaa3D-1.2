@@ -1114,22 +1114,9 @@ Set-Cookie: csrf_token=<redacted>; Max-Age=2592000; Path=/; SameSite=lax
       "is_public": false,
       "updated_at": "2026-10-12T18:04:26.835160Z",
       "updated_by": null
-    },
-    {
-      "key": "daily_download_cap",
-      "type": "integer",
-      "value": 20,
-      "description": "Download attempts allowed per authenticated customer per UTC day.",
-      "unit": "downloads per customer per UTC day",
-      "minimum": 1,
-      "maximum": 1000,
-      "nullable": false,
-      "is_public": false,
-      "updated_at": "2026-10-12T18:04:26.835160Z",
-      "updated_by": null
     }
   ],
-  "next_cursor": "ZGFpbHlfZG93bmxvYWRfY2Fw"
+  "next_cursor": "Y2hlY2tvdXRfaG9sZF9wZXJpb2Q"
 }
 ```
 
@@ -1156,7 +1143,7 @@ Set-Cookie: csrf_token=<redacted>; Max-Age=2592000; Path=/; SameSite=lax
 - Build the editor from the list response. Each row tells you its control: `boolean` is a switch, `integer` and `duration` are numbers within `minimum`/`maximum` (`duration` is in seconds), `string` is text, `money` is `{"amount_cents": int, "currency": "USD"}`. Where `nullable` is true, `null` means "not set".
 - **Which keys need a confirmation step?** The backend has none: every `PATCH` applies at once. Confirmation is a frontend decision. `accepting_orders` deserves one, because it stops or opens checkout for everybody.
 - Keys cannot be created or deleted through the API.
-- `daily_download_cap` (ADR-019) is obsolete and will be deleted by VS-023b; do not build special UI for it. `free_shipping_threshold` (ADR-024) was deleted on 2026-10-20 (VS-028); `cash_payment_enabled`, `cash_max_open_orders` (integer 1 – 10) and `cash_max_order_total` (money, 1 – 1 000 000 cents, never `null`) were added the same day.
+- `daily_download_cap` (ADR-019) was deleted by VS-023b; it no longer appears in the settings list. `free_shipping_threshold` (ADR-024) was deleted on 2026-10-20 (VS-028); `cash_payment_enabled`, `cash_max_open_orders` (integer 1 – 10) and `cash_max_order_total` (money, 1 – 1 000 000 cents, never `null`) were added the same day.
 
 ### Domain / item: P1-4 — Admin customer management
 
@@ -1798,7 +1785,7 @@ These items will never be built. Remove the frontend work that depends on them.
 
 **Notes:**
 - There is no entitlement entity. **Ownership is a paid, unrefunded STL order line.**
-- The customer's list of purchased STLs is their order history: each STL line shows `fulfillment_status` `awaiting_delivery` or `delivered`, with `delivered_at` ([C8](#domain--item-c8--orderorder-line-status-enum-and-available-actions), provisional).
+- The customer's list of purchased STLs is their order history: each STL line shows `fulfillment_status` `awaiting_delivery` or `delivered`, with `fulfilled_at` ([C8](#domain--item-c8--orderorder-line-status-enum-and-available-actions), provisional).
 - A "My STL purchases" page, if you want one, is a filtered view over `GET /api/v1/me/orders`. It has no download button.
 - `EntitlementModel` has no backend counterpart; delete it.
 
@@ -2321,8 +2308,8 @@ There is no total: compute one for display if you need it; checkout recomputes i
 **Confirmed endpoint:** none yet. Planned:
 - `GET /api/v1/admin/orders`, `GET /api/v1/admin/orders/{order_id}`
 - `PATCH /api/v1/admin/orders/{order_id}` — internal note only
-- `POST /api/v1/admin/orders/{order_id}/items/{item_id}/transition`
-- `GET /api/v1/admin/stl-deliveries` — the STL delivery queue
+- `POST /api/v1/admin/orders/{order_id}/items/{item_id}/transition` — STL `awaiting_delivery → delivered` built by VS-023b (provisional `OrderItemTransitionRead` response until VS-029; see [`docs/stl-delivery.md`](../stl-delivery.md))
+- `GET /api/v1/admin/stl-deliveries` — the STL delivery queue (built by VS-023b: [`docs/stl-delivery.md`](../stl-delivery.md))
 - `POST /api/v1/admin/orders/{order_id}/cash-handover`
 - `GET /api/v1/admin/cash-blocks`, `POST /api/v1/admin/cash-blocks/search`, `POST /api/v1/admin/cash-blocks/{block_id}/clear`
 

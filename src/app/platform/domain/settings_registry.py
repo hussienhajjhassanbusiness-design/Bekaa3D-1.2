@@ -152,17 +152,7 @@ _DEFINITIONS: Final[tuple[SettingDefinition, ...]] = (
         minimum=604_800,  # 7 days
         maximum=7_776_000,  # 90 days
     ),
-    SettingDefinition(
-        key="daily_download_cap",
-        type=SettingType.INTEGER,
-        description=(
-            "Abuse limit on download attempts per authenticated customer per UTC calendar day."
-        ),
-        default=20,
-        unit="downloads per customer per UTC day",
-        minimum=1,
-        maximum=1_000,
-    ),
+    # VS-023b (ADR-019): `daily_download_cap` was removed: no file is downloaded.
     # VS-028 (ADR-024 d7, BR-145). `free_shipping_threshold` was removed: no shipping is charged.
     SettingDefinition(
         key="cash_payment_enabled",

@@ -1163,7 +1163,7 @@ batch_size_snapshot IS NULL
 ```text
 (order_id)
 (fulfillment_status, order_id) WHERE product_type = 'physical'
-(created_at) WHERE product_type = 'stl' AND fulfillment_status = 'awaiting_delivery'   -- STL delivery queue
+ix_order_items_stl_awaiting (created_at, id) WHERE product_type = 'stl' AND fulfillment_status = 'awaiting_delivery'   -- STL delivery queue (VS-023b)
 ```
 
 ---
@@ -2256,7 +2256,7 @@ WHERE product_type = 'physical'
 ## 19.5 STL Delivery Queue and Ownership
 
 ```text
-order_items(created_at) WHERE product_type = 'stl' AND fulfillment_status = 'awaiting_delivery'
+order_items(created_at, id) WHERE product_type = 'stl' AND fulfillment_status = 'awaiting_delivery'
 ```
 
 plus the unique STL-ownership index on `order_items` (§8.4).

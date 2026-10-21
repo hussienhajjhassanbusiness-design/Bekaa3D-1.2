@@ -348,6 +348,14 @@ class OrderItemModel(Base):
             postgresql_where=text("product_type = 'physical'"),
         ),
         Index(
+            "ix_order_items_stl_awaiting",
+            "created_at",
+            "id",
+            postgresql_where=text(
+                "product_type = 'stl' AND fulfillment_status = 'awaiting_delivery'"
+            ),
+        ),
+        Index(
             "uq_order_items_stl_ownership",
             "user_id",
             "product_id",

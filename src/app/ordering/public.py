@@ -3,7 +3,7 @@
 Every write here follows the ADR-024 lock order: the `orders` row first, then its lines
 by id; a caller that also locks a payment does so only after `lock_order_for_change`."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -19,14 +19,17 @@ from app.ordering.domain.enums import (
     PaymentMethod,
 )
 from app.ordering.domain.exceptions import (
+    InvalidLineTransitionError,
+    LineNotFoundError,
     LiveAttemptExistsError,
     OfferCheckoutExpiredError,
     OfferCheckoutNotFoundError,
     OfferNotCheckoutableError,
     OrderNotReleasableError,
 )
+from app.ordering.domain.line_transitions import line_transition_refusal
 from app.ordering.domain.order_status import LineState, OrderStatusInputs, derive_order_status
-from app.ordering.domain.orders import Order, OrderLine, StatusChange
+from app.ordering.domain.orders import Order, OrderLine, StatusChange, StlDeliveryRow
 from app.ordering.domain.payment_recovery import (
     ReleaseRefusal,
     can_retry_payment,
@@ -39,6 +42,8 @@ from app.ordering.infrastructure.orders import SqlOrderStore
 __all__ = [
     "CancelReason",
     "FulfillmentMethod",
+    "InvalidLineTransitionError",
+    "LineNotFoundError",
     "LineState",
     "LiveAttemptExistsError",
     "LockedOrder",
@@ -46,12 +51,14 @@ __all__ = [
     "OfferCheckoutNotFoundError",
     "OfferNotCheckoutableError",
     "OrderItemStatus",
+    "OrderLine",
     "OrderNotReleasableError",
     "OrderSource",
     "OrderStatus",
     "OrderStatusInputs",
     "PaymentMethod",
     "ReleaseRefusal",
+    "StlDeliveryRow",
     "can_retry_payment",
     "derive_order_status",
     "hold_deadline",
@@ -59,11 +66,14 @@ __all__ = [
     "manual_release_available_at",
     "manual_release_refusal",
     "mark_order_paid",
+    "mark_stl_line_delivered",
     "order_lines",
     "orders_by_id",
     "recompute_order_status",
     "release_candidates",
     "release_unpaid_order",
+    "status_inputs_for",
+    "stl_delivery_page",
     "stl_owned",
     "unpaid_offer_order",
 ]
@@ -150,6 +160,75 @@ async def mark_order_paid(session: AsyncSession, locked: LockedOrder, *, at: dat
             payment_reached_paid=True,
             lines=states,
         ),
+    )
+
+
+def status_inputs_for(locked: LockedOrder, lines: tuple[LineState, ...]) -> OrderStatusInputs:
+    """Inputs for a paid order. STOP-GAP: VS-030 must replace `refund_present` with the
+    real refund query; until then a `partially_refunded` order keeps that status."""
+    return OrderStatusInputs(
+        payment_method=locked.order.payment_method,
+        cancelled_at_set=locked.order.cancelled_at is not None,
+        payment_reached_paid=True,
+        lines=lines,
+        refund_present=locked.order.status is OrderStatus.PARTIALLY_REFUNDED,
+    )
+
+
+async def mark_stl_line_delivered(
+    session: AsyncSession, locked: LockedOrder, *, line_id: UUID, admin_id: UUID, at: datetime
+) -> tuple[OrderLine, OrderStatus]:
+    """Admin sent the file: STL `awaiting_delivery -> delivered`, history, recomputed status.
+    The caller holds the orders and lines locks; the state is read from `locked`."""
+    line = next((item for item in locked.lines if item.id == line_id), None)
+    if line is None:
+        raise LineNotFoundError(f"line {line_id} is not on order {locked.order.id}")
+    refusal = line_transition_refusal(
+        line.product_type, line.fulfillment_status, OrderItemStatus.DELIVERED
+    )
+    if refusal is not None:
+        raise InvalidLineTransitionError(refusal.value, fulfilled_at=line.fulfilled_at)
+    store = SqlOrderStore(session)
+    if not await store.set_line_delivered(line_id, at=at, delivered_by=admin_id):
+        raise InvalidLineTransitionError("not_awaiting_delivery")
+    await store.add_history(
+        [
+            StatusChange(
+                locked.order.id,
+                OrderItemStatus.AWAITING_DELIVERY.value,
+                OrderItemStatus.DELIVERED.value,
+                order_item_id=line_id,
+                actor_user_id=admin_id,
+            )
+        ]
+    )
+    states = tuple(
+        LineState(OrderItemStatus.DELIVERED if item.id == line_id else item.fulfillment_status)
+        for item in locked.lines
+    )
+    order_status = await recompute_order_status(
+        session, locked, status_inputs_for(locked, states), actor_user_id=admin_id
+    )
+    delivered = replace(
+        line,
+        fulfillment_status=OrderItemStatus.DELIVERED,
+        fulfilled_at=at,
+        delivered_by=admin_id,
+    )
+    return delivered, order_status
+
+
+async def stl_delivery_page(
+    session: AsyncSession,
+    *,
+    after: tuple[datetime, UUID] | None,
+    limit: int,
+    product_id: UUID | None = None,
+    user_id: UUID | None = None,
+) -> list[StlDeliveryRow]:
+    """The admin delivery queue, oldest first. No lock."""
+    return await SqlOrderStore(session).stl_delivery_page(
+        after=after, limit=limit, product_id=product_id, user_id=user_id
     )
 
 

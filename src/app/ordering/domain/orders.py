@@ -80,6 +80,24 @@ class OrderLine:
     currency: str
     fulfillment_status: OrderItemStatus
     offer_id: UUID | None = None
+    fulfilled_at: datetime | None = None
+    delivered_by: UUID | None = None
+
+
+@dataclass(frozen=True)
+class StlDeliveryRow:
+    """One admin queue row: an STL line awaiting delivery, with its order's contact."""
+
+    item_id: UUID
+    order_id: UUID
+    order_number: str
+    product_id: UUID
+    product_name: str
+    customer_id: UUID
+    customer_email: str
+    line_total_cents: int
+    currency: str
+    queued_at: datetime
 
 
 @dataclass(frozen=True)
