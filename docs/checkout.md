@@ -1,6 +1,6 @@
-# Checkout and verified payment (VS-023)
+# Checkout and verified payment (VS-023, VS-028)
 
-A verified customer checks out a cart of STL products and pays online; the order is paid only once the provider itself confirms the exact amount. Decisions and rationale: [ADR-032](adr/ADR-032-checkout-idempotency-and-payment-verification.md). Requirements: SRS §7.3, §7.5, §9.2, §20.1, §20.2, BR-030, BR-031, BR-056, BR-058 to BR-060. Plan: [`plans/VS-023-digital-checkout-plan.md`](plans/VS-023-digital-checkout-plan.md). Physical lines, delivery, pickup and cash arrive with VS-028; payment retry and reconciliation with VS-024; STL delivery with VS-023b. An accepted offer is checked out at its agreed price through `POST /api/v1/me/offers/{offer_id}/checkout`, which shares this route's transactions, replay and rate limit ([`offers.md`](offers.md), VS-041). Paying an STL also settles the customer's offers on it: the one bought through becomes `paid`, any other live one `auto_closed`.
+A verified customer checks out a cart of STL products and pays online; the order is paid only once the provider itself confirms the exact amount. Decisions and rationale: [ADR-032](adr/ADR-032-checkout-idempotency-and-payment-verification.md). Requirements: SRS §7.3, §7.5, §9.2, §20.1, §20.2, BR-030, BR-031, BR-056, BR-058 to BR-060. Plan: [`plans/VS-023-digital-checkout-plan.md`](plans/VS-023-digital-checkout-plan.md). Physical lines, delivery, pickup and cash on delivery or at pickup are VS-028 ([ADR-038](adr/ADR-038-physical-checkout-and-cash-eligibility.md), plan [`plans/VS-028-physical-checkout-plan.md`](plans/VS-028-physical-checkout-plan.md)); payment retry and reconciliation with VS-024; STL delivery with VS-023b. An accepted offer is checked out at its agreed price through `POST /api/v1/me/offers/{offer_id}/checkout`, which shares this route's transactions, replay and rate limit ([`offers.md`](offers.md), VS-041). Paying an STL also settles the customer's offers on it: the one bought through becomes `paid`, any other live one `auto_closed`.
 
 ## Routes
 
@@ -15,19 +15,34 @@ A verified customer checks out a cart of STL products and pays online; the order
 **Request** (`extra="forbid"`: no amount, total or price is ever accepted):
 
 ```text
-payment_method: "online" | "cash"          # cash -> 422 PAYMENT_METHOD_NOT_ALLOWED until VS-028
-payment_provider?: str                     # default: the one configured provider
-fulfillment_method? / address_id? / contact_phone?   # any of them -> 422 INVALID_FULFILLMENT
+payment_method: "online" | "cash"          # cash: every kept line physical
+payment_provider?: str                     # online only; default: the one configured provider
+fulfillment_method?: "delivery" | "pickup" # required when a kept line is physical; absent for STL-only
+address_id?: uuid                          # delivery only, and required there
+contact_phone?: str                        # pickup only, and required there; normalised to E.164
 customer_note?: str (<= 1000)
 accept_terms: true
 accept_digital_final_sale?: true           # required when an STL line remains
-accept_cash_terms?: true                   # accepted and ignored for online orders
+accept_cash_terms?: true                   # required for cash; ignored for online
 accepted_price_changes?: [{product_id, amount_cents, currency}]   # <= 50
 ```
 
 Header `Idempotency-Key`: 8-255 characters of `[A-Za-z0-9._:-]`. One key per "Place order" press and all its automatic retries; a new key after any change.
 
-**Response `201`:** the order (`pending_payment`, live prices, lines `pending`), the payment (`pending`, provider, `redirect_url` to the provider's page) and `dropped_lines` (STLs bought since they were added, not charged). A replay of the same key and body returns the stored response with `Idempotent-Replayed: true`.
+The SRS 7.4 matrix runs on the **kept** lines (after owned STLs are dropped), so a mixed cart whose STL is already owned is physical-only and may pay cash.
+
+| Kept lines | `fulfillment_method` | `address_id` | `contact_phone` | Cash |
+|---|---|---|---|---|
+| STL only | absent | absent | absent | refused (`cash_requires_physical`) |
+| Physical, delivery | `delivery` | required | absent | allowed |
+| Physical, pickup | `pickup` | absent | required | allowed |
+| Mixed | `delivery` or `pickup` as above | | | refused (`cash_requires_physical`) |
+
+**Response `201`:** the order (live prices, lines `pending`), the payment, and `dropped_lines` (STLs bought since they were added, not charged; filled on the cash path too). The order also carries `estimated_dispatch_at`, `delivery_fee_note` (delivery only), `delivery_address` (the snapshot; never the contact phone or its hash), `payment_due` and `amount_due_cents`.
+- **Online:** the order is `pending_payment`; `payment` is `pending` with the provider and its `redirect_url`.
+- **Cash:** the order is `in_progress`, `payment` is `null`, `payment_due` is `true` and `amount_due_cents` is the total.
+
+A replay of the same key and body returns the stored response with `Idempotent-Replayed: true`. A replay is a pure read: it takes no lock and re-runs no limit check.
 
 **Errors:**
 
@@ -40,17 +55,22 @@ Header `Idempotency-Key`: 8-255 characters of `[A-Za-z0-9._:-]`. One key per "Pl
 | 409 | `IDEMPOTENCY_REQUEST_IN_PROGRESS` | same key and body still running, or crashed between placing the order and starting the payment; `order_id`, `order_number`, `Retry-After: 2` |
 | 422 | `PRODUCT_NOT_PURCHASABLE` | any line hidden, unavailable or WhatsApp-only (over-cap lines are listed too); `lines[{product_id, reason, max_quantity?}]` |
 | 422 | `QUANTITY_EXCEEDS_LIMIT` | only over-cap lines; same `lines` |
-| 422 | `INVALID_FULFILLMENT` | a physical line, or any fulfillment field |
-| 422 | `PAYMENT_METHOD_NOT_ALLOWED` | `reason`: `cash_requires_physical`, `provider_not_configured`, `provider_required`, `zero_total` |
-| 422 | `VALIDATION_ERROR` | schema, a client-sent total, or a missing `accept_digital_final_sale` |
+| 422 | `INVALID_FULFILLMENT` | the fulfillment fields do not fit the kept lines (table above); an unknown, another customer's or a deleted `address_id` (one answer for all three); pickup while `pickup_address` is not set |
+| 422 | `PAYMENT_METHOD_NOT_ALLOWED` | `reason`: `cash_requires_physical`, `cash_disabled`, `cash_blocked`, `zero_total`, `provider_not_configured`, `provider_required`, `provider_not_applicable` (a provider sent with cash) |
+| 422 | `CASH_PAYMENT_LIMIT_REACHED` | `reason`: `open_orders` (an unpaid cash order exists for this account **or** this phone) or `order_total` (the live total is above `cash_max_order_total`) |
+| 422 | `VALIDATION_ERROR` | schema, a client-sent total, an invalid `contact_phone`, or a missing `accept_digital_final_sale` / `accept_cash_terms` |
 | 429 | `RATE_LIMITED` | 30 checkouts per user per hour (a replay counts) |
 | 502 | `PAYMENT_PROVIDER_UNAVAILABLE` | the order exists unpaid; the provider could not start the payment; `order_id`, `order_number`; replayed for the same key |
 | 503 | `ORDERS_PAUSED` | `accepting_orders` is off |
-| 503 | `ONLINE_PAYMENT_UNAVAILABLE` | `PAYMENT_PROVIDER=none`; nothing written |
+| 503 | `ONLINE_PAYMENT_UNAVAILABLE` | an **online** checkout with `PAYMENT_PROVIDER=none`; nothing written. Cash still works (ADR-038 amends ADR-032 d12) |
 
 Every refusal before the order commits leaves the cart, the order tables and the idempotency key untouched.
 
-**Two transactions.** The first claims the key, locks the cart, revalidates every line, inserts the order, lines, pending payment, history and audit row, and clears the cart. The provider is then called with no transaction open (10 s timeout). The second stores the provider reference, or fails the attempt.
+**Cash refusals are indistinguishable.** `cash_blocked` and `open_orders` give byte-identical bodies whether the account or only the phone matched, so a refusal never reveals that another account uses a phone.
+
+**Cash is one transaction:** claim the key, place the order, complete the claim, COMMIT. There is no payment row, no provider call and no second transaction. The customer gets an `order_cash_placed` email (amount due, fulfillment, dispatch estimate, the courier fee note for delivery; no phone or address) and an `order.placed` notification. Release, reconciliation and payment retry never select a cash order; an admin release or a retry on one is `409 INVALID_STATE_TRANSITION` (`cash_order`).
+
+**Online is two transactions.** The first claims the key, locks the cart, revalidates every line, inserts the order, lines, pending payment, history and audit row, and clears the cart. The provider is then called with no transaction open (10 s timeout). The second stores the provider reference, or fails the attempt.
 
 **A stuck claim** (a crash between the two): the order stays `pending_payment` with its pending attempt; for 24 h the key answers `409 IDEMPOTENCY_REQUEST_IN_PROGRESS` naming the order; after the daily purge the same key is a new request, and the cart is already empty, so it gets `409 CART_EMPTY`. Recovery is VS-024's reconciliation and payment retry ([`payment-recovery.md`](payment-recovery.md)).
 
@@ -91,7 +111,9 @@ States: `paid` (add `--captured-amount-cents N` for an under- or overpayment), `
 
 ## Concurrency
 
-Lock order (ADR-024 d9, ADR-029 d4): checkout locks the idempotency key, then the cart, and only inserts new order rows; payment apply locks the order, its lines by id, then the payment. There is no cycle (`tests/concurrency/test_checkout_races.py`, `test_payment_races.py`).
+Lock order (ADR-024 d9, ADR-029 d4, VS-028 plan 8.1): checkout locks the idempotency key, then the cart, then (delivery) the address `FOR SHARE`, then (cash) the phone advisory lock `pg_advisory_xact_lock(CASH_PHONE_LOCK_NS, hashtext(phone_hash))`, and only then reads and inserts new order rows. Checkout never locks an existing `orders` row. Payment apply locks the order, its lines by id, then the payment; VS-031's cancel will lock the order, its lines, the cart, then the phone. There is no cycle (`tests/concurrency/test_checkout_races.py`, `test_cash_checkout_races.py` R1-R5, `test_payment_races.py`).
+
+Cash limits are read under the phone lock on the recomputed live total, so two accounts with one phone racing get one order and one `422`.
 
 ## Database
 

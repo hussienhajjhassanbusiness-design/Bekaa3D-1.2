@@ -40,6 +40,8 @@ class SqlCartProductReader:
                 _P.purchase_mode,
                 _P.is_available,
                 _P.max_quantity_per_line,
+                _P.production_lead_time_days,
+                _P.batch_size,
                 listed_predicate().label("listed"),
                 ProductImageModel,
             )
@@ -60,6 +62,8 @@ class SqlCartProductReader:
                 is_available=row.is_available,
                 max_quantity_per_line=row.max_quantity_per_line,
                 listed=bool(row.listed),
+                production_lead_time_days=row.production_lead_time_days,
+                batch_size=row.batch_size,
                 cover=_image(row.ProductImageModel) if row.ProductImageModel else None,
             )
             for row in rows

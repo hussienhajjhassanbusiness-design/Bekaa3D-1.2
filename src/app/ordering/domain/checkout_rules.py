@@ -13,11 +13,10 @@ from app.catalog.application.ports import (
 )
 from app.ordering.domain.cart_rules import cap_for
 from app.ordering.domain.entities import CartLine
-from app.ordering.domain.enums import PaymentMethod
+from app.ordering.domain.enums import FulfillmentMethod, PaymentMethod
 from app.ordering.domain.exceptions import (
     CheckoutLinesRefusedError,
     ConsentRequiredError,
-    InvalidFulfillmentError,
     LineRefusal,
     PaymentMethodNotAllowedError,
     PriceChange,
@@ -39,15 +38,17 @@ class AcceptedPrice:
 
 @dataclass(frozen=True)
 class CheckoutCommand:
-    """The validated request. `fulfillment_requested` is true when any of fulfillment
-    method, address or contact phone was sent (all VS-028)."""
+    """The validated request; `contact_phone` is already E.164 (VS-028 plan D10)."""
 
     payment_method: PaymentMethod
     payment_provider: str | None
-    fulfillment_requested: bool
     customer_note: str | None
     accept_digital_final_sale: bool
     accepted_price_changes: tuple[AcceptedPrice, ...]
+    fulfillment_method: FulfillmentMethod | None = None
+    address_id: UUID | None = None
+    contact_phone: str | None = None
+    accept_cash_terms: bool = False
 
 
 @dataclass(frozen=True)
@@ -78,20 +79,6 @@ def collect_refusals(lines: Sequence[CartLine], products: Mapping[UUID, CartProd
             refusals.append(LineRefusal(line.product_id, OVER_CAP, max_quantity=cap))
     if refusals:
         raise CheckoutLinesRefusedError(refusals)
-
-
-def require_digital_only(lines: Sequence[CartLine], command: CheckoutCommand) -> None:
-    """Physical lines and fulfillment details arrive with VS-028."""
-    if command.fulfillment_requested or any(
-        line.product_type is ProductType.PHYSICAL for line in lines
-    ):
-        raise InvalidFulfillmentError("Physical fulfillment is not available yet.")
-
-
-def require_online(command: CheckoutCommand) -> None:
-    """Cash needs every line physical (ADR-024 d2); an STL-only order is paid online."""
-    if command.payment_method is PaymentMethod.CASH:
-        raise PaymentMethodNotAllowedError("cash_requires_physical")
 
 
 def split_owned(
@@ -132,6 +119,9 @@ def price_lines(
     priced: list[NewOrderLine] = []
     for line in lines:
         product = products[line.product_id]
+        physical = product.type is ProductType.PHYSICAL
+        lead = product.production_lead_time_days if physical else None
+        batch = product.batch_size if physical else None
         priced.append(
             NewOrderLine(
                 product_id=product.id,
@@ -142,6 +132,8 @@ def price_lines(
                 quantity=line.quantity,
                 line_total_cents=product.price_cents * line.quantity,
                 currency=product.currency,
+                lead_time_days_snapshot=lead,
+                batch_size_snapshot=batch,
             )
         )
     return tuple(priced)
@@ -157,6 +149,12 @@ def require_consent(command: CheckoutCommand, *, has_stl: bool) -> None:
     """BR-060: STL purchases are final, and the customer must say so."""
     if has_stl and not command.accept_digital_final_sale:
         raise ConsentRequiredError("accept_digital_final_sale is required for STL lines.")
+
+
+def require_cash_terms(command: CheckoutCommand) -> None:
+    """Cash needs the customer's acceptance of the cash terms (SRS 7.3 step 9)."""
+    if command.payment_method is PaymentMethod.CASH and not command.accept_cash_terms:
+        raise ConsentRequiredError("accept_cash_terms is required for cash.", "accept_cash_terms")
 
 
 def choose_provider(

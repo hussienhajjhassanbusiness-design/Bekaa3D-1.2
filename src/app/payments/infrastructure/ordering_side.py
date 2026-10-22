@@ -11,6 +11,8 @@ from app.catalog.application.ports import ProductType
 from app.engagement.public import NotificationType, create_notification
 from app.negotiation.public import StlPurchase, settle_offers_on_stl_purchase
 from app.ordering.public import (
+    DELIVERY_FEE_NOTE,
+    FulfillmentMethod,
     LineState,
     LockedOrder,
     OrderItemStatus,
@@ -74,6 +76,7 @@ class SqlPaymentNotices:
     async def payment_confirmed(self, locked: LockedOrder) -> None:
         """To the email captured at checkout; the file itself is VS-023b's delivery."""
         order = locked.order
+        method, eta = order.fulfillment_method, order.estimated_dispatch_at
         await SqlOutboxWriter(self._session).add(
             user_id=order.user_id,
             recipient_email=order.customer_email_snapshot,
@@ -83,6 +86,11 @@ class SqlPaymentNotices:
                 "order_number": order.order_number,
                 "total_cents": order.total_cents,
                 "currency": order.currency,
+                "fulfillment_method": method.value if method else None,
+                "estimated_dispatch_at": eta.isoformat() if eta else None,
+                "delivery_fee_note": DELIVERY_FEE_NOTE
+                if method is FulfillmentMethod.DELIVERY
+                else None,
             },
         )
         await create_notification(

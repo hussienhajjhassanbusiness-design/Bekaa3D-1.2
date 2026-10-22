@@ -5,10 +5,11 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select, tuple_
+from sqlalchemy import func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ordering.application.ports import OrderFilters
+from app.ordering.domain.enums import OrderItemStatus
 from app.ordering.domain.orders import CustomerOrder, CustomerOrderLine, HistoryEntry
 from app.ordering.infrastructure.models import (
     OrderItemModel,
@@ -40,6 +41,13 @@ _ORDER_COLUMNS = (
     _O.placed_at,
     _O.completed_at,
     _O.cancelled_at,
+    # The amount still due: every line not cancelled (VS-028 plan 3.7), one subquery.
+    (
+        select(func.coalesce(func.sum(_I.line_total_cents), 0))
+        .where(_I.order_id == _O.id, _I.fulfillment_status != OrderItemStatus.CANCELLED)
+        .scalar_subquery()
+        .label("live_total_cents")
+    ),
 )
 _LINE_COLUMNS = (
     _I.id,

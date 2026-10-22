@@ -10,6 +10,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalog.application.ports import ProductType
+from app.ordering.domain.cash import amount_due_cents
 from app.ordering.domain.enums import (
     CancelReason,
     FulfillmentMethod,
@@ -27,6 +28,7 @@ from app.ordering.domain.exceptions import (
     OfferNotCheckoutableError,
     OrderNotReleasableError,
 )
+from app.ordering.domain.fulfillment import DELIVERY_FEE_NOTE
 from app.ordering.domain.line_transitions import line_transition_refusal
 from app.ordering.domain.order_status import LineState, OrderStatusInputs, derive_order_status
 from app.ordering.domain.orders import Order, OrderLine, StatusChange, StlDeliveryRow
@@ -37,9 +39,12 @@ from app.ordering.domain.payment_recovery import (
     manual_release_available_at,
     manual_release_refusal,
 )
+from app.ordering.infrastructure.cash import SqlCashBlockStore
+from app.ordering.infrastructure.cash import lock_cash_phone as _lock_cash_phone
 from app.ordering.infrastructure.orders import SqlOrderStore
 
 __all__ = [
+    "DELIVERY_FEE_NOTE",
     "CancelReason",
     "FulfillmentMethod",
     "InvalidLineTransitionError",
@@ -58,10 +63,14 @@ __all__ = [
     "OrderStatusInputs",
     "PaymentMethod",
     "ReleaseRefusal",
+    "SqlCashBlockStore",
     "StlDeliveryRow",
+    "amount_due_cents",
     "can_retry_payment",
+    "cash_block_store",
     "derive_order_status",
     "hold_deadline",
+    "lock_cash_phone",
     "lock_order_for_change",
     "manual_release_available_at",
     "manual_release_refusal",
@@ -83,6 +92,17 @@ __all__ = [
 class LockedOrder:
     order: Order
     lines: tuple[OrderLine, ...]
+
+
+async def lock_cash_phone(session: AsyncSession, phone_hash: str) -> None:
+    """The cash phone advisory lock, the one checkout takes (VS-028 D6). Call it only after
+    the customer's cart lock (ADR-024 d9); `test_cash_lock_order` allowlists the callers."""
+    await _lock_cash_phone(session, phone_hash)
+
+
+def cash_block_store(session: AsyncSession) -> SqlCashBlockStore:
+    """VS-031 inserts blocks and VS-029 lists and clears them through this store."""
+    return SqlCashBlockStore(session)
 
 
 async def lock_order_for_change(session: AsyncSession, order_id: UUID) -> LockedOrder | None:

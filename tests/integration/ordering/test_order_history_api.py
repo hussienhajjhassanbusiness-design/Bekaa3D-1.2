@@ -40,6 +40,7 @@ SUMMARY_KEYS = {
     "payment_method",
     "fulfillment_method",
     "payment_due",
+    "amount_due_cents",
     "total",
     "placed_at",
 }
@@ -51,6 +52,7 @@ DETAIL_KEYS = {
     "fulfillment_method",
     "payment_method",
     "payment_due",
+    "amount_due_cents",
     "can_cancel",
     "can_retry_payment",
     "hold_expires_at",

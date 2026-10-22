@@ -17,8 +17,6 @@ from app.ordering.domain.checkout_rules import (
     price_changes,
     price_lines,
     require_consent,
-    require_digital_only,
-    require_online,
     split_owned,
     totals,
 )
@@ -26,8 +24,6 @@ from app.ordering.domain.enums import PaymentMethod
 from app.ordering.domain.exceptions import (
     CheckoutLinesRefusedError,
     ConsentRequiredError,
-    InvalidFulfillmentError,
-    PaymentMethodNotAllowedError,
 )
 from app.ordering.domain.order_number import CROCKFORD, new_order_number
 from tests.unit.ordering.test_cart_rules import NOW, line, physical, stl
@@ -35,7 +31,6 @@ from tests.unit.ordering.test_cart_rules import NOW, line, physical, stl
 BASE = CheckoutCommand(
     payment_method=PaymentMethod.ONLINE,
     payment_provider=None,
-    fulfillment_requested=False,
     customer_note=None,
     accept_digital_final_sale=True,
     accepted_price_changes=(),
@@ -87,21 +82,6 @@ def test_only_cap_failures_are_flagged_as_such() -> None:
 def test_buyable_lines_pass() -> None:
     a, b = stl(), physical()
     collect_refusals([line(a, 1), line(b, 5)], by_id(a, b))
-
-
-def test_physical_lines_and_fulfillment_fields_wait_for_vs028() -> None:
-    with pytest.raises(InvalidFulfillmentError):
-        require_digital_only([line(physical(), 1)], command())
-    with pytest.raises(InvalidFulfillmentError):
-        require_digital_only([line(stl(), 1)], command(fulfillment_requested=True))
-    require_digital_only([line(stl(), 1)], command())
-
-
-def test_cash_is_refused_for_an_stl_order() -> None:
-    with pytest.raises(PaymentMethodNotAllowedError) as caught:
-        require_online(command(payment_method=PaymentMethod.CASH))
-    assert caught.value.reason == "cash_requires_physical"
-    require_online(command())
 
 
 def test_owned_stls_are_dropped_and_named() -> None:

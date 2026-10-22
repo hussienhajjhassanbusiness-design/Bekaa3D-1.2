@@ -5,12 +5,14 @@ from datetime import datetime
 from typing import Annotated, Literal, Self
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, StrictInt
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator
 
 from app.api.text import MultilineStr, PlainStr
 from app.catalog.application.ports import ProductType
 from app.catalog.public import PriceRead
+from app.core.phone import InvalidPhoneNumberError, normalise_lebanese_phone
 from app.ordering.application.services.checkout import PlacedOrder
+from app.ordering.domain.cash import amount_due_cents
 from app.ordering.domain.checkout_rules import AcceptedPrice, CheckoutCommand
 from app.ordering.domain.enums import (
     FulfillmentMethod,
@@ -19,6 +21,7 @@ from app.ordering.domain.enums import (
     OrderStatus,
     PaymentMethod,
 )
+from app.ordering.domain.fulfillment import DELIVERY_FEE_NOTE
 
 MAX_ACCEPTED_PRICES = 50
 IDEMPOTENCY_KEY_PATTERN = r"^[A-Za-z0-9._:-]{8,255}$"
@@ -44,26 +47,37 @@ class CheckoutRequest(BaseModel):
     accept_terms: Literal[True]
     accept_digital_final_sale: Literal[True] | None = None
     accept_cash_terms: Literal[True] | None = Field(
-        default=None, description="Accepted and ignored for online orders (VS-028 uses it)."
+        default=None, description="Required for cash orders; ignored for online ones."
     )
     accepted_price_changes: Annotated[
         list[AcceptedPriceIn], Field(max_length=MAX_ACCEPTED_PRICES)
     ] = Field(default_factory=list)
 
+    @field_validator("contact_phone")
+    @classmethod
+    def _normalise_phone(cls, value: str | None) -> str | None:
+        """Two spellings of one number are one request body (VS-028 plan D10)."""
+        if value is None:
+            return None
+        try:
+            return normalise_lebanese_phone(value)
+        except InvalidPhoneNumberError:
+            raise ValueError("Enter a valid Lebanese phone number.") from None
+
     def command(self) -> CheckoutCommand:
         return CheckoutCommand(
             payment_method=self.payment_method,
             payment_provider=self.payment_provider,
-            fulfillment_requested=any(
-                v is not None
-                for v in (self.fulfillment_method, self.address_id, self.contact_phone)
-            ),
             customer_note=self.customer_note,
             accept_digital_final_sale=bool(self.accept_digital_final_sale),
             accepted_price_changes=tuple(
                 AcceptedPrice(a.product_id, a.amount_cents, a.currency)
                 for a in self.accepted_price_changes
             ),
+            fulfillment_method=self.fulfillment_method,
+            address_id=self.address_id,
+            contact_phone=self.contact_phone,
+            accept_cash_terms=bool(self.accept_cash_terms),
         )
 
 
@@ -78,6 +92,17 @@ class CheckoutLineRead(BaseModel):
     fulfillment_status: OrderItemStatus
 
 
+class CheckoutAddressRead(BaseModel):
+    """The address snapshot: never the contact phone or its hash."""
+
+    recipient_name: str
+    governorate: str
+    city: str
+    area: str | None
+    street: str | None
+    landmark_notes: str | None
+
+
 class CheckoutOrderRead(BaseModel):
     id: UUID
     order_number: str
@@ -89,6 +114,11 @@ class CheckoutOrderRead(BaseModel):
     tax: PriceRead
     total: PriceRead
     placed_at: datetime
+    estimated_dispatch_at: datetime | None
+    delivery_fee_note: str | None
+    delivery_address: CheckoutAddressRead | None
+    payment_due: bool = Field(description="An unpaid cash order: pay the courier or at pickup.")
+    amount_due_cents: int | None = Field(description="Cash orders only: the live total.")
     lines: list[CheckoutLineRead]
 
 
@@ -106,14 +136,16 @@ class DroppedLineRead(BaseModel):
 
 class CheckoutRead(BaseModel):
     order: CheckoutOrderRead
-    payment: CheckoutPaymentRead
+    payment: CheckoutPaymentRead | None = Field(description="Null for a cash order.")
     dropped_lines: list[DroppedLineRead] = Field(
         description="STL lines bought since they were added: not charged (SRS 7.3 step 5)."
     )
 
     @classmethod
-    def of(cls, placed: PlacedOrder, redirect_url: str | None) -> Self:
+    def of(cls, placed: PlacedOrder, redirect_url: str | None = None) -> Self:
         order, currency = placed.order, placed.order.currency
+        cash = order.payment_method is PaymentMethod.CASH
+        delivery = order.fulfillment_method is FulfillmentMethod.DELIVERY
 
         def price(cents: int) -> PriceRead:
             return PriceRead(amount_cents=cents, currency=currency)
@@ -130,6 +162,22 @@ class CheckoutRead(BaseModel):
                 tax=price(order.tax_cents),
                 total=price(order.total_cents),
                 placed_at=order.placed_at,
+                estimated_dispatch_at=order.estimated_dispatch_at,
+                delivery_fee_note=DELIVERY_FEE_NOTE if delivery else None,
+                delivery_address=(
+                    CheckoutAddressRead(
+                        recipient_name=order.recipient_name or "",
+                        governorate=order.governorate or "",
+                        city=order.city or "",
+                        area=order.area,
+                        street=order.street,
+                        landmark_notes=order.landmark_notes,
+                    )
+                    if delivery
+                    else None
+                ),
+                payment_due=cash,
+                amount_due_cents=amount_due_cents(placed.lines) if cash else None,
                 lines=[
                     CheckoutLineRead(
                         id=line.id,
@@ -149,7 +197,9 @@ class CheckoutRead(BaseModel):
                 status=placed.payment.status,
                 provider=placed.payment.provider,
                 redirect_url=redirect_url,
-            ),
+            )
+            if placed.payment is not None
+            else None,
             dropped_lines=[
                 DroppedLineRead(product_id=p, reason="already_owned") for p in placed.dropped
             ],

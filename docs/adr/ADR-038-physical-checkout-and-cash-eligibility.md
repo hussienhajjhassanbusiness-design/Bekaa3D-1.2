@@ -25,6 +25,20 @@ ADR-024 lets a physical-only order be paid in cash, limited per customer **or** 
 6. **`PHONE_HASH_SALT` is a required secret, never rotated** (ADR-024 d6, plan Q5). `hash_phone` is `HMAC-SHA256(key = PHONE_HASH_SALT, msg = E.164)`, lowercase hex, and refuses any input that is not already E.164. Outside development and test, `main.py` and `worker.py` refuse to start with a value shorter than 32 characters or still starting with `generate_with__`; the error names the setting, never its value. Logs redact it by key, and redact the phone, its hash and E.164 numbers inside text.
 7. **Settings** (BR-145): `cash_payment_enabled` (public, `true`), `cash_max_open_orders` (private, `1`, 1-10) and `cash_max_order_total` (public, 10 000 cents, 1-1 000 000, never null). `free_shipping_threshold` is deleted from the table, the registry and the public allowlist; a downgrade restores it as JSON null.
 
+## PR B as built (2026-10-22): deviations from the plan
+
+PR B (branch `vs-028-checkout`) follows the plan's D3-D13 as written; only these differ.
+
+1. **Refusal precedence.** The SRS 7.4 matrix now runs after owned STLs are dropped, so `INVALID_FULFILLMENT` and `cash_requires_physical` come after `CART_EMPTY` (with `dropped_lines`) and before `CART_PRICE_CHANGED`. Before PR B a physical line was refused before the owned-STL drop.
+2. **`resolve_fulfillment` takes the kept lines' product types**, not the lines, plus the command's fields; the matrix needs nothing else.
+3. **The courier note keeps the existing VS-025 wording**, "The delivery fee is paid to the courier on delivery.", as one constant in `ordering/domain/fulfillment.py` used by every response and email.
+4. **`Order` (the internal read of a placed order) gains `estimated_dispatch_at` and the address snapshot**, never the phone or its hash, so the checkout response and emails need no second read. `OnlinePlacedOrder` keeps the provider call and offer checkout typed with a non-null payment.
+5. **`get_live_for_share` is on `SqlAddressRepository` only**, not on the `AddressStore` protocol: only `identity.public.lock_checkout_address` calls it.
+6. **The release query keeps its `payment_method = 'online'` filter as defence in depth.** It is redundant today, because an unpaid cash order derives `in_progress`, never `pending_payment`, but no CHECK enforces that. The reconcile query's `order_payment_method = 'online'` filter is redundant for the same kind of reason: a cash order has no payment row until VS-029 records one as `paid`.
+7. **R1's delivery variant uses one E.164 number on both addresses.** `ck_addresses_phone_e164` stores no other spelling; the pickup variant sends two spellings of one number.
+8. **The leak scan searches three more strings than the plan lists**: the two spaced spellings the customer sends and the invalid input. Without them an echoed invalid number went unnoticed (mutation L2).
+9. **R5 proves the D5 invariant directly.** A cash checkout completes while a release or a payment retry holds the customer's other order. Taking any `orders` lock before the phone lock makes it wait, and the test fails.
+
 ## Consequences
 
 - The plaintext phone exists only in `orders.contact_phone_snapshot`. Leaking `PHONE_HASH_SALT` lets the about 10^8 Lebanese numbers be brute-forced from block hashes; losing it makes every block stop matching by phone (they still match by `user_id`), and order hashes would have to be recomputed from the snapshots.

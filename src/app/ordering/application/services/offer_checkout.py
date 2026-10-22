@@ -20,7 +20,7 @@ from app.ordering.application.ports import (
     PaymentAttempts,
     SettingsSource,
 )
-from app.ordering.application.services.checkout import CheckoutCustomer, PlacedOrder
+from app.ordering.application.services.checkout import CheckoutCustomer, OnlinePlacedOrder
 from app.ordering.application.services.retry import already_active
 from app.ordering.domain.checkout_rules import DIGITAL_TERMS_VERSION, choose_provider
 from app.ordering.domain.enums import OrderItemStatus, OrderSource, PaymentMethod
@@ -56,7 +56,7 @@ async def place_offer_order(
     now: datetime,
     clock: Callable[[], datetime],
     number: Callable[[], str] | None = None,
-) -> PlacedOrder:
+) -> OnlinePlacedOrder:
     """Refusals in ADR-037's order; the price is the agreed amount, never the list price."""
     offer = await offers.read(command.offer_id, customer.id, now=now)
     if not await settings.get_bool("accepting_orders"):
@@ -127,7 +127,7 @@ async def place_offer_order(
             "offer_id": str(offer.id),
         },
     )
-    return PlacedOrder(order=order, lines=tuple(lines), payment=payment, dropped=())
+    return OnlinePlacedOrder(order=order, lines=tuple(lines), payment=payment, dropped=())
 
 
 def _purchasable(offer: AcceptedOffer, product: CartProduct | None) -> CartProduct:

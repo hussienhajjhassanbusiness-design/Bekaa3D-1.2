@@ -2531,6 +2531,66 @@
         "title": "CategoryUpdate",
         "type": "object"
       },
+      "CheckoutAddressRead": {
+        "description": "The address snapshot: never the contact phone or its hash.",
+        "properties": {
+          "area": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Area"
+          },
+          "city": {
+            "title": "City",
+            "type": "string"
+          },
+          "governorate": {
+            "title": "Governorate",
+            "type": "string"
+          },
+          "landmark_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Landmark Notes"
+          },
+          "recipient_name": {
+            "title": "Recipient Name",
+            "type": "string"
+          },
+          "street": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Street"
+          }
+        },
+        "required": [
+          "recipient_name",
+          "governorate",
+          "city",
+          "area",
+          "street",
+          "landmark_notes"
+        ],
+        "title": "CheckoutAddressRead",
+        "type": "object"
+      },
       "CheckoutLineRead": {
         "properties": {
           "fulfillment_status": {
@@ -2579,6 +2639,51 @@
       },
       "CheckoutOrderRead": {
         "properties": {
+          "amount_due_cents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Cash orders only: the live total.",
+            "title": "Amount Due Cents"
+          },
+          "delivery_address": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CheckoutAddressRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "delivery_fee_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivery Fee Note"
+          },
+          "estimated_dispatch_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Dispatch At"
+          },
           "fulfillment_method": {
             "anyOf": [
               {
@@ -2604,6 +2709,11 @@
           "order_number": {
             "title": "Order Number",
             "type": "string"
+          },
+          "payment_due": {
+            "description": "An unpaid cash order: pay the courier or at pickup.",
+            "title": "Payment Due",
+            "type": "boolean"
           },
           "payment_method": {
             "$ref": "#/components/schemas/PaymentMethod"
@@ -2640,6 +2750,11 @@
           "tax",
           "total",
           "placed_at",
+          "estimated_dispatch_at",
+          "delivery_fee_note",
+          "delivery_address",
+          "payment_due",
+          "amount_due_cents",
           "lines"
         ],
         "title": "CheckoutOrderRead",
@@ -2696,7 +2811,15 @@
             "$ref": "#/components/schemas/CheckoutOrderRead"
           },
           "payment": {
-            "$ref": "#/components/schemas/CheckoutPaymentRead"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CheckoutPaymentRead"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null for a cash order."
           }
         },
         "required": [
@@ -2720,7 +2843,7 @@
                 "type": "null"
               }
             ],
-            "description": "Accepted and ignored for online orders (VS-028 uses it).",
+            "description": "Required for cash orders; ignored for online ones.",
             "title": "Accept Cash Terms"
           },
           "accept_digital_final_sale": {
@@ -4933,6 +5056,18 @@
       },
       "OrderDetailRead": {
         "properties": {
+          "amount_due_cents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "While payment_due: the live total.",
+            "title": "Amount Due Cents"
+          },
           "can_cancel": {
             "title": "Can Cancel",
             "type": "boolean"
@@ -5116,6 +5251,7 @@
           "fulfillment_method",
           "payment_method",
           "payment_due",
+          "amount_due_cents",
           "can_cancel",
           "can_retry_payment",
           "hold_expires_at",
@@ -5438,6 +5574,18 @@
       },
       "OrderSummaryRead": {
         "properties": {
+          "amount_due_cents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "While payment_due: the live total.",
+            "title": "Amount Due Cents"
+          },
           "fulfillment_method": {
             "anyOf": [
               {
@@ -5484,6 +5632,7 @@
           "payment_method",
           "fulfillment_method",
           "payment_due",
+          "amount_due_cents",
           "total",
           "placed_at"
         ],
@@ -15825,7 +15974,7 @@
     },
     "/api/v1/checkout": {
       "post": {
-        "description": "Tx1: claim, place the order, attach it to the claim, COMMIT. Then the provider call\nwith no transaction open. Tx2: store the reference or fail the attempt, and the\nresponse. A crash between them leaves the claim `in_progress` naming the order.\nNo dependency holds a session: the user is read in its own short transaction.",
+        "description": "Tx1: claim, place the order, attach it to the claim. A cash order completes the claim\nand COMMITs there. An online one COMMITs, then calls the provider with no transaction\nopen; Tx2 stores the reference or fails the attempt. A crash between them leaves the\nclaim `in_progress` naming the order.\nNo dependency holds a session: the user is read in its own short transaction.",
         "operationId": "checkout_api_v1_checkout_post",
         "parameters": [
           {
@@ -15910,7 +16059,7 @@
                 }
               }
             },
-            "description": "PRODUCT_NOT_PURCHASABLE or QUANTITY_EXCEEDS_LIMIT (with `lines`), INVALID_FULFILLMENT, PAYMENT_METHOD_NOT_ALLOWED (with `reason`), or VALIDATION_ERROR."
+            "description": "PRODUCT_NOT_PURCHASABLE or QUANTITY_EXCEEDS_LIMIT (with `lines`), INVALID_FULFILLMENT, PAYMENT_METHOD_NOT_ALLOWED or CASH_PAYMENT_LIMIT_REACHED (each with `reason`), or VALIDATION_ERROR."
           },
           "429": {
             "content": {
@@ -15959,7 +16108,7 @@
             "sessionCookie": []
           }
         ],
-        "summary": "Place an order from the cart and start its online payment",
+        "summary": "Place an order from the cart: start its online payment, or place it as cash",
         "tags": [
           "checkout"
         ]

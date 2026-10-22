@@ -90,7 +90,7 @@ class CartPriceChangedError(OrderingDomainError):
 
 
 class InvalidFulfillmentError(OrderingDomainError):
-    """A physical line or a fulfillment field before VS-028 (422 INVALID_FULFILLMENT)."""
+    """The fulfillment fields do not fit the kept lines (422 INVALID_FULFILLMENT)."""
 
 
 class PaymentMethodNotAllowedError(OrderingDomainError):
@@ -110,7 +110,19 @@ class OrdersPausedError(OrderingDomainError):
 
 
 class ConsentRequiredError(OrderingDomainError):
-    """An STL line needs `accept_digital_final_sale` (422 VALIDATION_ERROR)."""
+    """A required acceptance is missing (422 VALIDATION_ERROR at `field`)."""
+
+    def __init__(self, message: str, field: str = "accept_digital_final_sale") -> None:
+        super().__init__(message)
+        self.field = field
+
+
+class CashLimitReachedError(OrderingDomainError):
+    """422 CASH_PAYMENT_LIMIT_REACHED; `reason` is `open_orders` or `order_total`."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(f"Cash payment limit reached: {reason}.")
+        self.reason = reason
 
 
 class ProductAlreadyOwnedError(OrderingDomainError):

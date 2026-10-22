@@ -366,7 +366,7 @@ Removed by ADR-024. The courier prices and collects the delivery fee; there is n
 
 | Method + Path | Auth / Authorization | Request | Success | Errors | Side Effects / Notes |
 |---|---|---|---|---|---|
-| `POST /api/v1/checkout` | Verified Customer | `CheckoutRequest` + required `Idempotency-Key` | `201 CheckoutRead` | 401, 403, 409 `CART_EMPTY` / `CART_PRICE_CHANGED` / `PRODUCT_ALREADY_OWNED` / `IDEMPOTENCY_KEY_CONFLICT` / `IDEMPOTENCY_REQUEST_IN_PROGRESS`, 422 `INVALID_FULFILLMENT` / `PRODUCT_NOT_PURCHASABLE` / `QUANTITY_EXCEEDS_LIMIT` / `PAYMENT_METHOD_NOT_ALLOWED` / `CASH_PAYMENT_LIMIT_REACHED` / `VALIDATION_ERROR`, 429, 502 `PAYMENT_PROVIDER_UNAVAILABLE`, 503 `ORDERS_PAUSED` / `ONLINE_PAYMENT_UNAVAILABLE` | **As built (VS-023, digital and online only; ADR-032):** two transactions around the provider call; the live price is charged; `dropped_lines` names STLs bought since they were added; a replay carries `Idempotent-Replayed: true` and counts against the 30/hour limit; `PAYMENT_ALREADY_ACTIVE` is VS-024's retry code and cannot occur here; cash and physical lines arrive with VS-028. Full contract: [`docs/checkout.md`](../checkout.md). Target behaviour: single transaction validates cart, recomputes amounts, then validates the payment method against the recomputed total, snapshots order/lines/address/contact phone/payment method/terms, clears cart. Online: creates a pending payment with the chosen provider and returns provider redirect information. Cash: creates no payment and returns the order with `payment_due` |
+| `POST /api/v1/checkout` | Verified Customer | `CheckoutRequest` + required `Idempotency-Key` | `201 CheckoutRead` | 401, 403, 409 `CART_EMPTY` / `CART_PRICE_CHANGED` / `PRODUCT_ALREADY_OWNED` / `IDEMPOTENCY_KEY_CONFLICT` / `IDEMPOTENCY_REQUEST_IN_PROGRESS`, 422 `INVALID_FULFILLMENT` / `PRODUCT_NOT_PURCHASABLE` / `QUANTITY_EXCEEDS_LIMIT` / `PAYMENT_METHOD_NOT_ALLOWED` / `CASH_PAYMENT_LIMIT_REACHED` / `VALIDATION_ERROR`, 429, 502 `PAYMENT_PROVIDER_UNAVAILABLE`, 503 `ORDERS_PAUSED` / `ONLINE_PAYMENT_UNAVAILABLE` | **As built (VS-023 online; VS-028 physical and cash, ADR-032, ADR-038):** online is two transactions around the provider call; cash is one transaction with no payment row and no provider call (`payment: null`), and works with `PAYMENT_PROVIDER=none`; the live price is charged; `dropped_lines` names STLs bought since they were added, on both paths; a replay carries `Idempotent-Replayed: true`, is a pure read and counts against the 30/hour limit; `PAYMENT_ALREADY_ACTIVE` is VS-024's retry code and cannot occur here. Full contract: [`docs/checkout.md`](../checkout.md). Target behaviour: single transaction validates cart, recomputes amounts, then validates the payment method against the recomputed total, snapshots order/lines/address/contact phone/payment method/terms, clears cart. Online: creates a pending payment with the chosen provider and returns provider redirect information. Cash: creates no payment and returns the order with `payment_due` |
 
 ### Price-Change Confirmation Contract
 
@@ -867,6 +867,13 @@ Rules:
 - `accept_digital_final_sale=true` is required when any digital line exists;
 - client never submits subtotal/total; there is no shipping amount (ADR-024).
 
+As built in VS-028 ([ADR-038](../adr/ADR-038-physical-checkout-and-cash-eligibility.md), [`docs/checkout.md`](../checkout.md)):
+- the rules apply to the **kept** lines, after owned STLs are dropped, so a mixed cart whose STL is owned may pay cash;
+- `contact_phone` sent with delivery → `INVALID_FULFILLMENT`; an invalid number → `VALIDATION_ERROR` at `body.contact_phone`, never echoing the input;
+- an unknown, another customer's or a deleted `address_id` → one `INVALID_FULFILLMENT`; pickup while `pickup_address` is unset → `INVALID_FULFILLMENT`;
+- `payment_provider` sent with cash → `PAYMENT_METHOD_NOT_ALLOWED` (`provider_not_applicable`);
+- a missing `accept_cash_terms` for cash → `VALIDATION_ERROR` at `body.accept_cash_terms`.
+
 ### `OfferCheckoutRequest`
 
 ```text
@@ -1292,6 +1299,8 @@ payment:
   redirect_url?
 ```
 
+As built in VS-028: `payment` is null for a cash order. `order` adds `estimated_dispatch_at`, `delivery_fee_note` (delivery only), `delivery_address` (`{recipient_name, governorate, city, area, street, landmark_notes}` or null; never the contact phone or its hash), `payment_due` and `amount_due_cents` (cash only, else null).
+
 As built in VS-023 (digital, online): `order` is `{id, order_number, source, status, payment_method, fulfillment_method, subtotal, tax, total, placed_at, lines[{id, product_id, product_type, name, unit_price, quantity, line_total, fulfillment_status}]}`, `payment` is `{id, status: "pending", provider, redirect_url}`, and `dropped_lines` is `[{product_id, reason: "already_owned"}]`. No provider reference, provider metadata or `admin_note` is ever returned.
 
 ## `OrderDetail`
@@ -1321,11 +1330,11 @@ customer-visible status history (omits in_production)
 
 `admin_note` is never returned by customer endpoints.
 
-As built in VS-025 ([ADR-033](../adr/ADR-033-customer-order-read-model.md), [`docs/order-history.md`](../order-history.md)): `{id, order_number, source, status, fulfillment_method, payment_method, payment_due, can_cancel, subtotal, tax, total, delivery_address, contact_phone, delivery_fee_note, estimated_dispatch_at, placed_at, completed_at, cancelled_at, customer_note, lines[], payment, status_history[]}`. Each line is `{id, product_id, product_type, name, image_url, unit_price, quantity, line_total, fulfillment_status, fulfilled_at, cancelled_at}`; `payment` is `{status, provider, amount}` or null; each history entry is `{order_item_id, from_status, to_status, at}`. The refund summary arrives with VS-030. VS-041 added `can_retry_payment` and `hold_expires_at` (ADR-037 d10).
+As built in VS-025 ([ADR-033](../adr/ADR-033-customer-order-read-model.md), [`docs/order-history.md`](../order-history.md)): `{id, order_number, source, status, fulfillment_method, payment_method, payment_due, can_cancel, subtotal, tax, total, delivery_address, contact_phone, delivery_fee_note, estimated_dispatch_at, placed_at, completed_at, cancelled_at, customer_note, lines[], payment, status_history[]}`. Each line is `{id, product_id, product_type, name, image_url, unit_price, quantity, line_total, fulfillment_status, fulfilled_at, cancelled_at}`; `payment` is `{status, provider, amount}` or null; each history entry is `{order_item_id, from_status, to_status, at}`. The refund summary arrives with VS-030. VS-041 added `can_retry_payment` and `hold_expires_at` (ADR-037 d10). VS-028 added `amount_due_cents`: the total of the lines not cancelled while `payment_due`, else null.
 
 ## `OrderSummary`
 
-As built in VS-025: `{id, order_number, status, payment_method, fulfillment_method, payment_due, total, placed_at}`, in an `OrderPage` (`items`, `next_cursor`).
+As built in VS-025: `{id, order_number, status, payment_method, fulfillment_method, payment_due, total, placed_at}`, in an `OrderPage` (`items`, `next_cursor`). VS-028 added `amount_due_cents` (as in `OrderDetail`).
 
 ## `OfferDetail`
 
