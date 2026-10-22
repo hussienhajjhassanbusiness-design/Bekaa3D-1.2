@@ -5056,6 +5056,18 @@
       },
       "OrderDetailRead": {
         "properties": {
+          "amount_due_cents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "While payment_due: the live total.",
+            "title": "Amount Due Cents"
+          },
           "can_cancel": {
             "title": "Can Cancel",
             "type": "boolean"
@@ -5239,6 +5251,7 @@
           "fulfillment_method",
           "payment_method",
           "payment_due",
+          "amount_due_cents",
           "can_cancel",
           "can_retry_payment",
           "hold_expires_at",
@@ -5561,6 +5574,18 @@
       },
       "OrderSummaryRead": {
         "properties": {
+          "amount_due_cents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "While payment_due: the live total.",
+            "title": "Amount Due Cents"
+          },
           "fulfillment_method": {
             "anyOf": [
               {
@@ -5607,6 +5632,7 @@
           "payment_method",
           "fulfillment_method",
           "payment_due",
+          "amount_due_cents",
           "total",
           "placed_at"
         ],

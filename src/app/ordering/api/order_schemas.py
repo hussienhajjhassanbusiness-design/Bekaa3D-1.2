@@ -32,6 +32,7 @@ class OrderSummaryRead(BaseModel):
     payment_method: PaymentMethod
     fulfillment_method: FulfillmentMethod | None
     payment_due: bool = Field(description="An unpaid cash order: pay the courier or at pickup.")
+    amount_due_cents: int | None = Field(description="While payment_due: the live total.")
     total: PriceRead
     placed_at: datetime
 
@@ -45,6 +46,7 @@ class OrderSummaryRead(BaseModel):
             payment_method=o.payment_method,
             fulfillment_method=o.fulfillment_method,
             payment_due=view.payment_due,
+            amount_due_cents=o.live_total_cents if view.payment_due else None,
             total=_price(o.total_cents, o.currency),
             placed_at=o.placed_at,
         )
@@ -140,6 +142,7 @@ class OrderDetailRead(BaseModel):
     fulfillment_method: FulfillmentMethod | None
     payment_method: PaymentMethod
     payment_due: bool
+    amount_due_cents: int | None = Field(description="While payment_due: the live total.")
     can_cancel: bool
     can_retry_payment: bool = Field(
         description="A new payment attempt may be started now; the POST re-checks."
@@ -174,6 +177,7 @@ class OrderDetailRead(BaseModel):
             fulfillment_method=o.fulfillment_method,
             payment_method=o.payment_method,
             payment_due=view.payment_due,
+            amount_due_cents=o.live_total_cents if view.payment_due else None,
             can_cancel=view.can_cancel,
             can_retry_payment=view.can_retry_payment,
             hold_expires_at=view.hold_expires_at,

@@ -158,6 +158,7 @@ class CustomerOrder:
     placed_at: datetime
     completed_at: datetime | None
     cancelled_at: datetime | None
+    live_total_cents: int = 0
 
 
 @dataclass(frozen=True)

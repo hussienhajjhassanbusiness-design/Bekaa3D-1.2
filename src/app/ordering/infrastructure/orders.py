@@ -313,6 +313,9 @@ def release_candidates_query(
     """The release job's selection, also EXPLAINed by its test (plan 6.2)."""
     query = select(_O.placed_at, _O.id).where(
         _O.status == OrderStatus.PENDING_PAYMENT,
+        # Redundant today: an unpaid cash order derives in_progress, never pending_payment.
+        # Kept as defence in depth, so a cash order can never be released even if that
+        # derivation changes; no CHECK enforces it (VS-028 Checkpoint 3, mutation E2).
         _O.payment_method == PaymentMethod.ONLINE,
         _O.placed_at <= placed_before,
     )
