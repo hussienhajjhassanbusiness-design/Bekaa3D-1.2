@@ -4,7 +4,7 @@
 **Date:** 2026-10-20
 **Source basis:** Owner decisions of 2026-10-20 on the [VS-028 plan](../plans/VS-028-physical-checkout-plan.md) (Q1-Q17, Revisions 1-3); SRS §7.3, §7.4, §9.8; BR-141, BR-144, BR-145; database-design.md §8.3, §8.6, §14; [ADR-024](ADR-024-cash-on-delivery-and-courier-priced-shipping.md); [ADR-027](ADR-027-address-book-decisions.md); [ADR-028](ADR-028-keyed-monthly-rotated-ip-hashes.md); [ADR-032](ADR-032-checkout-idempotency-and-payment-verification.md)
 **Applies first to:** `cash_payment_blocks`; `orders.contact_phone_snapshot` and `orders.contact_phone_hash`; the `cash_*` settings; `PHONE_HASH_SALT`; `GET /api/v1/settings/public`; `POST /api/v1/checkout`; `amount_due` on the order reads.
-**Amends:** [ADR-032](ADR-032-checkout-idempotency-and-payment-verification.md) d12 (decision 8); SRS §22.3's cash rows (decision 19).
+**Amends:** [ADR-032](ADR-032-checkout-idempotency-and-payment-verification.md) d12 (decision 8); SRS §22.3's cash rows (decision 19); SRS §9.8.1 and the cash checkout rules in database-design.md and entities-and-business-rules.md, which put every cash check under the phone lock (decision 20).
 
 ## Context
 
@@ -57,9 +57,11 @@ PR B (branch `vs-028-checkout`) follows the plan's D3-D13 as written; only these
 ## Review follow-up (2026-10-22, after PR #31)
 
 19. **One refusal for a block and for an open cash order.** Both are `422 CASH_NOT_AVAILABLE` with the detail "Cash on delivery isn't available for this order; please pay online." and no `reason`. The body never says which rule matched, nor whether the account or the phone did. This replaces the plan's Q8 answer (distinct `cash_blocked` and `open_orders` reasons) and amends SRS §22.3. `CASH_PAYMENT_LIMIT_REACHED` now means only `reason: order_total`.
-20. **Every cash check that needs no phone runs before the phone lock**, the total cap included: all lines physical, `cash_payment_enabled`, a total above zero, then `cash_max_order_total`. Checked after the phone, an over-cap cart would read `order_total` for a clean phone and `CASH_NOT_AVAILABLE` for a blocked one: a probe that creates nothing.
+20. **Every cash check that needs no phone runs before the phone lock**, the total cap included: all lines physical, `cash_payment_enabled`, a total above zero, then `cash_max_order_total`. Checked after the phone, an over-cap cart would read `order_total` for a clean phone and `CASH_NOT_AVAILABLE` for a blocked one: a probe that creates nothing. The cap is still read on the recomputed total under the cart lock; only the block and the open-order count need the phone lock.
 21. **`amount_due` is a `PriceRead`** (`{amount_cents, currency}`, or null) on the checkout response, the order list and the order detail, like every other amount in the API. It replaces the plan's Q12 answer (a bare `amount_due_cents`). The `order_cash_placed` email payload keeps `amount_due_cents` with `currency`, as `order_payment_confirmed` keeps `total_cents`.
 22. **The remaining probe is accepted.** A verified customer with a physical cart can still learn that a phone is blocked or has an open cash order: try cash with it and get `CASH_NOT_AVAILABLE` instead of an order. It is bounded by the 30-per-hour checkout limit, and the first probe that does not match places a real cash order on the prober's own account. From then on every cash checkout from that account is refused whatever the phone, until that order is handed over or cancelled (with the default `cash_max_open_orders = 1`). The answer never names the rule or the account.
+    - **The bound holds only until VS-031.** Once a customer can cancel their own unpaid cash order (an `other` cancel, which writes no block and frees the slot), a prober can cancel each miss and probe again: about 30 phones per hour per verified account. VS-031 must resolve this (slice plan, VS-031 "Must resolve" item 1).
+    - **A miss is not free for the phone's owner.** The prober's order carries that phone's hash, so the owner is refused cash until it is resolved, and an administrator who cancels it as `refused` or `no_show` blocks the phone. This is the risk ADR-024 d6 already accepts ("a customer can enter someone else's phone"): the administrator calls before printing and can clear a block.
 
 ## Consequences
 

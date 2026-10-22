@@ -905,6 +905,8 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - The SRS §5.6 end-to-end test passes.
   - The cancel-versus-start-printing race always has one winner, with no deadlock.
   - An unpaid cash line is never refunded, and only a whole-order refusal or no-show blocks cash, whatever the cancel order.
+- **Must resolve before build:**
+  1. **Self-cancel reopens the cash phone probe (VS-028 review, 2026-10-22).** [ADR-038](adr/ADR-038-physical-checkout-and-cash-eligibility.md) d22 accepts that `CASH_NOT_AVAILABLE` tells a prober a phone is blocked or has an open cash order, bounded because the first miss places a real cash order that refuses further cash from that account. A customer self-cancel of an unpaid cash order is an `other` cancel: no block, and the order stops counting toward `cash_max_open_orders`. So a prober can place, cancel and probe again, about 30 phones per hour per verified account, and each miss holds the phone's owner off cash meanwhile. Suggested fix: count the customer's own cash orders self-cancelled in a recent window toward the limit, or rate-limit cash self-cancels; or accept the wider bound explicitly in ADR-038. Test: place, self-cancel, probe again.
 
 ## VS-032 — Live online payment provider
 **Status:** Not started (final phase: needs a server)
