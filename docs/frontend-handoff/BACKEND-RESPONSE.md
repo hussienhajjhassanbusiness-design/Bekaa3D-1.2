@@ -309,7 +309,7 @@ Never `FLUSHALL`: the same Redis holds MFA challenges and the job queue.
 
 - There is no "message" setting for WhatsApp. The frontend builds the `wa.me` link and any prefilled text itself.
 - **2026-10-20 (VS-028 PR A): `free_shipping_threshold` removed** from `GET /api/v1/settings/public` and from the admin settings (its `GET`/`PATCH /api/v1/admin/settings/free_shipping_threshold` now answer `404`). `cash_payment_enabled` (bool) and `cash_max_order_total` (`{amount_cents, currency}`, never `null`) added. Remove any read of the old field. ADR-024 removed all shipping charges, so there is no threshold.
-- `cash_payment_enabled` and `cash_max_order_total` are live in the response; checkout starts honouring them with VS-028 PR B (cash checkout is still refused until then).
+- `cash_payment_enabled` and `cash_max_order_total` are live in the response, and checkout honours them since VS-028 PR B (2026-10-22, [C6](#domain--item-c6--checkout-contract)): hide or disable cash when the switch is off or the cart total is above the maximum.
 - `pickup_address` and `pickup_hours` are strings or `null`. Hide the element when `null`.
 - The home page can read this on every load today; cache headers arrive with VS-020.
 
@@ -2070,22 +2070,29 @@ There is no total: compute one for display if you need it; checkout recomputes i
 
 ### Domain / item: C6 — Checkout contract
 
-**Status:** **built for STL-only carts paid online** (VS-023). Physical, mixed, pickup and cash: PROVISIONAL, VS-028.
+**Status:** **built** for every cart type: STL-only online (VS-023); physical and mixed, delivery and pickup, online and cash (VS-028, 2026-10-22).
+
+> **2026-10-22 (VS-028 PR B): checkout changes.** Additive, except that `payment` may now be `null`.
+> - **Request:** `fulfillment_method`, `address_id`, `contact_phone` and `accept_cash_terms` now take effect (rules below). `"cash"` is accepted for physical-only carts.
+> - **Response:** `payment` is **nullable** (`null` for a cash order). `order` gains `estimated_dispatch_at`, `delivery_fee_note`, `delivery_address`, `payment_due` and `amount_due_cents` (integer cents or `null`; cash only).
+> - **Order history:** `amount_due_cents` (integer cents or `null`) is added to every `GET /api/v1/me/orders` item and to `GET /api/v1/me/orders/{id}`: what is still due on an unpaid cash order after any cancelled line; `null` otherwise. Show it instead of `total` while `payment_due`.
+> - **New error:** `422 CASH_PAYMENT_LIMIT_REACHED` with `reason` `open_orders` or `order_total`. New `PAYMENT_METHOD_NOT_ALLOWED` reasons: `cash_disabled`, `cash_blocked`, `provider_not_applicable`.
+> - **Reminder:** `free_shipping_threshold` is gone since 2026-10-20 (PR A, [B1](#domain--item-b1--public-settings-response-shape)); there is no shipping charge anywhere.
 
 **Confirmed endpoint:** `POST /api/v1/checkout`. Full contract: [`../checkout.md`](../checkout.md).
 
-**Request schema:** `CheckoutRequest` in `openapi.json`: `payment_method` (`"online"`; `"cash"` is refused until VS-028), `payment_provider` (optional; defaults to the one configured), `customer_note` (≤ 1000), `accept_terms: true`, `accept_digital_final_sale: true` (required with an STL), `accept_cash_terms` (accepted, ignored online), `accepted_price_changes[]` (≤ 50). `fulfillment_method`, `address_id` and `contact_phone` exist but any of them is `422 INVALID_FULFILLMENT` until VS-028. Any other field, including a total or a price, is `422 VALIDATION_ERROR`.
+**Request schema:** `CheckoutRequest` in `openapi.json`: `payment_method` (`"online"`, or `"cash"` when every line is physical), `payment_provider` (online only; defaults to the one configured), `fulfillment_method` (`"delivery"` or `"pickup"`; required with a physical line, absent for STL-only), `address_id` (delivery only, required there), `contact_phone` (pickup only, required there; any Lebanese spelling), `customer_note` (≤ 1000), `accept_terms: true`, `accept_digital_final_sale: true` (required with an STL), `accept_cash_terms: true` (required for cash), `accepted_price_changes[]` (≤ 50). Any other field, including a total or a price, is `422 VALIDATION_ERROR`. The rules apply to the lines left after already-owned STLs are dropped ([`../checkout.md`](../checkout.md) has the matrix).
 
-**Response schema:** `201 CheckoutRead`: `order` (`pending_payment`, live prices, lines `pending`), `payment` (`{id, status: "pending", provider, redirect_url}`) and `dropped_lines` (`[{product_id, reason: "already_owned"}]`: STLs bought since they were added, not charged). Send the customer to `payment.redirect_url`.
+**Response schema:** `201 CheckoutRead`: `order` (live prices, lines `pending`, plus `estimated_dispatch_at`, `delivery_fee_note`, `delivery_address`, `payment_due`, `amount_due_cents`), `payment` and `dropped_lines` (`[{product_id, reason: "already_owned"}]`: STLs bought since they were added, not charged). **Online:** the order is `pending_payment` and `payment` is `{id, status: "pending", provider, redirect_url}`; send the customer to `payment.redirect_url`. **Cash:** the order is `in_progress`, `payment` is `null`, `payment_due` is `true` and `amount_due_cents` is what the courier or the workshop collects. The contact phone is never in this response.
 
 **Enums/statuses/actions:** `payment_method`: `"online" | "cash"`; `fulfillment_method`: `"delivery" | "pickup"` (VS-028).
 
 **Errors:**
 - `409 CART_EMPTY` (with `dropped_lines`), `409 CART_PRICE_CHANGED` (with `price_changes: [{product_id, old_amount_cents, new_amount_cents, currency}]`; nothing is charged), `409 PRODUCT_ALREADY_OWNED` (with `product_ids`), `409 IDEMPOTENCY_KEY_CONFLICT`, `409 IDEMPOTENCY_REQUEST_IN_PROGRESS` (with `order_id`, `order_number`, `Retry-After: 2`).
-- `422 PRODUCT_NOT_PURCHASABLE` / `QUANTITY_EXCEEDS_LIMIT` (with `lines: [{product_id, reason, max_quantity?}]`, every offending line), `422 INVALID_FULFILLMENT`, `422 PAYMENT_METHOD_NOT_ALLOWED` (with `reason`), `422 VALIDATION_ERROR` (a missing `accept_digital_final_sale` points at that field).
+- `422 PRODUCT_NOT_PURCHASABLE` / `QUANTITY_EXCEEDS_LIMIT` (with `lines: [{product_id, reason, max_quantity?}]`, every offending line), `422 INVALID_FULFILLMENT` (fields that do not fit the cart, an address that is not the customer's live one, or pickup while no pickup address is set), `422 PAYMENT_METHOD_NOT_ALLOWED` (with `reason`: `cash_requires_physical`, `cash_disabled`, `cash_blocked`, `zero_total`, `provider_not_configured`, `provider_required`, `provider_not_applicable`), `422 CASH_PAYMENT_LIMIT_REACHED` (with `reason`: `open_orders` or `order_total`), `422 VALIDATION_ERROR` (a missing `accept_digital_final_sale` or `accept_cash_terms`, or an invalid `contact_phone`, points at that field).
 - `429 RATE_LIMITED` (30 per user per hour; a replay counts).
 - `502 PAYMENT_PROVIDER_UNAVAILABLE`: **the order exists**, unpaid (`order_id`, `order_number`); retry its payment with `POST /api/v1/me/orders/{order_id}/payments` ([C7](#domain--item-c7--payment-verification)).
-- `503 ORDERS_PAUSED`, `503 ONLINE_PAYMENT_UNAVAILABLE` (no online provider configured).
+- `503 ORDERS_PAUSED`, `503 ONLINE_PAYMENT_UNAVAILABLE` (an online checkout with no provider configured; cash still works).
 
 **Auth/CSRF/MFA:** verified customer, `X-CSRF-Token`, and the `Idempotency-Key` header ([C12](#domain--item-c12--idempotency-key-mechanism)).
 
@@ -2104,7 +2111,8 @@ There is no total: compute one for display if you need it; checkout recomputes i
 - **Price changed:** show the new prices and resend with `accepted_price_changes: [{product_id, amount_cents, currency}]` and a **new** idempotency key. If the price moves again, it fails again.
 - **Kill switch:** `accepting_orders` in public settings ([B1](#domain--item-b1--public-settings-response-shape)).
 - **Consent wording does not exist.** The terms and digital final-sale texts are business decisions still open (SRS section 30.2). The backend stores when consent was given (and the digital-terms version), not the wording. Do not ship invented copy.
-- **Cash on delivery** (ADR-024) and pickup arrive with VS-028; until then a cart with a physical line answers `422 INVALID_FULFILLMENT`.
+- **Cash refusals do not say why the phone matched.** `cash_blocked` and `open_orders` read the same whether the account or only the phone matched; show one generic message.
+- **Delivery fee:** paid to the courier on delivery; show `delivery_fee_note` as given. There is no shipping amount.
 
 ### Domain / item: C7 — Payment verification
 

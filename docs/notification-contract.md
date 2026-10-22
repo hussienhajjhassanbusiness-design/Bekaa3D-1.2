@@ -48,6 +48,7 @@ Rules enforced by `app.engagement.domain.payload`:
 | --- | --- | --- | --- | --- |
 | `custom_request.submitted` | `custom_request` | every active administrator | `custom_request_id`, `project_title`, `title` | VS-034 |
 | `payment.confirmed` | `payment` | the customer | `order_id`, `order_number` | VS-023 |
+| `order.placed` | `order` | the customer, for a cash order | `order_id`, `order_number` | VS-028 |
 | `offer.submitted` | `offer` | every active administrator | `offer_id`, `product_id`, `product_name`, `amount_cents`, `currency` | VS-039 |
 | `offer.expired` | `offer` | the customer | `offer_id`, `product_id` | VS-039 |
 | `offer.countered` | `offer` | the customer (admin counter) or every active administrator (customer counter) | `offer_id`, `product_id`, `product_name`, `amount_cents`, `currency`, `responds_by` | VS-040 |
@@ -57,6 +58,10 @@ Rules enforced by `app.engagement.domain.payload`:
 | `offer.expiring_soon` | `offer` | the customer | `offer_id`, `product_id`, `product_name`, `amount_cents`, `currency`, `responds_by` | VS-040 |
 | `offer.checkout_expired` | `offer` | the customer | `offer_id`, `product_id` | VS-040 |
 | `stl.delivered` (planned) | `download` | the customer | provisional | VS-023b |
+
+Emails with them (outbox templates; no phone, hash or address ever appears in a payload):
+- `order_payment_confirmed` (VS-023): `order_id`, `order_number`, `total_cents`, `currency`; VS-028 adds `fulfillment_method`, `estimated_dispatch_at` and `delivery_fee_note` (delivery only).
+- `order_cash_placed` (VS-028): `order_id`, `order_number`, `amount_due_cents`, `currency`, `fulfillment_method`, `estimated_dispatch_at`, `delivery_fee_note` (delivery only), `pickup`.
 
 ### On `event`
 

@@ -46,6 +46,7 @@ The customer's saved Lebanese delivery addresses. Decisions and rationale: [ADR-
 
 - At most **20** live addresses per user (`422 ADDRESS_LIMIT_REACHED`). Deleted addresses do not count.
 - `DELETE` is a soft delete: the row keeps `deleted_at` and stops being default. Past orders keep their own address snapshot (VS-028), so deleting or editing an address never changes an order.
+- A delivery checkout reads the address `FOR SHARE` (VS-028). An edit or delete racing it either lands first (the checkout sees the new row, or `422 INVALID_FULFILLMENT`) or waits for the checkout to commit (the order keeps the old snapshot); `tests/concurrency/test_cash_checkout_races.py` R4.
 
 ## Concurrency
 
