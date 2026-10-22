@@ -120,6 +120,12 @@ async def checkout_rate_limit(
     )
 
 
+_CONSENT_MESSAGES = {
+    "accept_digital_final_sale": "STL purchases are final sale and must be accepted.",
+    "accept_cash_terms": "The cash payment terms must be accepted.",
+}
+
+
 def translate_checkout_error(exc: OrderingDomainError) -> ApiError:
     unprocessable = status.HTTP_422_UNPROCESSABLE_ENTITY
     if isinstance(exc, CartEmptyError):
@@ -207,7 +213,7 @@ def translate_checkout_error(exc: OrderingDomainError) -> ApiError:
             errors=[
                 {
                     "loc": ["body", exc.field],
-                    "msg": "This acceptance is required.",
+                    "msg": _CONSENT_MESSAGES[exc.field],
                     "type": "missing",
                 }
             ],

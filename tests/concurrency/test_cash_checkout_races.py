@@ -5,6 +5,7 @@ Racers meet at a barrier or hold a lock at an event, and each wait is proved thr
 import asyncio
 import uuid
 from collections.abc import AsyncIterator, Callable
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -12,13 +13,15 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.core.security import hash_phone
 from app.ordering.application.services import cart as cart_service
 from app.ordering.application.services import checkout as checkout_service
 from app.ordering.infrastructure.cash import SqlCashChecks
 from app.ordering.infrastructure.checkout_addresses import SqlCheckoutAddresses
+from app.ordering.infrastructure.orders import SqlOrderStore
+from app.ordering.public import lock_order_for_change, release_unpaid_order
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
 from tests.concurrency.barrier import SYNC_TIMEOUT_SECONDS, meet_or_fail
 from tests.concurrency.cash_block_support import cancel_with_block
@@ -40,6 +43,7 @@ from tests.integration.ordering.physical_support import (
     setting,
     spaced,
 )
+from tests.integration.payments.recovery_support import seed_attempt, seed_order
 
 pytestmark = [
     pytest.mark.concurrency,
@@ -353,3 +357,88 @@ async def test_r4_an_address_delete_waits_for_the_checkout_holding_it_for_share(
         assert deleted.status_code == 204, deleted.text
         snapshot = response.json()["order"]["delivery_address"]
         assert snapshot["recipient_name"] == "Before Delete"
+
+
+# ------------------------------------------------------------------- R5
+
+
+async def _other_unpaid_order(db: AsyncSession, user_id: uuid.UUID) -> uuid.UUID:
+    placed = datetime.now(UTC) - timedelta(minutes=5)
+    order = await seed_order(db, placed_at=placed, user_id=user_id)
+    await seed_attempt(db, order, initiated_at=placed, status="failed")
+    return order.order_id
+
+
+async def test_r5_a_cash_checkout_never_waits_on_a_release_holding_another_order(
+    app: FastAPI, db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """D5: checkout takes no existing `orders` row, so it completes while a release holds
+    the customer's other order; then the release finishes. Neither waits on the other."""
+    client, user_id = await _buyer(app, db_session, await physical(db_session))
+    other = await _other_unpaid_order(db_session, user_id)
+    holding, release = asyncio.Event(), asyncio.Event()
+
+    async def releasing() -> tuple[uuid.UUID, ...]:
+        async with async_sessionmaker(db_engine)() as session, session.begin():
+            await session.execute(text("SET LOCAL lock_timeout = '5s'"))
+            locked = await lock_order_for_change(session, other)
+            assert locked is not None
+            holding.set()
+            await asyncio.wait_for(release.wait(), timeout=10)
+            return await release_unpaid_order(
+                session, locked, at=datetime.now(UTC), reason="hold_expired"
+            )
+
+    job = asyncio.create_task(releasing())
+    try:
+        await asyncio.wait_for(holding.wait(), timeout=SYNC_TIMEOUT_SECONDS)
+        response = await asyncio.wait_for(_checkout(client, pickup_body(random_phone())), timeout=5)
+        release.set()
+        await asyncio.wait_for(job, timeout=5)
+    finally:
+        release.set()
+        await client.aclose()
+    _no_deadlock(response)
+    assert response.status_code == 201, response.text
+    async with db_engine.connect() as conn:
+        status = await conn.scalar(text("SELECT status FROM orders WHERE id = :o"), {"o": other})
+    assert status == "cancelled"
+    assert (await rows(db_engine, user_id)).orders == 2
+
+
+async def test_r5_a_cash_checkout_never_waits_on_a_payment_retry_holding_another_order(
+    app: FastAPI, db_engine: AsyncEngine, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The real retry route holds the other order FOR UPDATE at an event; the cash checkout
+    completes meanwhile, then the retry opens its new attempt."""
+    holding, release = asyncio.Event(), asyncio.Event()
+    lock_owned = SqlOrderStore.lock_owned_order
+
+    async def held(self: SqlOrderStore, *args: Any) -> Any:
+        found = await lock_owned(self, *args)
+        holding.set()
+        await asyncio.wait_for(release.wait(), timeout=10)
+        return found
+
+    monkeypatch.setattr(SqlOrderStore, "lock_owned_order", held)
+    client, user_id = await _buyer(app, db_session, await physical(db_session))
+    other = await _other_unpaid_order(db_session, user_id)
+    retry = asyncio.create_task(
+        client.post(
+            f"/api/v1/me/orders/{other}/payments",
+            json={},
+            headers=_csrf(client) | {"Idempotency-Key": new_key()},
+        )
+    )
+    try:
+        await asyncio.wait_for(holding.wait(), timeout=SYNC_TIMEOUT_SECONDS)
+        response = await asyncio.wait_for(_checkout(client, pickup_body(random_phone())), timeout=5)
+        release.set()
+        retried = await asyncio.wait_for(retry, timeout=5)
+    finally:
+        release.set()
+        await client.aclose()
+    _no_deadlock(response, retried)
+    assert response.status_code == 201, response.text
+    assert retried.status_code == 201, retried.text
+    assert (await rows(db_engine, user_id)).orders == 2

@@ -13,10 +13,17 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from app.main import app as main_app
 from app.ordering.public import release_candidates
 from app.payments.domain.exceptions import ManualReleaseRefusedError
+from app.payments.infrastructure.payments import stale_live_query
 from app.payments.public import reconcile_stuck, release_order_by_admin, release_stale
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
 from tests.integration.catalog.storefront_support import seed_refs
-from tests.integration.deep_support import assert_problem, client_for, create_user, csrf
+from tests.integration.deep_support import (
+    assert_problem,
+    client_for,
+    create_user,
+    csrf,
+    mfa_admin,
+)
 from tests.integration.ordering.checkout_support import checkout_body, shop_open  # noqa: F401
 from tests.integration.ordering.physical_support import (
     physical,
@@ -187,3 +194,37 @@ async def test_amount_due_follows_the_live_lines_and_is_null_when_nothing_is_due
     assert after["amount_due_cents"] == 1500 and after["total"]["amount_cents"] == 2200
     assert listing_after[cash["id"]]["amount_due_cents"] == 1500
     assert online_detail["amount_due_cents"] is None and online_detail["payment_due"] is False
+
+
+async def test_admin_manual_release_over_http_is_409_cash_order_and_reconcile_never_selects_it(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    lamp = await physical(db_session)
+    with client_for(main_app) as client:
+        await signed_in_buyer(client, db_session, lamp)
+        placed = post(client, pickup_body(random_phone()))
+    assert placed.status_code == 201, placed.text
+    order_id = placed.json()["order"]["id"]
+    before = await _state(db_engine, order_id)
+    with client_for(main_app) as admin:
+        await mfa_admin(admin, db_session)
+        refused = admin.post(
+            f"/api/v1/admin/orders/{order_id}/release",
+            json={"reason": "testing a cash order", "events_reviewed": True},
+            headers=csrf(admin),
+        )
+    assert_problem(refused, 409, "INVALID_STATE_TRANSITION")
+    assert refused.json()["reason"] == "cash_order"
+    assert await _state(db_engine, order_id) == before
+
+    query = stale_live_query(before=datetime.now(UTC) + timedelta(days=1), after=None, limit=10_000)
+    async with async_sessionmaker(db_engine)() as session:
+        selected = [row.id for row in await session.execute(query)]
+        cash = await session.scalar(
+            text(
+                "SELECT count(*) FROM payments WHERE id = ANY(:ids)"
+                " AND (order_payment_method = 'cash' OR order_id = :o)"
+            ),
+            {"ids": selected, "o": order_id},
+        )
+    assert cash == 0
