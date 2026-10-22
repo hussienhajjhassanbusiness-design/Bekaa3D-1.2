@@ -162,7 +162,9 @@ LIMITS: dict[str, Any] = {
 def refused(**over: Any) -> str:
     with pytest.raises((PaymentMethodNotAllowedError, CashLimitReachedError)) as caught:
         cash_limits(**(LIMITS | over))
-    return str(caught.value.reason)
+    error = caught.value
+    assert isinstance(error, PaymentMethodNotAllowedError | CashLimitReachedError)
+    return error.reason
 
 
 def test_cash_limits_boundaries() -> None:
