@@ -10,11 +10,17 @@ import pytest_asyncio
 from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from app.core.config import get_settings
 from app.main import app as main_app
 from app.ordering.public import release_candidates
 from app.payments.domain.exceptions import ManualReleaseRefusedError
 from app.payments.infrastructure.payments import stale_live_query
-from app.payments.public import reconcile_stuck, release_order_by_admin, release_stale
+from app.payments.public import (
+    configured_payment_providers,
+    reconcile_stuck,
+    release_order_by_admin,
+    release_stale,
+)
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
 from tests.integration.catalog.storefront_support import seed_refs
 from tests.integration.deep_support import (
@@ -64,7 +70,6 @@ async def test_release_reconcile_retry_and_admin_release_never_select_a_cash_ord
 ) -> None:
     lamp = await physical(db_session)
     with client_for(main_app) as client:
-        providers = main_app.state.payment_providers
         await signed_in_buyer(client, db_session, lamp)
         placed = post(client, pickup_body(random_phone()))
         assert placed.status_code == 201, placed.text
@@ -86,10 +91,21 @@ async def test_release_reconcile_retry_and_admin_release_never_select_a_cash_ord
                 after=(old - timedelta(seconds=1), uuid.UUID(int=0)),
                 limit=1000,
             )
-        await release_stale(
-            factory, providers, now=now, start_after=(old - timedelta(seconds=1), uuid.UUID(int=0))
-        )
-        await reconcile_stuck(factory, providers, now=now)
+        # The jobs' own providers, made and closed on this loop as the worker does: the app's
+        # belong to the TestClient's loop, and a leftover live attempt from an earlier test
+        # makes reconcile open the mock's Redis here, which the lifespan then cannot close.
+        providers = configured_payment_providers(get_settings())
+        try:
+            await release_stale(
+                factory,
+                providers,
+                now=now,
+                start_after=(old - timedelta(seconds=1), uuid.UUID(int=0)),
+            )
+            await reconcile_stuck(factory, providers, now=now)
+        finally:
+            for provider in providers.values():
+                await provider.aclose()
         retry = client.post(
             f"/api/v1/me/orders/{order_id}/payments",
             json={},
