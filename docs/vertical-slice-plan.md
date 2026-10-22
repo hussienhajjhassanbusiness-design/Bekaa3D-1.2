@@ -30,7 +30,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 | VS-025 | Customer order history | VS-023 | Done |
 | VS-026 | Address book | VS-008 | Done |
 | VS-027 | Shipping zones | — | Removed (ADR-024) |
-| VS-028 | Physical checkout: delivery, pickup, payment method, dispatch estimate | VS-023, VS-024, VS-026 | Not started |
+| VS-028 | Physical checkout: delivery, pickup, payment method, dispatch estimate | VS-023, VS-024, VS-026 | Done |
 | VS-029 | Admin order queue, fulfillment and cash handover | VS-028, VS-023b, VS-024, VS-025 | Not started |
 | VS-030 | Refunds and settlement | VS-029, VS-024 | Not started |
 | VS-031 | Cancellation and returns | VS-030 | Not started |
@@ -696,7 +696,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 **Was:** admin-managed flat-rate Lebanese delivery zones and the customer zone list. Nothing replaces it: no order carries a shipping amount.
 
 ## VS-028 — Physical checkout: delivery, pickup, payment method, dispatch estimate
-**Status:** Not started
+**Status:** Done (PR A 2026-10-20, PR B 2026-10-22; [ADR-038](adr/ADR-038-physical-checkout-and-cash-eligibility.md), [`checkout.md`](checkout.md))
 **Depends on:** VS-023, VS-024, VS-026
 **Goal:** A customer checks out physical and mixed carts with courier delivery or free workshop pickup, pays online or (physical-only orders) in cash on delivery or at pickup, and sees an honest estimated ready date.
 - **Model / migration:**

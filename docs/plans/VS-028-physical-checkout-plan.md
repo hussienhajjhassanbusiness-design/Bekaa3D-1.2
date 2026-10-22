@@ -1,7 +1,7 @@
 # VS-028 — Physical Checkout: Delivery, Pickup, Payment Method, Dispatch Estimate: Implementation Plan
 
-**Status:** IN PROGRESS (2026-10-20). PR A (schema, settings, salt) on branch `vs-028-schema`;
-PR B IN PROGRESS (branch `vs-028-checkout`, which replaces the name `vs-028-physical-checkout` used below; 2026-10-22). Owner decisions: Q1–Q16 as recommended; Q17 decided (Revision 2).
+**Status:** DONE (2026-10-22). PR A (schema, settings, salt) on branch `vs-028-schema`, merged;
+PR B done (branch `vs-028-checkout`, which replaces the name `vs-028-physical-checkout` used below; 2026-10-22; deviations in ADR-038). Owner decisions: Q1–Q16 as recommended; Q17 decided (Revision 2).
 **Date:** 2026-10-20
 **Planned against alembic head:** `8d2f6a1c3e57` (`offers_remind_at`, VS-040).
 - Derived statically from `revision` / `down_revision` in `migrations/versions/`: 24
