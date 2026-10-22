@@ -443,6 +443,45 @@ async def test_a_physical_line_is_422_invalid_fulfillment(
     assert await rows(db_engine, user.id) == _untouched(2)
 
 
+async def test_the_thirty_first_checkout_in_an_hour_is_429_and_redis_down_fails_closed(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A refusal spends the bucket too, and offer checkout shares it (api-endpoints.md 10.2)."""
+    with client_for(main_app) as client:
+        login(client, (await create_user(db_session)).email)
+        refused = [post_checkout(client).status_code for _ in range(30)]
+        limited = post_checkout(client)
+        offer = client.post(
+            f"/api/v1/me/offers/{uuid.uuid4()}/checkout",
+            json={"accept_terms": True, "accept_digital_final_sale": True},
+            headers=csrf(client) | {"Idempotency-Key": new_key()},
+        )
+
+        async def broken(*args: Any, **kwargs: Any) -> Any:
+            raise ConnectionError("redis is down")
+
+        monkeypatch.setattr(main_app.state.redis, "eval", broken)
+        down = post_checkout(client)
+    assert refused == [409] * 30  # CART_EMPTY: no cart
+    assert_problem(limited, 429, "RATE_LIMITED")
+    assert int(limited.headers["retry-after"]) > 0
+    assert_problem(offer, 429, "RATE_LIMITED")
+    assert down.status_code == 503, down.text
+
+
+async def test_a_zero_total_is_422_zero_total_and_writes_nothing(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """Prices may be 0 (`ck_products_price_non_negative`), but free STLs are refused (Q8)."""
+    free = await _stl(db_session, price_cents=0)
+    with client_for(main_app) as client:
+        user = await buyer(client, db_session, free)
+        response = post_checkout(client)
+    assert_problem(response, 422, "PAYMENT_METHOD_NOT_ALLOWED")
+    assert response.json()["reason"] == "zero_total"
+    assert await rows(db_engine, user.id) == _untouched(1)
+
+
 @pytest.mark.parametrize("key", [None, "short", "has space in it", "x" * 256, "bad/slash1"])
 async def test_a_missing_or_malformed_idempotency_key_is_422(
     db_session: AsyncSession, key: str | None

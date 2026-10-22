@@ -70,6 +70,24 @@ async def _accepted(
     return user.id, product, offer
 
 
+async def test_the_thirty_first_offer_checkout_in_an_hour_is_429_shared_with_the_cart(
+    client: TestClient, db_session: AsyncSession
+) -> None:
+    """One 30/hour bucket per user for both checkouts (api-endpoints.md 29.5)."""
+    login(client, (await create_user(db_session)).email)
+    refused = [checkout(client, uuid.uuid4()).status_code for _ in range(30)]
+    limited = checkout(client, uuid.uuid4())
+    cart = client.post(
+        "/api/v1/checkout",
+        json={"payment_method": "online", "accept_terms": True},
+        headers=csrf(client) | {"Idempotency-Key": new_key()},
+    )
+    assert refused == [404] * 30  # no such offer
+    assert_problem(limited, 429, "RATE_LIMITED")
+    assert int(limited.headers["retry-after"]) > 0
+    assert_problem(cart, 429, "RATE_LIMITED")
+
+
 # ------------------------------------------------------------------- happy path
 
 

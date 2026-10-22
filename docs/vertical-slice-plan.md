@@ -798,12 +798,14 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - `UNIQUE(payment_id) WHERE kind = 'late_capture' AND status <> 'failed'`: one live late-capture refund per payment.
   - Obligations index: `(created_at) WHERE status = 'pending' OR (status = 'failed' AND reissued_at IS NULL)`.
   - No shipping component (ADR-024).
+  - **A line's customer is its order's customer** (VS-041 audit Q-1, decided 2026-10-22): `UNIQUE (orders.id, user_id)` and a composite FK `order_items (order_id, user_id) → orders (id, user_id)`, added `NOT VALID` and then validated. The STL ownership index keys on `order_items.user_id`, and today only the writer keeps it equal to the order's. Offer lines already reach their offer's customer through `fk_order_items_offer_owner`.
 - **Endpoints / jobs:** `POST /api/v1/admin/orders/{id}/refunds` (requires an `Idempotency-Key` header), `GET /api/v1/admin/refunds`, `GET /api/v1/admin/refunds/{id}`, `POST …/{id}/settle`, `POST …/{id}/fail`, `POST …/{id}/reissue`.
 - **Logic:**
   - Reuses the idempotency service from VS-023.
   - Adds the automatic `late_capture` refund to VS-024's late-capture path: no items, no requester, the captured amount; the item-sum check is waived for this kind. Cap a late-capture refund by `payments.captured_amount_cents` (an overpayment exceeds `amount_cents`), through VS-024's `LateCaptureSink` hook (ADR-036).
   - **Every refund is manual:** the administrator pays it in the provider dashboard or in cash, then settles it here. The platform never calls a provider refund API.
   - **Lock order (ADR-024):** the `orders` row, then the affected lines by `id`, then the payment, then the refund; balances are derived under those locks. Settle, fail and reissue take the same order.
+  - **Order total equals its lines** (VS-041 audit Q-2, decided 2026-10-22): no trigger. Inside the refund transaction, under the locks above, refund creation asserts `orders.total_cents = sum(order_items.line_total_cents)` before deriving any balance; a mismatch aborts the refund, writes nothing and is logged as an integrity error.
   - **Paid lines only (BR-149):** a line is refundable only if it is a paid line. Its refundable balance is `line_total` minus its items in non-failed refunds and in failed refunds not yet reissued; a cancelled line of a cash order has 0. A request over any line's balance or the payment's balance gives 422 `REFUND_EXCEEDS_AVAILABLE`.
   - **Unfinished physical lines:** a refund that would bring a `pending`, `in_production`, `ready_to_ship`, `shipped` or `ready_for_pickup` line to 0 gives 422 `REFUND_REQUIRES_CANCELLATION`; the administrator cancels it instead (VS-031).
   - **Partial refunds per line:** a refund of less than a line's balance leaves the line in its state. A line becomes `refunded` when its refunds cover its whole total: a fully refunded STL line still `awaiting_delivery` leaves the delivery queue and frees ownership; a partially refunded one stays. A fully refunded physical terminal line becomes `refunded`.
@@ -813,6 +815,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - Sends a "refund issued" email.
 - **Tests:**
   - Concurrent partial refunds never exceed the paid amount, on an online and on a cash payment.
+  - An order whose `total_cents` no longer equals the sum of its lines (seeded directly) refuses a refund and writes nothing; the database refuses a line whose `user_id` differs from its order's.
   - Two concurrent partial refunds that together equal the full paid amount both succeed, and the order becomes `refunded`.
   - Idempotent replay.
   - Partial-amount refunds on one line, then a refund of the rest: the line stays in its state after the first and becomes `refunded` after the second; the order goes `partially_refunded` then `refunded`. Run it on a delivered physical line and on an STL line still `awaiting_delivery` (it stays in the queue and owned after the first refund, and leaves both after the second).

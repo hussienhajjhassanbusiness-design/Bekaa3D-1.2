@@ -14,10 +14,19 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.core.config import get_settings
+from app.identity.domain.enums import UserRole
 from app.main import app as main_app
+from app.payments.infrastructure.providers import factory
 from app.payments.infrastructure.providers.mock import MockPaymentProvider
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
-from tests.integration.deep_support import assert_problem, client_for
+from tests.integration.catalog.storefront_support import seed_product, seed_refs
+from tests.integration.deep_support import assert_problem, client_for, create_user
+from tests.integration.ordering.test_order_payment_schema import (
+    Ctx,
+    cash_delivery_order,
+    cash_payment,
+    physical_line,
+)
 from tests.integration.payments.verification_support import (
     WEBHOOK,
     Seeded,
@@ -227,6 +236,101 @@ async def test_an_event_whose_reference_contradicts_the_payment_is_ignored(
     [event] = await _events(db_engine, seeded)
     assert (event["payment_id"], event["processing_error"]) == (None, "reference_mismatch")
     assert (await paid_state(db_engine, seeded)).payment_status == "pending"
+
+
+async def _cash_payment(db: AsyncSession) -> uuid.UUID:
+    """A paid cash payment: the only `payments.provider` other than `mock` today."""
+    refs = await seed_refs(db)
+    physical = (await seed_product(db, refs)).id
+    c = Ctx(
+        (await create_user(db)).id,
+        (await create_user(db, role=UserRole.ADMIN)).id,
+        physical,
+        physical,
+    )
+    order_id, payment_id = uuid.uuid4(), uuid.uuid4()
+    for sql, params in (
+        cash_delivery_order(c, order_id),
+        physical_line(c, order_id),
+        cash_payment(c, order_id, id=payment_id),
+    ):
+        await db.execute(text(sql), params)
+    await db.commit()
+    return payment_id
+
+
+async def test_an_event_naming_another_providers_payment_is_stored_as_provider_mismatch(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """FR-07: stored and ignored, never linked or verified, the payment untouched."""
+    payment_id = await _cash_payment(db_session)
+    event_id = f"ev_{uuid.uuid4().hex}"
+    payload = {"event_id": event_id, "type": "payment", "payment_reference": str(payment_id)}
+    body = json.dumps(payload).encode()
+    sql = "SELECT status, updated_at, provider_payment_id FROM payments WHERE id = :p"
+    async with db_engine.connect() as conn:
+        before = (await conn.execute(text(sql), {"p": payment_id})).one()
+    with client_for(main_app) as client:
+        assert client.post(WEBHOOK, content=body, headers=signed(body)).status_code == 200
+    async with db_engine.connect() as conn:
+        event = (
+            await conn.execute(
+                text(
+                    "SELECT payment_id, processed_at IS NOT NULL AS processed, processing_error"
+                    " FROM webhook_events WHERE provider_event_id = :e"
+                ),
+                {"e": event_id},
+            )
+        ).one()
+        after = (await conn.execute(text(sql), {"p": payment_id})).one()
+    assert (event.payment_id, event.processed, event.processing_error) == (
+        None,
+        True,
+        "provider_mismatch",
+    )
+    assert after == before
+
+
+class _StubProvider:
+    """A test-only online adapter, so production boots without the mock (VS-023 plan)."""
+
+    supports_status_query = False
+
+    async def aclose(self) -> None:
+        return None
+
+
+async def test_in_production_a_webhook_to_the_mock_is_404_and_stores_nothing(
+    db_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setitem(factory.ADAPTERS, "stub", lambda settings: _StubProvider())
+    production = {
+        "ENVIRONMENT": "production",
+        "PAYMENT_PROVIDER": "stub",
+        "CAPTCHA_PROVIDER": "turnstile",
+        "TURNSTILE_SECRET": "test-only",
+        "PHONE_HASH_SALT": "p" * 64,
+    }
+    for name, value in production.items():
+        monkeypatch.setenv(name, value)
+    get_settings.cache_clear()
+    event_id = f"ev_{uuid.uuid4().hex}"
+    body = json.dumps({"event_id": event_id, "type": "payment"}).encode()
+    try:
+        with client_for(main_app, ip="10.9.8.6") as client:
+            assert set(main_app.state.payment_providers) == {"stub"}
+            response = client.post(WEBHOOK, content=body, headers=signed(body))
+    finally:
+        get_settings.cache_clear()
+    assert response.status_code == 404
+    async with db_engine.connect() as conn:
+        stored = await conn.scalar(
+            text("SELECT count(*) FROM webhook_events WHERE provider_event_id = :e"),
+            {"e": event_id},
+        )
+    assert stored == 0
+    assert await _bucket("webhook-unverified:10.9.8.6") is None
+    assert await _bucket("webhook:mock") is None
 
 
 async def test_a_signed_unreadable_body_is_400_and_not_stored() -> None:
