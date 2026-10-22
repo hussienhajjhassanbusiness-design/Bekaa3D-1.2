@@ -431,7 +431,7 @@ async def test_a_refused_request_is_422_and_leaves_the_cart(
     assert await rows(db_engine, user.id) == _untouched(1)
 
 
-async def test_a_physical_line_is_422_invalid_fulfillment(
+async def test_a_physical_line_without_a_fulfillment_method_is_422_invalid_fulfillment(
     db_engine: AsyncEngine, db_session: AsyncSession
 ) -> None:
     refs = await seed_refs(db_session)

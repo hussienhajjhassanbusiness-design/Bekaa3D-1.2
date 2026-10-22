@@ -1,5 +1,6 @@
 """Physical and cash checkout (VS-028 plan 6.2). Every refusal asserts nothing was created."""
 
+import json
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -12,6 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from app.core.config import get_settings
 from app.core.security import hash_phone
 from app.main import app as main_app
+from app.ordering.domain.fulfillment import DELIVERY_FEE_NOTE
+from app.ordering.infrastructure.notices import SqlOrderNotices
+from app.payments.infrastructure.providers.mock import MockPaymentProvider
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
 from tests.integration.catalog.storefront_support import seed_refs
 from tests.integration.deep_support import assert_problem, client_for, create_user, login
@@ -39,6 +43,11 @@ from tests.integration.ordering.physical_support import (
     stl,
 )
 from tests.integration.payments.support import seed_online_order
+from tests.integration.payments.verification_support import (
+    WEBHOOK,
+    mock_fixture,  # noqa: F401
+    signed,
+)
 
 pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("configured_app", "shop_open")]
 
@@ -51,8 +60,31 @@ async def _pickup_address(db_engine: AsyncEngine) -> Any:
         yield
 
 
+CASH_NOT_AVAILABLE = "Cash on delivery isn't available for this order; please pay online."
+
+
+def assert_cash_not_available(response: Any) -> None:
+    """No `reason`, and one detail for a block and for an open order (ADR-038)."""
+    assert_problem(response, 422, "CASH_NOT_AVAILABLE")
+    assert "reason" not in response.json()
+    assert response.json()["detail"] == CASH_NOT_AVAILABLE
+
+
 def untouched(cart_lines: int) -> Rows:
     return Rows(orders=0, lines=0, payments=0, claims=0, cart_lines=cart_lines, history=0)
+
+
+async def side_effects(engine: AsyncEngine, user_id: uuid.UUID) -> tuple[int, int, int]:
+    """The cash email, the notification and the `order.placed` audit row."""
+    sql = """
+        SELECT
+          (SELECT count(*) FROM email_outbox WHERE user_id = :u),
+          (SELECT count(*) FROM notifications WHERE user_id = :u),
+          (SELECT count(*) FROM audit_logs WHERE actor_user_id = :u AND action = 'order.placed')
+    """
+    async with engine.connect() as conn:
+        a, b, c = (await conn.execute(text(sql), {"u": user_id})).one()
+    return a, b, c
 
 
 async def order_row(engine: AsyncEngine, order_id: str) -> Any:
@@ -111,6 +143,52 @@ async def test_a_physical_pickup_online_and_a_mixed_cart_online(
     assert lines == {"physical": "pending", "stl": "pending"}
     assert mixed.json()["order"]["total"]["amount_cents"] == 1900
     assert await rows(db_engine, user) == Rows(2, 3, 2, 2, 0, 2)
+
+
+async def test_a_mixed_delivery_order_paid_online_moves_only_the_stl_line(
+    db_engine: AsyncEngine, db_session: AsyncSession, mock: MockPaymentProvider
+) -> None:
+    """Verification sends the STL to the delivery queue; the physical line waits for printing,
+    and the confirmation email carries the courier note and the dispatch estimate."""
+    refs = await seed_refs(db_session)
+    lamp, file = await physical(db_session, refs), await stl(db_session, refs)
+    with client_for(main_app) as client:
+        user_id = await signed_in_buyer(client, db_session, lamp, file)
+        address = await seed_address(db_session, user_id)
+        placed = post(client, checkout_body(fulfillment_method="delivery", address_id=str(address)))
+        assert placed.status_code == 201, placed.text
+        payment_id = placed.json()["payment"]["id"]
+        await mock.simulate(uuid.UUID(payment_id), "paid")
+        event = {"event_id": f"ev_{uuid.uuid4().hex}", "payment_reference": payment_id}
+        raw = json.dumps(event | {"type": "payment"}).encode()
+        assert client.post(WEBHOOK, content=raw, headers=signed(raw)).status_code == 200
+    order_id = placed.json()["order"]["id"]
+    stored = await order_row(db_engine, order_id)
+    async with db_engine.connect() as conn:
+        lines = await conn.execute(
+            text(
+                "SELECT product_type::text, fulfillment_status::text FROM order_items"
+                " WHERE order_id = :o"
+            ),
+            {"o": order_id},
+        )
+        emails = await conn.scalars(
+            text(
+                "SELECT payload FROM email_outbox WHERE template = 'order_payment_confirmed'"
+                " AND payload->>'order_id' = :o"
+            ),
+            {"o": order_id},
+        )
+        states: dict[str, str] = dict(lines.all())
+        payloads = emails.all()
+    assert stored.status == "in_progress"
+    assert states == {"stl": "awaiting_delivery", "physical": "pending"}
+    assert len(payloads) == 1
+    assert payloads[0]["fulfillment_method"] == "delivery"
+    assert payloads[0]["delivery_fee_note"] == DELIVERY_FEE_NOTE
+    eta = payloads[0]["estimated_dispatch_at"]
+    assert stored.estimated_dispatch_at is not None
+    assert datetime.fromisoformat(eta) == stored.estimated_dispatch_at
 
 
 async def test_cash_is_refused_for_an_stl_only_and_a_mixed_cart_before_any_lock(
@@ -178,7 +256,7 @@ async def test_a_cash_order_is_one_transaction_with_no_payment_and_no_provider_c
         "cash",
         True,
     )
-    assert order["amount_due_cents"] == order["total"]["amount_cents"] == 1250
+    assert order["amount_due"] == order["total"] == {"amount_cents": 1250, "currency": "USD"}
     assert order["lines"][0]["fulfillment_status"] == "pending"
     assert await rows(db_engine, user_id) == Rows(1, 1, 0, 1, 0, 1)
     stored = await order_row(db_engine, order["id"])
@@ -371,6 +449,24 @@ async def test_the_total_cap_is_checked_on_the_live_total(
     assert at_cap.status_code == 201, at_cap.text
 
 
+async def test_an_over_cap_total_reads_the_same_whether_or_not_the_phone_is_blocked(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """The cap needs no phone, so it runs first and cannot tell a probe about one."""
+    lamp = await physical(db_session, price_cents=10_001)
+    blocked_phone = random_phone()
+    await seed_block(db_session, (await create_user(db_session)).id, blocked_phone)
+    with client_for(main_app) as client:
+        user_id = await signed_in_buyer(client, db_session, lamp)
+        responses = [
+            await refused_cash(client, db_engine, user_id, pickup_body(phone))
+            for phone in (blocked_phone, random_phone())
+        ]
+    for response in responses:
+        assert_problem(response, 422, "CASH_PAYMENT_LIMIT_REACHED")
+        assert response.json()["reason"] == "order_total"
+
+
 async def test_a_second_open_cash_order_is_refused_by_account_and_by_phone(
     db_engine: AsyncEngine, db_session: AsyncSession
 ) -> None:
@@ -386,8 +482,7 @@ async def test_a_second_open_cash_order_is_refused_by_account_and_by_phone(
         same_phone = await refused_cash(other, db_engine, second, pickup_body(spaced(shared)))
     assert done.status_code == 201
     for response in (same_account, same_phone):
-        assert_problem(response, 422, "CASH_PAYMENT_LIMIT_REACHED")
-        assert response.json()["reason"] == "open_orders"
+        assert_cash_not_available(response)
 
 
 async def test_blocks_match_by_account_and_by_phone_and_cleared_blocks_do_not(
@@ -418,20 +513,19 @@ async def test_blocks_match_by_account_and_by_phone_and_cleared_blocks_do_not(
         await db_session.commit()
         cleared = post(client, pickup_body(random_phone()))
     for response in (phone_refusal, by_user):
-        assert_problem(response, 422, "PAYMENT_METHOD_NOT_ALLOWED")
-        assert response.json()["reason"] == "cash_blocked"
+        assert_cash_not_available(response)
     assert cleared.status_code == 201, cleared.text
 
 
-async def test_account_and_phone_refusals_are_byte_identical(
+async def test_block_and_open_order_refusals_by_account_or_phone_are_byte_identical(
     db_engine: AsyncEngine, db_session: AsyncSession
 ) -> None:
-    """The caller cannot tell whether the account or the phone matched (Revision 1 item 4)."""
+    """The caller cannot tell a block from an open order, nor the account from the phone."""
     lamp = await physical(db_session)
     request_id = "req-vs028-indistinguishable"
     phone_a, phone_b = random_phone(), random_phone()
     bodies: dict[str, Any] = {}
-    # cash_blocked: A by user_id, B only by a phone match
+    # blocked: A by user_id, B only by a phone match
     owner = await create_user(db_session)
     await seed_block(db_session, owner.id, phone_b)
     with client_for(main_app) as client:
@@ -459,12 +553,13 @@ async def test_account_and_phone_refusals_are_byte_identical(
         bodies["open_b"] = await refused_cash(
             client, db_engine, d, pickup_body(held_phone), **{"X-Request-ID": request_id}
         )
-    for left, right in (("blocked_a", "blocked_b"), ("open_a", "open_b")):
-        x, y = bodies[left], bodies[right]
-        assert x.status_code == y.status_code == 422
-        assert x.headers["content-type"] == y.headers["content-type"]
-        assert x.content == y.content
-        assert request_id in x.text
+    first = bodies["blocked_a"]
+    assert_cash_not_available(first)
+    assert request_id in first.text
+    for other in ("blocked_b", "open_a", "open_b"):
+        assert bodies[other].status_code == 422
+        assert bodies[other].headers["content-type"] == first.headers["content-type"]
+        assert bodies[other].content == first.content, other
 
 
 async def test_one_phone_in_three_spellings_matches_one_block_and_one_open_count(
@@ -481,8 +576,7 @@ async def test_one_phone_in_three_spellings_matches_one_block_and_one_open_count
             user_id = await signed_in_buyer(client, db_session, lamp)
             refusals.append(await refused_cash(client, db_engine, user_id, pickup_body(spelling)))
     for response in refusals:
-        assert_problem(response, 422, "CASH_PAYMENT_LIMIT_REACHED")
-        assert response.json()["reason"] == "open_orders"
+        assert_cash_not_available(response)
 
 
 @pytest.mark.parametrize(
@@ -498,6 +592,52 @@ async def test_an_order_that_is_no_longer_open_frees_the_limit(
         await seed_cash_order(db_session, user_id, phone, status=status, line_status=line_status)
         response = post(client, pickup_body(phone))
     assert response.status_code == 201, response.text
+
+
+# ------------------------------------------------------- cash transaction
+
+
+async def test_a_paused_shop_refuses_cash_with_503_and_writes_nothing(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    lamp = await physical(db_session)
+    with client_for(main_app) as client:
+        user_id = await signed_in_buyer(client, db_session, lamp)
+        address = await seed_address(db_session, user_id)
+        async with setting(db_engine, "accepting_orders", False):
+            responses = [
+                await refused_cash(client, db_engine, user_id, body)
+                for body in (pickup_body(random_phone()), delivery_body(address))
+            ]
+    for response in responses:
+        assert_problem(response, 503, "ORDERS_PAUSED")
+    assert await rows(db_engine, user_id) == untouched(1)
+    assert await side_effects(db_engine, user_id) == (0, 0, 0)
+
+
+async def test_a_failure_after_the_order_insert_leaves_no_order_no_claim_and_the_cart(
+    db_engine: AsyncEngine, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The last write before the cart is cleared fails: one transaction, so nothing stays,
+    and the same key then places the order."""
+    lamp = await physical(db_session)
+    phone, key = random_phone(), new_key()
+
+    async def broken(*args: Any) -> None:
+        raise RuntimeError("forced after the order insert")
+
+    monkeypatch.setattr(SqlOrderNotices, "cash_order_placed", broken)
+    with client_for(main_app, raise_server_exceptions=False) as client:
+        user_id = await signed_in_buyer(client, db_session, lamp)
+        failed = post(client, pickup_body(phone), key)
+        after_failure = (await rows(db_engine, user_id), await side_effects(db_engine, user_id))
+        monkeypatch.undo()
+        retried = post(client, pickup_body(phone), key)
+    assert_problem(failed, 500, "INTERNAL_ERROR")
+    assert after_failure == (untouched(1), (0, 0, 0))
+    assert retried.status_code == 201, retried.text
+    assert "idempotent-replayed" not in retried.headers
+    assert await rows(db_engine, user_id) == Rows(1, 1, 0, 1, 0, 1)
 
 
 # ------------------------------------------------------------- idempotency

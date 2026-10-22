@@ -41,7 +41,7 @@ VS-023 creates the order and payment tables with every frozen column, so VS-023b
 9. **The live price is charged; the cart snapshot is display-only.** A price that differs from the snapshot is refused with `409 CART_PRICE_CHANGED` naming the new amount, unless the request accepts exactly that amount. Lines that cannot be bought are refused all together, each named; an STL bought since it was added is dropped and named (SRS §7.3 step 5).
 10. **The STL ownership index is raced, not pre-checked.** A violation of `uq_order_items_stl_ownership` inside a SAVEPOINT becomes `409 PRODUCT_ALREADY_OWNED`, never a 500.
 11. **Order numbers are `B3D-` and 8 Crockford base32 characters,** regenerated inside a SAVEPOINT on a collision, at most 5 attempts; the fifth collision is a 500 and nothing is written.
-12. **`PAYMENT_PROVIDER=none` means no online payment:** checkout answers `503 ONLINE_PAYMENT_UNAVAILABLE` and every webhook path is 404.
+12. **`PAYMENT_PROVIDER=none` means no online payment:** an online checkout answers `503 ONLINE_PAYMENT_UNAVAILABLE` and every webhook path is 404. *Amended by [ADR-038](ADR-038-physical-checkout-and-cash-eligibility.md) decision 8 (VS-028):* a cash checkout needs no provider, so it still works.
 
 ### Idempotency
 

@@ -17,6 +17,7 @@ from app.ordering.domain.enums import (
 )
 from app.ordering.domain.exceptions import (
     CashLimitReachedError,
+    CashNotAvailableError,
     InvalidFulfillmentError,
     PaymentMethodNotAllowedError,
 )
@@ -139,47 +140,40 @@ def test_the_estimate_is_calendar_days_after_placement() -> None:
 
 
 def test_cash_precheck_reasons_and_precedence() -> None:
-    def reason(lines: list[NewOrderLine], total: int, enabled: bool) -> str:
-        with pytest.raises(PaymentMethodNotAllowedError) as caught:
-            cash_precheck(lines, total, enabled=enabled)
-        return caught.value.reason
+    def reason(lines: list[NewOrderLine], total: int, enabled: bool, cap: int = 100) -> str:
+        with pytest.raises((PaymentMethodNotAllowedError, CashLimitReachedError)) as caught:
+            cash_precheck(lines, total, enabled=enabled, max_total=cap)
+        error = caught.value
+        assert isinstance(error, PaymentMethodNotAllowedError | CashLimitReachedError)
+        return error.reason
 
     assert reason([line(1, None, None, S)], 0, False) == "cash_requires_physical"
     assert reason([line(1, 1, 1)], 0, False) == "cash_disabled"
     assert reason([line(1, 1, 1)], 0, True) == "zero_total"
-    cash_precheck([line(1, 1, 1)], 1, enabled=True)
+    assert reason([line(1, 1, 1)], 101, True) == "order_total"
+    cash_precheck([line(1, 1, 1)], 1, enabled=True, max_total=100)
+    cash_precheck([line(1, 1, 1)], 100, enabled=True, max_total=100)  # total == cap passes
 
 
-LIMITS: dict[str, Any] = {
-    "blocked": False,
-    "open_orders": 0,
-    "max_open": 1,
-    "total_cents": 100,
-    "max_total": 100,
-}
-
-
-def refused(**over: Any) -> str:
-    with pytest.raises((PaymentMethodNotAllowedError, CashLimitReachedError)) as caught:
-        cash_limits(**(LIMITS | over))
-    error = caught.value
-    assert isinstance(error, PaymentMethodNotAllowedError | CashLimitReachedError)
-    return error.reason
+LIMITS: dict[str, Any] = {"blocked": False, "open_orders": 0, "max_open": 1}
 
 
 def test_cash_limits_boundaries() -> None:
     cash_limits(**LIMITS)
     cash_limits(**(LIMITS | {"open_orders": 2, "max_open": 3}))  # open == max - 1 passes
-    assert refused(open_orders=1) == "open_orders"  # open == max refuses
-    assert refused(total_cents=101) == "order_total"  # total == max passed above
-    assert refused(blocked=True) == "cash_blocked"
 
 
-def test_cash_limits_precedence_is_blocked_then_open_orders_then_total() -> None:
-    everything: dict[str, Any] = {"blocked": True, "open_orders": 5, "total_cents": 999}
-    assert refused(**everything) == "cash_blocked"
-    assert refused(**(everything | {"blocked": False})) == "open_orders"
-    assert refused(**(everything | {"blocked": False, "open_orders": 0})) == "order_total"
+@pytest.mark.parametrize(
+    "over",
+    [{"open_orders": 1}, {"blocked": True}, {"blocked": True, "open_orders": 5}],
+    ids=["open == max", "blocked", "both"],
+)
+def test_a_block_and_the_open_order_limit_are_one_refusal_with_no_reason(
+    over: dict[str, Any],
+) -> None:
+    with pytest.raises(CashNotAvailableError) as caught:
+        cash_limits(**(LIMITS | over))
+    assert vars(caught.value) == {}
 
 
 class _Line:

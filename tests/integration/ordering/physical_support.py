@@ -32,6 +32,11 @@ def random_phone() -> str:
     return f"+96171{random.SystemRandom().randrange(100000, 999999)}"
 
 
+def usd(cents: int) -> dict[str, Any]:
+    """A `PriceRead` body."""
+    return {"amount_cents": cents, "currency": "USD"}
+
+
 def spaced(e164: str) -> str:
     """The same number as a customer might type it."""
     return f"{e164[:4]} {e164[4:6]} {e164[6:9]} {e164[9:]}"

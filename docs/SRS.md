@@ -1371,8 +1371,9 @@ Every error carries a **stable machine-readable code**. The client renders its o
 | Full refund of an unfinished physical line | 422    | REFUND_REQUIRES_CANCELLATION                                   |
 | Offer below floor                          | 422    | OFFER_BELOW_MINIMUM                                            |
 | Product not purchasable                    | 422    | PRODUCT_NOT_PURCHASABLE                                        |
-| Cash chosen for an order with an STL line, or a zero total, or cash disabled or blocked; an unconfigured online provider chosen | 422 | PAYMENT_METHOD_NOT_ALLOWED |
-| Open cash orders or cash total over limit  | 422    | CASH_PAYMENT_LIMIT_REACHED                                     |
+| Cash chosen for an order with an STL line, or a zero total, or cash disabled; an unconfigured online provider chosen | 422 | PAYMENT_METHOD_NOT_ALLOWED |
+| Cash total over limit                      | 422    | CASH_PAYMENT_LIMIT_REACHED                                     |
+| Cash blocked, or open cash orders at the limit, for the customer or the phone (one body, no reason; ADR-038) | 422 | CASH_NOT_AVAILABLE |
 | Cash entered differs from the amount due   | 422    | CASH_AMOUNT_MISMATCH                                           |
 | Cooldown active                            | 422    | OFFER_COOLDOWN_ACTIVE                                          |
 | Rate limited                               | 429    | RATE_LIMITED                                                   |

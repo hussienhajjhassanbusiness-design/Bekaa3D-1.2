@@ -33,7 +33,7 @@ VS-025 gives customers `GET /api/v1/me/orders` and `GET /api/v1/me/orders/{order
 - An administrator field added to `orders` later cannot leak by accident: it would have to be added to the repository's column list and to a response model.
 - VS-029, which first moves physical lines, inherits the masking without change.
 - The flags are advisory: the detail is several READ COMMITTED reads, not one snapshot. VS-031's self-cancel must re-check the same `can_cancel` predicate under the ADR-024 d9 locks, and must use exactly this predicate, or the flag lies.
-- `total` is the order total at checkout. On a cash order with a cancelled line, the amount due at handover is the sum of the live lines, not `total`; VS-028's `amount_due_cents` says so explicitly.
+- `total` is the order total at checkout. On a cash order with a cancelled line, the amount due at handover is the sum of the live lines, not `total`; VS-028's `amount_due` says so explicitly.
 - A late-captured attempt reads as `failed`. Whether its `late_capture` refund appears in the customer's refund summary is VS-030's decision.
 - `status_history` shows line rows and order rows together, oldest first. The frontend tells them apart by `order_item_id`.
 - `fulfillment_status` in the OpenAPI enum still lists `in_production`, because the shared enum type is used. The contract doc says it never appears.

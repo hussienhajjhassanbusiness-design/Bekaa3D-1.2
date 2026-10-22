@@ -2639,17 +2639,16 @@
       },
       "CheckoutOrderRead": {
         "properties": {
-          "amount_due_cents": {
+          "amount_due": {
             "anyOf": [
               {
-                "type": "integer"
+                "$ref": "#/components/schemas/PriceRead"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "Cash orders only: the live total.",
-            "title": "Amount Due Cents"
+            "description": "Cash orders only: the live total."
           },
           "delivery_address": {
             "anyOf": [
@@ -2754,7 +2753,7 @@
           "delivery_fee_note",
           "delivery_address",
           "payment_due",
-          "amount_due_cents",
+          "amount_due",
           "lines"
         ],
         "title": "CheckoutOrderRead",
@@ -5056,17 +5055,16 @@
       },
       "OrderDetailRead": {
         "properties": {
-          "amount_due_cents": {
+          "amount_due": {
             "anyOf": [
               {
-                "type": "integer"
+                "$ref": "#/components/schemas/PriceRead"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "While payment_due: the live total.",
-            "title": "Amount Due Cents"
+            "description": "While payment_due: the live total."
           },
           "can_cancel": {
             "title": "Can Cancel",
@@ -5251,7 +5249,7 @@
           "fulfillment_method",
           "payment_method",
           "payment_due",
-          "amount_due_cents",
+          "amount_due",
           "can_cancel",
           "can_retry_payment",
           "hold_expires_at",
@@ -5574,17 +5572,16 @@
       },
       "OrderSummaryRead": {
         "properties": {
-          "amount_due_cents": {
+          "amount_due": {
             "anyOf": [
               {
-                "type": "integer"
+                "$ref": "#/components/schemas/PriceRead"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "While payment_due: the live total.",
-            "title": "Amount Due Cents"
+            "description": "While payment_due: the live total."
           },
           "fulfillment_method": {
             "anyOf": [
@@ -5632,7 +5629,7 @@
           "payment_method",
           "fulfillment_method",
           "payment_due",
-          "amount_due_cents",
+          "amount_due",
           "total",
           "placed_at"
         ],
@@ -15974,7 +15971,7 @@
     },
     "/api/v1/checkout": {
       "post": {
-        "description": "Tx1: claim, place the order, attach it to the claim. A cash order completes the claim\nand COMMITs there. An online one COMMITs, then calls the provider with no transaction\nopen; Tx2 stores the reference or fails the attempt. A crash between them leaves the\nclaim `in_progress` naming the order.\nNo dependency holds a session: the user is read in its own short transaction.",
+        "description": "Tx1 claims, places the order and attaches it; cash completes the claim there. Online\nthen calls the provider with no transaction open, and Tx2 stores the reference or fails\nthe attempt (docs/checkout.md). No dependency holds a session.",
         "operationId": "checkout_api_v1_checkout_post",
         "parameters": [
           {
@@ -16059,7 +16056,7 @@
                 }
               }
             },
-            "description": "PRODUCT_NOT_PURCHASABLE or QUANTITY_EXCEEDS_LIMIT (with `lines`), INVALID_FULFILLMENT, PAYMENT_METHOD_NOT_ALLOWED or CASH_PAYMENT_LIMIT_REACHED (each with `reason`), or VALIDATION_ERROR."
+            "description": "PRODUCT_NOT_PURCHASABLE or QUANTITY_EXCEEDS_LIMIT (with `lines`), INVALID_FULFILLMENT, PAYMENT_METHOD_NOT_ALLOWED or CASH_PAYMENT_LIMIT_REACHED (each with `reason`), CASH_NOT_AVAILABLE (no reason: a block or an open cash order on the account or the phone, never saying which), or VALIDATION_ERROR."
           },
           "429": {
             "content": {

@@ -1,7 +1,6 @@
-"""The contact phone and its keyed hash never leave the order row (VS-028 plan 6.5, Revision 1
-item 2). One sentinel number goes through every checkout path and refusal; none of its spellings
-or its hash may appear in a response, a log line, an audit row, an outbox payload, a
-notification or a stored idempotency response. Only the owner's order detail may show it."""
+"""The contact phone and its keyed hash never leave the order row (VS-028 plan 6.5). One
+sentinel number goes through every checkout path and refusal, and only the owner's order
+detail may show it: no response, log, audit, outbox, notification or stored replay may."""
 
 import io
 import json

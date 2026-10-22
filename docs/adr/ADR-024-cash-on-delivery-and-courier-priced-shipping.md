@@ -36,7 +36,8 @@ An emailed STL file cannot be taken back, so STL purchases must still be paid an
    | Payment retry | `orders` → re-check `pending_payment` and `cancelled_at` → INSERT payment |
    | Reconciliation marking an attempt `failed` / `expired` | `orders` → `payments` → recompute |
    | Receipt confirmation, problem report | `orders` → lines by `id` |
-   | Cash checkout | cart → phone advisory lock → INSERT order (no existing `orders` row is locked) |
+   | Cart checkout, online or cash (VS-028, [ADR-038](ADR-038-physical-checkout-and-cash-eligibility.md) d10) | idempotency key → cart → (delivery) the address `FOR SHARE` → (cash) phone advisory lock → INSERT order (no existing `orders` row is locked) |
+   | Address edit or delete (VS-026) | the owner's `users` row (`NO KEY UPDATE`) → the address row, which waits for a checkout holding it `FOR SHARE`; checkout takes no `users` lock, so there is no cycle |
 
    **Never lock `payments` before `orders`, including in batch selection:** a job selects candidate ids without locking, then locks each order and re-reads. Locking a line first and the order second, as a line-only lock would, closes a cycle against the handover and PostgreSQL reports `DeadlockDetectedError` — the same class of bug ADR-018 fixed with "`users` before `sessions`". Locking the order also stops two parallel line changes from each deriving the order status from a stale view of the other line.
 10. **Receipt confirmation is optional.** The delivered / picked-up email links to the order page, where a signed-in customer can press "I got it" (sets `receipt_confirmed_at`) or "Report a problem" (creates a contact message linked to the order and sets `problem_reported_at`). The order completes without either.

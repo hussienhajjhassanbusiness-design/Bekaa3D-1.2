@@ -39,6 +39,7 @@ from tests.integration.ordering.physical_support import (
     setting,
     signed_in_buyer,
     stl,
+    usd,
 )
 from tests.integration.payments.support import seed_online_order
 
@@ -169,7 +170,7 @@ async def test_a_replayed_cash_checkout_is_the_stored_response_and_a_pure_read(
     assert replay.json()["dropped_lines"] == [{"product_id": str(owned), "reason": "already_owned"}]
     assert not any("pg_advisory" in s or "FOR UPDATE" in s for s in statements), statements
     assert not any(s.startswith(("INSERT INTO orders", "UPDATE", "DELETE")) for s in statements)
-    assert_problem(fresh, 422, "CASH_PAYMENT_LIMIT_REACHED")
+    assert_problem(fresh, 422, "CASH_NOT_AVAILABLE")
 
 
 async def test_amount_due_follows_the_live_lines_and_is_null_when_nothing_is_due(
@@ -191,7 +192,7 @@ async def test_amount_due_follows_the_live_lines_and_is_null_when_nothing_is_due
         online = post(client, checkout_body(accept_digital_final_sale=True)).json()["order"]
         listing = client.get("/api/v1/me/orders").json()["items"]
         detail = client.get(f"/api/v1/me/orders/{cash['id']}").json()
-        assert detail["amount_due_cents"] == detail["total"]["amount_cents"] == 2200
+        assert detail["amount_due"] == detail["total"] == usd(2200)
         await db_session.execute(
             text(
                 "UPDATE order_items SET fulfillment_status = 'cancelled', cancelled_at = now()"
@@ -203,13 +204,13 @@ async def test_amount_due_follows_the_live_lines_and_is_null_when_nothing_is_due
         after = client.get(f"/api/v1/me/orders/{cash['id']}").json()
         online_detail = client.get(f"/api/v1/me/orders/{online['id']}").json()
         listing_after = {row["id"]: row for row in client.get("/api/v1/me/orders").json()["items"]}
-    assert {row["id"]: row["amount_due_cents"] for row in listing} == {
-        cash["id"]: 2200,
+    assert {row["id"]: row["amount_due"] for row in listing} == {
+        cash["id"]: usd(2200),
         online["id"]: None,
     }
-    assert after["amount_due_cents"] == 1500 and after["total"]["amount_cents"] == 2200
-    assert listing_after[cash["id"]]["amount_due_cents"] == 1500
-    assert online_detail["amount_due_cents"] is None and online_detail["payment_due"] is False
+    assert after["amount_due"] == usd(1500) and after["total"] == usd(2200)
+    assert listing_after[cash["id"]]["amount_due"] == usd(1500)
+    assert online_detail["amount_due"] is None and online_detail["payment_due"] is False
 
 
 async def test_admin_manual_release_over_http_is_409_cash_order_and_reconcile_never_selects_it(

@@ -149,7 +149,10 @@ async def place_order(
         if command.payment_provider is not None:
             raise PaymentMethodNotAllowedError("provider_not_applicable")
         cash_precheck(
-            new_lines, money.total_cents, enabled=await settings.get_bool("cash_payment_enabled")
+            new_lines,
+            money.total_cents,
+            enabled=await settings.get_bool("cash_payment_enabled"),
+            max_total=await settings.get_money_cents("cash_max_order_total"),
         )
         if phone_hash is None:  # unreachable: cash is physical, so a phone was resolved
             raise InvalidFulfillmentError("A cash order needs a contact phone.")
@@ -158,8 +161,6 @@ async def place_order(
             blocked=await cash.active_block(customer.id, phone_hash),
             open_orders=await cash.open_order_count(customer.id, phone_hash),
             max_open=await settings.get_int("cash_max_open_orders"),
-            total_cents=money.total_cents,
-            max_total=await settings.get_money_cents("cash_max_order_total"),
         )
 
     status = derive_order_status(

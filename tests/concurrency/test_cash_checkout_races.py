@@ -1,4 +1,4 @@
-"""VS-028 cash checkout races R1-R4 (plan 6.3, 8.1) through the real route on one running app.
+"""VS-028 cash checkout races R1-R5 (plan 6.3, 8.1) through the real route on one running app.
 Racers meet at a barrier or hold a lock at an event, and each wait is proved through
 `pg_locks`, so a race that silently ran in sequence fails instead of passing."""
 
@@ -16,12 +16,14 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.core.security import hash_phone
+from app.ordering.api import checkout as checkout_api
 from app.ordering.application.services import cart as cart_service
 from app.ordering.application.services import checkout as checkout_service
 from app.ordering.infrastructure.cash import SqlCashChecks
 from app.ordering.infrastructure.checkout_addresses import SqlCheckoutAddresses
 from app.ordering.infrastructure.orders import SqlOrderStore
 from app.ordering.public import lock_order_for_change, release_unpaid_order
+from app.platform.infrastructure.idempotency import SqlIdempotencyStore
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
 from tests.concurrency.barrier import SYNC_TIMEOUT_SECONDS, meet_or_fail
 from tests.concurrency.cash_block_support import cancel_with_block
@@ -89,9 +91,11 @@ def _csrf(client: httpx.AsyncClient) -> dict[str, str]:
     return {"X-CSRF-Token": client.cookies["csrf_token"]}
 
 
-async def _checkout(client: httpx.AsyncClient, body: dict[str, Any]) -> httpx.Response:
+async def _checkout(
+    client: httpx.AsyncClient, body: dict[str, Any], key: str | None = None
+) -> httpx.Response:
     return await client.post(
-        CHECKOUT, json=body, headers=_csrf(client) | {"Idempotency-Key": new_key()}
+        CHECKOUT, json=body, headers=_csrf(client) | {"Idempotency-Key": key or new_key()}
     )
 
 
@@ -171,10 +175,7 @@ async def test_r1_two_accounts_one_phone_place_one_cash_order(
     _no_deadlock(*responses)
     assert sorted(r.status_code for r in responses) == [201, 422], [r.text for r in responses]
     loser = next(r for r in responses if r.status_code == 422)
-    assert (loser.json()["code"], loser.json()["reason"]) == (
-        "CASH_PAYMENT_LIMIT_REACHED",
-        "open_orders",
-    )
+    assert loser.json()["code"] == "CASH_NOT_AVAILABLE"
     assert await _cash_orders_for(db_engine, phone) == 1
 
 
@@ -205,6 +206,40 @@ async def test_r2_one_customer_two_keys_place_one_cash_order(
     _no_deadlock(*responses)
     assert sorted(r.status_code for r in responses) == [201, 409], [r.text for r in responses]
     assert next(r for r in responses if r.status_code == 409).json()["code"] == "CART_EMPTY"
+    counts = await rows(db_engine, user_id)
+    assert (counts.orders, counts.payments, counts.claims, counts.cart_lines) == (1, 0, 1, 0)
+
+
+async def test_r2_b_one_key_in_parallel_places_one_cash_order_and_replays_it(
+    app: FastAPI, db_engine: AsyncEngine, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The cash claim completes inside its one transaction, so the twin waiting on the claim
+    replays the 201 and never sees it in progress."""
+    barrier = asyncio.Barrier(2)
+    claim, place = SqlIdempotencyStore.claim, checkout_service.place_order
+
+    async def synced_claim(self: SqlIdempotencyStore, **kwargs: Any) -> Any:
+        await meet_or_fail(barrier)
+        return await claim(self, **kwargs)
+
+    async def held_place(**kwargs: Any) -> Any:
+        placed = await place(**kwargs)
+        await _waiting(db_engine, "transactionid")  # the twin is blocked on this claim
+        return placed
+
+    monkeypatch.setattr(SqlIdempotencyStore, "claim", synced_claim)
+    monkeypatch.setattr(checkout_api, "place_order", held_place)
+    client, user_id = await _buyer(app, db_session, await physical(db_session))
+    key, body = new_key(), pickup_body(random_phone())
+    try:
+        responses = await asyncio.gather(_checkout(client, body, key), _checkout(client, body, key))
+    finally:
+        await client.aclose()
+    _no_deadlock(*responses)
+    assert [r.status_code for r in responses] == [201, 201], [r.text for r in responses]
+    replayed = sorted(r.headers.get("idempotent-replayed", "false") for r in responses)
+    assert replayed == ["false", "true"]
+    assert responses[0].json() == responses[1].json()
     counts = await rows(db_engine, user_id)
     assert (counts.orders, counts.payments, counts.claims, counts.cart_lines) == (1, 0, 1, 0)
 
@@ -264,7 +299,7 @@ async def test_r3_a_block_committed_first_refuses_the_waiting_checkout(
                 await client.aclose()
             _no_deadlock(response)
             assert response.status_code == 422, response.text
-            assert response.json()["reason"] == "cash_blocked"
+            assert response.json()["code"] == "CASH_NOT_AVAILABLE"
             orders = await rows(db_engine, user_id)
             assert orders.orders == (1 if variant == "b" else 0)  # (b): only X's seeded order
 
