@@ -17,9 +17,8 @@ from app.ordering.domain.enums import (
     OrderStatus,
     PaymentMethod,
 )
+from app.ordering.domain.fulfillment import DELIVERY_FEE_NOTE
 from app.ordering.domain.orders import CustomerOrder, CustomerOrderLine, HistoryEntry
-
-DELIVERY_FEE_NOTE = "The delivery fee is paid to the courier on delivery."
 
 
 def _price(cents: int, currency: str) -> PriceRead:

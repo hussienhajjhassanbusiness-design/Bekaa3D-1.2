@@ -50,6 +50,13 @@ _ORDER_COLUMNS = (
     _O.currency,
     _O.placed_at,
     _O.cancelled_at,
+    _O.estimated_dispatch_at,
+    _O.recipient_name,
+    _O.governorate,
+    _O.city,
+    _O.area,
+    _O.street,
+    _O.landmark_notes,
 )
 _LINE_COLUMNS = (
     _I.id,

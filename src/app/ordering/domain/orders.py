@@ -27,6 +27,8 @@ class NewOrderLine:
     line_total_cents: int
     currency: str
     offer_id: UUID | None = None
+    lead_time_days_snapshot: int | None = None
+    batch_size_snapshot: int | None = None
 
 
 @dataclass(frozen=True)
@@ -46,6 +48,17 @@ class NewOrder:
     digital_terms_accepted_at: datetime | None
     digital_terms_version: str | None
     placed_at: datetime
+    fulfillment_method: FulfillmentMethod | None = None
+    recipient_name: str | None = None
+    contact_phone_snapshot: str | None = None
+    contact_phone_hash: str | None = None
+    governorate: str | None = None
+    city: str | None = None
+    area: str | None = None
+    street: str | None = None
+    landmark_notes: str | None = None
+    estimated_dispatch_at: datetime | None = None
+    cash_terms_accepted_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -64,6 +77,13 @@ class Order:
     currency: str
     placed_at: datetime
     cancelled_at: datetime | None
+    estimated_dispatch_at: datetime | None = None
+    recipient_name: str | None = None
+    governorate: str | None = None
+    city: str | None = None
+    area: str | None = None
+    street: str | None = None
+    landmark_notes: str | None = None
 
 
 @dataclass(frozen=True)

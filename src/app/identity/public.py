@@ -7,6 +7,7 @@ dependencies its routers mount, the `User` entity those dependencies return, and
 the token claims, read through the token-claims port.
 """
 
+from dataclasses import dataclass
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,16 +23,19 @@ from app.identity.api.dependencies import (
 )
 from app.identity.application.token_claims import AccessTokenClaims
 from app.identity.domain.entities import User
+from app.identity.infrastructure.addresses import SqlAddressRepository
 from app.identity.infrastructure.repositories import UserRepository
 
 __all__ = [
     "AccessTokenClaims",
     "AdminBoundaryRoute",
+    "CheckoutAddress",
     "User",
     "active_administrator_contacts",
     "active_administrator_ids",
     "current_user",
     "current_verified_user",
+    "lock_checkout_address",
     "not_found_error",
     "require_admin",
     "require_csrf",
@@ -54,3 +58,37 @@ async def active_administrator_contacts(session: AsyncSession) -> list[tuple[UUI
 async def user_emails(session: AsyncSession, user_ids: list[UUID]) -> dict[UUID, str]:
     """Account emails by id, read in the caller's transaction (VS-039 admin offer queue)."""
     return await UserRepository(session).emails_by_id(user_ids)
+
+
+@dataclass(frozen=True)
+class CheckoutAddress:
+    """The fields an order snapshots from an address (VS-028 plan 3.3)."""
+
+    recipient_name: str
+    phone: str
+    governorate: str
+    city: str
+    area: str | None
+    street: str | None
+    landmark_notes: str
+
+
+async def lock_checkout_address(
+    session: AsyncSession, *, address_id: UUID, user_id: UUID
+) -> CheckoutAddress | None:
+    """`FOR SHARE` read of a live address; None for unknown, foreign and deleted alike."""
+    address = await SqlAddressRepository(session).get_live_for_share(
+        address_id=address_id, user_id=user_id
+    )
+    if address is None:
+        return None
+    d = address.details
+    return CheckoutAddress(
+        recipient_name=d.recipient_name,
+        phone=d.phone,
+        governorate=d.governorate.value,
+        city=d.city,
+        area=d.area,
+        street=d.street,
+        landmark_notes=d.landmark_notes,
+    )

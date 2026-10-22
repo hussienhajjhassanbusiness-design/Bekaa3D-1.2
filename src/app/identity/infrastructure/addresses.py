@@ -87,6 +87,16 @@ class SqlAddressRepository:
         row = (await self._session.execute(stmt)).first()
         return _to_domain(row) if row is not None else None
 
+    async def get_live_for_share(self, *, address_id: UUID, user_id: UUID) -> Address | None:
+        """`FOR SHARE`: a concurrent edit or delete waits for the checkout's transaction."""
+        stmt = (
+            select(*_COLUMNS)
+            .where(_A.id == address_id, _A.user_id == user_id, _LIVE)
+            .with_for_update(read=True)
+        )
+        row = (await self._session.execute(stmt)).first()
+        return _to_domain(row) if row is not None else None
+
     async def count_live(self, user_id: UUID) -> int:
         stmt = select(func.count()).select_from(_A).where(_A.user_id == user_id, _LIVE)
         return (await self._session.execute(stmt)).scalar_one()

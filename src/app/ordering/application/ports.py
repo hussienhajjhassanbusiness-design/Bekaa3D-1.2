@@ -137,6 +137,49 @@ class SettingsSource(Protocol):
 
     async def get_bool(self, key: str) -> bool: ...
 
+    async def get_int(self, key: str) -> int: ...
+
+    async def get_money_cents(self, key: str) -> int: ...
+
+    async def get_text(self, key: str) -> str | None: ...
+
+
+@dataclass(frozen=True)
+class CheckoutAddressSnapshot:
+    """What an order copies from the customer's address; the phone is E.164."""
+
+    recipient_name: str
+    phone: str
+    governorate: str
+    city: str
+    area: str | None
+    street: str | None
+    landmark_notes: str
+
+
+class CheckoutAddresses(Protocol):
+    """Implemented over `app.identity.public.lock_checkout_address`."""
+
+    async def lock_for_share(
+        self, address_id: UUID, user_id: UUID
+    ) -> CheckoutAddressSnapshot | None:
+        """`FOR SHARE`; None for an unknown, foreign or deleted address alike."""
+        ...
+
+
+class CashChecks(Protocol):
+    """Cash eligibility reads. `lock_phone` comes first and every read follows it."""
+
+    async def lock_phone(self, phone_hash: str) -> None: ...
+
+    async def active_block(self, user_id: UUID, phone_hash: str) -> bool: ...
+
+    async def open_order_count(self, user_id: UUID, phone_hash: str) -> int: ...
+
+
+class OrderNotices(Protocol):
+    async def cash_order_placed(self, order: Order, lines: Sequence[OrderLine]) -> None: ...
+
 
 class OrderStore(Protocol):
     """Ordering's order repository. Locks follow ADR-024: `orders`, then lines by id."""

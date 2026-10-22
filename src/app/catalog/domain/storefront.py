@@ -175,6 +175,8 @@ class CartProduct:
     max_quantity_per_line: int | None
     listed: bool
     cover: ProductImage | None = None
+    production_lead_time_days: int | None = None
+    batch_size: int | None = None
 
 
 def purchase_refusal(product: CartProduct) -> PurchaseRefusal | None:

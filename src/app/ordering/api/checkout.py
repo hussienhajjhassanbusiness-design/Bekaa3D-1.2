@@ -14,6 +14,7 @@ from app.catalog.public import cart_product_reader
 from app.core.config import get_settings
 from app.core.exceptions import ApiError
 from app.core.rate_limit import enforce_rate_limit
+from app.core.security import hash_phone
 from app.identity.public import User, verified_user_short_read
 from app.ordering.api.checkout_schemas import (
     IDEMPOTENCY_KEY_PATTERN,
@@ -24,12 +25,14 @@ from app.ordering.api.idempotent import replay, stored
 from app.ordering.api.problems import already_owned_error
 from app.ordering.application.services.checkout import (
     CheckoutCustomer,
+    OnlinePlacedOrder,
     PlacedOrder,
     place_order,
 )
 from app.ordering.domain.exceptions import (
     CartEmptyError,
     CartPriceChangedError,
+    CashLimitReachedError,
     CheckoutLinesRefusedError,
     ConsentRequiredError,
     InvalidFulfillmentError,
@@ -40,6 +43,9 @@ from app.ordering.domain.exceptions import (
     ProductAlreadyOwnedError,
 )
 from app.ordering.infrastructure.carts import SqlCartStore
+from app.ordering.infrastructure.cash import SqlCashChecks
+from app.ordering.infrastructure.checkout_addresses import SqlCheckoutAddresses
+from app.ordering.infrastructure.notices import SqlOrderNotices
 from app.ordering.infrastructure.orders import SqlOrderStore
 from app.payments.public import (
     CHECKOUT_RATE_LIMIT,
@@ -88,7 +94,8 @@ _RESPONSES: dict[int | str, dict[str, Any]] = {
     },
     422: {
         "description": "PRODUCT_NOT_PURCHASABLE or QUANTITY_EXCEEDS_LIMIT (with `lines`), "
-        "INVALID_FULFILLMENT, PAYMENT_METHOD_NOT_ALLOWED (with `reason`), or VALIDATION_ERROR."
+        "INVALID_FULFILLMENT, PAYMENT_METHOD_NOT_ALLOWED or CASH_PAYMENT_LIMIT_REACHED (each "
+        "with `reason`), or VALIDATION_ERROR."
     },
     429: {"description": "RATE_LIMITED: too many checkouts this hour."},
     502: {
@@ -173,7 +180,15 @@ def translate_checkout_error(exc: OrderingDomainError) -> ApiError:
             status_code=unprocessable,
             code="INVALID_FULFILLMENT",
             title="Fulfillment not available",
-            detail="Physical products and delivery or pickup are not available yet.",
+            detail="The delivery or pickup details do not fit this order.",
+        )
+    if isinstance(exc, CashLimitReachedError):
+        return ApiError(
+            status_code=unprocessable,
+            code="CASH_PAYMENT_LIMIT_REACHED",
+            title="Cash payment limit reached",
+            detail="This order cannot be paid in cash right now.",
+            extensions={"reason": exc.reason},
         )
     if isinstance(exc, PaymentMethodNotAllowedError):
         return ApiError(
@@ -191,8 +206,8 @@ def translate_checkout_error(exc: OrderingDomainError) -> ApiError:
             detail="One or more fields failed validation.",
             errors=[
                 {
-                    "loc": ["body", "accept_digital_final_sale"],
-                    "msg": "STL purchases are final sale and must be accepted.",
+                    "loc": ["body", exc.field],
+                    "msg": "This acceptance is required.",
                     "type": "missing",
                 }
             ],
@@ -222,6 +237,7 @@ CHECKOUT_ERRORS = (
     InvalidFulfillmentError,
     PaymentMethodNotAllowedError,
     ConsentRequiredError,
+    CashLimitReachedError,
     OrdersPausedError,
     OnlinePaymentUnavailableError,
 )
@@ -254,7 +270,7 @@ def key_conflict_error() -> ApiError:
     status_code=status.HTTP_201_CREATED,
     response_model=CheckoutRead,
     dependencies=[Depends(checkout_rate_limit)],
-    summary="Place an order from the cart and start its online payment",
+    summary="Place an order from the cart: start its online payment, or place it as cash",
     responses=_RESPONSES,
 )
 async def checkout(
@@ -263,9 +279,10 @@ async def checkout(
     idempotency_key: IdempotencyKey,
     user: User = Depends(verified_user_short_read),
 ) -> Response:
-    """Tx1: claim, place the order, attach it to the claim, COMMIT. Then the provider call
-    with no transaction open. Tx2: store the reference or fail the attempt, and the
-    response. A crash between them leaves the claim `in_progress` naming the order.
+    """Tx1: claim, place the order, attach it to the claim. A cash order completes the claim
+    and COMMITs there. An online one COMMITs, then calls the provider with no transaction
+    open; Tx2 stores the reference or fails the attempt. A crash between them leaves the
+    claim `in_progress` naming the order.
     No dependency holds a session: the user is read in its own short transaction."""
     providers = request.app.state.payment_providers
     digest = request_hash(SCOPE, body.model_dump(mode="json"))
@@ -292,28 +309,39 @@ async def checkout(
                     products=await cart_product_reader(session),
                     orders=SqlOrderStore(session),
                     attempts=payment_attempts(session, providers),
+                    addresses=SqlCheckoutAddresses(session),
+                    cash=SqlCashChecks(session),
+                    notices=SqlOrderNotices(session),
                     settings=settings_reader(session),
                     audit=SqlAuditWriter(session),
                     customer=CheckoutCustomer(id=user.id, email=user.email),
                     command=body.command(),
+                    hash_phone=hash_phone,
                     now=now,
                 )
             except CHECKOUT_ERRORS as exc:
                 raise translate_checkout_error(exc) from exc
             await claims.attach(claim.record_id, resource_id=placed.order.id)
+            if placed.payment is None:
+                read = CheckoutRead.of(placed).model_dump(mode="json")
+                await claims.complete(
+                    claim.record_id, status_code=status.HTTP_201_CREATED, body=read
+                )
+                return JSONResponse(read, status_code=status.HTTP_201_CREATED)
 
+        online = OnlinePlacedOrder(placed.order, placed.lines, placed.payment, placed.dropped)
         try:
             created = await start_online_payment(
-                providers[placed.payment.provider], create_payment_request(placed)
+                providers[online.payment.provider], create_payment_request(online)
             )
         except ProviderUnavailableError:
-            failed = provider_failed(request, placed)
+            failed = provider_failed(request, online)
             async with session.begin():
                 await fail_attempt(
                     payment_store(session),
                     SqlAuditWriter(session),
-                    payment_id=placed.payment.id,
-                    order_id=placed.order.id,
+                    payment_id=online.payment.id,
+                    order_id=online.order.id,
                     actor_user_id=user.id,
                     at=datetime.now(UTC),
                 )
@@ -322,11 +350,11 @@ async def checkout(
                 )
             return failed
 
-        read = CheckoutRead.of(placed, created.redirect_url).model_dump(mode="json")
+        read = CheckoutRead.of(online, created.redirect_url).model_dump(mode="json")
         async with session.begin():
             await record_provider_reference(
                 payment_store(session),
-                payment_id=placed.payment.id,
+                payment_id=online.payment.id,
                 created=created,
                 at=datetime.now(UTC),
             )
@@ -334,7 +362,7 @@ async def checkout(
     return JSONResponse(read, status_code=status.HTTP_201_CREATED)
 
 
-def create_payment_request(placed: PlacedOrder) -> CreatePayment:
+def create_payment_request(placed: OnlinePlacedOrder) -> CreatePayment:
     number = placed.order.order_number
     return CreatePayment(
         payment_id=placed.payment.id,

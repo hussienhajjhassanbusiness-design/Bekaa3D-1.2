@@ -83,6 +83,26 @@ class SettingsReader:
             raise SettingTypeMismatchError(key, type(value).__name__, "int")
         return value
 
+    async def get_money_cents(self, key: str) -> int:
+        """The `amount_cents` of a validated money setting."""
+        definition = definition_for(key)
+        if definition.type is not SettingType.MONEY:
+            raise SettingTypeMismatchError(key, definition.type, SettingType.MONEY)
+        value = await self.get(key)
+        if not isinstance(value, dict) or type(value.get("amount_cents")) is not int:
+            raise SettingTypeMismatchError(key, type(value).__name__, "money")
+        return int(value["amount_cents"])
+
+    async def get_text(self, key: str) -> str | None:
+        """A string setting; None when it is nullable and unset."""
+        definition = definition_for(key)
+        if definition.type is not SettingType.STRING:
+            raise SettingTypeMismatchError(key, definition.type, SettingType.STRING)
+        value = await self.get(key)
+        if value is not None and type(value) is not str:
+            raise SettingTypeMismatchError(key, type(value).__name__, "str")
+        return value
+
     async def get_bool(self, key: str) -> bool:
         definition = definition_for(key)
         if definition.type is not SettingType.BOOLEAN:
