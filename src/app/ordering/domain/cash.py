@@ -5,7 +5,11 @@ from typing import Final, Protocol
 
 from app.catalog.application.ports import ProductType
 from app.ordering.domain.enums import OrderItemStatus
-from app.ordering.domain.exceptions import CashLimitReachedError, PaymentMethodNotAllowedError
+from app.ordering.domain.exceptions import (
+    CashLimitReachedError,
+    CashNotAvailableError,
+    PaymentMethodNotAllowedError,
+)
 from app.ordering.domain.orders import NewOrderLine
 
 # int4 namespace of the two-int advisory lock; the one-bigint locks are another key space.
@@ -20,26 +24,25 @@ class _Priced(Protocol):
     def fulfillment_status(self) -> OrderItemStatus: ...
 
 
-def cash_precheck(lines: Sequence[NewOrderLine], total_cents: int, *, enabled: bool) -> None:
-    """Before the phone lock: all physical, enabled, a total above zero."""
+def cash_precheck(
+    lines: Sequence[NewOrderLine], total_cents: int, *, enabled: bool, max_total: int
+) -> None:
+    """Before the phone lock, so no phone-free refusal can follow a phone-matched one: all
+    physical, enabled, a total above zero and within the cap (ADR-038)."""
     if any(line.product_type is not ProductType.PHYSICAL for line in lines):
         raise PaymentMethodNotAllowedError("cash_requires_physical")
     if not enabled:
         raise PaymentMethodNotAllowedError("cash_disabled")
     if total_cents <= 0:
         raise PaymentMethodNotAllowedError("zero_total")
-
-
-def cash_limits(
-    *, blocked: bool, open_orders: int, max_open: int, total_cents: int, max_total: int
-) -> None:
-    """Under the phone lock: blocked, then open orders, then the total cap."""
-    if blocked:
-        raise PaymentMethodNotAllowedError("cash_blocked")
-    if open_orders >= max_open:
-        raise CashLimitReachedError("open_orders")
     if total_cents > max_total:
         raise CashLimitReachedError("order_total")
+
+
+def cash_limits(*, blocked: bool, open_orders: int, max_open: int) -> None:
+    """Under the phone lock: one refusal for a block and for the open-order limit."""
+    if blocked or open_orders >= max_open:
+        raise CashNotAvailableError("Cash on delivery is not available for this order.")
 
 
 def amount_due_cents(lines: Iterable[_Priced]) -> int:

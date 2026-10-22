@@ -38,9 +38,9 @@ The SRS 7.4 matrix runs on the **kept** lines (after owned STLs are dropped), so
 | Physical, pickup | `pickup` | absent | required | allowed |
 | Mixed | `delivery` or `pickup` as above | | | refused (`cash_requires_physical`) |
 
-**Response `201`:** the order (live prices, lines `pending`), the payment, and `dropped_lines` (STLs bought since they were added, not charged; filled on the cash path too). The order also carries `estimated_dispatch_at`, `delivery_fee_note` (delivery only), `delivery_address` (the snapshot; never the contact phone or its hash), `payment_due` and `amount_due_cents`.
+**Response `201`:** the order (live prices, lines `pending`), the payment, and `dropped_lines` (STLs bought since they were added, not charged; filled on the cash path too). The order also carries `estimated_dispatch_at`, `delivery_fee_note` (delivery only), `delivery_address` (the snapshot; never the contact phone or its hash), `payment_due` and `amount_due` (a `PriceRead`, or null).
 - **Online:** the order is `pending_payment`; `payment` is `pending` with the provider and its `redirect_url`.
-- **Cash:** the order is `in_progress`, `payment` is `null`, `payment_due` is `true` and `amount_due_cents` is the total.
+- **Cash:** the order is `in_progress`, `payment` is `null`, `payment_due` is `true` and `amount_due` equals `total`.
 
 A replay of the same key and body returns the stored response with `Idempotent-Replayed: true`. A replay is a pure read: it takes no lock and re-runs no limit check.
 
@@ -56,8 +56,9 @@ A replay of the same key and body returns the stored response with `Idempotent-R
 | 422 | `PRODUCT_NOT_PURCHASABLE` | any line hidden, unavailable or WhatsApp-only (over-cap lines are listed too); `lines[{product_id, reason, max_quantity?}]` |
 | 422 | `QUANTITY_EXCEEDS_LIMIT` | only over-cap lines; same `lines` |
 | 422 | `INVALID_FULFILLMENT` | the fulfillment fields do not fit the kept lines (table above); an unknown, another customer's or a deleted `address_id` (one answer for all three); pickup while `pickup_address` is not set |
-| 422 | `PAYMENT_METHOD_NOT_ALLOWED` | `reason`: `cash_requires_physical`, `cash_disabled`, `cash_blocked`, `zero_total`, `provider_not_configured`, `provider_required`, `provider_not_applicable` (a provider sent with cash) |
-| 422 | `CASH_PAYMENT_LIMIT_REACHED` | `reason`: `open_orders` (an unpaid cash order exists for this account **or** this phone) or `order_total` (the live total is above `cash_max_order_total`) |
+| 422 | `PAYMENT_METHOD_NOT_ALLOWED` | `reason`: `cash_requires_physical`, `cash_disabled`, `zero_total`, `provider_not_configured`, `provider_required`, `provider_not_applicable` (a provider sent with cash) |
+| 422 | `CASH_PAYMENT_LIMIT_REACHED` | `reason`: `order_total` (the live total is above `cash_max_order_total`) |
+| 422 | `CASH_NOT_AVAILABLE` | no `reason`: an uncleared cash block, or `cash_max_open_orders` unpaid cash orders, for this account **or** this phone. Detail: "Cash on delivery isn't available for this order; please pay online." |
 | 422 | `VALIDATION_ERROR` | schema, a client-sent total, an invalid `contact_phone`, or a missing `accept_digital_final_sale` / `accept_cash_terms` |
 | 429 | `RATE_LIMITED` | 30 checkouts per user per hour (a replay counts) |
 | 502 | `PAYMENT_PROVIDER_UNAVAILABLE` | the order exists unpaid; the provider could not start the payment; `order_id`, `order_number`; replayed for the same key |
@@ -66,7 +67,7 @@ A replay of the same key and body returns the stored response with `Idempotent-R
 
 Every refusal before the order commits leaves the cart, the order tables and the idempotency key untouched.
 
-**Cash refusals are indistinguishable.** `cash_blocked` and `open_orders` give byte-identical bodies whether the account or only the phone matched, so a refusal never reveals that another account uses a phone.
+**Cash refusals are indistinguishable.** A block and the open-order limit give one byte-identical `CASH_NOT_AVAILABLE` body, whether the account or only the phone matched, so a refusal never says which rule matched or that another account uses a phone. Every check that needs no phone (physical lines, the cash switch, a zero total, the total cap) runs before the phone is looked at, so it cannot be used to probe one. One probe remains and is accepted: trying cash with someone's phone shows whether it is blocked or has an open cash order, at most 30 times an hour, and the first miss places a real order that then refuses every further cash checkout from that account. That bound lasts only until VS-031 lets a customer cancel their own cash order, and a miss holds the phone's owner off cash until it is resolved (the ADR-024 d6 risk) ([ADR-038](adr/ADR-038-physical-checkout-and-cash-eligibility.md) d19-d22).
 
 **Cash is one transaction:** claim the key, place the order, complete the claim, COMMIT. There is no payment row, no provider call and no second transaction. The customer gets an `order_cash_placed` email (amount due, fulfillment, dispatch estimate, the courier fee note for delivery; no phone or address) and an `order.placed` notification. Release, reconciliation and payment retry never select a cash order; an admin release or a retry on one is `409 INVALID_STATE_TRANSITION` (`cash_order`).
 
@@ -113,7 +114,7 @@ States: `paid` (add `--captured-amount-cents N` for an under- or overpayment), `
 
 Lock order (ADR-024 d9, ADR-029 d4, VS-028 plan 8.1): checkout locks the idempotency key, then the cart, then (delivery) the address `FOR SHARE`, then (cash) the phone advisory lock `pg_advisory_xact_lock(CASH_PHONE_LOCK_NS, hashtext(phone_hash))`, and only then reads and inserts new order rows. Checkout never locks an existing `orders` row. Payment apply locks the order, its lines by id, then the payment; VS-031's cancel will lock the order, its lines, the cart, then the phone. There is no cycle (`tests/concurrency/test_checkout_races.py`, `test_cash_checkout_races.py` R1-R5, `test_payment_races.py`).
 
-Cash limits are read under the phone lock on the recomputed live total, so two accounts with one phone racing get one order and one `422`.
+The block and the open-order count are read under the phone lock, after the recomputed live total has passed the cap, so two accounts with one phone racing get one order and one `422 CASH_NOT_AVAILABLE`.
 
 ## Database
 

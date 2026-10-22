@@ -118,11 +118,16 @@ class ConsentRequiredError(OrderingDomainError):
 
 
 class CashLimitReachedError(OrderingDomainError):
-    """422 CASH_PAYMENT_LIMIT_REACHED; `reason` is `open_orders` or `order_total`."""
+    """422 CASH_PAYMENT_LIMIT_REACHED; `reason` is `order_total`, a check on no phone."""
 
     def __init__(self, reason: str) -> None:
         super().__init__(f"Cash payment limit reached: {reason}.")
         self.reason = reason
+
+
+class CashNotAvailableError(OrderingDomainError):
+    """422 CASH_NOT_AVAILABLE: a block or an open cash order, never saying which, nor
+    whether the account or the phone matched (ADR-038)."""
 
 
 class ProductAlreadyOwnedError(OrderingDomainError):

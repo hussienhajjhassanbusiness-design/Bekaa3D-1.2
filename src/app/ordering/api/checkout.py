@@ -33,6 +33,7 @@ from app.ordering.domain.exceptions import (
     CartEmptyError,
     CartPriceChangedError,
     CashLimitReachedError,
+    CashNotAvailableError,
     CheckoutLinesRefusedError,
     ConsentRequiredError,
     InvalidFulfillmentError,
@@ -95,7 +96,8 @@ _RESPONSES: dict[int | str, dict[str, Any]] = {
     422: {
         "description": "PRODUCT_NOT_PURCHASABLE or QUANTITY_EXCEEDS_LIMIT (with `lines`), "
         "INVALID_FULFILLMENT, PAYMENT_METHOD_NOT_ALLOWED or CASH_PAYMENT_LIMIT_REACHED (each "
-        "with `reason`), or VALIDATION_ERROR."
+        "with `reason`), CASH_NOT_AVAILABLE (no reason: a block or an open cash order on the "
+        "account or the phone, never saying which), or VALIDATION_ERROR."
     },
     429: {"description": "RATE_LIMITED: too many checkouts this hour."},
     502: {
@@ -196,6 +198,13 @@ def translate_checkout_error(exc: OrderingDomainError) -> ApiError:
             detail="This order cannot be paid in cash right now.",
             extensions={"reason": exc.reason},
         )
+    if isinstance(exc, CashNotAvailableError):
+        return ApiError(
+            status_code=unprocessable,
+            code="CASH_NOT_AVAILABLE",
+            title="Cash on delivery not available",
+            detail="Cash on delivery isn't available for this order; please pay online.",
+        )
     if isinstance(exc, PaymentMethodNotAllowedError):
         return ApiError(
             status_code=unprocessable,
@@ -244,6 +253,7 @@ CHECKOUT_ERRORS = (
     PaymentMethodNotAllowedError,
     ConsentRequiredError,
     CashLimitReachedError,
+    CashNotAvailableError,
     OrdersPausedError,
     OnlinePaymentUnavailableError,
 )
@@ -285,11 +295,9 @@ async def checkout(
     idempotency_key: IdempotencyKey,
     user: User = Depends(verified_user_short_read),
 ) -> Response:
-    """Tx1: claim, place the order, attach it to the claim. A cash order completes the claim
-    and COMMITs there. An online one COMMITs, then calls the provider with no transaction
-    open; Tx2 stores the reference or fails the attempt. A crash between them leaves the
-    claim `in_progress` naming the order.
-    No dependency holds a session: the user is read in its own short transaction."""
+    """Tx1 claims, places the order and attaches it; cash completes the claim there. Online
+    then calls the provider with no transaction open, and Tx2 stores the reference or fails
+    the attempt (docs/checkout.md). No dependency holds a session."""
     providers = request.app.state.payment_providers
     digest = request_hash(SCOPE, body.model_dump(mode="json"))
     now = datetime.now(UTC)

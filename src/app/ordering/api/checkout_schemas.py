@@ -118,7 +118,7 @@ class CheckoutOrderRead(BaseModel):
     delivery_fee_note: str | None
     delivery_address: CheckoutAddressRead | None
     payment_due: bool = Field(description="An unpaid cash order: pay the courier or at pickup.")
-    amount_due_cents: int | None = Field(description="Cash orders only: the live total.")
+    amount_due: PriceRead | None = Field(description="Cash orders only: the live total.")
     lines: list[CheckoutLineRead]
 
 
@@ -177,7 +177,7 @@ class CheckoutRead(BaseModel):
                     else None
                 ),
                 payment_due=cash,
-                amount_due_cents=amount_due_cents(placed.lines) if cash else None,
+                amount_due=price(amount_due_cents(placed.lines)) if cash else None,
                 lines=[
                     CheckoutLineRead(
                         id=line.id,
