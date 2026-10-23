@@ -10,12 +10,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ordering.public import lock_order_for_change
 from app.payments.domain.exceptions import (
+    CaptureRecordRefusedError,
     ManualConfirmRefusedError,
     PaymentNotFoundError,
     PaymentReferenceMismatchError,
 )
-from app.payments.domain.manual import ConfirmRefusal, confirm_refusal
-from app.payments.domain.outcome import Outcome, ProviderResult
+from app.payments.domain.manual import (
+    CaptureRefusal,
+    ConfirmRefusal,
+    capture_refusal,
+    confirm_refusal,
+)
+from app.payments.domain.outcome import REACHED_PAID, Outcome, ProviderResult
 from app.payments.infrastructure.payments import SqlPaymentStore
 from app.payments.infrastructure.verification import (
     Providers,
@@ -94,6 +100,70 @@ async def confirm_payment_manually(
             "reason": reason,
             "outcome": outcome.value,
             "attempt_status_before": payment.status.value,
+            "events_marked_processed": marked,
+        },
+        request_id=request_id,
+        ip_hash=ip_hash,
+    )
+    return outcome
+
+
+async def record_capture_manually(
+    session: AsyncSession,
+    providers: Providers,
+    payment_id: UUID,
+    *,
+    admin_id: UUID,
+    amount_cents: int,
+    currency: str,
+    dashboard_reference: str,
+    reason: str,
+    request_id: str | None = None,
+    ip_hash: str | None = None,
+) -> Outcome:
+    """VS-024 Q2 / VS-030 Q5: a capture the dashboard shows and no status API can report,
+    whose amount or currency differs from the attempt, recorded as a late capture through
+    `apply_result`, so the alert and the refund obligation come with it."""
+    store = SqlPaymentStore(session)
+    seen = await store.get(payment_id)  # unlocked: the provider, state and amount
+    if seen is None:
+        raise PaymentNotFoundError(f"payment {payment_id} does not exist")
+    refusal = capture_refusal(
+        provider=seen.provider,
+        capability=capability(providers, seen.provider.value),
+        reached_paid=seen.status in REACHED_PAID,
+        late_captured=seen.late_captured_at is not None,
+        payment_amount_cents=seen.amount_cents,
+        typed_amount_cents=amount_cents,
+        typed_currency=currency,
+    )
+    if refusal is not None:
+        raise CaptureRecordRefusedError(refusal)
+    outcome = await apply_provider_result(
+        session,
+        payment_id,
+        ProviderResult("paid", amount_cents, currency),
+        source="manual",
+        actor_user_id=admin_id,
+    )
+    if outcome not in (Outcome.LATE_CAPTURE, Outcome.LATE_CAPTURE_AND_FAIL):
+        raise CaptureRecordRefusedError(CaptureRefusal.ALREADY_LATE_CAPTURED)  # moved meanwhile
+    marked = await SqlWebhookEventStore(session).mark_processed_for_payment(
+        payment_id, at=datetime.now(UTC)
+    )
+    await SqlAuditWriter(session).record(
+        actor_user_id=admin_id,
+        action="payment.capture_recorded",
+        entity_type="payment",
+        entity_id=payment_id,
+        after_data={
+            "order_id": str(seen.order_id),
+            "typed_amount_cents": amount_cents,
+            "typed_currency": currency,
+            "dashboard_reference": dashboard_reference,
+            "reason": reason,
+            "outcome": outcome.value,
+            "attempt_status_before": seen.status.value,
             "events_marked_processed": marked,
         },
         request_id=request_id,

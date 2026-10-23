@@ -21,6 +21,7 @@ ROUTES = {
     ("post", "/api/v1/admin/orders/{order_id}/chargebacks"),
     ("get", "/api/v1/admin/orders/{order_id}/chargebacks"),
     ("get", "/api/v1/admin/chargebacks/{chargeback_id}"),
+    ("post", "/api/v1/admin/payments/{payment_id}/record-capture"),
 }
 
 

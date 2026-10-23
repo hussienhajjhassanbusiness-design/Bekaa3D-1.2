@@ -7976,6 +7976,73 @@
         "title": "ReconcileQueued",
         "type": "object"
       },
+      "RecordCaptureRead": {
+        "properties": {
+          "outcome": {
+            "$ref": "#/components/schemas/Outcome"
+          },
+          "payment": {
+            "$ref": "#/components/schemas/PaymentSummary"
+          },
+          "refund_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The late-capture obligation it created.",
+            "title": "Refund Id"
+          }
+        },
+        "required": [
+          "outcome",
+          "payment",
+          "refund_id"
+        ],
+        "title": "RecordCaptureRead",
+        "type": "object"
+      },
+      "RecordCaptureRequest": {
+        "additionalProperties": false,
+        "description": "What the dashboard shows captured, when it differs from the attempt (VS-030 Q5).",
+        "properties": {
+          "captured_amount_cents": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 1000000000.0,
+            "title": "Captured Amount Cents",
+            "type": "integer"
+          },
+          "captured_currency": {
+            "pattern": "^[A-Z]{3}$",
+            "title": "Captured Currency",
+            "type": "string"
+          },
+          "dashboard_reference": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Dashboard Reference",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 10,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "captured_amount_cents",
+          "captured_currency",
+          "dashboard_reference",
+          "reason"
+        ],
+        "title": "RecordCaptureRequest",
+        "type": "object"
+      },
       "RefundCreate": {
         "additionalProperties": false,
         "properties": {
@@ -15485,6 +15552,159 @@
           }
         ],
         "summary": "Ask the provider about a payment, after answering 202",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/payments/{payment_id}/record-capture": {
+      "post": {
+        "description": "A late capture plus its refund obligation (VS-024 Q2, VS-030 Q5): the admin then pays\nit back in the dashboard and settles it. A mistaken one is voided.",
+        "operationId": "record_capture_api_v1_admin_payments__payment_id__record_capture_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "payment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Payment Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "8-255 characters of [A-Za-z0-9._:-]; one key per intended refund.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "description": "8-255 characters of [A-Za-z0-9._:-]; one key per intended refund.",
+              "pattern": "^[A-Za-z0-9._:-]{8,255}$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordCaptureRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordCaptureRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "MALFORMED_REQUEST: the body is not valid JSON."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "AUTH_REQUIRED, or MFA_REQUIRED for an administrator."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "CSRF_INVALID."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "NOT_FOUND: no such payment (customers always get this)."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "MANUAL_CONFIRMATION_NOT_ALLOWED (the provider has a status API), INVALID_STATE_TRANSITION (`reason`: `cash_payment`, `already_paid`, `already_late_captured`, `use_confirm` for a matching amount), IDEMPOTENCY_KEY_CONFLICT or IDEMPOTENCY_REQUEST_IN_PROGRESS."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "VALIDATION_ERROR."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "RATE_LIMITED: this action's per-administrator hourly limit."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the database or Redis is unreachable; retry later."
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Record a capture the dashboard shows but the attempt's amount does not match",
         "tags": [
           "admin",
           "admin"

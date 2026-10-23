@@ -130,3 +130,11 @@ class ChargebackAllocationInvalidError(PaymentsDomainError):
         super().__init__("chargeback items exceed the available balance")
         self.lines, self.payment_cents = lines, payment_cents
         self.chargeable_cents = chargeable_cents
+
+
+class CaptureRecordRefusedError(PaymentsDomainError):
+    """A `CaptureRefusal` (VS-030 plan 3.6); nothing written."""
+
+    def __init__(self, refusal: StrEnum) -> None:
+        super().__init__(refusal.value)
+        self.refusal = refusal
