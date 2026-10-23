@@ -20,6 +20,8 @@ class AlertKind(StrEnum):
     PROVIDER_NOT_CONFIGURED = "provider_not_configured"
     REFERENCE_UNKNOWN = "reference_unknown"
     REFUND_INTEGRITY = "refund_integrity"  # VS-030 Q-2: order total != its lines
+    CHARGEBACK = "chargeback"  # VS-030: every chargeback recorded
+    CHARGEBACK_EXCESS = "chargeback_excess"  # the bank took more than was left to refund
 
 
 # What an admin needs to act, and nothing else: no redirect URL, provider reference or
@@ -33,6 +35,10 @@ DETAIL_KEYS = frozenset(
         "captured_amount_cents",
         "captured_currency",
         "expected_amount_cents",
+        "chargeback_id",
+        "charged_cents",
+        "applied_cents",
+        "excess_cents",
     }
 )
 
@@ -58,6 +64,11 @@ _REPEAT = {
     AlertKind.REFUND_INTEGRITY: ALERT_REPEAT_PER_PAYMENT,
     AlertKind.PROVIDER_UNREACHABLE: ALERT_REPEAT_PER_PROVIDER,
 }
+
+
+# Each chargeback is its own event, so its alert is never folded into an earlier one.
+EVERY_TIME = timedelta(0)
+_REPEAT |= {AlertKind.CHARGEBACK: EVERY_TIME, AlertKind.CHARGEBACK_EXCESS: EVERY_TIME}
 
 
 def repeat_window(kind: AlertKind) -> timedelta | None:

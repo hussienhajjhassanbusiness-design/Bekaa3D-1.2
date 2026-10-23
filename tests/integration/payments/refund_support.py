@@ -224,3 +224,40 @@ async def payment_of(engine: AsyncEngine, order_id: uuid.UUID) -> uuid.UUID:
         )
     assert isinstance(found, uuid.UUID)
     return found
+
+
+def chargeback(
+    client: TestClient,
+    order_id: uuid.UUID,
+    payment_id: uuid.UUID,
+    charged_cents: int,
+    items: list[tuple[uuid.UUID, int]] | None = None,
+    *,
+    dispute: str | None = None,
+    idempotency_key: str | None = None,
+) -> httpx.Response:
+    response: httpx.Response = client.post(
+        f"{ADMIN}/orders/{order_id}/chargebacks",
+        json={
+            "payment_id": str(payment_id),
+            "provider_dispute_reference": dispute or f"dp_{uuid.uuid4().hex}",
+            "charged_cents": charged_cents,
+            "items": [{"order_item_id": str(i), "amount_cents": a} for i, a in items or []],
+            "reason": "Bank dispute: not received.",
+            "received_at": "2026-10-20T10:00:00Z",
+        },
+        headers=csrf(client) | {"Idempotency-Key": idempotency_key or key()},
+    )
+    return response
+
+
+async def refund_rows(engine: AsyncEngine, order_id: uuid.UUID) -> list[Any]:
+    async with engine.connect() as conn:
+        rows = await conn.execute(
+            text(
+                "SELECT id, kind::text AS kind, status::text AS status, amount_cents, reason,"
+                " void_reason FROM refunds WHERE order_id = :o ORDER BY created_at, id"
+            ),
+            {"o": order_id},
+        )
+        return list(rows)

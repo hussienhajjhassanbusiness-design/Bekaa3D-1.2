@@ -14,10 +14,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ordering.application.ports import NO_REFUNDS, RefundFacts
 from app.payments.domain.enums import PaymentProvider, RefundKind, RefundStatus
-from app.payments.domain.exceptions import OrderLockRequiredError
 from app.payments.domain.outcome import REACHED_PAID
 from app.payments.domain.refunds import ItemFact, NewRefund, PaymentFact, Refund, facts_for
+from app.payments.infrastructure.chargebacks import SqlChargebackStore
 from app.payments.infrastructure.models import PaymentModel, RefundItemModel, RefundModel
+from app.payments.infrastructure.order_lock import require_order_lock
 
 _P, _R, _I = PaymentModel, RefundModel, RefundItemModel
 _COLUMNS = (
@@ -34,19 +35,6 @@ _COLUMNS = (
 
 # The predicate of `uq_refunds_one_live_late_capture`, so ON CONFLICT infers that index.
 _LIVE_LATE = text("kind = 'late_capture' AND status NOT IN ('failed', 'voided')")
-
-# xmax is this transaction after `FOR UPDATE`; xmin is, once this transaction updated it.
-_HOLDS_ORDER_LOCK = text(
-    "SELECT (xmax::text = pg_current_xact_id()::xid::text"
-    " OR xmin::text = pg_current_xact_id()::xid::text) FROM orders WHERE id = :o"
-)
-
-
-async def require_order_lock(session: AsyncSession, order_id: UUID) -> None:
-    """Refuse a refund-fact read made without `lock_order_for_change` in this transaction."""
-    held = (await session.execute(_HOLDS_ORDER_LOCK, {"o": order_id})).scalar()
-    if not held:
-        raise OrderLockRequiredError(f"order {order_id} is not locked by this transaction")
 
 
 async def _items(session: AsyncSession, refund_ids: list[UUID]) -> dict[UUID, list[ItemFact]]:
@@ -225,10 +213,25 @@ class SqlRefundStore:
         )
         return result.first() is not None
 
+    async def lock_open_for_payment(self, payment_id: UUID) -> list[Refund]:
+        open_ = (_R.status == RefundStatus.PENDING) | (
+            (_R.status == RefundStatus.FAILED) & _R.reissued_at.is_(None)
+        )
+        rows = (
+            await self._session.execute(
+                select(*_COLUMNS)
+                .where(_R.payment_id == payment_id, open_)
+                .order_by(_R.id)
+                .with_for_update()
+            )
+        ).all()
+        items = await _items(self._session, [row.id for row in rows])
+        return [_refund(row, items[row.id]) for row in rows]
+
 
 async def order_refund_facts(session: AsyncSession, order_id: UUID) -> RefundFacts:
     """`NO_REFUNDS` until a payment reached paid. The caller holds the order's lock (the
-    check refuses otherwise). Chargebacks join here in PR C."""
+    check refuses otherwise); chargebacks count with their applied amount."""
     await require_order_lock(session, order_id)
     paid = (
         await session.execute(
@@ -241,9 +244,11 @@ async def order_refund_facts(session: AsyncSession, order_id: UUID) -> RefundFac
         return NO_REFUNDS
     rows = await session.execute(select(*_COLUMNS).where(_R.order_id == order_id).order_by(_R.id))
     refunds = [_refund(row, []).fact() for row in rows]
+    chargebacks = await SqlChargebackStore(session).for_order(order_id)
     return facts_for(
         PaymentFact(paid.id, paid.provider, paid.status, paid.amount_cents, paid.currency),
         refunds,
+        chargebacks,
     )
 
 

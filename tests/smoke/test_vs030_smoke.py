@@ -18,6 +18,9 @@ ROUTES = {
     ("post", "/api/v1/admin/refunds/{refund_id}/fail"),
     ("post", "/api/v1/admin/refunds/{refund_id}/void"),
     ("post", "/api/v1/admin/refunds/{refund_id}/reissue"),
+    ("post", "/api/v1/admin/orders/{order_id}/chargebacks"),
+    ("get", "/api/v1/admin/orders/{order_id}/chargebacks"),
+    ("get", "/api/v1/admin/chargebacks/{chargeback_id}"),
 }
 
 

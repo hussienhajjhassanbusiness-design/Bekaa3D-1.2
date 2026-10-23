@@ -18,6 +18,7 @@ from app.core.rate_limit import enforce_rate_limit
 from app.core.security import hash_ip
 from app.fulfillment.api.admin_order_schemas import (
     AdminLineBalanceRead,
+    AdminOrderChargebackRead,
     AdminOrderDetail,
     AdminOrderPage,
     AdminOrderRefundRead,
@@ -53,7 +54,7 @@ from app.ordering.public import (
     admin_order_page,
     admin_orders,
 )
-from app.payments.public import CashAlreadyRecordedError, admin_refunds
+from app.payments.public import CashAlreadyRecordedError, admin_refunds, order_chargebacks
 from app.platform.public import SqlAuditWriter
 
 admin_router = APIRouter(prefix="/orders", tags=["admin"], route_class=AdminBoundaryRoute)
@@ -106,6 +107,17 @@ async def order_detail(session: AsyncSession, order_id: UUID) -> AdminOrderDetai
                     created_at=r.created_at,
                 )
                 for r in rows
+            ],
+            "chargebacks": [
+                AdminOrderChargebackRead(
+                    id=c.id,
+                    payment_id=c.payment_id,
+                    charged=PriceRead(amount_cents=c.charged_cents, currency=c.currency),
+                    applied_cents=c.applied_cents,
+                    excess_cents=c.excess_cents,
+                    received_at=c.received_at,
+                )
+                for c in await order_chargebacks(session, order_id)
             ],
             "refund_balance": AdminRefundBalanceRead(
                 lines=[

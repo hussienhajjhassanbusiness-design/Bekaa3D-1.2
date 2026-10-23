@@ -193,6 +193,17 @@ class AdminOrderRefundRead(BaseModel):
     created_at: datetime
 
 
+class AdminOrderChargebackRead(BaseModel):
+    """One chargeback of the order (VS-030); the full record is `GET /admin/chargebacks/{id}`."""
+
+    id: UUID
+    payment_id: UUID
+    charged: PriceRead
+    applied_cents: int
+    excess_cents: int
+    received_at: datetime
+
+
 class AdminLineBalanceRead(BaseModel):
     order_item_id: UUID
     balance_cents: int
@@ -233,6 +244,9 @@ class AdminOrderDetail(BaseModel):
     payments: list[AdminOrderPaymentRead] = Field(description="Newest first.")
     status_history: list[AdminHistoryRead] = Field(description="Oldest first.")
     refunds: list[AdminOrderRefundRead] = Field(default_factory=list, description="Oldest first.")
+    chargebacks: list[AdminOrderChargebackRead] = Field(
+        default_factory=list, description="Oldest first; never in the obligations queue."
+    )
     refund_balance: AdminRefundBalanceRead | None = Field(
         default=None, description="Null until a payment reached paid."
     )

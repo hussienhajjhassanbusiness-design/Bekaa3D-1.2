@@ -27,6 +27,7 @@ from app.payments.domain.limits import CHECKOUT_RATE_LIMIT, CHECKOUT_RATE_WINDOW
 from app.payments.domain.outcome import Outcome, ProviderResult
 from app.payments.domain.payments import OrderPaymentRow
 from app.payments.infrastructure.cash_payments import insert_cash_payment, order_payment_rows
+from app.payments.infrastructure.chargebacks import ChargebackRow, order_chargebacks
 from app.payments.infrastructure.manual import confirm_payment_manually
 from app.payments.infrastructure.order_payments import SqlOrderPaymentReader, SqlPaymentInFlight
 from app.payments.infrastructure.payments import SqlPaymentAttempts, SqlPaymentStore
@@ -51,6 +52,7 @@ __all__ = [
     "CHECKOUT_RATE_LIMIT",
     "CHECKOUT_RATE_WINDOW_SECONDS",
     "CashAlreadyRecordedError",
+    "ChargebackRow",
     "CreatePayment",
     "CreatedPayment",
     "CustomerRefund",
@@ -72,6 +74,7 @@ __all__ = [
     "fail_attempt",
     "insert_cash_payment",
     "limits",
+    "order_chargebacks",
     "order_payment_reader",
     "order_payment_rows",
     "order_refund_facts",

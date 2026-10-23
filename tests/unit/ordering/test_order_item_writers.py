@@ -24,6 +24,7 @@ KNOWN_LINE_STATUS_CALLERS = {
     ("ordering/public.py", "mark_order_paid"),
     ("ordering/public.py", "release_unpaid_order"),  # VS-024 plan 6.1
     ("ordering/public.py", "refund_lines"),  # VS-030: only under the orders lock
+    ("ordering/public.py", "cancel_lines_for_chargeback"),  # VS-030 D4: same
 }
 
 

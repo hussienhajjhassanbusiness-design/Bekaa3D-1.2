@@ -361,7 +361,9 @@ async def _idempotent(
     key: str,
     body: dict[str, Any],
     write: Callable[[], Awaitable[UUID]],
+    detail: Callable[[AsyncSession, UUID], Awaitable[dict[str, Any]]] | None = None,
 ) -> Response:
+    """Claim, write, then store the 201 (a refund's detail unless `detail` reads another)."""
     claims = idempotency_store(session)
     claim = await claims.claim(
         scope=scope,
@@ -375,7 +377,7 @@ async def _idempotent(
     if isinstance(claim, InProgress | Conflict):
         raise _claim_refusal(claim)
     refund_id = await write()
-    read = await _detail(session, refund_id)
+    read = await (detail or _detail)(session, refund_id)
     await claims.attach(claim.record_id, resource_id=refund_id)
     await claims.complete(claim.record_id, status_code=status.HTTP_201_CREATED, body=read)
     return JSONResponse(read, status_code=status.HTTP_201_CREATED)

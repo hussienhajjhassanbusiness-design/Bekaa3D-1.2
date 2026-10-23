@@ -106,3 +106,27 @@ class RefundRefusedError(PaymentsDomainError):
 
 class OrderLockRequiredError(PaymentsDomainError):
     """A refund fact read by a transaction that does not hold the order's row lock."""
+
+
+class ChargebackNotOnlineError(PaymentsDomainError):
+    """422 CHARGEBACK_NOT_ONLINE: a cash payment has no card network to charge it back."""
+
+
+class ChargebackDuplicateError(PaymentsDomainError):
+    """409 CHARGEBACK_DUPLICATE: this provider dispute reference is already recorded."""
+
+
+class ChargebackItemsForbiddenError(PaymentsDomainError):
+    """422 CHARGEBACK_ITEMS_FORBIDDEN: a late-captured attempt paid no line."""
+
+
+class ChargebackAllocationInvalidError(PaymentsDomainError):
+    """422 CHARGEBACK_ALLOCATION_INVALID: an item over its line's balance, or the items over
+    the payment's balance or over what the bank charged beyond the absorbed refunds."""
+
+    def __init__(
+        self, *, lines: dict[UUID, int], payment_cents: int, chargeable_cents: int
+    ) -> None:
+        super().__init__("chargeback items exceed the available balance")
+        self.lines, self.payment_cents = lines, payment_cents
+        self.chargeable_cents = chargeable_cents

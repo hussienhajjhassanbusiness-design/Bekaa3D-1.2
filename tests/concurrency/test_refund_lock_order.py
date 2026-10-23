@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.identity.domain.enums import UserRole
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
+from tests.concurrency.test_chargeback_races import charge
 from tests.concurrency.test_refund_races import World
 from tests.integration.deep_support import create_user
 from tests.integration.fulfillment.order_support import seed_physical_order
@@ -42,6 +43,8 @@ RANKS = [
     (re.compile(r"FROM refunds\b.*FOR UPDATE", re.S), 4, "refunds FOR UPDATE"),
     (re.compile(r"^\s*INSERT INTO refunds\b", re.S), 4, "INSERT refunds"),
     (re.compile(r"^\s*INSERT INTO refund_items\b", re.S), 4, "INSERT refund_items"),
+    (re.compile(r"^\s*INSERT INTO chargebacks\b", re.S), 5, "INSERT chargebacks"),
+    (re.compile(r"^\s*INSERT INTO chargeback_items\b", re.S), 5, "INSERT chargeback_items"),
     (re.compile(r"^\s*UPDATE refunds\b", re.S), 4, "UPDATE refunds (held)"),
     (re.compile(r"^\s*UPDATE order_items\b", re.S), 2, "UPDATE order_items (held)"),
     (re.compile(r"^\s*UPDATE payments\b", re.S), 3, "UPDATE payments (held)"),
@@ -136,6 +139,24 @@ async def test_lo2_the_late_capture_paths_lock_in_rank_order(
         assert ranks == sorted(ranks), (name, trace)
         assert ranks[:3] == [1, 2, 3], (name, trace)
     assert (4, "INSERT refunds") in traces["late capture"]
+
+
+async def test_lo2_the_chargeback_path_locks_in_rank_order(
+    world: World, db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """Plan 8.1 path 6: 1, 2, 3, the open refunds FOR UPDATE (4), their voids, then 5."""
+    order = await paid_online(db_session, stl=None, physical=("delivered",))
+    line = order.physical[0]
+    payment = await payment_of(db_engine, order.order_id)
+    await world.create(order.order_id, [(line, 1000)])()
+    with recorded(db_engine) as statements:
+        result = await charge(world, order, payment, 600, [])()
+    trace = lock_trace(statements)
+    print("LO2 chargeback: " + " -> ".join(label for _, label in trace))
+    assert result == "charged:600:0"
+    ranks = acquisitions(trace)
+    assert ranks == sorted(ranks), trace
+    assert ranks[:4] == [1, 2, 3, 4] and ranks[-1] == 5, trace
 
 
 async def test_lo3_a_random_mixed_workload_never_deadlocks(

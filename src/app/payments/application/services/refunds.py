@@ -10,7 +10,14 @@ from uuid import UUID
 import structlog
 
 from app.ordering.public import LockedOrder, OrderItemStatus, OrderStatus
-from app.payments.application.ports import PaymentStore, RefundNotices, RefundOrders, RefundStore
+from app.payments.application.ports import (
+    ChargebackStore,
+    PaymentAlerts,
+    PaymentStore,
+    RefundNotices,
+    RefundOrders,
+    RefundStore,
+)
 from app.payments.domain.enums import RefundKind, RefundStatus
 from app.payments.domain.exceptions import (
     OrderNotPaidError,
@@ -50,6 +57,8 @@ class RefundDeps:
     refunds: RefundStore
     audit: AuditWriter
     notices: RefundNotices
+    chargebacks: ChargebackStore
+    alerts: PaymentAlerts
 
 
 @dataclass(frozen=True)
@@ -97,6 +106,7 @@ async def _lock(deps: RefundDeps, order_id: UUID, *, check_totals: bool = True) 
         ),
         payment=paid_fact,
         refunds=tuple(row.fact() for row in rows),
+        chargebacks=tuple(await deps.chargebacks.for_order(order_id)),
     )
     if check_totals:  # Q-2: nothing is written past a mismatch
         check_order_totals(ledger, order_currency=locked.order.currency)

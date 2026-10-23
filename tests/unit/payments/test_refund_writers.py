@@ -17,15 +17,19 @@ MODELS = {"RefundModel", "RefundItemModel", "ChargebackModel", "ChargebackItemMo
 KNOWN_WRITERS = {
     ("payments/infrastructure/refunds.py", "insert"),
     ("payments/infrastructure/refunds.py", "insert_late_capture"),
+    ("payments/infrastructure/chargebacks.py", "_insert"),  # rank 5, after the refunds
     ("payments/infrastructure/refunds.py", "_move"),
     ("payments/infrastructure/refunds.py", "void"),
     ("payments/infrastructure/refunds.py", "mark_reissued"),
 }
 # Store writes -> the use cases allowed to call them, each after `_lock` (orders first).
 STORE_WRITES = {"insert", "insert_late_capture", "settle", "fail", "void", "mark_reissued"}
+STORES = {"refunds", "chargebacks"}
 KNOWN_STORE_CALLERS = {
     "create_refund",
     "create_late_capture_refund",  # VS-024's Tx B holds ranks 1-3 (test below)
+    "record_chargeback",
+    "_void_and_remainders",  # called by record_chargeback after rank 4 (test below)
     "settle_refund",
     "fail_refund",
     "void_refund",
@@ -101,8 +105,8 @@ def _store_calls(function: ast.AST) -> set[str]:
         if isinstance(node, ast.Call)
         and isinstance(node.func, ast.Attribute)
         and (
-            (isinstance(node.func.value, ast.Attribute) and node.func.value.attr == "refunds")
-            or (isinstance(node.func.value, ast.Name) and node.func.value.id == "refunds")
+            (isinstance(node.func.value, ast.Attribute) and node.func.value.attr in STORES)
+            or (isinstance(node.func.value, ast.Name) and node.func.value.id in STORES)
         )
         and node.func.attr in STORE_WRITES
     }
@@ -178,3 +182,18 @@ def test_lo1_the_late_capture_sink_runs_after_the_order_and_payment_locks() -> N
         < _first_line(result, "_late_capture")
     )
     assert _first_line(late, "mark_late_capture") < _first_line(late, "late_capture_recorded")
+
+
+def test_lo1_a_chargeback_locks_orders_payments_open_refunds_then_inserts() -> None:
+    """Plan 8.1 path 6: ranks 1-2, 3, the refund reads, 4, then 5 (the chargeback INSERT)."""
+    path = SRC / "payments" / "application" / "services" / "chargebacks.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    record = next(f for f in _functions(tree) if f.name == "record_chargeback")
+    assert (
+        _first_line(record, "lock")
+        < _first_line(record, "lock_for_order")
+        < _first_line(record, "for_order")
+        < _first_line(record, "lock_open_for_payment")
+        < _first_line(record, "_void_and_remainders")
+        < _first_line(record, "insert")
+    )
