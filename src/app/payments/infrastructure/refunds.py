@@ -9,6 +9,7 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import insert, select, text, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ordering.application.ports import NO_REFUNDS, RefundFacts
@@ -30,6 +31,9 @@ _COLUMNS = (
     _R.currency,
     _R.reissued_at,
 )
+
+# The predicate of `uq_refunds_one_live_late_capture`, so ON CONFLICT infers that index.
+_LIVE_LATE = text("kind = 'late_capture' AND status NOT IN ('failed', 'voided')")
 
 # xmax is this transaction after `FOR UPDATE`; xmin is, once this transaction updated it.
 _HOLDS_ORDER_LOCK = text(
@@ -134,6 +138,26 @@ class SqlRefundStore:
                     for item in new.items
                 ],
             )
+        return refund_id
+
+    async def insert_late_capture(self, new: NewRefund) -> UUID | None:
+        query = (
+            pg_insert(_R)
+            .values(
+                order_id=new.order_id,
+                payment_id=new.payment_id,
+                payment_provider=new.provider,
+                kind=RefundKind.LATE_CAPTURE,
+                status=RefundStatus.PENDING,
+                amount_cents=new.amount_cents,
+                currency=new.currency,
+                reason=new.reason,
+                initiated_at=new.initiated_at,
+            )
+            .on_conflict_do_nothing(index_elements=[_R.payment_id], index_where=_LIVE_LATE)
+            .returning(_R.id)
+        )
+        refund_id: UUID | None = (await self._session.execute(query)).scalar_one_or_none()
         return refund_id
 
     async def _move(

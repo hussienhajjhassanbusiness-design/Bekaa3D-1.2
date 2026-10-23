@@ -15,7 +15,7 @@ from app.payments.domain.exceptions import (
     RefundExceedsAvailableError,
     RefundRequiresCancellationError,
 )
-from app.payments.domain.outcome import REACHED_PAID
+from app.payments.domain.outcome import REACHED_PAID, readable_currency
 
 S = OrderItemStatus
 # Only a physical line can be in these on a paid order (an STL line leaves `pending` when paid).
@@ -93,10 +93,45 @@ class NewRefund:
     approved_by: UUID | None
     initiated_at: datetime
     reissue_of_refund_id: UUID | None = None
+    late_amount_cents: int | None = None  # `late_capture` only: it has no items
 
     @property
     def amount_cents(self) -> int:
+        if self.late_amount_cents is not None:
+            return self.late_amount_cents
         return sum(item.amount_cents for item in self.items)
+
+
+NO_AMOUNT_NOTE = "provider reported no amount; check the dashboard"
+BAD_CURRENCY_NOTE = "provider currency unreadable; check the dashboard"
+
+
+@dataclass(frozen=True)
+class LateCaptureAmount:
+    amount_cents: int
+    currency: str
+    notes: tuple[str, ...]
+
+
+def late_capture_amount(
+    *,
+    captured_amount_cents: int | None,
+    captured_currency: str | None,
+    payment_amount_cents: int,
+    payment_currency: str,
+) -> LateCaptureAmount:
+    """Q6: what the provider captured, else the attempt's amount (flagged); its currency as
+    reported, never converted, else the attempt's (flagged). The caller skips amounts <= 0."""
+    notes: list[str] = []
+    amount = captured_amount_cents
+    if amount is None:
+        amount = payment_amount_cents
+        notes.append(NO_AMOUNT_NOTE)
+    currency = readable_currency(captured_currency or payment_currency)
+    if currency is None:
+        currency = payment_currency
+        notes.append(BAD_CURRENCY_NOTE)
+    return LateCaptureAmount(amount, currency, tuple(notes))
 
 
 @dataclass(frozen=True)

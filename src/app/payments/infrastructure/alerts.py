@@ -13,8 +13,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.engagement.public import NotificationType, create_notification
 from app.identity.public import active_administrator_contacts
 from app.ordering.public import LockedOrder
+from app.payments.application.services.refunds import create_late_capture_refund
 from app.payments.domain.alerts import AlertKind, alert_payload, repeat_window
 from app.payments.domain.payments import Payment
+from app.payments.infrastructure.refunds import SqlRefundStore
 from app.platform.public import SqlAuditWriter, SqlOutboxWriter
 
 logger = structlog.get_logger()
@@ -128,12 +130,12 @@ class SqlPaymentAlerts:
         return failed
 
 
-class SqlLateCaptureAlerts:
-    """VS-024's `LateCaptureSink`: one `late_capture` alert per payment, ever (3.5).
-    VS-030 adds the refund obligation beside it."""
+class SqlLateCaptureRefunds:
+    """VS-024's `LateCaptureSink`: one `late_capture` alert per payment, ever (3.5), then
+    VS-030's refund obligation for what was captured (plan 3.5, D10), in the same Tx B."""
 
-    def __init__(self, alerts: SqlPaymentAlerts) -> None:
-        self._alerts = alerts
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
 
     async def late_capture_recorded(
         self,
@@ -145,7 +147,7 @@ class SqlLateCaptureAlerts:
         reason: str,
         at: datetime,
     ) -> None:
-        await self._alerts.raise_alert(
+        await SqlPaymentAlerts(self._session).raise_alert(
             AlertKind.LATE_CAPTURE,
             payment_id=payment.id,
             order_id=locked.order.id,
@@ -158,6 +160,16 @@ class SqlLateCaptureAlerts:
                 "expected_amount_cents": payment.amount_cents,
             },
             dedupe_window=None,
+        )
+        await create_late_capture_refund(
+            SqlRefundStore(self._session),
+            SqlAuditWriter(self._session),
+            locked,
+            payment,
+            captured_amount_cents=captured_amount_cents,
+            captured_currency=captured_currency,
+            reason=reason,
+            at=at,
         )
 
 

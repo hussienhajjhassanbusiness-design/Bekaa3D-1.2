@@ -1,5 +1,6 @@
 """The refund rules L0-L8 and the state machine (VS-030 plan 3.2, 6.1 U3 and U6-U10, U16)."""
 
+from datetime import UTC, datetime
 from itertools import product
 from uuid import UUID, uuid4
 
@@ -15,12 +16,16 @@ from app.payments.domain.exceptions import (
     RefundExceedsAvailableError,
     RefundRequiresCancellationError,
 )
+from app.payments.domain.outcome import ProviderResult, stored_capture
 from app.payments.domain.refunds import (
+    BAD_CURRENCY_NOTE,
+    NO_AMOUNT_NOTE,
     UNFINISHED_PHYSICAL,
     ChargebackFact,
     ItemFact,
     Ledger,
     LineFact,
+    NewRefund,
     PaymentFact,
     RefundAction,
     RefundFact,
@@ -28,6 +33,7 @@ from app.payments.domain.refunds import (
     check_order_totals,
     check_request,
     is_counted,
+    late_capture_amount,
     line_balances,
     lines_becoming_refunded,
     paid_payment,
@@ -482,3 +488,64 @@ def test_a_voided_refund_is_never_reissued() -> None:
             R.VOIDED, RefundAction.REISSUE, reissued=reissued, line_refunded=line_refunded
         )
         assert step.refusal is RefundRefusal.NOT_FAILED
+
+
+# --- Late capture (plan 3.5, Q6) ----------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("captured", "currency", "expected"),
+    [
+        (1100, "USD", (1100, "USD", ())),  # an overpayment is the obligation, uncapped
+        (900, None, (900, "USD", ())),
+        (None, "USD", (1000, "USD", (NO_AMOUNT_NOTE,))),
+        (5000, "LBP", (5000, "LBP", ())),  # never converted
+        (5000, " lbp ", (5000, "LBP", ())),
+        (5000, "L$", (5000, "USD", (BAD_CURRENCY_NOTE,))),
+        (None, "dollars", (1000, "USD", (NO_AMOUNT_NOTE, BAD_CURRENCY_NOTE))),
+        (0, "USD", (0, "USD", ())),  # the caller skips it
+    ],
+)
+def test_the_late_capture_obligation_is_what_was_captured(
+    captured: int | None, currency: str | None, expected: tuple[int, str, tuple[str, ...]]
+) -> None:
+    got = late_capture_amount(
+        captured_amount_cents=captured,
+        captured_currency=currency,
+        payment_amount_cents=1000,
+        payment_currency="USD",
+    )
+    assert (got.amount_cents, got.currency, got.notes) == expected
+
+
+def test_a_late_capture_refund_carries_its_amount_without_items() -> None:
+    new = NewRefund(
+        order_id=uuid4(),
+        payment_id=PAY_ID,
+        provider=PaymentProvider.MOCK,
+        kind=RefundKind.LATE_CAPTURE,
+        items=(),
+        currency="USD",
+        reason="late capture: attempt_not_live",
+        requested_by=None,
+        approved_by=None,
+        initiated_at=datetime.now(UTC),
+        late_amount_cents=1100,
+    )
+    assert new.amount_cents == 1100
+
+
+@pytest.mark.parametrize(
+    ("amount", "currency", "stored"),
+    [
+        (900, "USD", (900, "USD")),
+        (900, " eur", (900, "EUR")),
+        (900, "L$", (900, None)),
+        (None, "USD", (None, None)),  # never a currency without an amount
+        (-5, "USD", (None, None)),
+    ],
+)
+def test_the_payment_row_stores_only_what_its_check_holds(
+    amount: int | None, currency: str | None, stored: tuple[int | None, str | None]
+) -> None:
+    assert stored_capture(ProviderResult("paid", amount, currency)) == stored

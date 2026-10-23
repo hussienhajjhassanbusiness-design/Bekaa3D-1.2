@@ -285,6 +285,10 @@ class RefundStore(Protocol):
 
     async def insert(self, new: NewRefund) -> UUID: ...
 
+    async def insert_late_capture(self, new: NewRefund) -> UUID | None:
+        """None when the payment already has a live one (`uq_refunds_one_live_late_capture`)."""
+        ...
+
     async def settle(
         self, refund_id: UUID, *, by: UUID, at: datetime, reference: str | None, note: str | None
     ) -> bool:

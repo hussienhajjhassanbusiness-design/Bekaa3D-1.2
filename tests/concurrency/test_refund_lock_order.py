@@ -19,7 +19,14 @@ from app.identity.domain.enums import UserRole
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
 from tests.concurrency.test_refund_races import World
 from tests.integration.deep_support import create_user
-from tests.integration.payments.refund_support import Paid, paid_online
+from tests.integration.fulfillment.order_support import seed_physical_order
+from tests.integration.payments.refund_support import (
+    Paid,
+    late_capture,
+    late_refunds,
+    paid_online,
+    payment_of,
+)
 
 pytestmark = [
     pytest.mark.integration,
@@ -102,6 +109,33 @@ async def test_lo2_every_refund_path_locks_in_rank_order(
         print(f"LO2 {name}: " + " -> ".join(label for _, label in trace))
         assert ranks == sorted(ranks), (name, trace)
         assert ranks[:3] == [1, 2, 3], (name, trace)
+
+
+async def test_lo2_the_late_capture_paths_lock_in_rank_order(
+    world: World, db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """Plan 8.1 path 5, then the admin's steps on its refund (no paid payment needed)."""
+    order = await seed_physical_order(db_session, payment_method="online", payment_status="expired")
+    payment_id = await payment_of(db_engine, order.order_id)
+    traces: dict[str, list[tuple[int, str]]] = {}
+    with recorded(db_engine) as statements:
+        await late_capture(db_engine, payment_id, 1000)
+    traces["late capture"] = lock_trace(statements)
+    (row,) = await late_refunds(db_engine, payment_id)
+    for name in ("fail", "reissue"):
+        with recorded(db_engine) as statements:
+            result = await world.action(name, row.id)()
+        traces[name] = lock_trace(statements)
+    twin = uuid.UUID(result.split(":", 1)[1])
+    with recorded(db_engine) as statements:
+        await world.action("settle", twin)()
+    traces["settle"] = lock_trace(statements)
+    for name, trace in traces.items():
+        ranks = acquisitions(trace)
+        print(f"LO2 {name}: " + " -> ".join(label for _, label in trace))
+        assert ranks == sorted(ranks), (name, trace)
+        assert ranks[:3] == [1, 2, 3], (name, trace)
+    assert (4, "INSERT refunds") in traces["late capture"]
 
 
 async def test_lo3_a_random_mixed_workload_never_deadlocks(

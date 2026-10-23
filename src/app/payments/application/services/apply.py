@@ -18,7 +18,7 @@ from app.payments.application.ports import (
 )
 from app.payments.domain.enums import PaymentStatus
 from app.payments.domain.exceptions import PaymentNotFoundError
-from app.payments.domain.outcome import LIVE, Outcome, ProviderResult, decide
+from app.payments.domain.outcome import LIVE, Outcome, ProviderResult, decide, stored_capture
 from app.payments.domain.payments import Payment
 from app.platform.application.ports import AuditWriter
 
@@ -169,12 +169,13 @@ async def _late_capture(
         reason = "order_cancelled"
     else:
         reason = "amount_mismatch"
+    amount, currency = stored_capture(result)  # a malformed report must not roll back Tx B
     await payments.mark_late_capture(
         payment.id,
         at=at,
         fail=outcome is Outcome.LATE_CAPTURE_AND_FAIL,
-        captured_amount_cents=result.captured_amount_cents,
-        captured_currency=result.currency,
+        captured_amount_cents=amount,
+        captured_currency=currency,
     )
     details: dict[str, Any] = {
         "order_id": str(order.id),
@@ -200,8 +201,8 @@ async def _late_capture(
         await late_captures.late_capture_recorded(
             locked,
             payment,
-            captured_amount_cents=result.captured_amount_cents,
-            captured_currency=result.currency,
+            captured_amount_cents=amount,
+            captured_currency=result.currency,  # raw, so an unreadable one is flagged (Q6)
             reason=reason,
             at=at,
         )

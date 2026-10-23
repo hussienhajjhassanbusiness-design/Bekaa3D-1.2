@@ -55,7 +55,8 @@ def writes(statements: list[str]) -> list[str]:
         (ProviderResult("expired", None, None), ["UPDATE payments", "INSERT audit_logs"]),
         (
             ProviderResult("paid", 900, "USD"),
-            ["UPDATE payments", "INSERT audit_logs", ALERT],
+            # VS-030 D10: the refund obligation, and its audit row, after the alert.
+            ["UPDATE payments", "INSERT audit_logs", ALERT, "INSERT refunds", "INSERT audit_logs"],
         ),
     ],
     ids=["paid", "expiry", "late-capture"],
@@ -82,7 +83,14 @@ async def test_apply_locks_orders_then_lines_then_payments_and_nothing_else(
     print(f"\nAPPLY {result.state}/{result.captured_amount_cents}", *order, sep="\n  ")
     print("  writes:", writes(statements))
     paid = writes(statements)[1:2] == ["UPDATE order_items"]
-    assert tables(order) == ["orders", "order_items", "payments", *(["offers"] if paid else [])]
+    late = "INSERT refunds" in writes(statements)  # VS-030 path 5: rank 4, after payments
+    assert tables(order) == [
+        "orders",
+        "order_items",
+        "payments",
+        *(["offers"] if paid else []),
+        *(["refunds"] if late else []),
+    ]
     assert order[1].endswith("ORDER BY order_items.id FOR UPDATE")
     assert writes(statements) == expected_writes
     if paid:

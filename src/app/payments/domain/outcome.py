@@ -1,6 +1,7 @@
 """What one verified provider result does to a payment (SRS 9.2, 20.1; ADR-024 d15).
 Pure: the decision table is the whole of payment-state logic; writers only apply it."""
 
+import re
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Literal
@@ -23,6 +24,24 @@ class ProviderResult:
     state: ProviderState
     captured_amount_cents: int | None
     currency: str | None
+
+
+_CURRENCY = re.compile(r"[A-Z]{3}")
+
+
+def readable_currency(raw: str | None) -> str | None:
+    """An ISO-shaped code, uppercased; anything else is unknown."""
+    code = (raw or "").strip().upper()
+    return code if _CURRENCY.fullmatch(code) else None
+
+
+def stored_capture(result: ProviderResult) -> tuple[int | None, str | None]:
+    """What `ck_payments_captured_shape` can hold of a capture: a negative amount is
+    unknown, and an unknown amount stores no currency (VS-030 Q6 default)."""
+    amount = result.captured_amount_cents
+    if amount is None or amount < 0:
+        return None, None
+    return amount, readable_currency(result.currency)
 
 
 class Outcome(StrEnum):
