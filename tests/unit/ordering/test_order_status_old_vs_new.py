@@ -1,17 +1,24 @@
 """U15: the old and new `derive_order_status` over every input (VS-030 plan 3.1a, ADR-042).
-The old function is frozen below, verbatim from `order_status.py:35-55` at `326aa40`."""
+The old function is frozen below, verbatim from `order_status.py:35-55` at `326aa40`.
+Only D-a and D-c may be reachable; D-b, D-d and D-e must break an invariant."""
 
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from itertools import combinations_with_replacement, product
+
+import pytest
 
 from app.ordering.domain.enums import OrderItemStatus, OrderStatus, PaymentMethod
 from app.ordering.domain.order_status import (
     TERMINAL_LINE_STATES,
     LineState,
     OrderStatusInputs,
+    RefundFacts,
     derive_order_status,
 )
+
+S = OrderItemStatus
+ONLINE = PaymentMethod.ONLINE
 
 
 @dataclass(frozen=True)
@@ -74,8 +81,7 @@ class Case:
                 self.cancelled_at_set,
                 self.paid,
                 tuple(LineState(s) for s in self.states),
-                refunds_cover_paid=self.c,
-                refund_present=self.p or self.o,
+                refunds=RefundFacts(covers_paid=self.c, present=self.p, owed=self.o),
             )
         )
 
@@ -129,12 +135,87 @@ def test_the_domain_is_every_combination() -> None:
     assert sum(1 for _ in every_case()) == 23_232
 
 
-def test_the_frozen_copy_matches_the_function_before_the_reorder() -> None:
-    """Removed with the reorder: proves the frozen copy is the shipped VS-023 function."""
-    differing = [case for case in every_case() if case.old() is not case.new()]
-    assert differing == []
-
-
 def test_the_classes_are_disjoint() -> None:
     for case in every_case():
         assert sum(predicate(case) for predicate in CLASSES.values()) <= 1, case
+
+
+INTENDED = {"D-a", "D-c"}  # PR #8 cases B and A; the rest are unreachable (I1-I3)
+
+
+def _class_of(case: Case) -> str | None:
+    return next((name for name, predicate in CLASSES.items() if predicate(case)), None)
+
+
+def test_old_and_new_differ_exactly_on_the_five_classes() -> None:
+    counts = dict.fromkeys(CLASSES, 0)
+    for case in every_case():
+        differs = case.old() is not case.new()
+        name = _class_of(case)
+        assert differs is (name is not None), (case, case.old(), case.new())
+        if name is not None:
+            counts[name] += 1
+            assert case.new() is OrderStatus.PARTIALLY_REFUNDED or name == "D-e", case
+    print("U15 per-class counts:", counts)  # for the PR description
+    assert all(counts.values()), counts
+
+
+def test_only_the_intended_differences_are_reachable() -> None:
+    """D-b, D-d, D-e never consistent; D-c always; D-a exactly when not covered (I1)."""
+    reachable = dict.fromkeys(CLASSES, 0)
+    for case in every_case():
+        name = _class_of(case)
+        if name is None:
+            continue
+        expected = name == "D-c" or (name == "D-a" and not case.c)
+        assert consistent(case) is expected, (name, case)
+        reachable[name] += consistent(case)
+    assert {name for name, n in reachable.items() if n} == INTENDED, reachable
+
+
+@pytest.mark.parametrize(
+    ("label", "case", "old", "new", "can_happen"),
+    [
+        (
+            "PR #8 case A (D-c): full refund failed, owed",
+            Case(ONLINE, False, True, (S.REFUNDED,), c=False, p=False, o=True),
+            OrderStatus.REFUNDED,
+            OrderStatus.PARTIALLY_REFUNDED,
+            True,
+        ),
+        (
+            "PR #8 case B (D-a): every line cancelled, cancellation refund failed",
+            Case(ONLINE, False, True, (S.CANCELLED, S.CANCELLED), c=False, p=False, o=True),
+            OrderStatus.CANCELLED,
+            OrderStatus.PARTIALLY_REFUNDED,
+            True,
+        ),
+        (
+            # Cannot happen (I2, I3): a refunded line exists only through a refund that
+            # covers it. This was test_order_status's old "paid-all-lines-refunded" input.
+            "cannot happen (D-e): every line refunded, no refund facts at all",
+            Case(ONLINE, False, True, (S.REFUNDED,), c=False, p=False, o=False),
+            OrderStatus.REFUNDED,
+            OrderStatus.COMPLETED,
+            False,
+        ),
+        (
+            "after the reissue: case A covered again",
+            Case(ONLINE, False, True, (S.REFUNDED,), c=True, p=True, o=False),
+            OrderStatus.REFUNDED,
+            OrderStatus.REFUNDED,
+            True,
+        ),
+        (
+            "after the reissue: case B cancelled again",
+            Case(ONLINE, False, True, (S.CANCELLED, S.CANCELLED), c=True, p=True, o=False),
+            OrderStatus.CANCELLED,
+            OrderStatus.CANCELLED,
+            True,
+        ),
+    ],
+)
+def test_named_rows(
+    label: str, case: Case, old: OrderStatus, new: OrderStatus, can_happen: bool
+) -> None:
+    assert (case.old(), case.new(), consistent(case)) == (old, new, can_happen), label

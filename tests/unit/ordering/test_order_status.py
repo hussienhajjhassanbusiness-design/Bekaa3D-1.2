@@ -1,4 +1,4 @@
-"""derive_order_status: every SRS 20.2 branch, in the SRS order (VS-023 plan 3.1, 6.1)."""
+"""derive_order_status: every SRS 20.2 branch, in the ADR-042 order (VS-030 plan 3.1, U1)."""
 
 import pytest
 from hypothesis import given, settings
@@ -74,17 +74,17 @@ CASES = [
         OrderStatus.IN_PROGRESS,
     ),
     ("paid-returned-is-not-terminal", inputs(CASH, S.RETURNED, paid=True), OrderStatus.IN_PROGRESS),
-    # The PR #8 review cases (vertical-slice-plan.md:820): pinned to SRS 20.2 as written.
-    # A reorder is a VS-030 decision (ADR plus co-developer confirmation); change these then.
+    # The PR #8 review cases (vertical-slice-plan.md:820), flipped by ADR-042: money still
+    # owed never reads refunded (D-c, case A) or cancelled (D-a, case B).
     (
         "pr8-case-a-failed-full-refund-owed",
         inputs(ONLINE, S.REFUNDED, paid=True, owed=True),
-        OrderStatus.REFUNDED,
+        OrderStatus.PARTIALLY_REFUNDED,
     ),
     (
         "pr8-case-b-all-cancelled-refund-owed",
         inputs(ONLINE, S.CANCELLED, S.CANCELLED, paid=True, owed=True),
-        OrderStatus.CANCELLED,
+        OrderStatus.PARTIALLY_REFUNDED,
     ),
 ]
 

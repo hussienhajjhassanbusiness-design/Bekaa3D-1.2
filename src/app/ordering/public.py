@@ -53,7 +53,12 @@ from app.ordering.domain.line_transitions import (
     available_targets,
     line_transition_refusal,
 )
-from app.ordering.domain.order_status import LineState, OrderStatusInputs, derive_order_status
+from app.ordering.domain.order_status import (
+    LineState,
+    OrderStatusInputs,
+    RefundFacts,
+    derive_order_status,
+)
 from app.ordering.domain.orders import Order, OrderLine, StatusChange, StlDeliveryRow
 from app.ordering.domain.payment_recovery import (
     ReleaseRefusal,
@@ -237,7 +242,9 @@ def status_inputs_for(
         cancelled_at_set=locked.order.cancelled_at is not None,
         payment_reached_paid=reached_paid,
         lines=lines,
-        refund_present=reached_paid and locked.order.status is OrderStatus.PARTIALLY_REFUNDED,
+        refunds=RefundFacts(
+            present=reached_paid and locked.order.status is OrderStatus.PARTIALLY_REFUNDED
+        ),
     )
 
 
