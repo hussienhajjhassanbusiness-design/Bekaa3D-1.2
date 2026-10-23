@@ -31,7 +31,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 | VS-026 | Address book | VS-008 | Done |
 | VS-027 | Shipping zones | — | Removed (ADR-024) |
 | VS-028 | Physical checkout: delivery, pickup, payment method, dispatch estimate | VS-023, VS-024, VS-026 | Done |
-| VS-029 | Admin order queue, fulfillment and cash handover | VS-028, VS-023b, VS-024, VS-025 | Not started |
+| VS-029 | Admin order queue, fulfillment and cash handover | VS-028, VS-023b, VS-024, VS-025 | Done |
 | VS-030 | Refunds and settlement | VS-029, VS-024 | Not started |
 | VS-031 | Cancellation and returns | VS-030 | Not started |
 | VS-033 | Contact form and captcha | VS-005 | Done |
@@ -740,7 +740,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 - **Owner decision 2026-10-19 (ADR-033): `amount_due_cents`.** Unpaid cash orders expose `amount_due_cents` (with the order's currency): the sum of `line_total_cents` over live (not cancelled) lines, the amount BR-055 / BR-143 require at handover. Null when `payment_due` is false. Add it to `OrderSummaryRead` and `OrderDetailRead` (`src/app/ordering/api/order_schemas.py`, VS-025) and to the cash `CheckoutRead`; test it after one line is cancelled. VS-029's handover should compute its expected amount with the same function. The API shows it as `amount_due`, a `PriceRead` (review follow-up 2026-10-22, ADR-038 d21).
 
 ## VS-029 — Admin order queue, fulfillment and cash handover
-**Status:** Not started
+**Status:** Done (2026-10-23; [ADR-040](adr/ADR-040-admin-order-queue-fulfillment-and-cash-handover.md), [`fulfillment.md`](fulfillment.md))
 **Depends on:** VS-028, VS-023b, VS-024, VS-025
 **Goal:** The administrator moves each physical line of a cash order or a paid online order from received to delivered or picked up, records the cash for a cash order at handover, and the customer is told at each visible step.
 - **Model / migration:** A partial index for the cash-due filter on unpaid cash orders, shaped by `EXPLAIN`; other queue indexes only if `EXPLAIN` shows the need.
