@@ -50,7 +50,12 @@ CASES = [
         inputs(ONLINE, S.DELIVERED, S.PENDING, paid=True, cover=True, refund=True),
         OrderStatus.REFUNDED,
     ),
-    ("paid-all-lines-refunded", inputs(ONLINE, S.REFUNDED, paid=True), OrderStatus.REFUNDED),
+    # Realistic: a fully refunded line means refunds cover the paid money (ADR-042, I2).
+    (
+        "paid-all-lines-refunded",
+        inputs(ONLINE, S.REFUNDED, paid=True, cover=True, refund=True),
+        OrderStatus.REFUNDED,
+    ),
     (
         "paid-refund-present",
         inputs(ONLINE, S.AWAITING_DELIVERY, paid=True, refund=True),
