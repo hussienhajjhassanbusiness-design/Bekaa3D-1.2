@@ -182,6 +182,29 @@ class AdminHistoryRead(BaseModel):
         )
 
 
+class AdminOrderRefundRead(BaseModel):
+    """One refund of the order (VS-030); the full record is `GET /admin/refunds/{id}`."""
+
+    id: UUID
+    kind: str
+    status: str
+    owed: bool
+    amount: PriceRead
+    created_at: datetime
+
+
+class AdminLineBalanceRead(BaseModel):
+    order_item_id: UUID
+    balance_cents: int
+
+
+class AdminRefundBalanceRead(BaseModel):
+    """What can still be refunded, per line and on the paid payment (VS-030 L2, L3)."""
+
+    lines: list[AdminLineBalanceRead]
+    payment_cents: int
+
+
 class AdminOrderDetail(BaseModel):
     id: UUID
     order_number: str
@@ -209,6 +232,10 @@ class AdminOrderDetail(BaseModel):
     lines: list[AdminOrderLineRead]
     payments: list[AdminOrderPaymentRead] = Field(description="Newest first.")
     status_history: list[AdminHistoryRead] = Field(description="Oldest first.")
+    refunds: list[AdminOrderRefundRead] = Field(default_factory=list, description="Oldest first.")
+    refund_balance: AdminRefundBalanceRead | None = Field(
+        default=None, description="Null until a payment reached paid."
+    )
 
     @classmethod
     def of(cls, view: AdminOrderView, media_base_url: str) -> Self:

@@ -3,6 +3,7 @@ input is a row read after the orders lock; the lock, not this module, makes it s
 
 from collections.abc import Collection, Iterable, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
 
@@ -50,6 +51,52 @@ class RefundFact:
     reissued: bool
     amount_cents: int
     items: tuple[ItemFact, ...] = ()
+
+
+@dataclass(frozen=True)
+class Refund:
+    """A refund row with its items, as the use cases decide on it."""
+
+    id: UUID
+    order_id: UUID
+    payment_id: UUID
+    provider: PaymentProvider
+    kind: RefundKind
+    status: RefundStatus
+    amount_cents: int
+    currency: str
+    reissued_at: datetime | None
+    items: tuple[ItemFact, ...]
+
+    def fact(self) -> RefundFact:
+        return RefundFact(
+            self.id,
+            self.payment_id,
+            self.kind,
+            self.status,
+            self.reissued_at is not None,
+            self.amount_cents,
+            self.items,
+        )
+
+
+@dataclass(frozen=True)
+class NewRefund:
+    order_id: UUID
+    payment_id: UUID
+    provider: PaymentProvider
+    kind: RefundKind
+    items: tuple[ItemFact, ...]
+    currency: str
+    reason: str
+    requested_by: UUID | None
+    approved_by: UUID | None
+    initiated_at: datetime
+    reissue_of_refund_id: UUID | None = None
+
+    @property
+    def amount_cents(self) -> int:
+        return sum(item.amount_cents for item in self.items)
 
 
 @dataclass(frozen=True)
@@ -137,6 +184,7 @@ def check_order_totals(ledger: Ledger) -> None:
             order_total_cents=ledger.order_total_cents,
             line_total_cents=lines,
             payment_amount_cents=ledger.payment.amount_cents,
+            payment_id=ledger.payment.id,
         )
 
 

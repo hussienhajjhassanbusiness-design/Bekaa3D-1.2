@@ -13,10 +13,16 @@ from pydantic import AwareDatetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_session
+from app.catalog.public import PriceRead
 from app.core.config import get_settings
 from app.identity.public import User, current_user, not_found_error
 from app.negotiation.public import SqlOfferCheckouts
-from app.ordering.api.order_schemas import OrderDetailRead, OrderPage, OrderSummaryRead
+from app.ordering.api.order_schemas import (
+    OrderDetailRead,
+    OrderPage,
+    OrderRefundRead,
+    OrderSummaryRead,
+)
 from app.ordering.application.ports import OrderFilters
 from app.ordering.application.services.order_history import (
     RetryContext,
@@ -25,7 +31,7 @@ from app.ordering.application.services.order_history import (
 )
 from app.ordering.domain.enums import OrderStatus
 from app.ordering.infrastructure.order_history import SqlOrderHistory
-from app.payments.public import order_payment_reader
+from app.payments.public import customer_refunds, order_payment_reader
 from app.platform.public import settings_reader
 
 router = APIRouter(prefix="/me/orders", tags=["orders"])
@@ -151,4 +157,14 @@ async def order_detail_read(
     )
     if view is None:
         raise not_found_error()
-    return OrderDetailRead.of(view, get_settings().media_public_url)
+    read = OrderDetailRead.of(view, get_settings().media_public_url)
+    refunds = [
+        OrderRefundRead(
+            kind=r.kind.value,
+            status=r.status,
+            amount=PriceRead(amount_cents=r.amount_cents, currency=r.currency),
+            created_at=r.created_at,
+        )
+        for r in await customer_refunds(session, order_id)
+    ]
+    return read.model_copy(update={"refunds": refunds})

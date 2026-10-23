@@ -7,11 +7,12 @@ from datetime import datetime, timedelta
 from typing import Any, Protocol
 from uuid import UUID
 
-from app.ordering.public import LockedOrder
+from app.ordering.public import LockedOrder, OrderStatus, RefundFacts
 from app.payments.domain.alerts import AlertKind
 from app.payments.domain.enums import PaymentProvider, PaymentStatus
 from app.payments.domain.outcome import ProviderResult
 from app.payments.domain.payments import Payment
+from app.payments.domain.refunds import NewRefund, Refund
 
 
 @dataclass(frozen=True)
@@ -242,3 +243,64 @@ class LateCaptureSink(Protocol):
         reason: str,
         at: datetime,
     ) -> None: ...
+
+
+class RefundOrders(Protocol):
+    """Ordering's half of a refund, through `ordering.public` (VS-030 plan 3.0, 3.4)."""
+
+    async def lock(self, order_id: UUID) -> LockedOrder | None:
+        """`orders` FOR UPDATE, then every line FOR UPDATE ORDER BY id (ranks 1-2)."""
+        ...
+
+    async def refund_lines(
+        self, locked: LockedOrder, line_ids: tuple[UUID, ...], *, actor_user_id: UUID, at: datetime
+    ) -> None: ...
+
+    async def recompute(
+        self,
+        locked: LockedOrder,
+        *,
+        refunded: tuple[UUID, ...],
+        refunds: RefundFacts,
+        actor_user_id: UUID,
+    ) -> OrderStatus:
+        """The order status from the locked lines (`refunded` now `refunded`) and facts."""
+        ...
+
+
+class RefundStore(Protocol):
+    """`refunds` and `refund_items`. Every method but `get` runs under the orders lock."""
+
+    async def get(self, refund_id: UUID) -> Refund | None:
+        """Unlocked: only to learn the order id (plan 8.1, note 2)."""
+        ...
+
+    async def lock(self, refund_id: UUID) -> Refund | None:
+        """`FOR UPDATE` (rank 4)."""
+        ...
+
+    async def for_order(self, order_id: UUID) -> list[Refund]:
+        """Plain reads; refuses unless this transaction holds the order's row lock."""
+        ...
+
+    async def insert(self, new: NewRefund) -> UUID: ...
+
+    async def settle(
+        self, refund_id: UUID, *, by: UUID, at: datetime, reference: str | None, note: str | None
+    ) -> bool:
+        """Only from `pending`; False if the row was not pending."""
+        ...
+
+    async def fail(self, refund_id: UUID, *, by: UUID, at: datetime, reason: str) -> bool: ...
+
+    async def void(self, refund_id: UUID, *, by: UUID, at: datetime, reason: str) -> bool: ...
+
+    async def mark_reissued(self, refund_id: UUID, *, at: datetime) -> bool: ...
+
+
+class RefundNotices(Protocol):
+    async def refund_issued(
+        self, locked: LockedOrder, *, refund_id: UUID, amount_cents: int, currency: str
+    ) -> None:
+        """The customer's "refund issued" email and `refund` notification (Q7)."""
+        ...

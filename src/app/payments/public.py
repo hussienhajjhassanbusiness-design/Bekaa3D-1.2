@@ -32,7 +32,13 @@ from app.payments.infrastructure.order_payments import SqlOrderPaymentReader, Sq
 from app.payments.infrastructure.payments import SqlPaymentAttempts, SqlPaymentStore
 from app.payments.infrastructure.providers.factory import configured_payment_providers
 from app.payments.infrastructure.reconcile import reconcile_stuck
-from app.payments.infrastructure.refunds import order_refund_facts
+from app.payments.infrastructure.refund_views import (
+    CustomerRefund,
+    RefundBalances,
+    admin_refunds,
+    customer_refunds,
+)
+from app.payments.infrastructure.refunds import RefundRow, order_refund_facts
 from app.payments.infrastructure.release import release_order_by_admin, release_stale
 from app.payments.infrastructure.verification import (
     apply_provider_result,
@@ -47,6 +53,7 @@ __all__ = [
     "CashAlreadyRecordedError",
     "CreatePayment",
     "CreatedPayment",
+    "CustomerRefund",
     "ManualReleaseRefusedError",
     "OrderNotFoundError",
     "OrderPaymentRow",
@@ -55,9 +62,13 @@ __all__ = [
     "PaymentProviderPort",
     "ProviderResult",
     "ProviderUnavailableError",
+    "RefundBalances",
+    "RefundRow",
+    "admin_refunds",
     "apply_provider_result",
     "configured_payment_providers",
     "confirm_payment_manually",
+    "customer_refunds",
     "fail_attempt",
     "insert_cash_payment",
     "limits",

@@ -2,7 +2,7 @@
 schemas: no `admin_note`, provider reference, phone hash, actor or reason (plan Q7)."""
 
 from datetime import datetime
-from typing import Self
+from typing import Literal, Self
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -138,6 +138,15 @@ class StatusHistoryRead(BaseModel):
         )
 
 
+class OrderRefundRead(BaseModel):
+    """A refund as the customer sees it (VS-030 Q9): voided ones are never listed."""
+
+    kind: Literal["admin", "cancellation", "late_capture"]
+    status: Literal["processing", "refunded"]
+    amount: PriceRead
+    created_at: datetime
+
+
 class OrderDetailRead(BaseModel):
     id: UUID
     order_number: str
@@ -168,6 +177,7 @@ class OrderDetailRead(BaseModel):
     lines: list[OrderLineRead]
     payment: OrderPaymentRead | None = Field(description="Null while a cash order is unpaid.")
     status_history: list[StatusHistoryRead] = Field(description="Oldest first.")
+    refunds: list[OrderRefundRead] = Field(default_factory=list, description="Oldest first.")
 
     @classmethod
     def of(cls, view: OrderDetailView, media_base_url: str) -> Self:
