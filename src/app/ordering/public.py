@@ -129,6 +129,7 @@ __all__ = [
     "orders_by_id",
     "payment_due",
     "recompute_order_status",
+    "refund_lines",
     "release_candidates",
     "release_unpaid_order",
     "status_inputs_for",
@@ -467,6 +468,35 @@ async def stl_delivery_page(
 async def stl_owned(session: AsyncSession, *, user_id: UUID, product_id: UUID) -> bool:
     """A paid, unrefunded STL line (`awaiting_delivery` or `delivered`), ADR-019 d5."""
     return bool(await SqlOrderStore(session).owned_stl_product_ids(user_id, [product_id]))
+
+
+async def refund_lines(
+    session: AsyncSession,
+    locked: LockedOrder,
+    line_ids: tuple[UUID, ...],
+    *,
+    actor_user_id: UUID,
+    reason: str,
+    at: datetime,
+) -> None:
+    """Fully covered lines become `refunded` (VS-030 L6), with history; no recompute, the
+    caller does that with fresh refund facts. Caller holds `lock_order_for_change`."""
+    lines = [_line(locked, line_id) for line_id in line_ids]
+    store = SqlOrderStore(session)
+    await store.set_line_status(list(line_ids), OrderItemStatus.REFUNDED, at=at)
+    await store.add_history(
+        [
+            StatusChange(
+                locked.order.id,
+                line.fulfillment_status.value,
+                OrderItemStatus.REFUNDED.value,
+                order_item_id=line.id,
+                actor_user_id=actor_user_id,
+                reason=reason,
+            )
+            for line in lines
+        ]
+    )
 
 
 async def release_unpaid_order(
