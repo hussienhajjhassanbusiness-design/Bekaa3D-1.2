@@ -14,7 +14,7 @@ Short, practical rules for working on Bekaa3D with more than one person. The spe
   git checkout -b vs-004-password-reset
   ```
 
-- **A PR needs review and green CI before it merges.** CI runs `ruff check`, `ruff format --check`, `mypy src`, and the full `pytest` suite. Don't merge on `mergeable_state: unstable` — that means checks are still running.
+- **A PR needs review and green CI before it merges.** CI runs `ruff check`, `ruff format --check` and `mypy src tests` in one job, and the full `pytest` suite split into parallel shards in `.github/workflows/ci.yml`. The tests are skipped when a PR changes only `docs/**` or `*.md` files, but not `docs/frontend-handoff/openapi.json`. The `ci-ok` check is green only when every job passed. Don't merge on `mergeable_state: unstable` — that means checks are still running.
 - Keep a slice's PR self-contained: it should not depend on unfinished work in another branch (Definition of Done in [`docs/vertical-slice-plan.md`](docs/vertical-slice-plan.md)).
 
 ## The Alembic migration lock
