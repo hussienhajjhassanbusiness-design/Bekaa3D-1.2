@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Select, insert, select, tuple_, update
+from sqlalchemy import Select, func, insert, select, tuple_, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -259,6 +259,26 @@ class SqlOrderStore:
         )
         return int(getattr(result, "rowcount", 0))
 
+    async def move_line(
+        self,
+        line_id: UUID,
+        *,
+        from_status: OrderItemStatus,
+        to_status: OrderItemStatus,
+        at: datetime,
+    ) -> int:
+        """A physical edge, only from the state read under the locks (VS-029)."""
+        result = await self._session.execute(
+            update(_I)
+            .where(
+                _I.id == line_id,
+                _I.product_type == ProductType.PHYSICAL,
+                _I.fulfillment_status == from_status,
+            )
+            .values(fulfillment_status=to_status, updated_at=at)
+        )
+        return int(getattr(result, "rowcount", 0))
+
     async def stl_delivery_page(
         self,
         *,
@@ -302,9 +322,10 @@ class SqlOrderStore:
         return [(row.placed_at, row.id) for row in await self._session.execute(query)]
 
     async def set_order_status(self, order_id: UUID, status: OrderStatus, *, at: datetime) -> None:
-        await self._session.execute(
-            update(_O).where(_O.id == order_id).values(status=status, updated_at=at)
-        )
+        values: dict[str, Any] = {"status": status, "updated_at": at}
+        if status is OrderStatus.COMPLETED:  # the first time only (ADR-040 d5)
+            values["completed_at"] = func.coalesce(_O.completed_at, at)
+        await self._session.execute(update(_O).where(_O.id == order_id).values(**values))
 
 
 def release_candidates_query(

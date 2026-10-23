@@ -40,6 +40,7 @@ from app.core.rate_limit import enforce_rate_limit
 from app.engagement.api.admin_analytics import admin_router as engagement_analytics_router
 from app.engagement.api.contact_messages import admin_router as contact_messages_router
 from app.engagement.api.custom_request_admin import admin_router as custom_requests_router
+from app.fulfillment.api.admin_orders import admin_router as admin_orders_router
 from app.fulfillment.api.item_transition import admin_router as item_transition_router
 from app.fulfillment.api.stl_deliveries import admin_router as stl_deliveries_router
 from app.identity.api.admin_users import router as admin_users_router
@@ -50,6 +51,7 @@ from app.identity.public import (
     require_admin,
 )
 from app.negotiation.api.admin_offers import admin_router as offers_router
+from app.ordering.api.admin_cash_blocks import admin_router as cash_blocks_router
 from app.ordering.api.admin_release import admin_router as order_release_router
 from app.payments.api.admin_payments import admin_router as admin_payments_router
 from app.platform.api.audit_logs import admin_router as audit_logs_router
@@ -115,6 +117,9 @@ router.include_router(order_release_router)
 # VS-023b. The STL delivery queue and mark-as-sent.
 router.include_router(stl_deliveries_router)
 router.include_router(item_transition_router)
+# VS-029. The order queue and detail, the cash handover and cash payment blocks.
+router.include_router(admin_orders_router)
+router.include_router(cash_blocks_router)
 # VS-039. The offer queue and offer detail (api-endpoints.md 21).
 router.include_router(offers_router)
 

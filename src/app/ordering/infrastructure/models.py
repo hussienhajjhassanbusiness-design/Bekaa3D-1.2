@@ -33,6 +33,10 @@ from app.ordering.domain.enums import (
 
 # Lowercase hex HMAC-SHA256 (`app.core.security.hash_phone`, ADR-024 d6).
 PHONE_HASH_FORMAT = "^[0-9a-f]{64}$"
+# Every order but an unpaid online one, open or released (BR-148; ADR-040).
+ADMIN_QUEUE_PREDICATE = (
+    "status <> 'pending_payment' AND (payment_method = 'cash' OR cancelled_at IS NULL)"
+)
 
 
 def _pg_enum(enum: type[StrEnum], name: str) -> Enum:
@@ -217,6 +221,19 @@ class OrderModel(Base):
             "ix_orders_open_cash_phone",
             "contact_phone_hash",
             postgresql_where=text("payment_method = 'cash' AND status = 'in_progress'"),
+        ),
+        # VS-029 (b6e1d0c4a2f7): the admin "cash due" view and the queue, newest first.
+        Index(
+            "ix_orders_cash_due",
+            text("placed_at DESC"),
+            text("id DESC"),
+            postgresql_where=text("payment_method = 'cash' AND status = 'in_progress'"),
+        ),
+        Index(
+            "ix_orders_admin_queue",
+            text("placed_at DESC"),
+            text("id DESC"),
+            postgresql_where=text(ADMIN_QUEUE_PREDICATE),
         ),
     )
 

@@ -196,9 +196,10 @@ async def test_marking_a_line_sent_writes_every_record_once(
         admin, _, _ = await mfa_admin(client, db_session)
         response = _send(client, order.order_id, line)
     assert response.status_code == 200, response.text
-    body = response.json()
-    assert (body["fulfillment_status"], body["order_status"]) == ("delivered", "completed")
-    assert body["delivered_by"] == str(admin.id)
+    body = response.json()  # the whole AdminOrderDetail since VS-029 (ADR-039 d9)
+    [sent] = [item for item in body["lines"] if item["id"] == str(line)]
+    assert (sent["fulfillment_status"], body["status"]) == ("delivered", "completed")
+    assert sent["delivered_by"] == str(admin.id) and sent["available_actions"] == []
     row = await line_row(db_engine, line)
     assert (row.fulfillment_status, row.delivered_by, row.order_status) == (
         "delivered",
@@ -271,7 +272,7 @@ async def test_a_pending_physical_line_keeps_the_order_in_progress(
         await mfa_admin(client, db_session)
         response = _send(client, order.order_id, line)
     assert response.status_code == 200, response.text
-    assert response.json()["order_status"] == "in_progress"
+    assert response.json()["status"] == "in_progress"
     async with db_engine.connect() as conn:
         order_rows = await conn.scalar(
             text(
@@ -319,16 +320,17 @@ async def test_a_line_that_is_not_awaiting_delivery_is_a_409_that_writes_nothing
     assert await effects(db_engine, line) == (0, 0, 0, 0)
 
 
-async def test_a_physical_line_is_a_409_and_stays_untouched(
+async def test_an_unpaid_physical_line_is_a_409_and_stays_untouched(
     db_engine: AsyncEngine, db_session: AsyncSession
 ) -> None:
+    """The seeded order has no payment row, so BR-148 refuses the physical line first."""
     order, _ = await seed_stl_order(db_session, physical=True)
     lamp = await line_of(db_session, order.order_id, "physical")
     with client_for(main_app) as client:
         await mfa_admin(client, db_session)
         response = _send(client, order.order_id, lamp)
     assert_problem(response, 409, "INVALID_STATE_TRANSITION")
-    assert response.json()["reason"] == "not_an_stl_line"
+    assert response.json()["reason"] == "payment_required"
     assert (await line_row(db_engine, lamp)).fulfillment_status == "pending"
     assert await effects(db_engine, lamp) == (0, 0, 0, 0)
 
@@ -374,13 +376,24 @@ async def test_a_failing_notice_rolls_the_whole_delivery_back(
     assert await effects(db_engine, line) == (0, 0, 0, 0)
 
 
-async def test_an_unknown_target_status_is_a_422(db_session: AsyncSession) -> None:
+async def test_an_unknown_target_is_a_422_and_a_physical_target_a_409(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
     order, line = await seed_stl_order(db_session)
     with client_for(main_app) as client:
         await mfa_admin(client, db_session)
-        response = client.post(
-            transition_path(order.order_id, line),
-            json={"target_status": "shipped"},
-            headers=csrf(client),
+        unknown, physical = (
+            client.post(
+                transition_path(order.order_id, line),
+                json={"target_status": target},
+                headers=csrf(client),
+            )
+            for target in ("teleported", "shipped")
         )
-    assert_problem(response, 422, "VALIDATION_ERROR")
+    assert_problem(unknown, 422, "VALIDATION_ERROR")
+    assert_problem(physical, 409, "INVALID_STATE_TRANSITION")
+    assert (physical.json()["reason"], physical.json()["fulfillment_status"]) == (
+        "not_a_legal_edge",
+        "awaiting_delivery",
+    )
+    assert await effects(db_engine, line) == (0, 0, 0, 0)

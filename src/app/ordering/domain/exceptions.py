@@ -195,9 +195,32 @@ class LineNotFoundError(OrderingDomainError):
 
 
 class InvalidLineTransitionError(OrderingDomainError):
-    """409 INVALID_STATE_TRANSITION with `reason` (VS-023b)."""
+    """409 INVALID_STATE_TRANSITION with `reason` (VS-023b) and the state read (VS-029)."""
 
-    def __init__(self, reason: str, *, fulfilled_at: datetime | None = None) -> None:
+    def __init__(
+        self,
+        reason: str,
+        *,
+        fulfilled_at: datetime | None = None,
+        current_status: str | None = None,
+    ) -> None:
         super().__init__(f"The line cannot make this transition: {reason}.")
         self.reason = reason
         self.fulfilled_at = fulfilled_at
+        self.current_status = current_status
+
+
+class HandoverRefusedError(OrderingDomainError):
+    """409 INVALID_STATE_TRANSITION: the order cannot take a cash handover now (VS-029)."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(f"The cash handover is refused: {reason}.")
+        self.reason = reason
+
+
+class CashAmountMismatchError(OrderingDomainError):
+    """422 CASH_AMOUNT_MISMATCH: not exactly the live total above zero (BR-055, BR-143)."""
+
+    def __init__(self, due_cents: int) -> None:
+        super().__init__("The cash entered differs from the amount due.")
+        self.due_cents = due_cents

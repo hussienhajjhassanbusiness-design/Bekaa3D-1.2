@@ -3,15 +3,26 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import exists, func, literal, select, union
+from sqlalchemy import exists, func, literal, select, tuple_, union, update
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ordering.domain.admin_orders import CashBlock
 from app.ordering.domain.cash import CASH_PHONE_LOCK_NS
 from app.ordering.domain.enums import CancelReason, OrderStatus, PaymentMethod
 from app.ordering.infrastructure.models import CashPaymentBlockModel, OrderModel
 
 _B, _O = CashPaymentBlockModel, OrderModel
+_BLOCK_COLUMNS = (
+    _B.id,
+    _B.user_id,
+    _B.order_id,
+    _O.order_number,
+    _B.reason,
+    _B.created_at,
+    _B.cleared_at,
+    _B.cleared_by,
+)
 
 
 async def lock_cash_phone(session: AsyncSession, phone_hash: str) -> None:
@@ -74,3 +85,44 @@ class SqlCashBlockStore:
             .returning(literal(1))
         )
         return (await self._session.execute(stmt)).first() is not None
+
+    async def page(
+        self,
+        *,
+        user_id: UUID | None,
+        active: bool | None,
+        phone_hash: str | None,
+        after: tuple[datetime, UUID] | None,
+        limit: int,
+    ) -> list[CashBlock]:
+        """Newest first by `(created_at, id)`. No lock."""
+        query = select(*_BLOCK_COLUMNS).join(_O, _O.id == _B.order_id)
+        if user_id is not None:
+            query = query.where(_B.user_id == user_id)
+        if phone_hash is not None:
+            query = query.where(_B.contact_phone_hash == phone_hash)
+        if active is not None:
+            query = query.where(_B.cleared_at.is_(None) if active else _B.cleared_at.is_not(None))
+        if after is not None:
+            query = query.where(tuple_(_B.created_at, _B.id) < tuple_(*after))
+        query = query.order_by(_B.created_at.desc(), _B.id.desc()).limit(limit)
+        return [CashBlock(*row) for row in (await self._session.execute(query)).all()]
+
+    async def lock(self, block_id: UUID) -> CashBlock | None:
+        row = (
+            await self._session.execute(
+                select(*_BLOCK_COLUMNS)
+                .join(_O, _O.id == _B.order_id)
+                .where(_B.id == block_id)
+                .with_for_update(of=_B)
+            )
+        ).first()
+        return CashBlock(*row) if row is not None else None
+
+    async def clear(self, block_id: UUID, *, admin_id: UUID, at: datetime) -> None:
+        """Only an uncleared block; the caller holds `lock`."""
+        await self._session.execute(
+            update(_B)
+            .where(_B.id == block_id, _B.cleared_at.is_(None))
+            .values(cleared_at=at, cleared_by=admin_id)
+        )

@@ -14,6 +14,7 @@ KNOWN_WRITERS = {
     ("ordering/infrastructure/orders.py", "insert_lines"): "new rows, invisible until commit",
     ("ordering/infrastructure/orders.py", "set_line_status"): "only under the orders lock",
     ("ordering/infrastructure/orders.py", "set_line_delivered"): "only under the orders lock",
+    ("ordering/infrastructure/orders.py", "move_line"): "only under the orders lock",  # VS-029
 }
 # Callers of `set_line_status`: each must hold `lock_order_for_change`'s locks.
 KNOWN_LINE_STATUS_CALLERS = {
@@ -108,6 +109,17 @@ def test_a_delivery_is_written_only_under_the_orders_lock() -> None:
     source = (SRC / "ordering" / "public.py").read_text(encoding="utf-8")
     mark = next(f for f in _functions(ast.parse(source)) if f.name == "mark_stl_line_delivered")
     assert any(arg.arg == "locked" for arg in mark.args.args), "takes a LockedOrder"
+
+
+def test_physical_edges_are_written_only_under_the_orders_lock() -> None:
+    assert _callers("move_line") == {
+        ("ordering/public.py", "transition_physical_line"),
+        ("ordering/public.py", "hand_over_cash_lines"),
+    }
+    source = (SRC / "ordering" / "public.py").read_text(encoding="utf-8")
+    for name in ("transition_physical_line", "hand_over_cash_lines"):
+        writer = next(f for f in _functions(ast.parse(source)) if f.name == name)
+        assert any(arg.arg == "locked" for arg in writer.args.args), f"{name} takes a LockedOrder"
 
 
 def test_only_the_delivery_writer_sets_fulfilled_at_or_delivered_by() -> None:

@@ -10,7 +10,16 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalog.application.ports import ProductType
+from app.ordering.domain.admin_orders import (
+    AdminHistoryEntry,
+    AdminOrder,
+    AdminOrderFilters,
+    AdminOrderLine,
+    CashBlock,
+    cash_due,
+)
 from app.ordering.domain.cash import amount_due_cents
+from app.ordering.domain.customer_view import payment_due
 from app.ordering.domain.enums import (
     CancelReason,
     FulfillmentMethod,
@@ -20,6 +29,8 @@ from app.ordering.domain.enums import (
     PaymentMethod,
 )
 from app.ordering.domain.exceptions import (
+    CashAmountMismatchError,
+    HandoverRefusedError,
     InvalidLineTransitionError,
     LineNotFoundError,
     LiveAttemptExistsError,
@@ -29,7 +40,19 @@ from app.ordering.domain.exceptions import (
     OrderNotReleasableError,
 )
 from app.ordering.domain.fulfillment import DELIVERY_FEE_NOTE
-from app.ordering.domain.line_transitions import line_transition_refusal
+from app.ordering.domain.fulfillment_steps import step_reached
+from app.ordering.domain.handover import (
+    HANDED_OVER,
+    HandoverRefusal,
+    handover_amount_matches,
+    handover_refusal,
+)
+from app.ordering.domain.line_transitions import (
+    LineContext,
+    TransitionRefusal,
+    available_targets,
+    line_transition_refusal,
+)
 from app.ordering.domain.order_status import LineState, OrderStatusInputs, derive_order_status
 from app.ordering.domain.orders import Order, OrderLine, StatusChange, StlDeliveryRow
 from app.ordering.domain.payment_recovery import (
@@ -39,15 +62,25 @@ from app.ordering.domain.payment_recovery import (
     manual_release_available_at,
     manual_release_refusal,
 )
+from app.ordering.infrastructure.admin_orders import SqlAdminOrders
 from app.ordering.infrastructure.cash import SqlCashBlockStore
 from app.ordering.infrastructure.cash import lock_cash_phone as _lock_cash_phone
 from app.ordering.infrastructure.orders import SqlOrderStore
 
 __all__ = [
     "DELIVERY_FEE_NOTE",
+    "AdminHistoryEntry",
+    "AdminOrder",
+    "AdminOrderFilters",
+    "AdminOrderLine",
     "CancelReason",
+    "CashAmountMismatchError",
+    "CashBlock",
     "FulfillmentMethod",
+    "HandoverRefusal",
+    "HandoverRefusedError",
     "InvalidLineTransitionError",
+    "LineContext",
     "LineNotFoundError",
     "LineState",
     "LiveAttemptExistsError",
@@ -65,11 +98,19 @@ __all__ = [
     "ReleaseRefusal",
     "SqlCashBlockStore",
     "StlDeliveryRow",
+    "TransitionRefusal",
+    "admin_order_page",
+    "admin_orders",
     "amount_due_cents",
+    "available_targets",
     "can_retry_payment",
     "cash_block_store",
+    "cash_due",
+    "check_cash_handover",
     "derive_order_status",
+    "hand_over_cash_lines",
     "hold_deadline",
+    "line_context",
     "lock_cash_phone",
     "lock_order_for_change",
     "manual_release_available_at",
@@ -78,12 +119,15 @@ __all__ = [
     "mark_stl_line_delivered",
     "order_lines",
     "orders_by_id",
+    "payment_due",
     "recompute_order_status",
     "release_candidates",
     "release_unpaid_order",
     "status_inputs_for",
+    "step_reached",
     "stl_delivery_page",
     "stl_owned",
+    "transition_physical_line",
     "unpaid_offer_order",
 ]
 
@@ -183,15 +227,31 @@ async def mark_order_paid(session: AsyncSession, locked: LockedOrder, *, at: dat
     )
 
 
-def status_inputs_for(locked: LockedOrder, lines: tuple[LineState, ...]) -> OrderStatusInputs:
-    """Inputs for a paid order. STOP-GAP: VS-030 must replace `refund_present` with the
-    real refund query; until then a `partially_refunded` order keeps that status."""
+def status_inputs_for(
+    locked: LockedOrder, lines: tuple[LineState, ...], *, reached_paid: bool
+) -> OrderStatusInputs:
+    """STOP-GAP: VS-030 must replace `refund_present` with the real refund query; until
+    then a `partially_refunded` order keeps that status."""
     return OrderStatusInputs(
         payment_method=locked.order.payment_method,
         cancelled_at_set=locked.order.cancelled_at is not None,
-        payment_reached_paid=True,
+        payment_reached_paid=reached_paid,
         lines=lines,
-        refund_present=locked.order.status is OrderStatus.PARTIALLY_REFUNDED,
+        refund_present=reached_paid and locked.order.status is OrderStatus.PARTIALLY_REFUNDED,
+    )
+
+
+def _line(locked: LockedOrder, line_id: UUID) -> OrderLine:
+    line = next((item for item in locked.lines if item.id == line_id), None)
+    if line is None:
+        raise LineNotFoundError(f"line {line_id} is not on order {locked.order.id}")
+    return line
+
+
+def line_context(locked: LockedOrder, line: OrderLine, *, reached_paid: bool) -> LineContext:
+    order = locked.order
+    return LineContext(
+        line.product_type, order.fulfillment_method, order.payment_method, reached_paid
     )
 
 
@@ -200,11 +260,11 @@ async def mark_stl_line_delivered(
 ) -> tuple[OrderLine, OrderStatus]:
     """Admin sent the file: STL `awaiting_delivery -> delivered`, history, recomputed status.
     The caller holds the orders and lines locks; the state is read from `locked`."""
-    line = next((item for item in locked.lines if item.id == line_id), None)
-    if line is None:
-        raise LineNotFoundError(f"line {line_id} is not on order {locked.order.id}")
+    line = _line(locked, line_id)
     refusal = line_transition_refusal(
-        line.product_type, line.fulfillment_status, OrderItemStatus.DELIVERED
+        line_context(locked, line, reached_paid=True),
+        line.fulfillment_status,
+        OrderItemStatus.DELIVERED,
     )
     if refusal is not None:
         raise InvalidLineTransitionError(refusal.value, fulfilled_at=line.fulfilled_at)
@@ -227,7 +287,10 @@ async def mark_stl_line_delivered(
         for item in locked.lines
     )
     order_status = await recompute_order_status(
-        session, locked, status_inputs_for(locked, states), actor_user_id=admin_id
+        session,
+        locked,
+        status_inputs_for(locked, states, reached_paid=True),
+        actor_user_id=admin_id,
     )
     delivered = replace(
         line,
@@ -236,6 +299,135 @@ async def mark_stl_line_delivered(
         delivered_by=admin_id,
     )
     return delivered, order_status
+
+
+async def transition_physical_line(
+    session: AsyncSession,
+    locked: LockedOrder,
+    *,
+    line_id: UUID,
+    target: OrderItemStatus,
+    admin_id: UUID,
+    at: datetime,
+    reached_paid: bool,
+    note: str | None,
+) -> tuple[OrderLine, OrderStatus]:
+    """A physical forward edge (VS-029), decided on the state in `locked`; history, then
+    the recomputed status. `reached_paid` is read after the caller took the locks."""
+    line = _line(locked, line_id)
+    current = line.fulfillment_status
+    refusal = line_transition_refusal(
+        line_context(locked, line, reached_paid=reached_paid), current, target
+    )
+    if line.product_type is not ProductType.PHYSICAL:
+        refusal = refusal or TransitionRefusal.NOT_A_LEGAL_EDGE
+    if refusal is not None:
+        raise InvalidLineTransitionError(
+            refusal.value, fulfilled_at=line.fulfilled_at, current_status=current.value
+        )
+    store = SqlOrderStore(session)
+    if not await store.move_line(line_id, from_status=current, to_status=target, at=at):
+        raise InvalidLineTransitionError(
+            TransitionRefusal.NOT_A_LEGAL_EDGE.value, current_status=current.value
+        )
+    await store.add_history(
+        [
+            StatusChange(
+                locked.order.id,
+                current.value,
+                target.value,
+                order_item_id=line_id,
+                actor_user_id=admin_id,
+                reason=note,
+            )
+        ]
+    )
+    states = tuple(
+        LineState(target if item.id == line_id else item.fulfillment_status)
+        for item in locked.lines
+    )
+    order_status = await recompute_order_status(
+        session,
+        locked,
+        status_inputs_for(locked, states, reached_paid=reached_paid),
+        actor_user_id=admin_id,
+    )
+    return replace(line, fulfillment_status=target), order_status
+
+
+def check_cash_handover(locked: LockedOrder, *, typed_cents: int) -> int:
+    """SRS 9.8.3 under the locks: the 409 reasons first, then the amount (422). Returns
+    the amount due, `amount_due_cents` over the locked lines (ADR-033)."""
+    order = locked.order
+    states = [line.fulfillment_status for line in locked.lines]
+    refusal = handover_refusal(order.payment_method, order.fulfillment_method, states)
+    if refusal is not None:
+        raise HandoverRefusedError(refusal.value)
+    due = amount_due_cents(locked.lines)
+    if not handover_amount_matches(due_cents=due, typed_cents=typed_cents):
+        raise CashAmountMismatchError(due)
+    return due
+
+
+async def hand_over_cash_lines(
+    session: AsyncSession, locked: LockedOrder, *, admin_id: UUID, at: datetime, note: str | None
+) -> tuple[tuple[OrderLine, ...], OrderStatus]:
+    """Every live line delivered / picked up, history, the status recomputed as paid.
+    Only after `check_cash_handover` and the cash payment's INSERT, under the same locks."""
+    order = locked.order
+    method = order.fulfillment_method
+    states = [line.fulfillment_status for line in locked.lines]
+    refusal = handover_refusal(order.payment_method, method, states)
+    if refusal is not None or method is None:
+        raise HandoverRefusedError((refusal or HandoverRefusal.NOT_A_CASH_ORDER).value)
+    done = HANDED_OVER[method]
+    store = SqlOrderStore(session)
+    live = [
+        line for line in locked.lines if line.fulfillment_status is not OrderItemStatus.CANCELLED
+    ]
+    for line in live:
+        moved = await store.move_line(
+            line.id, from_status=line.fulfillment_status, to_status=done, at=at
+        )
+        if not moved:
+            raise HandoverRefusedError(HandoverRefusal.LINES_NOT_READY.value)
+    await store.add_history(
+        [
+            StatusChange(
+                order.id,
+                line.fulfillment_status.value,
+                done.value,
+                order_item_id=line.id,
+                actor_user_id=admin_id,
+                reason=note,
+            )
+            for line in live
+        ]
+    )
+    ids = {line.id for line in live}
+    after = tuple(
+        LineState(done if line.id in ids else line.fulfillment_status) for line in locked.lines
+    )
+    order_status = await recompute_order_status(
+        session, locked, status_inputs_for(locked, after, reached_paid=True), actor_user_id=admin_id
+    )
+    return tuple(replace(line, fulfillment_status=done) for line in live), order_status
+
+
+def admin_orders(session: AsyncSession) -> SqlAdminOrders:
+    """The administrator's order reads and the internal note (VS-029). No lock."""
+    return SqlAdminOrders(session)
+
+
+async def admin_order_page(
+    session: AsyncSession,
+    filters: AdminOrderFilters,
+    *,
+    after: tuple[datetime, UUID] | None,
+    limit: int,
+) -> list[AdminOrder]:
+    """The fulfillment queue, newest first; never an unpaid online order (BR-148)."""
+    return await SqlAdminOrders(session).page(filters, after=after, limit=limit)
 
 
 async def stl_delivery_page(

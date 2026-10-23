@@ -17,6 +17,7 @@ from app.payments.application.services.payments import (
 )
 from app.payments.domain import limits
 from app.payments.domain.exceptions import (
+    CashAlreadyRecordedError,
     ManualReleaseRefusedError,
     OrderNotFoundError,
     PaymentConfigurationError,
@@ -24,6 +25,8 @@ from app.payments.domain.exceptions import (
 )
 from app.payments.domain.limits import CHECKOUT_RATE_LIMIT, CHECKOUT_RATE_WINDOW_SECONDS
 from app.payments.domain.outcome import Outcome, ProviderResult
+from app.payments.domain.payments import OrderPaymentRow
+from app.payments.infrastructure.cash_payments import insert_cash_payment, order_payment_rows
 from app.payments.infrastructure.manual import confirm_payment_manually
 from app.payments.infrastructure.order_payments import SqlOrderPaymentReader, SqlPaymentInFlight
 from app.payments.infrastructure.payments import SqlPaymentAttempts, SqlPaymentStore
@@ -40,10 +43,12 @@ from app.payments.infrastructure.verification import (
 __all__ = [
     "CHECKOUT_RATE_LIMIT",
     "CHECKOUT_RATE_WINDOW_SECONDS",
+    "CashAlreadyRecordedError",
     "CreatePayment",
     "CreatedPayment",
     "ManualReleaseRefusedError",
     "OrderNotFoundError",
+    "OrderPaymentRow",
     "Outcome",
     "PaymentConfigurationError",
     "PaymentProviderPort",
@@ -53,8 +58,10 @@ __all__ = [
     "configured_payment_providers",
     "confirm_payment_manually",
     "fail_attempt",
+    "insert_cash_payment",
     "limits",
     "order_payment_reader",
+    "order_payment_rows",
     "payment_attempts",
     "payment_in_flight",
     "payment_store",
