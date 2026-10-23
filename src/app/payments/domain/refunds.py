@@ -179,18 +179,28 @@ def lines_becoming_refunded(ledger: Ledger, items: Sequence[ItemFact]) -> tuple[
 
 def refund_facts(ledger: Ledger) -> RefundFacts:
     """L8: the projection's refund inputs from the same rows."""
+    return facts_for(ledger.payment, ledger.refunds, ledger.chargebacks)
+
+
+def facts_for(
+    payment: PaymentFact,
+    refunds: Iterable[RefundFact],
+    chargebacks: Iterable[ChargebackFact] = (),
+) -> RefundFacts:
+    """L8 without the lines: what a status recompute needs (refund items are not read)."""
+    refunds = tuple(refunds)
     live = [
         r
-        for r in ledger.refunds
+        for r in refunds
         if r.kind is not RefundKind.LATE_CAPTURE
         and r.status in (RefundStatus.PENDING, RefundStatus.SETTLED)
     ]
-    applied = [c for c in ledger.chargebacks if c.applied_cents > 0]
+    applied = [c for c in chargebacks if c.applied_cents > 0]
     covered = sum(r.amount_cents for r in live) + sum(c.applied_cents for c in applied)
     return RefundFacts(
-        covers_paid=covered >= ledger.payment.amount_cents,
+        covers_paid=covered >= payment.amount_cents,
         present=bool(live or applied),
-        owed=any(is_owed(r) for r in ledger.refunds),
+        owed=any(is_owed(r) for r in refunds),
     )
 
 

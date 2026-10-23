@@ -12,6 +12,7 @@ from app.ordering.public import (
     OrderItemStatus,
     OrderLine,
     OrderStatus,
+    RefundFacts,
 )
 from app.payments.public import OrderPaymentRow
 
@@ -22,7 +23,13 @@ class DeliveryOrders(Protocol):
         ...
 
     async def mark_delivered(
-        self, locked: LockedOrder, *, line_id: UUID, admin_id: UUID, at: datetime
+        self,
+        locked: LockedOrder,
+        *,
+        line_id: UUID,
+        admin_id: UUID,
+        at: datetime,
+        refunds: RefundFacts,
     ) -> tuple[OrderLine, OrderStatus]: ...
 
 
@@ -36,6 +43,7 @@ class FulfillmentOrders(DeliveryOrders, Protocol):
         admin_id: UUID,
         at: datetime,
         reached_paid: bool,
+        refunds: RefundFacts,
         note: str | None,
     ) -> tuple[OrderLine, OrderStatus]: ...
 
@@ -47,6 +55,10 @@ class FulfillmentOrders(DeliveryOrders, Protocol):
 class OrderPayments(Protocol):
     async def reached_paid(self, order_id: UUID) -> bool:
         """`paid`, `partially_refunded` or `refunded`; read under the orders lock (BR-148)."""
+        ...
+
+    async def refund_facts(self, order_id: UUID) -> RefundFacts:
+        """Read under the orders lock, like `reached_paid` (ADR-042)."""
         ...
 
     async def record_cash(

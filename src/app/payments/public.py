@@ -32,6 +32,7 @@ from app.payments.infrastructure.order_payments import SqlOrderPaymentReader, Sq
 from app.payments.infrastructure.payments import SqlPaymentAttempts, SqlPaymentStore
 from app.payments.infrastructure.providers.factory import configured_payment_providers
 from app.payments.infrastructure.reconcile import reconcile_stuck
+from app.payments.infrastructure.refunds import order_refund_facts
 from app.payments.infrastructure.release import release_order_by_admin, release_stale
 from app.payments.infrastructure.verification import (
     apply_provider_result,
@@ -62,6 +63,7 @@ __all__ = [
     "limits",
     "order_payment_reader",
     "order_payment_rows",
+    "order_refund_facts",
     "payment_attempts",
     "payment_in_flight",
     "payment_store",

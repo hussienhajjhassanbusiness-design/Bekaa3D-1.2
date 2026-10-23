@@ -39,6 +39,8 @@ async def transition_line(
     line = next((item for item in locked.lines if item.id == item_id), None)
     if line is None:
         raise LineNotFoundError(f"line {item_id} is not on order {order_id}")
+    # Every payment and refund writer locks the order first, so neither changes under us.
+    refunds = await payments.refund_facts(order_id)
     if line.product_type is ProductType.STL:
         if target is not OrderItemStatus.DELIVERED:
             raise InvalidLineTransitionError(
@@ -50,6 +52,7 @@ async def transition_line(
             audit,
             notices,
             locked,
+            refunds=refunds,
             item_id=item_id,
             admin_id=admin_id,
             at=at,
@@ -66,6 +69,7 @@ async def transition_line(
         admin_id=admin_id,
         at=at,
         reached_paid=reached_paid,
+        refunds=refunds,
         note=note,
     )
     await audit.record(
