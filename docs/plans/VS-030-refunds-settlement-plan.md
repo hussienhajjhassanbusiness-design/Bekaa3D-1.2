@@ -431,8 +431,10 @@ I10 and I25):
 - It enumerates the 23,232 cases and collects every case where old ≠ new.
 - It asserts the set equals exactly the union of D-a … D-e, with each case classified by its
   predicate. A new difference, or a listed one disappearing, fails with the case printed.
-- It asserts every D-b, D-d and D-e case violates `consistent(i) = I1 ∧ I2 ∧ I3`, and that every
-  D-a and D-c case satisfies it. So the only reachable changes are the two intended ones.
+- It asserts every D-b, D-d and D-e case violates `consistent(i) = I1 ∧ I2 ∧ I3`, that every D-c
+  case satisfies it, and that a D-a case satisfies it **exactly when refunds do not cover the paid
+  money** (¬c; a covered D-a case breaks I1). So the only reachable changes are the two intended
+  ones. (Corrected in PR B: the first wording said every D-a case was consistent.)
 - It prints the per-class counts for the PR description.
 
 **ADR-042** states that it **amends SRS §20.2** (and database-design §17.2 and the entities
