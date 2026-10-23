@@ -74,12 +74,15 @@ class _Locked:
     ledger: Ledger
 
 
-async def _lock(deps: RefundDeps, order_id: UUID) -> _Locked:
+async def _lock(deps: RefundDeps, order_id: UUID, *, check_totals: bool = True) -> _Locked:
+    """`check_totals` False only for settle: it records a payout already made, moves no money."""
     locked = await deps.orders.lock(order_id)  # ranks 1 and 2
     if locked is None:
         raise RefundNotFoundError(f"order {order_id} does not exist")
     attempts = await deps.payments.lock_for_order(order_id)  # rank 3, by id
-    facts = {p.id: PaymentFact(p.id, p.provider, p.status, p.amount_cents) for p in attempts}
+    facts = {
+        p.id: PaymentFact(p.id, p.provider, p.status, p.amount_cents, p.currency) for p in attempts
+    }
     paid_fact = paid_payment(facts.values())
     if paid_fact is None:
         raise OrderNotPaidError(f"order {order_id} has no payment that reached paid")
@@ -94,7 +97,8 @@ async def _lock(deps: RefundDeps, order_id: UUID) -> _Locked:
         payment=paid_fact,
         refunds=tuple(row.fact() for row in rows),
     )
-    check_order_totals(ledger)  # Q-2: nothing is written past a mismatch
+    if check_totals:  # Q-2: nothing is written past a mismatch
+        check_order_totals(ledger, order_currency=locked.order.currency)
     return _Locked(locked, paid, ledger)
 
 
@@ -206,21 +210,33 @@ async def create_refund(
     return RefundOutcome(refund_id, True, status)
 
 
-async def _locked_refund(deps: RefundDeps, refund_id: UUID) -> tuple[_Locked, Refund]:
+async def _locked_refund(
+    deps: RefundDeps, refund_id: UUID, *, check_totals: bool = True
+) -> tuple[_Locked, Refund]:
     seen = await deps.refunds.get(refund_id)  # unlocked: only the order id
     if seen is None:
         raise RefundNotFoundError(f"refund {refund_id} does not exist")
-    held = await _lock(deps, seen.order_id)
+    held = await _lock(deps, seen.order_id, check_totals=check_totals)
     row = await deps.refunds.lock(refund_id)  # rank 4
     if row is None or row.order_id != seen.order_id:
         raise RefundNotFoundError(f"refund {refund_id} vanished")
     return held, row
 
 
-def _decide(row: Refund, action: RefundAction, *, line_refunded: bool = False) -> bool:
+def _decide(
+    row: Refund,
+    action: RefundAction,
+    *,
+    line_refunded: bool = False,
+    line_cancelled: bool = False,
+) -> bool:
     """True to write; False for an idempotent repeat; refusals raise."""
     step = refund_step(
-        row.status, action, reissued=row.reissued_at is not None, line_refunded=line_refunded
+        row.status,
+        action,
+        reissued=row.reissued_at is not None,
+        line_refunded=line_refunded,
+        line_cancelled=line_cancelled,
     )
     if step.refusal is not None:
         raise RefundRefusedError(step.refusal.value)
@@ -237,7 +253,7 @@ async def settle_refund(
     at: datetime,
 ) -> RefundOutcome:
     """`pending -> settled`; no order or payment status changes (ADR-024 d12)."""
-    _, row = await _locked_refund(deps, refund_id)
+    _, row = await _locked_refund(deps, refund_id, check_totals=False)
     if not _decide(row, RefundAction.SETTLE):
         return RefundOutcome(refund_id, False)
     if not await deps.refunds.settle(
@@ -296,11 +312,16 @@ async def void_refund(
     deps: RefundDeps, *, refund_id: UUID, reason: str, ctx: AuditContext, at: datetime
 ) -> RefundOutcome:
     """`pending`, or `failed` not reissued, -> `voided`; never after settlement, never on a
-    refund with a line already `refunded`. A repeat keeps the first reason, no new audit."""
+    refund with a line already `refunded` or `cancelled`. A repeat keeps the first reason."""
     held, row = await _locked_refund(deps, refund_id)
     states = {line.id: line.fulfillment_status for line in held.order.lines}
-    line_refunded = any(states.get(i.order_item_id) is OrderItemStatus.REFUNDED for i in row.items)
-    if not _decide(row, RefundAction.VOID, line_refunded=line_refunded):
+    touched = {states.get(i.order_item_id) for i in row.items}
+    if not _decide(
+        row,
+        RefundAction.VOID,
+        line_refunded=OrderItemStatus.REFUNDED in touched,
+        line_cancelled=OrderItemStatus.CANCELLED in touched,
+    ):
         return RefundOutcome(refund_id, False)
     if not await deps.refunds.void(refund_id, by=ctx.actor_user_id, at=at, reason=reason):
         raise RefundRefusedError("already_settled")

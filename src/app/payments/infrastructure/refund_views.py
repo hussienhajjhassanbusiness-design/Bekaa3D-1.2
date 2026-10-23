@@ -75,6 +75,7 @@ async def admin_refunds(
                 PaymentModel.provider,
                 PaymentModel.status,
                 PaymentModel.amount_cents,
+                PaymentModel.currency,
             ).where(PaymentModel.order_id == order_id, PaymentModel.status.in_(REACHED_PAID))
         )
     ).first()
@@ -86,7 +87,7 @@ async def admin_refunds(
             LineFact(line.id, line.product_type, line.fulfillment_status, line.line_total_cents)
             for line in lines
         ),
-        PaymentFact(paid.id, paid.provider, paid.status, paid.amount_cents),
+        PaymentFact(paid.id, paid.provider, paid.status, paid.amount_cents, paid.currency),
         tuple(_fact(row) for row in rows),
     )
     return rows, RefundBalances(line_balances(ledger), payment_balance(ledger))

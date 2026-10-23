@@ -414,6 +414,52 @@ async def test_i25_void_rules(db_engine: AsyncEngine, db_session: AsyncSession) 
     assert "ck_refunds_void_never_settled" in str(caught.value)
 
 
+async def test_a_void_never_strands_the_money_of_a_cancelled_line(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    order = await paid_online(db_session, stl=None)
+    line = order.physical[0]
+    with client_for(main_app) as client:
+        await _admin(client, db_session)
+        refund = ok(create(client, order.order_id, [(line, 400)]), 201)["id"]
+        # VS-031's cancel writer stands in: the line is cancelled with this refund on it.
+        await db_session.execute(
+            text(
+                "UPDATE order_items SET fulfillment_status = 'cancelled', cancelled_at = now()"
+                " WHERE id = :i"
+            ),
+            {"i": line},
+        )
+        await db_session.commit()
+        refused = act(client, refund, "void", {"reason": "Oops."})
+        assert refund in queue_ids(client, order.order_id)  # still owed to the customer
+    assert_problem(refused, 409, "INVALID_STATE_TRANSITION")
+    assert refused.json()["reason"] == "line_already_cancelled"
+    assert await line_state(db_engine, line) == "cancelled"
+
+
+async def test_settle_records_a_payout_even_when_the_totals_drifted(
+    db_session: AsyncSession,
+) -> None:
+    order = await paid_online(db_session, stl=None, physical=("delivered", "delivered"))
+    a, b = order.physical
+    with client_for(main_app) as client:
+        await _admin(client, db_session)
+        paid_out = ok(create(client, order.order_id, [(a, 100)]), 201)["id"]
+        other = ok(create(client, order.order_id, [(b, 100)]), 201)["id"]
+        await db_session.execute(
+            text(
+                "UPDATE orders SET subtotal_cents = subtotal_cents + 1,"
+                " total_cents = total_cents + 1 WHERE id = :o"
+            ),
+            {"o": order.order_id},
+        )
+        await db_session.commit()
+        assert ok(act(client, paid_out, "settle", {}))["status"] == "settled"
+        refused = act(client, other, "fail", {"reason": "Bounced."})
+    assert_problem(refused, 409, "ORDER_TOTAL_MISMATCH")
+
+
 # --- I12, I13, I14 ------------------------------------------------------------------------
 
 

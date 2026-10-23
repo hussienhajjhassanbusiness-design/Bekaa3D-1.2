@@ -47,7 +47,7 @@ def line(status: S = S.DELIVERED, total: int = 1000, kind: ProductType = PHYSICA
 
 
 def payment(amount: int, provider: PaymentProvider = PaymentProvider.MOCK) -> PaymentFact:
-    return PaymentFact(PAY_ID, provider, PaymentStatus.PAID, amount)
+    return PaymentFact(PAY_ID, provider, PaymentStatus.PAID, amount, "USD")
 
 
 def refund(
@@ -80,7 +80,7 @@ def item(ln: LineFact, amount: int) -> ItemFact:
 
 def test_only_a_payment_that_reached_paid_is_the_paid_one() -> None:
     def fact(status: PaymentStatus) -> PaymentFact:
-        return PaymentFact(uuid4(), PaymentProvider.MOCK, status, 100)
+        return PaymentFact(uuid4(), PaymentProvider.MOCK, status, 100, "USD")
 
     failed, paid = fact(PaymentStatus.FAILED), fact(PaymentStatus.PARTIALLY_REFUNDED)
     assert paid_payment([failed, paid]) is paid
@@ -238,9 +238,9 @@ def test_an_owed_failed_refund_reserves_the_line_so_it_is_not_refunded_twice() -
 def test_the_order_total_must_equal_its_lines() -> None:
     a = line()
     book = ledger(a)
-    check_order_totals(book)
+    check_order_totals(book, order_currency="USD")
     with pytest.raises(OrderTotalMismatchError) as refused:
-        check_order_totals(Ledger(1001, (a,), book.payment))
+        check_order_totals(Ledger(1001, (a,), book.payment), order_currency="USD")
     assert (refused.value.order_total_cents, refused.value.line_total_cents) == (1001, 1000)
 
 
@@ -248,14 +248,26 @@ def test_a_cash_order_total_must_equal_its_lines_too() -> None:
     a = line()
     cash = payment(1000, PaymentProvider.CASH)
     with pytest.raises(OrderTotalMismatchError):
-        check_order_totals(Ledger(999, (a,), cash))
+        check_order_totals(Ledger(999, (a,), cash), order_currency="USD")
 
 
 def test_an_online_payment_must_equal_the_order_total_and_cash_need_not() -> None:
     a, b = line(), line(S.CANCELLED)
     with pytest.raises(OrderTotalMismatchError):
-        check_order_totals(ledger(a, b, pay=payment(1000)))
-    check_order_totals(ledger(a, b, pay=payment(1000, PaymentProvider.CASH)))
+        check_order_totals(ledger(a, b, pay=payment(1000)), order_currency="USD")
+    check_order_totals(ledger(a, b, pay=payment(1000, PaymentProvider.CASH)), order_currency="USD")
+
+
+def test_the_payment_currency_must_be_the_order_currency() -> None:
+    a = line()
+    with pytest.raises(OrderTotalMismatchError):
+        check_order_totals(ledger(a), order_currency="EUR")
+
+
+def test_a_line_named_twice_in_one_request_is_refused() -> None:
+    a = line()
+    with pytest.raises(ValueError, match="one item per line"):
+        check_request(ledger(a), [item(a, 600), item(a, 600)])
 
 
 # --- L8 and U3 --------------------------------------------------------------------------
@@ -274,6 +286,16 @@ def test_refund_facts_from_rows() -> None:
         False, True, False
     )
     assert refund_facts(ledger(a, b, refunds=(voided,))) == RefundFacts()
+
+
+def test_only_the_paid_payments_refunds_and_chargebacks_make_the_facts() -> None:
+    a = line()
+    other = uuid4()  # a late-captured attempt of the same order
+    pending = RefundFact(uuid4(), other, RefundKind.ADMIN, RefundStatus.PENDING, False, 1000)
+    owed = RefundFact(uuid4(), other, RefundKind.ADMIN, RefundStatus.FAILED, False, 1000)
+    absorbed = ChargebackFact(other, 1000)
+    book = ledger(a, refunds=(pending, owed), chargebacks=(absorbed,))
+    assert refund_facts(book) == RefundFacts()
 
 
 @pytest.mark.parametrize(("covers", "present", "owed"), list(product((False, True), repeat=3)))
@@ -436,6 +458,16 @@ def test_each_refund_step(
     status, reissued, line_refunded, action = key
     step = refund_step(status, action, reissued=reissued, line_refunded=line_refunded)
     assert (step.target, step.refusal) == expected
+
+
+@pytest.mark.parametrize("status", [R.PENDING, R.FAILED])
+def test_a_void_never_reopens_a_cancelled_line(status: R) -> None:
+    step = refund_step(status, RefundAction.VOID, reissued=False, line_cancelled=True)
+    assert (step.target, step.refusal) == (None, RefundRefusal.LINE_ALREADY_CANCELLED)
+    both = refund_step(
+        status, RefundAction.VOID, reissued=False, line_refunded=True, line_cancelled=True
+    )
+    assert both.refusal is RefundRefusal.LINE_ALREADY_REFUNDED
 
 
 def test_settled_and_voided_are_terminal() -> None:

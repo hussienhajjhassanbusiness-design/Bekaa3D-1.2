@@ -91,7 +91,8 @@ _TRANSITION = {
     409: {
         "description": "INVALID_STATE_TRANSITION (`reason`: `not_pending`, `not_failed`, "
         "`already_settled`, `already_reissued` with `reissued_by_refund_id`, "
-        "`line_already_refunded`), or ORDER_TOTAL_MISMATCH."
+        "`line_already_refunded`, `line_already_cancelled`), or ORDER_TOTAL_MISMATCH "
+        "(never on settle)."
     },
     422: {"description": "VALIDATION_ERROR."},
 }

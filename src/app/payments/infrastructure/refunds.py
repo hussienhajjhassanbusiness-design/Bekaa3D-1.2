@@ -208,7 +208,7 @@ async def order_refund_facts(session: AsyncSession, order_id: UUID) -> RefundFac
     await require_order_lock(session, order_id)
     paid = (
         await session.execute(
-            select(_P.id, _P.provider, _P.status, _P.amount_cents).where(
+            select(_P.id, _P.provider, _P.status, _P.amount_cents, _P.currency).where(
                 _P.order_id == order_id, _P.status.in_(REACHED_PAID)
             )
         )
@@ -217,7 +217,10 @@ async def order_refund_facts(session: AsyncSession, order_id: UUID) -> RefundFac
         return NO_REFUNDS
     rows = await session.execute(select(*_COLUMNS).where(_R.order_id == order_id).order_by(_R.id))
     refunds = [_refund(row, []).fact() for row in rows]
-    return facts_for(PaymentFact(paid.id, paid.provider, paid.status, paid.amount_cents), refunds)
+    return facts_for(
+        PaymentFact(paid.id, paid.provider, paid.status, paid.amount_cents, paid.currency),
+        refunds,
+    )
 
 
 # --- Reads for responses: no lock, never a phone, hash, address or provider reference ---
