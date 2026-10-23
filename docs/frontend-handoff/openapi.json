@@ -4150,6 +4150,19 @@
             "title": "Name",
             "type": "string"
           },
+          "order_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The order a problem report is about.",
+            "title": "Order Id"
+          },
           "phone": {
             "anyOf": [
               {
@@ -4179,6 +4192,19 @@
             "format": "date-time",
             "title": "Updated At",
             "type": "string"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set for a customer's problem report only.",
+            "title": "User Id"
           }
         },
         "required": [
@@ -4190,7 +4216,9 @@
           "message",
           "status",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "user_id",
+          "order_id"
         ],
         "title": "ContactMessageDetail",
         "type": "object"
@@ -6345,6 +6373,19 @@
             "title": "Name",
             "type": "string"
           },
+          "problem_reported_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Physical: the first problem report.",
+            "title": "Problem Reported At"
+          },
           "product_id": {
             "format": "uuid",
             "title": "Product Id",
@@ -6356,6 +6397,19 @@
           "quantity": {
             "title": "Quantity",
             "type": "integer"
+          },
+          "receipt_confirmed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Physical: the first \"I got it\".",
+            "title": "Receipt Confirmed At"
           },
           "unit_price": {
             "$ref": "#/components/schemas/PriceRead"
@@ -6372,7 +6426,9 @@
           "line_total",
           "fulfillment_status",
           "fulfilled_at",
-          "cancelled_at"
+          "cancelled_at",
+          "receipt_confirmed_at",
+          "problem_reported_at"
         ],
         "title": "OrderLineRead",
         "type": "object"
@@ -6899,6 +6955,21 @@
           "request_id",
           "errors"
         ],
+        "type": "object"
+      },
+      "ProblemReportCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "maxLength": 5000,
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "ProblemReportCreate",
         "type": "object"
       },
       "ProductDetail": {
@@ -20307,6 +20378,115 @@
         ]
       }
     },
+    "/api/v1/me/orders/{order_id}/confirm-receipt": {
+      "post": {
+        "operationId": "confirm_my_receipt_api_v1_me_orders__order_id__confirm_receipt_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Order Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderDetailRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No valid session cookie was presented."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "CSRF_INVALID, or EMAIL_VERIFICATION_REQUIRED."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "NOT_FOUND: no such order, or not yours."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INVALID_STATE_TRANSITION (`reason`: `no_delivered_line`): no physical line is delivered or picked up."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the database or Redis is unreachable; retry later."
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Say \"I got it\" for the delivered or picked-up items of your order",
+        "tags": [
+          "orders"
+        ]
+      }
+    },
     "/api/v1/me/orders/{order_id}/payments": {
       "post": {
         "description": "Tx1: claim (scope `payment_retry:{order_id}`), lock the caller's order, T1, the new\nattempt in a SAVEPOINT, COMMIT. The provider call with no transaction open. Tx2:\nthe reference or the failure, and the stored response.",
@@ -20464,6 +20644,146 @@
           }
         ],
         "summary": "Start a new payment attempt for one of your unpaid orders",
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/api/v1/me/orders/{order_id}/report-problem": {
+      "post": {
+        "description": "The message body is never logged or audited; it lives in the contact queue only.",
+        "operationId": "report_my_problem_api_v1_me_orders__order_id__report_problem_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Order Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProblemReportCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderDetailRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "MALFORMED_REQUEST: the body is not valid JSON."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No valid session cookie was presented."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "CSRF_INVALID, or EMAIL_VERIFICATION_REQUIRED."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "NOT_FOUND: no such order, or not yours."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INVALID_STATE_TRANSITION (`reason`: `no_delivered_line`): no physical line is delivered or picked up."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "VALIDATION_ERROR: a blank or over-long message."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "RATE_LIMITED: too many problem reports this hour."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the database or Redis is unreachable; retry later."
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Report a problem with the delivered or picked-up items of your order",
         "tags": [
           "orders"
         ]

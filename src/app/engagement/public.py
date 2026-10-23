@@ -15,19 +15,28 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.engagement.application.commands.purge_expired_attachments import (
     PurgeExpiredAttachments,
 )
+from app.engagement.application.commands.submit_problem_report import SubmitProblemReport
 from app.engagement.application.services.notification_writer import write_notification
+from app.engagement.domain.contact_message import MESSAGE_MAX, ProblemReport
 from app.engagement.domain.entities import Notification
 from app.engagement.domain.enums import NotificationType
+from app.engagement.infrastructure.administrators import IdentityAdministratorDirectory
+from app.engagement.infrastructure.contact_messages import SqlContactMessageRepository
 from app.engagement.infrastructure.custom_requests import SqlCustomRequestRepository
 from app.engagement.infrastructure.repositories import NotificationRepository
 from app.integrations.storage.ports import StoragePort
 
 __all__ = [
+    "PROBLEM_REPORT_MESSAGE_MAX",
     "NotificationType",
+    "ProblemReport",
     "create_notification",
     "purge_expired_attachments_batch",
     "referenced_attachment_keys",
+    "submit_problem_report",
 ]
+
+PROBLEM_REPORT_MESSAGE_MAX = MESSAGE_MAX
 
 
 async def create_notification(
@@ -79,3 +88,14 @@ async def purge_expired_attachments_batch(
 async def referenced_attachment_keys(session: AsyncSession, keys: Sequence[str]) -> set[str]:
     """Which private attachment keys a row still names, for `reap_orphan_files`."""
     return await SqlCustomRequestRepository(session).referenced_keys(keys)
+
+
+async def submit_problem_report(session: AsyncSession, report: ProblemReport) -> UUID:
+    """The linked contact message plus one notification per active administrator, in the
+    caller's transaction (VS-029b). Returns the message id. Does **not** commit."""
+    message = await SubmitProblemReport(
+        SqlContactMessageRepository(session),
+        NotificationRepository(session),
+        IdentityAdministratorDirectory(session),
+    ).execute(report)
+    return message.id

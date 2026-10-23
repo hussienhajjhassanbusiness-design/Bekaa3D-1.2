@@ -1,6 +1,6 @@
-"""The ORM models match the migrated schema for VS-023's six tables (03a4730dd046, plus
-VS-024's payments.captured_* in 00ce1ce252a6) and VS-028's cash_payment_blocks and orders
-index (fcd589e89e59): Alembic's autogenerate diff must be empty."""
+"""Alembic's autogenerate diff is empty for the tables listed below: VS-023's six, VS-024's
+payments.captured_*, VS-028's cash_payment_blocks and orders index, and VS-029b's
+contact_messages (0f43e238eaae, linked to orders)."""
 
 from typing import Any
 
@@ -23,6 +23,7 @@ VS023_TABLES = {
     "webhook_events",
     "idempotency_records",
     "cash_payment_blocks",
+    "contact_messages",
 }
 
 

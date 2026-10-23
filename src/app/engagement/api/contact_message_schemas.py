@@ -62,6 +62,8 @@ class ContactMessageDetail(BaseModel):
     status: ContactMessageStatus
     created_at: datetime
     updated_at: datetime
+    user_id: UUID | None = Field(description="Set for a customer's problem report only.")
+    order_id: UUID | None = Field(description="The order a problem report is about.")
 
     @classmethod
     def of(cls, message: ContactMessage) -> "ContactMessageDetail":
@@ -75,6 +77,8 @@ class ContactMessageDetail(BaseModel):
             status=message.status,
             created_at=message.created_at,
             updated_at=message.updated_at,
+            user_id=message.user_id,
+            order_id=message.order_id,
         )
 
 

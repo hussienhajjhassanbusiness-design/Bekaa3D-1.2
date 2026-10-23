@@ -83,6 +83,8 @@ LINE_KEYS = {
     "fulfillment_status",
     "fulfilled_at",
     "cancelled_at",
+    "receipt_confirmed_at",  # VS-029b
+    "problem_reported_at",
 }
 
 

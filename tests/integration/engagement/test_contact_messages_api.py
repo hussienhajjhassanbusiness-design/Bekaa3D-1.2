@@ -440,6 +440,8 @@ async def test_reading_a_message_is_audited_and_does_not_mark_it_read(
         "status": "new",
         "created_at": None,
         "updated_at": None,
+        "user_id": None,  # a contact-form message; VS-029b's problem reports set both
+        "order_id": None,
     }
     [audit] = await _audits(db_session, row.id, "contact_message.viewed")
     assert audit.actor_user_id == admin_id

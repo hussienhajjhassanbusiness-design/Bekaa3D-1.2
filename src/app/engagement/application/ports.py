@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any, Protocol
 from uuid import UUID
 
-from app.engagement.domain.contact_message import ContactDetails, ContactMessage
+from app.engagement.domain.contact_message import ContactDetails, ContactMessage, ProblemReport
 from app.engagement.domain.custom_request import (
     CustomRequest,
     CustomRequestAttachment,
@@ -35,6 +35,8 @@ class NotificationStore(Protocol):
 
 class ContactMessageStore(Protocol):
     async def add(self, details: ContactDetails) -> ContactMessage: ...
+
+    async def add_problem_report(self, report: ProblemReport) -> ContactMessage: ...
 
     async def get(self, message_id: UUID) -> ContactMessage | None: ...
 

@@ -96,7 +96,7 @@ class NotificationModel(Base):
 
 
 class ContactMessageModel(Base):
-    """database-design.md 12.6 minus `user_id` and `order_id`, which VS-029b adds (VS-033 Q8)."""
+    """database-design.md 12.6; `user_id` and `order_id` set only by a problem report (VS-029b)."""
 
     __tablename__ = "contact_messages"
 
@@ -108,6 +108,12 @@ class ContactMessageModel(Base):
     phone: Mapped[str | None] = mapped_column(Text)
     subject: Mapped[str | None] = mapped_column(Text)
     message: Mapped[str] = mapped_column(Text, nullable=False)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    order_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("orders.id", ondelete="RESTRICT")
+    )
     status: Mapped[ContactMessageStatus] = mapped_column(
         Enum(
             ContactMessageStatus,
@@ -148,6 +154,19 @@ class ContactMessageModel(Base):
         ),
         # Queue order (VS-033 Q9): new first, oldest first; the enum sorts by declaration.
         Index("ix_contact_messages_queue", "status", "created_at", "id"),
+        CheckConstraint(
+            "order_id IS NULL OR user_id IS NOT NULL", name="ck_contact_messages_order_has_user"
+        ),
+        Index(
+            "ix_contact_messages_order_id",
+            "order_id",
+            postgresql_where=text("order_id IS NOT NULL"),
+        ),
+        Index(
+            "ix_contact_messages_user_id",
+            "user_id",
+            postgresql_where=text("user_id IS NOT NULL"),
+        ),
     )
 
 

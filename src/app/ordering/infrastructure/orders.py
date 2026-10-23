@@ -241,6 +241,26 @@ class SqlOrderStore:
                 values["cancelled_at"] = cancelled_at
             await self._session.execute(update(_I).where(_I.id.in_(line_ids)).values(**values))
 
+    async def stamp_receipt_confirmed(
+        self, line_ids: Sequence[UUID], *, at: datetime
+    ) -> list[UUID]:
+        result = await self._session.execute(
+            update(_I)
+            .where(_I.id.in_(line_ids), _I.receipt_confirmed_at.is_(None))
+            .values(receipt_confirmed_at=at, updated_at=at)
+            .returning(_I.id)
+        )
+        return sorted(result.scalars())
+
+    async def stamp_problem_reported(self, line_ids: Sequence[UUID], *, at: datetime) -> list[UUID]:
+        result = await self._session.execute(
+            update(_I)
+            .where(_I.id.in_(line_ids), _I.problem_reported_at.is_(None))
+            .values(problem_reported_at=at, updated_at=at)
+            .returning(_I.id)
+        )
+        return sorted(result.scalars())
+
     async def set_line_delivered(self, line_id: UUID, *, at: datetime, delivered_by: UUID) -> int:
         """STL `awaiting_delivery -> delivered`; `fulfilled_at` and `delivered_by` together."""
         result = await self._session.execute(

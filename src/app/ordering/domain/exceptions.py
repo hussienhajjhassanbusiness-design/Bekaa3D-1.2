@@ -190,6 +190,16 @@ class OfferChangedError(OrderingDomainError):
     """The locked offer differs from the one priced: a 500, never a charge (ADR-037 d3)."""
 
 
+class ReceiptOrderNotFoundError(OrderingDomainError):
+    """Unknown, or not the caller's: the same 404 either way (VS-029b)."""
+
+
+class NoDeliveredLineError(OrderingDomainError):
+    """409 INVALID_STATE_TRANSITION: no physical line is delivered or picked up (FR-21)."""
+
+    reason = "no_delivered_line"
+
+
 class LineNotFoundError(OrderingDomainError):
     """404: the item is not a line of the order (or the order does not exist)."""
 

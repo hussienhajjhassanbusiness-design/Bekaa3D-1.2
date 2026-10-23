@@ -305,6 +305,12 @@ class OrderItemModel(Base):
         CheckConstraint(
             "offer_id IS NULL OR product_type = 'stl'", name="ck_order_items_offer_is_stl"
         ),
+        # VS-029b / ADR-041 d1: "I got it" and problem reports are for physical lines.
+        CheckConstraint(
+            "product_type = 'physical' "
+            "OR (receipt_confirmed_at IS NULL AND problem_reported_at IS NULL)",
+            name="ck_order_items_feedback_physical_only",
+        ),
         # VS-041 / ADR-037: an offer pays for at most one line, ever.
         Index(
             "uq_order_items_offer_once",

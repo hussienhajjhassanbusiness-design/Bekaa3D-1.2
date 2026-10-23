@@ -176,6 +176,8 @@ class CustomerOrderLine:
     fulfilled_at: datetime | None
     cancelled_at: datetime | None
     offer_id: UUID | None = None
+    receipt_confirmed_at: datetime | None = None
+    problem_reported_at: datetime | None = None
 
 
 @dataclass(frozen=True)
