@@ -70,3 +70,22 @@ async def test_receipt_feedback_is_refused_on_an_stl_line(
     with pytest.raises(IntegrityError, match="ck_order_items_feedback_physical_only"):
         await _insert(db_engine, stamp, i=stl)
     await _insert(db_engine, stamp, i=order.line_ids[0])
+
+
+async def test_the_foreign_key_delete_rules_follow_database_design_14(
+    db_engine: AsyncEngine,
+) -> None:
+    """`user_id` SET NULL keeps the unverified-account purge unblocked; `order_id` RESTRICT."""
+    async with db_engine.connect() as conn:
+        rules: dict[str, str] = dict(
+            (
+                await conn.execute(
+                    text(
+                        "SELECT conname, confdeltype::text FROM pg_constraint"
+                        " WHERE conname IN ('fk_contact_messages_user_id',"
+                        " 'fk_contact_messages_order_id')"
+                    )
+                )
+            ).all()
+        )
+    assert rules == {"fk_contact_messages_user_id": "n", "fk_contact_messages_order_id": "r"}

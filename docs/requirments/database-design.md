@@ -1701,7 +1701,7 @@ As built by VS-034 (ADR-030): `scan_status` is the enum `upload_scan_status`, wh
 
 ## 12.6 `contact_messages`
 
-VS-033 built this table without `user_id` and `order_id`; VS-029b adds both (migration `0f43e238eaae`, ADR-041), as its problem reports are their first writer. `CHECK (order_id IS NULL OR user_id IS NOT NULL)`; partial indexes on each `WHERE … IS NOT NULL`; both FKs `ON DELETE RESTRICT`.
+VS-033 built this table without `user_id` and `order_id`; VS-029b adds both (migration `0f43e238eaae`, ADR-041), as its problem reports are their first writer. `CHECK (order_id IS NULL OR user_id IS NOT NULL)`; partial indexes on each `WHERE … IS NOT NULL`; `user_id` `ON DELETE SET NULL` and `order_id` `ON DELETE RESTRICT` (§14).
 
 | Column | Type | Null | Constraint |
 |---|---|---:|---|

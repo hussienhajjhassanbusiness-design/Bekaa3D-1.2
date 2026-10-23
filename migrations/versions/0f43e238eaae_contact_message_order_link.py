@@ -21,7 +21,7 @@ def upgrade() -> None:
         "users",
         ["user_id"],
         ["id"],
-        ondelete="RESTRICT",
+        ondelete="SET NULL",  # database-design.md 14; a report's owner is held by orders
     )
     op.create_foreign_key(
         "fk_contact_messages_order_id",

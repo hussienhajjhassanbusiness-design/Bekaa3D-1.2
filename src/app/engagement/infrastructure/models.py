@@ -109,7 +109,7 @@ class ContactMessageModel(Base):
     subject: Mapped[str | None] = mapped_column(Text)
     message: Mapped[str] = mapped_column(Text, nullable=False)
     user_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT")
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
     )
     order_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("orders.id", ondelete="RESTRICT")
