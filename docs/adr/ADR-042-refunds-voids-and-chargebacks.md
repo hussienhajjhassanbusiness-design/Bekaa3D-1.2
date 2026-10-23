@@ -53,6 +53,17 @@ The VS-041 audit added two more:
    Q-2 (the total equals its lines) is asserted inside each refund transaction, not by a trigger.
 7. **A late-capture refund may carry the currency the provider reported**, never converted (owner answer Q6). Every other refund is USD.
 
+### Decided in PR B (refund core, branch `vs-030-refund-core`)
+
+8. **One lock order for every refund path:** the idempotency claim, then `orders`, every line by id, the order's payments by id, then the refund (`FOR UPDATE` or INSERT). Rank 5 (`chargebacks`) is reserved for PR C; the cart and phone lock come last (VS-031). LO1 checks it statically and LO2 at runtime.
+9. **Refund facts are read only under the order's row lock.** The reader refuses a transaction that does not hold that order's lock (`OrderLockRequiredError`, a check on the row's `xmax`/`xmin`). Every refund writer takes the lock first (U12), so the rows cannot change under a reader.
+10. **Two guards back the state machine.** The use case decides on the locked row (`refund_step`), and each UPDATE matches only a row still in a legal source state. The CHECKs added in PR A are the last backstop.
+11. **Create and reissue run in one transaction with their `Idempotency-Key` claim.** Any 4xx rolls the claim back, so the same key may be retried. Only the 201 is stored and replayed. Scopes: `admin_refund_create` and `admin_refund_reissue`, per administrator.
+12. **A Q-2 mismatch (owner answer Q11)** answers 409 `ORDER_TOTAL_MISMATCH` and writes nothing. It logs `refund_integrity_error` and raises a `refund_integrity` payment alert in its own transaction, repeated at most daily per payment. Unpaid orders are refused first (409 `ORDER_NOT_PAID`).
+13. **Settle changes no order or payment status.** Create, fail, reissue and void recompute both. The payment may move back (`refunded → partially_refunded → paid`).
+14. **Display reads are unlocked and never decide money.** The customer's `OrderDetail.refunds` shows admin, cancellation and late-capture refunds as `processing` or `refunded`, hiding voided ones and a reissued failure (Q9). `AdminOrderDetail` gains `refunds` and `refund_balance`.
+15. **The cash-block phone search is audited** as `cash_block.searched`, with its filters, result count and block ids only: never the phone or its hash (Q8).
+
 ## Consequences
 
 - PR B rewrites the `derive_order_status` tests for cases A and B (VS-023's note asked for this ADR), and replaces the `refund_present` stop-gap.

@@ -1,6 +1,6 @@
 # VS-030 — Refunds and Settlement: Implementation Plan
 
-**Status:** IN PROGRESS (PR B, branch `vs-030-refund-core`), revision 2. PR A (`vs-030-schema`,
+**Status:** IN PROGRESS: PR B built on `vs-030-refund-core` (awaiting review); PR C next. Revision 2. PR A (`vs-030-schema`,
 migration `c01e53ab3e0f`) is merged as `7b346a4`. The owner answered Q1-Q12 on 2026-10-23
 (Revisions 1 and 2 below).
 **Date:** 2026-10-23
@@ -1215,6 +1215,14 @@ Never everything at once (memory, VS-041 audit §8).
 Reports: the head, the constraint list, and the downgrade result.
 
 ### PR B: refund core (branch `vs-030-refund-core`, from main after PR A)
+
+PR B as built (2026-10-24):
+- Every B1-B4 item is in, except the published interface's `create_refund` /
+  `refund_balances` for VS-031 and `refunded_cents_by_line` / `unsettled_refund_exists`.
+  Nothing calls those yet, so their owners (VS-031, VS-043, VS-045) add them.
+- The refund limits sit in `app.payments.domain.limits`, registered in `test_limits.py`.
+- E1 starts from a seeded paid order, not a checkout. R4, R5, R10 and R14 run 5 forced
+  rounds per commit order (the order is forced, so repeats add little), not 50.
 
 Owner decisions at PR B's start (2026-10-23):
 - The branch is `vs-030-refund-core`, not the `vs-030-refunds` first planned here.
