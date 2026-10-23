@@ -814,6 +814,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - The payment and order statuses are recomputed from refund records at creation: non-failed refunds covering all paid money make the order `refunded` (unless every line is cancelled); any non-failed or owed refund makes it at least `partially_refunded`; `late_capture` refunds never count; settlement never changes either status.
   - A cash payment is refunded up to the cash recorded.
   - Sends a "refund issued" email.
+  - Audit cash-block phone searches (audit row with the phone hash only, never the number).
 - **Tests:**
   - Concurrent partial refunds never exceed the paid amount, on an online and on a cash payment.
   - An order whose `total_cents` no longer equals the sum of its lines (seeded directly) refuses a refund and writes nothing; the database refuses a line whose `user_id` differs from its order's.
