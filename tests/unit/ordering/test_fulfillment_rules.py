@@ -27,7 +27,12 @@ from app.ordering.domain.fulfillment import (
     estimated_dispatch_at,
     resolve_fulfillment,
 )
-from app.ordering.domain.order_status import LineState, OrderStatusInputs, derive_order_status
+from app.ordering.domain.order_status import (
+    LineState,
+    OrderStatusInputs,
+    RefundFacts,
+    derive_order_status,
+)
 from app.ordering.domain.orders import NewOrderLine
 
 P, S = ProductType.PHYSICAL, ProductType.STL
@@ -203,14 +208,15 @@ TERMINAL = [
 def test_a_paid_cash_order_with_only_terminal_lines_never_derives_in_progress(size: int) -> None:
     """D8: `in_progress` on a cash order means unpaid; no edge leaves a terminal state."""
     for combo in product(TERMINAL, repeat=size):
-        for refund_present in (False, True):
+        # Every RefundFacts, which covers both former flags (refund present, refunds cover).
+        for facts in product((False, True), repeat=3):
             status = derive_order_status(
                 OrderStatusInputs(
                     CASH,
                     cancelled_at_set=False,
                     payment_reached_paid=True,
                     lines=tuple(LineState(s) for s in combo),
-                    refund_present=refund_present,
+                    refunds=RefundFacts(*facts),
                 )
             )
             assert status is not OrderStatus.IN_PROGRESS, combo
