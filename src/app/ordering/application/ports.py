@@ -177,6 +177,41 @@ class CashChecks(Protocol):
     async def open_order_count(self, user_id: UUID, phone_hash: str) -> int: ...
 
 
+class ReceiptOrders(Protocol):
+    """VS-029b's slice of the order store, in the ADR-024 lock order."""
+
+    async def lock_owned_order(self, order_id: UUID, user_id: UUID) -> Order | None: ...
+
+    async def lock_lines(self, order_id: UUID) -> list[OrderLine]: ...
+
+    async def stamp_receipt_confirmed(
+        self, order_id: UUID, line_ids: Sequence[UUID], *, at: datetime
+    ) -> list[UUID]:
+        """Only where unset, so the first confirmation stays; returns the ids it set."""
+        ...
+
+    async def stamp_problem_reported(
+        self, order_id: UUID, line_ids: Sequence[UUID], *, at: datetime
+    ) -> list[UUID]:
+        """Only where unset, so the first report's time stays; returns the ids it set."""
+        ...
+
+
+class ProblemReportInbox(Protocol):
+    """Implemented over `app.engagement.public.submit_problem_report`; returns the message id."""
+
+    async def submit(
+        self,
+        *,
+        user_id: UUID,
+        order_id: UUID,
+        order_number: str,
+        recipient_name: str | None,
+        email: str,
+        message: str,
+    ) -> UUID: ...
+
+
 class OrderNotices(Protocol):
     async def cash_order_placed(self, order: Order, lines: Sequence[OrderLine]) -> None: ...
 

@@ -6,7 +6,7 @@ from sqlalchemy import DateTime, func, literal, select, tuple_, update
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.engagement.domain.contact_message import ContactDetails, ContactMessage
+from app.engagement.domain.contact_message import ContactDetails, ContactMessage, ProblemReport
 from app.engagement.domain.enums import ContactMessageStatus
 from app.engagement.infrastructure.models import ContactMessageModel
 
@@ -21,6 +21,8 @@ _COLUMNS = (
     _M.status,
     _M.created_at,
     _M.updated_at,
+    _M.user_id,
+    _M.order_id,
 )
 
 
@@ -35,6 +37,8 @@ def _to_domain(row: Any) -> ContactMessage:
         status=row.status,
         created_at=row.created_at,
         updated_at=row.updated_at,
+        user_id=row.user_id,
+        order_id=row.order_id,
     )
 
 
@@ -51,6 +55,21 @@ class SqlContactMessageRepository:
                 phone=details.phone,
                 subject=details.subject,
                 message=details.message,
+            )
+            .returning(*_COLUMNS)
+        )
+        return _to_domain((await self._session.execute(stmt)).one())
+
+    async def add_problem_report(self, report: ProblemReport) -> ContactMessage:
+        stmt = (
+            postgresql.insert(_M)
+            .values(
+                name=report.name,
+                email=report.email,
+                subject=report.subject,
+                message=report.message,
+                user_id=report.user_id,
+                order_id=report.order_id,
             )
             .returning(*_COLUMNS)
         )

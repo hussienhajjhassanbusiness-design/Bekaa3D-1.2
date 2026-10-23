@@ -410,8 +410,8 @@ A materially changed retry uses a **new** idempotency key.
 | `POST /api/v1/me/orders/{order_id}/payments` | Verified Customer; owner; CSRF | `PaymentRetryRequest` + required `Idempotency-Key` | `201 PaymentRetryRead` | 401, 403, 404, 409 `PAYMENT_ALREADY_ACTIVE` / `INVALID_STATE_TRANSITION` / `IDEMPOTENCY_KEY_CONFLICT` / `IDEMPOTENCY_REQUEST_IN_PROGRESS`, 422 `PAYMENT_METHOD_NOT_ALLOWED` / `VALIDATION_ERROR`, 429, 502 `PAYMENT_PROVIDER_UNAVAILABLE`, 503 `ONLINE_PAYMENT_UNAVAILABLE` | — | **As built (VS-024, ADR-036):** retry on the same order before `placed_at + checkout_hold_period`; the order's own total is charged; key scoped `payment_retry:{order_id}` per user; two transactions around the provider call; 10/hour. Full contract: [`docs/payment-recovery.md`](../payment-recovery.md) |
 | `GET /api/v1/me/orders/{order_id}` | Authenticated; owner | — | `200 OrderDetail` | 401, 404 | — | Includes lines, payment method, `payment_due`, `can_cancel`, payment projection, refund summary and status history needed by customer; `in_production` is shown as `pending` and omitted from the history. **As built (VS-025, ADR-033):** no refund summary until VS-030; another customer's order is the same 404 as an unknown id |
 | `POST /api/v1/me/orders/{order_id}/cancel` | Verified Customer; owner | `CustomerOrderCancelRequest` | `200 OrderDetail` | 401, 403, 404, 409 `ORDER_NOT_CANCELLABLE` / `INVALID_STATE_TRANSITION` | — | V1 decision: cancels all still-self-cancellable physical lines atomically; digital lines are never cancelled; allowed only when `can_cancel` is true (a live physical line, a cash order or a payment that reached `paid`, every live (not cancelled) physical line `pending`; already-cancelled lines are ignored, ADR-033); if cancellation is no longer legally possible, no partial silent cancellation occurs |
-| `POST /api/v1/me/orders/{order_id}/confirm-receipt` | Verified Customer; owner; CSRF | — | `200 OrderDetail` | 401, 403, 404, 409 `INVALID_STATE_TRANSITION` | — | Sets `receipt_confirmed_at` on delivered / picked-up lines; idempotent; no state change (ADR-024, VS-029b) |
-| `POST /api/v1/me/orders/{order_id}/report-problem` | Verified Customer; owner; CSRF | `ProblemReportCreate` | `201 OrderDetail` | 401, 403, 404, 409 `INVALID_STATE_TRANSITION`, 422, 429 | — | Sets `problem_reported_at` and creates a contact message linked to the order; no state change (ADR-024, VS-029b) |
+| `POST /api/v1/me/orders/{order_id}/confirm-receipt` | Verified Customer; owner; CSRF | — | `200 OrderDetail` | 401, 403, 404, 409 `INVALID_STATE_TRANSITION` | — | Sets `receipt_confirmed_at` on delivered / picked-up lines; idempotent; no state change (ADR-024, VS-029b). **As built (ADR-041):** physical lines only; `409` carries `reason: no_delivered_line`; only unset timestamps are written; audited when a line was stamped; no rate limit. Contract: [`docs/order-history.md`](../order-history.md) |
+| `POST /api/v1/me/orders/{order_id}/report-problem` | Verified Customer; owner; CSRF | `ProblemReportCreate` | `201 OrderDetail` | 401, 403, 404, 409 `INVALID_STATE_TRANSITION`, 422, 429 | — | Sets `problem_reported_at` and creates a contact message linked to the order; no state change (ADR-024, VS-029b). **As built (ADR-041):** physical lines only; the first report's time is kept and every report is a new message; one in-app notification (`order.problem_reported`) per active administrator in the same transaction; 5/hour per user; audited without the body |
 
 The delivered / picked-up email links only to the order page; it never carries a link that changes state, because email scanners follow links.
 
@@ -642,7 +642,7 @@ A callback alone never authorizes these state changes.
 | Method + Path | Request | Success | Errors | Pagination / Filter / Sort | Side Effects / Notes |
 |---|---|---|---|---|---|
 | `GET /api/v1/admin/contact-messages` | query params | `200 ContactMessagePage` | 401/404, 422 | Cursor; `status`, `created_after` (inclusive), `created_before` (exclusive), exact `email`; sorted `status` (new, read, replied, archived), then oldest first | Admin queue; audited as `contact_message.list_viewed` (filters as flags, no address) |
-| `GET /api/v1/admin/contact-messages/{message_id}` | — | `200 ContactMessageDetail` | 401/404 | — | Audited as `contact_message.viewed`; does not mark the message read |
+| `GET /api/v1/admin/contact-messages/{message_id}` | — | `200 ContactMessageDetail` | 401/404 | — | Audited as `contact_message.viewed`; does not mark the message read. Carries `user_id` and `order_id`, set only for a customer's problem report (VS-029b, ADR-041) |
 | `PATCH /api/v1/admin/contact-messages/{message_id}` | `ContactMessageAdminUpdate` | `200 ContactMessageDetail` | 401/404, 403 `CSRF_INVALID`, 409 `INVALID_STATE_TRANSITION`, 422 | — | Status moves forward only, skipping allowed (new, read, replied, archived); the same status is a no-op that is still audited. Checked under a row lock and audited as `contact_message.status_changed` (status only). The reply itself happens outside the system |
 
 ---
@@ -934,7 +934,7 @@ The amount must equal the sum of live line totals; the server never derives it f
 ### `ProblemReportCreate`
 
 ```text
-message: str
+message: str         # 1-5000 after trimming; line breaks allowed (VS-029b)
 ```
 
 ---

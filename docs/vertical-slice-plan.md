@@ -35,7 +35,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 | VS-030 | Refunds and settlement | VS-029, VS-024 | Not started |
 | VS-031 | Cancellation and returns | VS-030 | Not started |
 | VS-033 | Contact form and captcha | VS-005 | Done |
-| VS-029b | Receipt confirmation and problem report | VS-029, VS-033 | Not started |
+| VS-029b | Receipt confirmation and problem report | VS-029, VS-033 | Done |
 | VS-034 | Bring Your Idea submission | VS-014, VS-033 | Done |
 | VS-035 | Bring Your Idea pipeline and funnel | VS-034 | Done |
 | VS-036 | Reviews and Verified Purchase badge | VS-015, VS-028, VS-030, VS-031 | Not started |
@@ -963,7 +963,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 - **Built:** ADR-026 (a refused token is `400 CAPTCHA_INVALID`, an outage fails closed with `503`, a 60/hour attempt limit runs before the captcha). Tests: `tests/integration/engagement/test_contact_messages_api.py`, `test_contact_message_schema.py`; `tests/integration/identity/test_auth_captcha.py`; `tests/concurrency/test_contact_message_status_race.py`; `tests/unit/integrations/test_captcha_factory.py`, `test_turnstile_adapter.py`; `tests/unit/engagement/test_contact_*.py`.
 
 ## VS-029b — Receipt confirmation and problem report
-**Status:** Not started
+**Status:** Done (2026-10-23; [ADR-041](adr/ADR-041-receipt-confirmation-and-problem-report.md))
 **Depends on:** VS-029, VS-033
 **Goal:** After delivery or pickup a customer can say "I got it" or report a problem, and the administrator sees it on the order, without either being required.
 - **Model / migration:** nullable `contact_messages.user_id` and `order_id`, which VS-033 left out (`order_items.receipt_confirmed_at` and `problem_reported_at` come from VS-023).
@@ -978,6 +978,18 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - Confirming twice changes nothing the second time.
   - An order completes without confirmation.
 - **Done when:** Receipt confirmation and problem reports are recorded on the order and never block completion.
+- **Built:**
+  - Migration `0f43e238eaae`.
+  - ADR-041: physical lines only; the first timestamp is kept; a report also notifies every active administrator in its transaction (owner decision); 5 reports an hour per user.
+  - Tests:
+    - `tests/integration/ordering/test_receipt_api.py`, `test_receipt_schema.py`, `test_receipt_lock_order.py`
+    - `tests/concurrency/test_receipt_races.py`
+    - `tests/unit/ordering/test_receipt_rules.py`, `test_receipt_service.py`
+    - `tests/unit/engagement/test_problem_report.py`
+    - `tests/smoke/test_vs029b_smoke.py`
+- **Notes for VS-044 / VS-045:**
+  - Contact messages with `user_id` belong to that customer's export and anonymisation.
+  - A problem report holds the `orders` lock while its foreign keys take `FOR KEY SHARE` on the customer's and each administrator's `users` row. If anonymisation updates `users.email` (a unique key), it must not then lock that customer's orders, or it can deadlock against a report: lock orders before users.
 
 ## VS-034 — Bring Your Idea submission
 **Status:** Done

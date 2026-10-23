@@ -15,6 +15,9 @@ KNOWN_WRITERS = {
     ("ordering/infrastructure/orders.py", "set_line_status"): "only under the orders lock",
     ("ordering/infrastructure/orders.py", "set_line_delivered"): "only under the orders lock",
     ("ordering/infrastructure/orders.py", "move_line"): "only under the orders lock",  # VS-029
+    # VS-029b: timestamps only, never a state.
+    ("ordering/infrastructure/orders.py", "stamp_receipt_confirmed"): "only under the orders lock",
+    ("ordering/infrastructure/orders.py", "stamp_problem_reported"): "only under the orders lock",
 }
 # Callers of `set_line_status`: each must hold `lock_order_for_change`'s locks.
 KNOWN_LINE_STATUS_CALLERS = {
@@ -130,3 +133,29 @@ def test_only_the_delivery_writer_sets_fulfilled_at_or_delivered_by() -> None:
         if pattern.search(path.read_text("utf-8"))
     }
     assert hits == {"ordering/infrastructure/orders.py"}
+
+
+def _call_lines(function: ast.AST) -> dict[str, int]:
+    """Called name -> first source line, since `ast.walk` is breadth-first."""
+    lines: dict[str, int] = {}
+    for node in ast.walk(function):
+        if isinstance(node, ast.Call):
+            func = node.func
+            name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", "")
+            lines[name] = min(lines.get(name, node.lineno), node.lineno)
+    return lines
+
+
+def test_receipt_timestamps_are_written_only_after_the_owned_order_lock() -> None:
+    receipt = "ordering/application/services/receipt.py"
+    writers = {
+        "confirm_receipt": "stamp_receipt_confirmed",
+        "report_problem": "stamp_problem_reported",
+    }
+    tree = ast.parse((SRC / receipt).read_text(encoding="utf-8"))
+    for caller, stamp in writers.items():
+        assert _callers(stamp) == {(receipt, caller)}
+        calls = _call_lines(next(f for f in _functions(tree) if f.name == caller))
+        assert calls["_received"] < calls[stamp], caller
+    locks = _call_lines(next(f for f in _functions(tree) if f.name == "_received"))
+    assert locks["lock_owned_order"] < locks["lock_lines"]

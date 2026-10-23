@@ -63,6 +63,8 @@ _LINE_COLUMNS = (
     _I.fulfilled_at,
     _I.cancelled_at,
     _I.offer_id,
+    _I.receipt_confirmed_at,
+    _I.problem_reported_at,
 )
 
 

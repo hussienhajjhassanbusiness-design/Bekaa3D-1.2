@@ -134,11 +134,18 @@ async def get_my_order(
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
 ) -> OrderDetailRead:
+    return await order_detail_read(session, user_id=user.id, order_id=order_id)
+
+
+async def order_detail_read(
+    session: AsyncSession, *, user_id: UUID, order_id: UUID
+) -> OrderDetailRead:
+    """The owner's `OrderDetail`, also returned by VS-029b's POSTs; 404 if not theirs."""
     hold = await settings_reader(session).get_duration_seconds(HOLD_SETTING)
     view = await get_order(
         SqlOrderHistory(session),
         order_payment_reader(session),
-        user_id=user.id,
+        user_id=user_id,
         order_id=order_id,
         retry=RetryContext(SqlOfferCheckouts(session), timedelta(seconds=hold), datetime.now(UTC)),
     )

@@ -9,6 +9,7 @@ from app.ordering.api.offer_checkout import router as ordering_offer_checkout_ro
 from app.ordering.api.orders import router as ordering_orders_router
 from app.ordering.api.ownership import router as ordering_ownership_router
 from app.ordering.api.payment_retry import router as ordering_payment_retry_router
+from app.ordering.api.receipt import router as ordering_receipt_router
 
 router = APIRouter()
 router.include_router(identity_profile_router)
@@ -19,6 +20,8 @@ router.include_router(ordering_ownership_router)
 # VS-024: a new payment attempt for the caller's own unpaid order.
 router.include_router(ordering_payment_retry_router)
 router.include_router(ordering_orders_router)
+# VS-029b: "I got it" and "Report a problem" on the customer's own order.
+router.include_router(ordering_receipt_router)
 router.include_router(negotiation_offers_router)
 # VS-041: offer checkout lives with Ordering, which owns orders and checkout (ADR-037).
 router.include_router(ordering_offer_checkout_router)

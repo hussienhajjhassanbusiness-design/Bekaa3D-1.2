@@ -71,6 +71,8 @@ class OrderLineRead(BaseModel):
     )
     fulfilled_at: datetime | None = Field(description="STL: when the file was emailed.")
     cancelled_at: datetime | None
+    receipt_confirmed_at: datetime | None = Field(description='Physical: the first "I got it".')
+    problem_reported_at: datetime | None = Field(description="Physical: the first problem report.")
 
     @classmethod
     def of(cls, line: CustomerOrderLine, media_base_url: str) -> Self:
@@ -87,6 +89,8 @@ class OrderLineRead(BaseModel):
             fulfillment_status=line.fulfillment_status,
             fulfilled_at=line.fulfilled_at,
             cancelled_at=line.cancelled_at,
+            receipt_confirmed_at=line.receipt_confirmed_at,
+            problem_reported_at=line.problem_reported_at,
         )
 
 

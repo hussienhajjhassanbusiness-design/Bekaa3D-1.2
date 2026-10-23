@@ -47,6 +47,7 @@ Rules enforced by `app.engagement.domain.payload`:
 | `payload.event` | Type | Recipient | Other keys | Slice |
 | --- | --- | --- | --- | --- |
 | `custom_request.submitted` | `custom_request` | every active administrator | `custom_request_id`, `project_title`, `title` | VS-034 |
+| `order.problem_reported` | `order` | every active administrator, in the report's transaction (a failure fails the report, ADR-041) | `order_id`, `order_number`, `contact_message_id`, `title`; never the message, email or phone | VS-029b |
 | `payment.confirmed` | `payment` | the customer | `order_id`, `order_number` | VS-023 |
 | `order.placed` | `order` | the customer, for a cash order | `order_id`, `order_number` | VS-028 |
 | `offer.submitted` | `offer` | every active administrator | `offer_id`, `product_id`, `product_name`, `amount_cents`, `currency` | VS-039 |

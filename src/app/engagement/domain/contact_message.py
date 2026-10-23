@@ -74,6 +74,53 @@ class ContactMessage:
     status: ContactMessageStatus
     created_at: datetime
     updated_at: datetime
+    user_id: UUID | None = None
+    order_id: UUID | None = None
+
+
+@dataclass(frozen=True)
+class ProblemReport:
+    """A customer's "Report a problem" on their order (VS-029b, ADR-041). No phone: the
+    order carries it. The name falls back to the email's local part, which fits NAME_MAX."""
+
+    user_id: UUID
+    order_id: UUID
+    order_number: str
+    name: str
+    email: str
+    message: str
+
+    @classmethod
+    def of(
+        cls,
+        *,
+        user_id: UUID,
+        order_id: UUID,
+        order_number: str,
+        recipient_name: str | None,
+        email: str,
+        message: str,
+    ) -> "ProblemReport":
+        name = (recipient_name or "").strip() or email.rpartition("@")[0]
+        report = cls(user_id, order_id, order_number, name[:NAME_MAX], email, message.strip())
+        if not 1 <= len(report.message) <= MESSAGE_MAX:
+            raise InvalidContactDetailsError(["message"])
+        return report
+
+    @property
+    def subject(self) -> str:
+        return f"Problem with order {self.order_number}"
+
+
+def problem_report_notification(report: ProblemReport, message_id: UUID) -> dict[str, str]:
+    """For each administrator: ids and the order number only, never the body or sender."""
+    return {
+        "event": "order.problem_reported",
+        "order_id": str(report.order_id),
+        "order_number": report.order_number,
+        "contact_message_id": str(message_id),
+        "title": f"Problem reported on order {report.order_number}",
+    }
 
 
 def can_transition(current: ContactMessageStatus, target: ContactMessageStatus) -> bool:
