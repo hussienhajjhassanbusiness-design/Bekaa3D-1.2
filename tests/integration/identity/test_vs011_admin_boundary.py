@@ -61,6 +61,19 @@ WRONG_METHODS = _admin_wrong_methods()  # once: path ids are random per call
 VARIANTS = ROOTS + IMAGINARY_VARIANTS + SLASH_VARIANTS + WRONG_METHODS
 
 
+# VS-029's routes, so the matrix below provably walks them (paths as `_concrete` fills them).
+VS029_PREFIXES = ("/api/v1/admin/orders", "/api/v1/admin/cash-blocks")
+VS029_METHODS = {"GET", "PATCH", "POST"}
+
+
+def test_the_matrix_walks_every_vs029_route() -> None:
+    walked = {(m, p.split("/")[4]) for m, p in ADMIN_OPERATIONS if p.startswith(VS029_PREFIXES)}
+    assert {m for m, _ in walked} == VS029_METHODS
+    assert {segment for _, segment in walked} == {"orders", "cash-blocks"}
+    tails = {p.rsplit("/", 1)[-1] for _, p in ADMIN_OPERATIONS if p.startswith(VS029_PREFIXES)}
+    assert {"cash-handover", "transition", "search", "clear"} <= tails
+
+
 def _canonical(response: Any) -> tuple[Any, ...]:
     """Everything a caller can observe, minus what legitimately differs between
     two requests: the request id, and the path echoed in `instance`."""

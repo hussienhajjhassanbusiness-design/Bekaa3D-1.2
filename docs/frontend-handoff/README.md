@@ -65,7 +65,7 @@ The last command prints the seed accounts' credentials **once**. Keep them in a 
 | P1-8 | Admin STL asset upload | **Removed (ADR-019)** | — |
 | P1-9 | Admin entitlement grant | **Removed (ADR-019)** | — |
 | P1-10 | Admin payments | Not built | VS-024 |
-| P1-11 | Admin order fulfillment | Not built | VS-023b, VS-029 |
+| P1-11 | Admin order fulfillment | Built | VS-023b, VS-029 |
 | P1-12 | Cancellation and returns | Not built | VS-031 |
 | P1-13 | Refunds | Not built | VS-030 |
 | P2-1 | Captcha provider | Not built; Turnstile decided (ADR-025) | VS-033 |

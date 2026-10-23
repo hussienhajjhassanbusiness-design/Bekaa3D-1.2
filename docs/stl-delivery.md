@@ -24,14 +24,13 @@ A refunded or cancelled line is not listed; a partly refunded line still is.
 
 ### `POST /api/v1/admin/orders/{order_id}/items/{item_id}/transition`
 
-Body `{ "target_status": "delivered" }`. `200`, provisional until VS-029:
-`{ order_id, item_id, fulfillment_status: "delivered", fulfilled_at, delivered_by, order_status }`.
+Body `{ "target_status": "delivered" }`. `200` with the whole `AdminOrderDetail` (since VS-029; the same endpoint moves physical lines, see [`fulfillment.md`](fulfillment.md)).
 
 | Status | When |
 |---|---|
 | `404` | no such order, no such item, or the item is on another order (one body for all three) |
-| `409 INVALID_STATE_TRANSITION` | `reason`: `already_delivered` (with `fulfilled_at`), `line_closed`, `not_awaiting_delivery`, `not_an_stl_line` |
-| `422` | any other `target_status` |
+| `409 INVALID_STATE_TRANSITION` | `reason`: `already_delivered` (with `fulfilled_at`), `line_closed`, `not_awaiting_delivery`, or `not_a_legal_edge` for any other `target_status`; with the line's `fulfillment_status` |
+| `422` | an unknown `target_status` |
 
 There is no `Idempotency-Key`: a second call gets `409 already_delivered`.
 
@@ -48,7 +47,6 @@ In one transaction, locking `orders` and then its lines by id:
 
 The email is sent after commit by `dispatch_outbox`; it is at-least-once, so it can rarely arrive twice.
 
-## For VS-029 and VS-030
+## For VS-030
 
-- Add physical edges to `ordering/domain/line_transitions.py` (`LEGAL_EDGES`) and widen `target_status`; replace `OrderItemTransitionRead` with `AdminOrderDetail`.
 - VS-030 must replace the `refund_present` stop-gap in `ordering.public.status_inputs_for` with the real refund query, and take the `orders` lock before refunding a line.

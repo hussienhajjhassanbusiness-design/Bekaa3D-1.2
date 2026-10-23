@@ -1,6 +1,11 @@
-"""Limits for the STL delivery routes (VS-023b)."""
+"""Limits for the fulfillment routes (VS-023b, VS-029; ADR-040 d10)."""
 
-STL_DELIVERY_RATE_LIMIT = 300
+STL_DELIVERY_RATE_LIMIT = 300  # every line transition, STL or physical, shares it
 STL_DELIVERY_WINDOW_SECONDS = 3600
+HANDOVER_RATE_LIMIT = 60
+ADMIN_NOTE_RATE_LIMIT = 120
+RATE_WINDOW_SECONDS = 3600
 QUEUE_PAGE_DEFAULT = 25
 QUEUE_PAGE_MAX = 100
+ADMIN_NOTE_MAX = 5000
+NOTE_MAX = 500

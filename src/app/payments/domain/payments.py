@@ -22,3 +22,18 @@ class Payment:
     captured_currency: str | None = None
     # Never in a repr, log or audit row (VS-024 2.1).
     redirect_url: str | None = field(default=None, repr=False)
+
+
+@dataclass(frozen=True)
+class OrderPaymentRow:
+    """One payment of an order in the admin order detail (VS-029); `recorded_by` is cash."""
+
+    id: UUID
+    provider: str
+    status: str
+    amount_cents: int
+    currency: str
+    initiated_at: datetime
+    verified_at: datetime | None
+    late_captured_at: datetime | None
+    recorded_by: UUID | None

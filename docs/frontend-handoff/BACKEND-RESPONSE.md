@@ -2315,43 +2315,37 @@ There is no total: compute one for display if you need it; checkout recomputes i
 
 ### Domain / item: P1-11 — Admin order fulfillment
 
-**Status:** not built. PROVISIONAL. Slices: VS-023b (STL delivery queue), VS-029 (physical lines and cash).
+**Status:** **built** (VS-023b STL delivery, 2026-10-21; VS-029 physical lines, cash handover and cash blocks, 2026-10-23). Cancel and return actions come with VS-031 ([P1-12](#domain--item-p1-12--cancellation-and-returns)).
 
-**Confirmed endpoint:** none yet. Planned:
-- `GET /api/v1/admin/orders`, `GET /api/v1/admin/orders/{order_id}`
-- `PATCH /api/v1/admin/orders/{order_id}` — internal note only
-- `POST /api/v1/admin/orders/{order_id}/items/{item_id}/transition` — STL `awaiting_delivery → delivered` built by VS-023b (provisional `OrderItemTransitionRead` response until VS-029; see [`docs/stl-delivery.md`](../stl-delivery.md))
-- `GET /api/v1/admin/stl-deliveries` — the STL delivery queue (built by VS-023b: [`docs/stl-delivery.md`](../stl-delivery.md))
-- `POST /api/v1/admin/orders/{order_id}/cash-handover`
-- `GET /api/v1/admin/cash-blocks`, `POST /api/v1/admin/cash-blocks/search`, `POST /api/v1/admin/cash-blocks/{block_id}/clear`
+**Confirmed endpoints** (full reference: [`docs/fulfillment.md`](../fulfillment.md), [`docs/stl-delivery.md`](../stl-delivery.md)):
+- `GET /api/v1/admin/orders` — the queue, newest first; filters `status`, `fulfillment_method`, `payment_method`, `payment_due`, `customer_id`, `order_number`, `placed_after`, `placed_before`, `limit`, `cursor`
+- `GET /api/v1/admin/orders/{order_id}` — `AdminOrderDetail`
+- `PATCH /api/v1/admin/orders/{order_id}` — `{ "admin_note": "..." | null }` only
+- `POST /api/v1/admin/orders/{order_id}/items/{item_id}/transition` — `{ "target_status", "reason"? }`; answers `AdminOrderDetail`
+- `POST /api/v1/admin/orders/{order_id}/cash-handover` — `{ "amount_cents", "currency": "USD", "note"? }`; answers `AdminOrderDetail`
+- `GET /api/v1/admin/stl-deliveries` — the STL delivery queue
+- `GET /api/v1/admin/cash-blocks`, `POST /api/v1/admin/cash-blocks/search` (`{ "phone", "active"?, "limit"?, "cursor"? }`), `POST /api/v1/admin/cash-blocks/{block_id}/clear`
 
-**Request schema:** provisional; see api-endpoints.md section 29.6: `AdminOrderUpdate` (`admin_note`), `OrderItemTransitionRequest` (`target_status`, `reason`, `cancel_reason`), `CashHandoverRequest` (`amount_cents`, `currency`, `note`). List filters: `status`, `fulfillment_method`, `payment_method`, `payment_due`, customer, order number, dates.
+**Schemas:** `AdminOrderPage`, `AdminOrderSummaryRead`, `AdminOrderDetail`, `AdminOrderLineRead`, `AvailableActionRead`, `AdminOrderPaymentRead`, `AdminHistoryRead`, `AdminOrderUpdate`, `CashHandoverRequest`, `CashPaymentBlockPage`, `CashPaymentBlockRead` in [`openapi.json`](openapi.json). Money is `PriceRead`. `OrderItemTransitionRequest` has no `cancel_reason` until VS-031.
 
-**Response schema:** provisional: `AdminOrderPage`, `AdminOrderDetail`, `StlDeliveryPage` (rows: `order_id`, `order_number`, `order_item_id`, product summary, customer summary, `customer_email_snapshot`, `paid_at`).
+**Enums/statuses/actions:** line status as in [C8](#domain--item-c8--orderorder-line-status-enum-and-available-actions). **Machine-readable actions: yes** ([ADR-025](../adr/ADR-025-frontend-contract-decisions.md)): every line carries `available_actions`, a list of `{target_status, cancel_reasons}`; `cancel_reasons` is always `[]` until VS-031.
 
-**Enums/statuses/actions:** provisional: line status as in [C8](#domain--item-c8--orderorder-line-status-enum-and-available-actions). `cancel_reason`: `"refused" | "no_show" | "other"`. **Machine-readable actions: yes** ([ADR-025](../adr/ADR-025-frontend-contract-decisions.md)): every line carries `available_actions`, a list of `{target_status, cancel_reasons}`.
+**Errors:** `409 INVALID_STATE_TRANSITION` with `reason` (transition: `payment_required`, `cash_handover_required`, `not_a_legal_edge`, `line_closed`, `already_delivered`, `not_awaiting_delivery`, plus the line's `fulfillment_status`; handover: `not_a_cash_order`, `no_live_line`, `already_recorded`, `lines_not_ready`), `422 CASH_AMOUNT_MISMATCH` (with `amount_due`), `422 VALIDATION_ERROR`, `429 RATE_LIMITED`.
 
-**Errors:** provisional: `409 INVALID_STATE_TRANSITION` (illegal step, or another administrator got there first), `422 CASH_AMOUNT_MISMATCH`, `422 VALIDATION_ERROR`.
+**Auth/CSRF/MFA:** administrator with MFA; writes also need `X-CSRF-Token`. A customer gets `404` on every route.
 
-**Auth/CSRF/MFA:** administrator with MFA; writes also need `X-CSRF-Token`.
+**Concurrency/idempotency:** no version field and no `Idempotency-Key`. Each transition and the handover lock the order; when two administrators act on the same state, one succeeds and the other gets `409 INVALID_STATE_TRANSITION` (a second handover: `already_recorded`). Re-read the order and render its new state.
 
-**Concurrency/idempotency:** no version field. Each transition locks the order; when two administrators act on the same state, one succeeds and the other gets `409 INVALID_STATE_TRANSITION`. Re-read the order and show its new state.
-
-**Example success JSON:** none; not built.
-
-**Example error JSON:** none; not built.
-
-**Fixture/test account:** none possible yet.
-
-**Authoritative source/OpenAPI file:** none yet. Plan: VS-023b, VS-029; api-endpoints.md section 18; ADR-019; ADR-024 decisions 4, 5, 8.
+**Authoritative source/OpenAPI file:** [`openapi.json`](openapi.json); [ADR-040](../adr/ADR-040-admin-order-queue-fulfillment-and-cash-handover.md), [ADR-039](../adr/ADR-039-stl-delivery-workflow.md), ADR-024 decisions 4, 5, 8.
 
 **Notes:**
-- Planned physical steps. Delivery: `pending → in_production → ready_to_ship → shipped → delivered`. Pickup: `pending → in_production → ready_for_pickup → picked_up`. STL: `awaiting_delivery → delivered` ("mark as sent").
-- Nothing physical can move on an online order that is not paid. Unpaid online orders never appear in the queue.
-- A cash order's lines cannot be moved to `delivered` or `picked_up` through the transition endpoint. The **cash handover** does it for the whole order at once and records the payment; the amount entered must equal the amount due exactly.
+- Steps. Delivery: `pending → in_production → ready_to_ship → shipped → delivered`. Pickup: `pending → in_production → ready_for_pickup → picked_up`. STL: `awaiting_delivery → delivered` ("mark as sent").
+- Nothing physical moves on an online order that is not paid. Unpaid online orders never appear in the queue (`status=pending_payment` is a `422`), though their detail still opens.
+- A cash order's lines never reach `delivered` or `picked_up` through the transition endpoint. The **cash handover** does it for the whole order at once and records the payment; the amount entered must equal `amount_due` exactly.
 - Order status cannot be patched. It is always derived.
-- `TransitionAffordance` reads `available_actions` ([ADR-025](../adr/ADR-025-frontend-contract-decisions.md)): one button per entry, and a reason picker limited to its `cancel_reasons` when that list is not empty. A line with `[]` has no action. The list is computed at read time; after a `409` from the transition endpoint, re-read the order and render the new list.
-- The cash handover is an order-level action and is not in `available_actions`. It is available when every live line is `shipped` (delivery) or `ready_for_pickup` (pickup).
+- `TransitionAffordance` reads `available_actions`: one button per entry. A line with `[]` has no action. After a `409`, re-read the order and render the new list.
+- The cash handover is an order-level action and is not in `available_actions`. Offer it when `payment_due` is true and every live line is `shipped` (delivery) or `ready_for_pickup` (pickup).
+- Cash blocks never carry the phone or its hash; search by phone in the body.
 
 ### Domain / item: P1-12 — Cancellation and returns
 

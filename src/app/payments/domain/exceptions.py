@@ -49,3 +49,7 @@ class ManualConfirmRefusedError(PaymentsDomainError):
 
 class PaymentReferenceMismatchError(PaymentsDomainError):
     """409 PAYMENT_REFERENCE_MISMATCH: the typed reference is another payment's or differs."""
+
+
+class CashAlreadyRecordedError(PaymentsDomainError):
+    """`uq_payments_one_cash` refused a second cash payment on one order (VS-029)."""
