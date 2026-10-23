@@ -1,6 +1,7 @@
 """Alembic's autogenerate diff is empty for the tables listed below: VS-023's six, VS-024's
-payments.captured_*, VS-028's cash_payment_blocks and orders index, and VS-029b's
-contact_messages (0f43e238eaae, linked to orders)."""
+payments.captured_*, VS-028's cash_payment_blocks and orders index, VS-029b's
+contact_messages (0f43e238eaae, linked to orders), and VS-030's refunds, refund_items,
+chargebacks and chargeback_items with the new order and payment keys (c01e53ab3e0f)."""
 
 from typing import Any
 
@@ -24,6 +25,10 @@ VS023_TABLES = {
     "idempotency_records",
     "cash_payment_blocks",
     "contact_messages",
+    "refunds",
+    "refund_items",
+    "chargebacks",
+    "chargeback_items",
 }
 
 

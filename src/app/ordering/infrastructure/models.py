@@ -173,6 +173,8 @@ class OrderModel(Base):
     __table_args__ = (
         UniqueConstraint("order_number", name="uq_orders_order_number"),
         UniqueConstraint("id", "payment_method", name="uq_orders_id_payment_method"),
+        # VS-030 (c01e53ab3e0f): what `fk_order_items_order_owner` references.
+        UniqueConstraint("id", "user_id", name="uq_orders_id_user"),
         CheckConstraint(
             "subtotal_cents >= 0 AND total_cents >= 0", name="ck_orders_money_non_negative"
         ),
@@ -294,6 +296,16 @@ class OrderItemModel(Base):
             ondelete="RESTRICT",
             onupdate="RESTRICT",
         ),
+        # VS-030 / VS-041 audit Q-1: a line's customer is its order's customer.
+        ForeignKeyConstraint(
+            ["order_id", "user_id"],
+            ["orders.id", "orders.user_id"],
+            name="fk_order_items_order_owner",
+            ondelete="RESTRICT",
+            onupdate="RESTRICT",
+        ),
+        # What a refund or chargeback item's composite FK references (VS-030).
+        UniqueConstraint("id", "order_id", name="uq_order_items_id_order"),
         # VS-039 / ADR-034: a line's offer is its own customer's, on its own product.
         ForeignKeyConstraint(
             ["offer_id", "user_id", "product_id"],

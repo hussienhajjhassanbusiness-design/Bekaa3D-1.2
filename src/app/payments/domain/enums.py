@@ -20,3 +20,20 @@ class PaymentProvider(StrEnum):
 
     MOCK = "mock"
     CASH = "cash"
+
+
+class RefundKind(StrEnum):
+    """VS-030: a chargeback is its own record (`chargebacks`), never a refund kind (ADR-042)."""
+
+    ADMIN = "admin"
+    CANCELLATION = "cancellation"
+    LATE_CAPTURE = "late_capture"
+
+
+class RefundStatus(StrEnum):
+    """`failed` stays owed until reissued; `voided` closes an obligation unpaid (ADR-042)."""
+
+    PENDING = "pending"
+    SETTLED = "settled"
+    FAILED = "failed"
+    VOIDED = "voided"
