@@ -1212,7 +1212,13 @@ Never everything at once (memory, VS-041 audit §8).
 **CP1** (end of PR A): migration applied on a copy, the schema tests green, a single head.
 Reports: the head, the constraint list, and the downgrade result.
 
-### PR B: refund core (branch `vs-030-refunds`, from main after PR A)
+### PR B: refund core (branch `vs-030-refund-core`, from main after PR A)
+
+Owner decisions at PR B's start (2026-10-23):
+- The branch is `vs-030-refund-core`, not the `vs-030-refunds` first planned here.
+- ADR-042 stays **Proposed** in PR B, which only appends its decisions. PR C sets it Accepted.
+- PR B's paths lock in ranks 0-4 only (claim, `orders`, lines by id, `payments`, `refunds`), then
+  6-7 (cart and phone lock). Rank 5 (`chargebacks`) is reserved for PR C, and the code says so.
 1. The pure rules (§3.1, §3.2) with U1–U12.
 2. Ordering: the `RefundFacts` signature, `refund_lines`, the stop-gap removal, the strict-xfail
    conversion (one commit, named), and the allow-lists.
