@@ -44,6 +44,7 @@ class OrderStatusInputs:
     lines: tuple[LineState, ...]
     refunds_cover_paid: bool = False
     refund_present: bool = False
+    refunds: RefundFacts = NO_REFUNDS  # the reorder commit drops the two flags above
 
 
 def derive_order_status(i: OrderStatusInputs) -> OrderStatus:
@@ -56,11 +57,11 @@ def derive_order_status(i: OrderStatusInputs) -> OrderStatus:
         return OrderStatus.CANCELLED if all_cancelled else OrderStatus.IN_PROGRESS
     if all_cancelled:
         return OrderStatus.CANCELLED
-    if i.refunds_cover_paid:
+    if i.refunds_cover_paid or i.refunds.covers_paid:
         return OrderStatus.REFUNDED
     if states and all(s is OrderItemStatus.REFUNDED for s in states):
         return OrderStatus.REFUNDED
-    if i.refund_present:
+    if i.refund_present or i.refunds.present or i.refunds.owed:
         return OrderStatus.PARTIALLY_REFUNDED
     if states and all(s in TERMINAL_LINE_STATES for s in states):
         return OrderStatus.COMPLETED
