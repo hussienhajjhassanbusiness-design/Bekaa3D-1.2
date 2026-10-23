@@ -104,3 +104,34 @@ def test_the_login_route_documents_both_of_its_success_shapes() -> None:
         responses["202"]["content"]["application/json"]["schema"]["$ref"]
         == "#/components/schemas/MfaChallengeRead"
     )
+
+
+# VS-029: the admin order and cash-block routes; every write needs the cookie and CSRF.
+VS029_ROUTES = [
+    ("get", "/api/v1/admin/orders"),
+    ("get", "/api/v1/admin/orders/{order_id}"),
+    ("patch", "/api/v1/admin/orders/{order_id}"),
+    ("post", "/api/v1/admin/orders/{order_id}/cash-handover"),
+    ("post", "/api/v1/admin/orders/{order_id}/items/{item_id}/transition"),
+    ("get", "/api/v1/admin/cash-blocks"),
+    ("post", "/api/v1/admin/cash-blocks/search"),
+    ("post", "/api/v1/admin/cash-blocks/{block_id}/clear"),
+]
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("configured_app")
+@pytest.mark.parametrize(("method", "path"), VS029_ROUTES)
+def test_the_vs029_admin_routes_declare_session_csrf_and_the_boundary(
+    method: str, path: str
+) -> None:
+    from app.main import app
+
+    with TestClient(app) as client:
+        operation = client.get(SCHEMA_PATH).json()["paths"][path][method]
+    scheme: dict[str, list[str]] = {"sessionCookie": []}
+    expected = [scheme if method == "get" else scheme | {"csrfToken": []}]
+    assert operation["security"] == expected
+    assert {"401", "404"} <= set(operation["responses"])
+    if method != "get":
+        assert "403" in operation["responses"]

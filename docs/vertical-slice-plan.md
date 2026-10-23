@@ -787,6 +787,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 ## VS-030 — Refunds and settlement
 **Status:** Not started
 **Depends on:** VS-029, VS-024
+- **Notes from VS-029 ([ADR-040](adr/ADR-040-admin-order-queue-fulfillment-and-cash-handover.md)):** a cash order's one payment is created only by `record_cash_handover` (`tests/unit/payments/test_cash_payment_writers.py` lists every `payments` INSERT), `paid` for exactly the live line total, with `recorded_by`; refunds of a cash line refund against that row. Every transition and the handover take the `orders` lock first, so a refund must too. The `refund_present` stop-gap in `ordering.public.status_inputs_for` is still there.
 - **Notes from VS-023:**
   - Create a late-capture refund obligation for every row that already has `late_captured_at` (`SELECT id, order_id, provider, amount_cents, status, late_captured_at FROM payments WHERE late_captured_at IS NOT NULL`); until then that listing is the only view.
   - `derive_order_status` implements SRS §20.2 as written. The VS-023 plan's Revision 1 item 1 records two cases (one line `refunded` with a refund still owed; all lines cancelled with a refund owed) where a reorder may be wanted; a change needs an ADR and the co-developer's confirmation.
@@ -854,6 +855,11 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 **Status:** Not started
 **Depends on:** VS-030
 **Goal:** A customer cancels before printing starts, the administrator cancels at any legal point, a returned item is re-shipped, reprinted, refunded or (unpaid cash) cancelled, and a whole-order cash refusal blocks cash for that customer and phone.
+- **Notes from VS-029 ([ADR-040](adr/ADR-040-admin-order-queue-fulfillment-and-cash-handover.md)):**
+  - Add the cancel and return edges to `ordering/domain/line_transitions.py`, with their `cancel_reasons`; `available_actions` and the endpoint read the same table.
+  - One notice per order per visible step (`ordering/domain/fulfillment_steps.py`): a cancel can leave every remaining line at a step without any line moving, and `returned → shipped` reaches `shipped` a second time. Decide whether either sends a notice, and test it.
+  - The queue hides an online order with `orders.cancelled_at` set (`ADMIN_QUEUE_PREDICATE`), which today only the hold release sets. If cancelling a paid online order sets it, change the predicate so that order stays listed.
+  - The handover refuses an order with no live line (`409 no_live_line`) and computes the amount over live lines only, so a partly refused cash order needs no handover change.
 - **Model / migration:** None (`order_items.cancel_reason` comes from VS-023, `cash_payment_blocks` from VS-028).
 - **Endpoints / jobs:** `POST /api/v1/me/orders/{id}/cancel`, `POST /api/v1/admin/orders/{id}/cancel`; the transition endpoint gains the `returned` and no-show edges. Admin cancels from `ready_to_ship`, `returned` or `ready_for_pickup` require `cancel_reason`: `refused` (any of the three), `no_show` (`ready_for_pickup` only) or `other`.
 - **Logic:**

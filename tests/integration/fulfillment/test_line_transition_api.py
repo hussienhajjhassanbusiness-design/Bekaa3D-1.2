@@ -409,7 +409,7 @@ async def test_an_email_outage_does_not_block_a_transition(
                 "UPDATE email_outbox SET status = 'sent', sent_at = now() WHERE status ="
                 " 'pending' AND payload->>'order_id' IS DISTINCT FROM CAST(:o AS text)"
             ),
-            {"o": order.order_id},
+            {"o": str(order.order_id)},
         )
     await outbox_job.dispatch_outbox({"session_factory": factory})
     assert await states(db_engine, order.order_id) == ("in_progress", ["ready_to_ship"])
@@ -420,7 +420,7 @@ async def test_an_email_outage_does_not_block_a_transition(
                     "SELECT status, attempt_count FROM email_outbox"
                     " WHERE payload->>'order_id' = CAST(:o AS text)"
                 ),
-                {"o": order.order_id},
+                {"o": str(order.order_id)},
             )
         ).one()
     assert (row.status, row.attempt_count) == ("pending", 1)

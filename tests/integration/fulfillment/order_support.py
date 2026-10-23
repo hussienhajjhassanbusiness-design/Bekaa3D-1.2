@@ -91,6 +91,7 @@ async def seed_physical_order(
     refs = await seed_refs(db)
     order_id, number, phone = uuid.uuid4(), f"B3D-{uuid.uuid4().hex[:8].upper()}", random_phone()
     at = placed_at or datetime.now(UTC)
+    status = order_status or _default_status(payment_method, payment_status)
     stl_total = 500 if stl_line else 0
     total = sum(totals) + stl_total
     address = (
@@ -105,17 +106,17 @@ async def seed_physical_order(
             " total_cents, recipient_name, governorate, city, landmark_notes,"
             " contact_phone_snapshot, contact_phone_hash, terms_accepted_at,"
             " digital_terms_accepted_at, digital_terms_version, cash_terms_accepted_at,"
-            " placed_at)"
+            " placed_at, cancelled_at)"
             " VALUES (:id, :n, :u, :e, 'cart', CAST(:st AS order_status),"
             " CAST(:fm AS fulfillment_method), CAST(:pm AS payment_method), :t, 0, :t,"
-            " :rn, :gov, :city, :lm, :ph, :h, :at, :dt, :dv, :ct, :at)"
+            " :rn, :gov, :city, :lm, :ph, :h, :at, :dt, :dv, :ct, :at, :x)"
         ),
         {
             "id": order_id,
             "n": number,
             "u": user_id,
             "e": email,
-            "st": order_status or _default_status(payment_method, payment_status),
+            "st": status,
             "fm": fulfillment,
             "pm": payment_method,
             "t": total,
@@ -125,6 +126,7 @@ async def seed_physical_order(
             "dt": at if stl_line else None,
             "dv": "2026-10-17" if stl_line else None,
             "ct": at if payment_method == "cash" else None,
+            "x": at if status == "cancelled" else None,
         }
         | address,
     )
@@ -248,7 +250,7 @@ async def emails(engine: AsyncEngine, order_id: uuid.UUID) -> list[tuple[str, di
                 "SELECT template, payload FROM email_outbox"
                 " WHERE payload->>'order_id' = CAST(:o AS text) ORDER BY created_at, id"
             ),
-            {"o": order_id},
+            {"o": str(order_id)},
         )
         return [(row.template, row.payload) for row in rows]
 
@@ -260,6 +262,6 @@ async def notifications(engine: AsyncEngine, order_id: uuid.UUID) -> list[str]:
                 "SELECT payload->>'event' FROM notifications"
                 " WHERE payload->>'order_id' = CAST(:o AS text) ORDER BY created_at, id"
             ),
-            {"o": order_id},
+            {"o": str(order_id)},
         )
         return [str(event) for event in rows]

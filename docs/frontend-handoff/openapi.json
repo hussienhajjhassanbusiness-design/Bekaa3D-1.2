@@ -949,7 +949,7 @@
           "payments": {
             "description": "Newest first.",
             "items": {
-              "$ref": "#/components/schemas/app__fulfillment__api__admin_order_schemas__AdminPaymentRead"
+              "$ref": "#/components/schemas/AdminOrderPaymentRead"
             },
             "title": "Payments",
             "type": "array"
@@ -1223,6 +1223,80 @@
         "title": "AdminOrderPage",
         "type": "object"
       },
+      "AdminOrderPaymentRead": {
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/PriceRead"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "initiated_at": {
+            "format": "date-time",
+            "title": "Initiated At",
+            "type": "string"
+          },
+          "late_captured_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Late Captured At"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "recorded_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Cash: the administrator who recorded it.",
+            "title": "Recorded By"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "verified_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified At"
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "status",
+          "amount",
+          "initiated_at",
+          "verified_at",
+          "late_captured_at",
+          "recorded_by"
+        ],
+        "title": "AdminOrderPaymentRead",
+        "type": "object"
+      },
       "AdminOrderSummaryRead": {
         "properties": {
           "amount_due": {
@@ -1368,7 +1442,7 @@
             "$ref": "#/components/schemas/AdminPaymentOrderRead"
           },
           "payment": {
-            "$ref": "#/components/schemas/app__payments__api__admin_payments__AdminPaymentRead"
+            "$ref": "#/components/schemas/AdminPaymentRead"
           }
         },
         "required": [
@@ -1577,7 +1651,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/app__payments__api__admin_payments__AdminPaymentRead"
+              "$ref": "#/components/schemas/AdminPaymentRead"
             },
             "title": "Items",
             "type": "array"
@@ -1600,6 +1674,161 @@
           "next_cursor"
         ],
         "title": "AdminPaymentPage",
+        "type": "object"
+      },
+      "AdminPaymentRead": {
+        "description": "No provider metadata (so no redirect URL), event payloads or customer email.",
+        "properties": {
+          "amount_cents": {
+            "title": "Amount Cents",
+            "type": "integer"
+          },
+          "captured_amount_cents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Captured Amount Cents"
+          },
+          "captured_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Captured Currency"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "expired_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expired At"
+          },
+          "failed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failed At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "initiated_at": {
+            "format": "date-time",
+            "title": "Initiated At",
+            "type": "string"
+          },
+          "late_captured_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Late Captured At"
+          },
+          "needs_manual_confirmation": {
+            "title": "Needs Manual Confirmation",
+            "type": "boolean"
+          },
+          "order_id": {
+            "format": "uuid",
+            "title": "Order Id",
+            "type": "string"
+          },
+          "order_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Number"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/PaymentProvider"
+          },
+          "provider_payment_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Payment Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PaymentStatus"
+          },
+          "unprocessed_event_count": {
+            "title": "Unprocessed Event Count",
+            "type": "integer"
+          },
+          "verified_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified At"
+          }
+        },
+        "required": [
+          "id",
+          "order_id",
+          "order_number",
+          "provider",
+          "status",
+          "amount_cents",
+          "currency",
+          "captured_amount_cents",
+          "captured_currency",
+          "provider_payment_id",
+          "initiated_at",
+          "verified_at",
+          "failed_at",
+          "expired_at",
+          "late_captured_at",
+          "needs_manual_confirmation",
+          "unprocessed_event_count"
+        ],
+        "title": "AdminPaymentRead",
         "type": "object"
       },
       "AdminProductCreate": {
@@ -8103,235 +8332,6 @@
           "next_cursor"
         ],
         "title": "WishlistPage",
-        "type": "object"
-      },
-      "app__fulfillment__api__admin_order_schemas__AdminPaymentRead": {
-        "properties": {
-          "amount": {
-            "$ref": "#/components/schemas/PriceRead"
-          },
-          "id": {
-            "format": "uuid",
-            "title": "Id",
-            "type": "string"
-          },
-          "initiated_at": {
-            "format": "date-time",
-            "title": "Initiated At",
-            "type": "string"
-          },
-          "late_captured_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Late Captured At"
-          },
-          "provider": {
-            "title": "Provider",
-            "type": "string"
-          },
-          "recorded_by": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Cash: the administrator who recorded it.",
-            "title": "Recorded By"
-          },
-          "status": {
-            "title": "Status",
-            "type": "string"
-          },
-          "verified_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Verified At"
-          }
-        },
-        "required": [
-          "id",
-          "provider",
-          "status",
-          "amount",
-          "initiated_at",
-          "verified_at",
-          "late_captured_at",
-          "recorded_by"
-        ],
-        "title": "AdminPaymentRead",
-        "type": "object"
-      },
-      "app__payments__api__admin_payments__AdminPaymentRead": {
-        "description": "No provider metadata (so no redirect URL), event payloads or customer email.",
-        "properties": {
-          "amount_cents": {
-            "title": "Amount Cents",
-            "type": "integer"
-          },
-          "captured_amount_cents": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Captured Amount Cents"
-          },
-          "captured_currency": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Captured Currency"
-          },
-          "currency": {
-            "title": "Currency",
-            "type": "string"
-          },
-          "expired_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Expired At"
-          },
-          "failed_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Failed At"
-          },
-          "id": {
-            "format": "uuid",
-            "title": "Id",
-            "type": "string"
-          },
-          "initiated_at": {
-            "format": "date-time",
-            "title": "Initiated At",
-            "type": "string"
-          },
-          "late_captured_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Late Captured At"
-          },
-          "needs_manual_confirmation": {
-            "title": "Needs Manual Confirmation",
-            "type": "boolean"
-          },
-          "order_id": {
-            "format": "uuid",
-            "title": "Order Id",
-            "type": "string"
-          },
-          "order_number": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Order Number"
-          },
-          "provider": {
-            "$ref": "#/components/schemas/PaymentProvider"
-          },
-          "provider_payment_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Provider Payment Id"
-          },
-          "status": {
-            "$ref": "#/components/schemas/PaymentStatus"
-          },
-          "unprocessed_event_count": {
-            "title": "Unprocessed Event Count",
-            "type": "integer"
-          },
-          "verified_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Verified At"
-          }
-        },
-        "required": [
-          "id",
-          "order_id",
-          "order_number",
-          "provider",
-          "status",
-          "amount_cents",
-          "currency",
-          "captured_amount_cents",
-          "captured_currency",
-          "provider_payment_id",
-          "initiated_at",
-          "verified_at",
-          "failed_at",
-          "expired_at",
-          "late_captured_at",
-          "needs_manual_confirmation",
-          "unprocessed_event_count"
-        ],
-        "title": "AdminPaymentRead",
         "type": "object"
       }
     },

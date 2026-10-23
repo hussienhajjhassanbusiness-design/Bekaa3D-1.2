@@ -29,6 +29,7 @@ from tests.smoke.test_vs024_smoke import SMOKE_ELSEWHERE as VS024_SMOKE
 from tests.smoke.test_vs025_smoke import SMOKE_ELSEWHERE as VS025_SMOKE
 from tests.smoke.test_vs026_smoke import SMOKE_ELSEWHERE as VS026_SMOKE
 from tests.smoke.test_vs028_smoke import SMOKE_ELSEWHERE as VS028_SMOKE
+from tests.smoke.test_vs029_smoke import SMOKE_ELSEWHERE as VS029_SMOKE
 from tests.smoke.test_vs033_smoke import SMOKE_ELSEWHERE as VS033_SMOKE
 from tests.smoke.test_vs034_smoke import SMOKE_ELSEWHERE as VS034_SMOKE
 from tests.smoke.test_vs035_smoke import SMOKE_ELSEWHERE as VS035_SMOKE
@@ -59,6 +60,7 @@ _SMOKE_NODE_IDS = frozenset(
         VS025_SMOKE,
         VS026_SMOKE,
         VS028_SMOKE,
+        VS029_SMOKE,
         VS033_SMOKE,
         VS034_SMOKE,
         VS035_SMOKE,

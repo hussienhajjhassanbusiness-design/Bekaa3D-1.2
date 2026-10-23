@@ -138,7 +138,7 @@ class AdminDeliveryAddressRead(BaseModel):
     landmark_notes: str | None
 
 
-class AdminPaymentRead(BaseModel):
+class AdminOrderPaymentRead(BaseModel):
     id: UUID
     provider: str
     status: str
@@ -207,7 +207,7 @@ class AdminOrderDetail(BaseModel):
     completed_at: datetime | None
     cancelled_at: datetime | None
     lines: list[AdminOrderLineRead]
-    payments: list[AdminPaymentRead] = Field(description="Newest first.")
+    payments: list[AdminOrderPaymentRead] = Field(description="Newest first.")
     status_history: list[AdminHistoryRead] = Field(description="Oldest first.")
 
     @classmethod
@@ -248,7 +248,7 @@ class AdminOrderDetail(BaseModel):
             completed_at=o.completed_at,
             cancelled_at=o.cancelled_at,
             lines=[AdminOrderLineRead.of(line, media_base_url) for line in view.lines],
-            payments=[AdminPaymentRead.of(p) for p in view.payments],
+            payments=[AdminOrderPaymentRead.of(p) for p in view.payments],
             status_history=[AdminHistoryRead.of(h) for h in view.history],
         )
 
