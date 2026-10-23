@@ -34,6 +34,31 @@ Every `file:line` below is on `main` at `326aa40`.
 
 ---
 
+## Revision 3 (2026-10-24): PR C starts (branch `vs-030-pr-c`)
+
+The money review of PR B (`34af46d`) found no Blocker. The owner answered PR C's questions as
+recommended:
+
+| Q | Decision |
+|---|---|
+| C1 | **Absorption keeps coverage.** A chargeback voids every pending and owed refund on its payment (Q3), and each voided refund's items become the chargeback's first items, so no line's coverage changes and no `refunded` or `cancelled` line reopens. The admin's `items` add coverage on top. `applied` = absorbed + Σ admin items; `excess` = charged − applied. When charged < absorbed, absorption runs in (refund id, line id) order, and the unabsorbed part becomes one new pending refund per voided refund, of the same kind, reason `remainder after chargeback <id>` (the §3.3 step 4 late-capture rule, generalised). This replaces "allocate against the balances after the voids" in §2.5 and §3.3 step 3. |
+| C2 | The cash-block search audit stays as PR B built it: no phone and no hash (Q8). `docs/vertical-slice-plan.md:817` is reworded. |
+| C3 | Settle skips the Q-2 check: it records a payout already made and moves no money. Create, fail, void and reissue keep it. |
+| C4 | A chargeback on a late-captured payment whose open `late_capture` refund is not in USD records the whole amount as excess, voids nothing and raises the `chargeback_excess` alert. |
+
+**Defaults (accepted):**
+- A provider-reported late-capture currency that is not `^[A-Z]{3}$` after uppercasing falls back to the payment's currency, flagged in the reason, so a CHECK never rolls back Tx B.
+- Record-capture's `dashboard_reference` is kept in its audit row only.
+- Q-2 runs only where balances are derived, so not for a late-captured attempt's chargeback.
+- The §3.7 interface functions stay with VS-031, VS-043 and VS-045.
+
+**Review fixes carried by PR C:**
+- Void also refuses when a line of the refund is `cancelled` (`line_already_cancelled`). The 0-balance rule would otherwise strand the customer's money.
+- `check_request` refuses a line named twice.
+- Q-2 compares the payment's currency to the order's.
+- `facts_for` counts only the paid payment's refunds and chargebacks.
+- Late-capture refunds get their own lock step: the order, its lines, then the refund's own payment, with no paid payment required, no Q-2 and no status recompute. Settling one sends the Q7 notice.
+
 ## Revision 2 (2026-10-23): PR A starts
 
 - **No co-developer confirmation is needed for D1.** The owner works alone, so the owner's Q1
