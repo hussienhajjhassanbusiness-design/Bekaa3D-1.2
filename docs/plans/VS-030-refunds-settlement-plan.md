@@ -1,7 +1,8 @@
 # VS-030 — Refunds and Settlement: Implementation Plan
 
-**Status:** IN PROGRESS (PR A, branch `vs-030-schema`), revision 2. The owner answered Q1-Q12 on
-2026-10-23 (Revisions 1 and 2 below).
+**Status:** IN PROGRESS (PR B, branch `vs-030-refund-core`), revision 2. PR A (`vs-030-schema`,
+migration `c01e53ab3e0f`) is merged as `7b346a4`. The owner answered Q1-Q12 on 2026-10-23
+(Revisions 1 and 2 below).
 **Date:** 2026-10-23
 **Planned against alembic head:** `0f43e238eaae` (`contact_message_order_link`, VS-029b, merged
 as `fc641dc` after revision 1 was written against `b6e1d0c4a2f7`).
