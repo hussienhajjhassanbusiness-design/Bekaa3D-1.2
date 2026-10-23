@@ -158,9 +158,14 @@ async def list_blocks(
     },
 )
 async def search_blocks(
-    body: CashBlockSearchRequest, session: AsyncSession = Depends(get_session)
+    body: CashBlockSearchRequest,
+    request: Request,
+    claims: AccessTokenClaims = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
 ) -> CashPaymentBlockPage:
-    return await _page(
+    """One `cash_block.searched` audit row per search: filters, count and ids only, never
+    the phone or its hash (VS-030 2.6, Q8)."""
+    page = await _page(
         session,
         user_id=None,
         active=body.active,
@@ -168,6 +173,22 @@ async def search_blocks(
         cursor=body.cursor,
         limit=body.limit,
     )
+    ip = client_ip(request)
+    await SqlAuditWriter(session).record(
+        actor_user_id=claims.user_id,
+        action="cash_block.searched",
+        entity_type="cash_block",
+        entity_id=None,
+        after_data={
+            "active": body.active,
+            "limit": body.limit,
+            "result_count": len(page.items),
+            "block_ids": [str(item.id) for item in page.items],
+        },
+        request_id=getattr(request.state, "request_id", None),
+        ip_hash=hash_ip(ip) if ip else None,
+    )
+    return page
 
 
 @admin_router.post(

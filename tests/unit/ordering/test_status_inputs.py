@@ -3,11 +3,14 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
-import pytest
-
 from app.ordering.domain.enums import OrderItemStatus as S
 from app.ordering.domain.enums import OrderSource, OrderStatus, PaymentMethod
-from app.ordering.domain.order_status import LineState, derive_order_status
+from app.ordering.domain.order_status import (
+    NO_REFUNDS,
+    LineState,
+    RefundFacts,
+    derive_order_status,
+)
 from app.ordering.domain.orders import Order
 from app.ordering.public import LockedOrder, status_inputs_for
 
@@ -36,10 +39,12 @@ def _status(
     *lines: S,
     paid: bool = True,
     payment: PaymentMethod = PaymentMethod.ONLINE,
+    refunds: RefundFacts = NO_REFUNDS,
 ) -> OrderStatus:
     states = tuple(LineState(line) for line in lines)
     locked = LockedOrder(_order(order_status, payment), ())
-    return derive_order_status(status_inputs_for(locked, states, reached_paid=paid))
+    inputs = status_inputs_for(locked, states, reached_paid=paid, refunds=refunds)
+    return derive_order_status(inputs)
 
 
 def test_the_only_stl_line_delivered_completes_the_order() -> None:
@@ -51,8 +56,12 @@ def test_a_pending_physical_line_keeps_the_order_in_progress() -> None:
 
 
 def test_a_partially_refunded_order_stays_partially_refunded_after_delivery() -> None:
-    """The stop-gap: VS-030 must compute `refund_present` from real refunds instead."""
-    assert _status(OrderStatus.PARTIALLY_REFUNDED, S.DELIVERED) is OrderStatus.PARTIALLY_REFUNDED
+    """From the refund facts, never from the order's previous status (ADR-042)."""
+    present = RefundFacts(present=True)
+    assert _status(OrderStatus.PARTIALLY_REFUNDED, S.DELIVERED, refunds=present) is (
+        OrderStatus.PARTIALLY_REFUNDED
+    )
+    assert _status(OrderStatus.PARTIALLY_REFUNDED, S.DELIVERED) is OrderStatus.COMPLETED
 
 
 def test_an_unpaid_cash_order_in_production_stays_in_progress() -> None:
@@ -70,12 +79,14 @@ def test_a_handed_over_cash_order_completes_beside_a_cancelled_line() -> None:
     )
 
 
-def test_the_refund_stop_gap_never_applies_to_an_unpaid_order() -> None:
-    assert _status(OrderStatus.PARTIALLY_REFUNDED, S.SHIPPED, paid=False) is (
+def test_refund_facts_never_apply_to_an_unpaid_order() -> None:
+    every = RefundFacts(covers_paid=True, present=True, owed=True)
+    assert _status(OrderStatus.PARTIALLY_REFUNDED, S.SHIPPED, paid=False, refunds=every) is (
         OrderStatus.PENDING_PAYMENT
     )
 
 
-@pytest.mark.xfail(strict=True, reason="VS-030 replaces the refund_present stop-gap (ADR-039 d7)")
 def test_a_refunded_order_stays_refunded_after_a_physical_transition() -> None:
-    assert _status(OrderStatus.REFUNDED, S.IN_PRODUCTION) is OrderStatus.REFUNDED
+    """Was a strict xfail under the stop-gap (ADR-039 d7, ADR-040); real facts fix it."""
+    covered = RefundFacts(covers_paid=True, present=True)
+    assert _status(OrderStatus.REFUNDED, S.IN_PRODUCTION, refunds=covered) is OrderStatus.REFUNDED

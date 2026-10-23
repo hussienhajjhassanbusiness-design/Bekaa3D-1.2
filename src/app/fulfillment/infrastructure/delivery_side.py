@@ -15,6 +15,7 @@ from app.ordering.public import (
     OrderItemStatus,
     OrderLine,
     OrderStatus,
+    RefundFacts,
     hand_over_cash_lines,
     lock_order_for_change,
     mark_stl_line_delivered,
@@ -25,6 +26,7 @@ from app.payments.public import (
     insert_cash_payment,
     order_payment_reader,
     order_payment_rows,
+    order_refund_facts,
 )
 from app.platform.public import SqlOutboxWriter, settings_reader
 
@@ -48,10 +50,16 @@ class SqlDeliveryOrders:
         return await lock_order_for_change(self._session, order_id)
 
     async def mark_delivered(
-        self, locked: LockedOrder, *, line_id: UUID, admin_id: UUID, at: datetime
+        self,
+        locked: LockedOrder,
+        *,
+        line_id: UUID,
+        admin_id: UUID,
+        at: datetime,
+        refunds: RefundFacts,
     ) -> tuple[OrderLine, OrderStatus]:
         return await mark_stl_line_delivered(
-            self._session, locked, line_id=line_id, admin_id=admin_id, at=at
+            self._session, locked, line_id=line_id, admin_id=admin_id, at=at, refunds=refunds
         )
 
     async def transition(
@@ -63,6 +71,7 @@ class SqlDeliveryOrders:
         admin_id: UUID,
         at: datetime,
         reached_paid: bool,
+        refunds: RefundFacts,
         note: str | None,
     ) -> tuple[OrderLine, OrderStatus]:
         return await transition_physical_line(
@@ -73,6 +82,7 @@ class SqlDeliveryOrders:
             admin_id=admin_id,
             at=at,
             reached_paid=reached_paid,
+            refunds=refunds,
             note=note,
         )
 
@@ -91,6 +101,9 @@ class SqlOrderPayments:
     async def reached_paid(self, order_id: UUID) -> bool:
         view = (await order_payment_reader(self._session).views([order_id])).get(order_id)
         return view is not None and view.reached_paid
+
+    async def refund_facts(self, order_id: UUID) -> RefundFacts:
+        return await order_refund_facts(self._session, order_id)
 
     async def record_cash(
         self, *, order_id: UUID, amount_cents: int, currency: str, admin_id: UUID, at: datetime

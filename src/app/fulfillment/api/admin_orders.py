@@ -11,15 +11,19 @@ from pydantic import AwareDatetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import client_ip, get_session
+from app.catalog.public import PriceRead
 from app.core.config import get_settings
 from app.core.exceptions import ApiError
 from app.core.rate_limit import enforce_rate_limit
 from app.core.security import hash_ip
 from app.fulfillment.api.admin_order_schemas import (
+    AdminLineBalanceRead,
     AdminOrderDetail,
     AdminOrderPage,
+    AdminOrderRefundRead,
     AdminOrderSummaryRead,
     AdminOrderUpdate,
+    AdminRefundBalanceRead,
     CashHandoverRequest,
 )
 from app.fulfillment.api.stl_deliveries import decode_cursor, encode_cursor
@@ -49,7 +53,7 @@ from app.ordering.public import (
     admin_order_page,
     admin_orders,
 )
-from app.payments.public import CashAlreadyRecordedError
+from app.payments.public import CashAlreadyRecordedError, admin_refunds
 from app.platform.public import SqlAuditWriter
 
 admin_router = APIRouter(prefix="/orders", tags=["admin"], route_class=AdminBoundaryRoute)
@@ -86,7 +90,34 @@ async def order_detail(session: AsyncSession, order_id: UUID) -> AdminOrderDetai
     view = await admin_order_detail(admin_orders(session), SqlOrderPayments(session), order_id)
     if view is None:
         raise not_found_error()
-    return AdminOrderDetail.of(view, get_settings().media_public_url)
+    detail = AdminOrderDetail.of(view, get_settings().media_public_url)
+    rows, balances = await admin_refunds(
+        session, order_id, view.order.total_cents, [entry.line for entry in view.lines]
+    )
+    return detail.model_copy(
+        update={
+            "refunds": [
+                AdminOrderRefundRead(
+                    id=r.id,
+                    kind=r.kind.value,
+                    status=r.status.value,
+                    owed=r.status.value == "failed" and r.reissued_at is None,
+                    amount=PriceRead(amount_cents=r.amount_cents, currency=r.currency),
+                    created_at=r.created_at,
+                )
+                for r in rows
+            ],
+            "refund_balance": AdminRefundBalanceRead(
+                lines=[
+                    AdminLineBalanceRead(order_item_id=line_id, balance_cents=cents)
+                    for line_id, cents in balances.lines.items()
+                ],
+                payment_cents=balances.payment_cents,
+            )
+            if balances
+            else None,
+        }
+    )
 
 
 def _utc(value: datetime | None, field: str) -> datetime | None:

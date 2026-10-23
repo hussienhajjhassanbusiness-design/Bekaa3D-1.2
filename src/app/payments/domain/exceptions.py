@@ -1,5 +1,6 @@
 from datetime import datetime
 from enum import StrEnum
+from uuid import UUID
 
 
 class PaymentsDomainError(Exception):
@@ -53,3 +54,55 @@ class PaymentReferenceMismatchError(PaymentsDomainError):
 
 class CashAlreadyRecordedError(PaymentsDomainError):
     """`uq_payments_one_cash` refused a second cash payment on one order (VS-029)."""
+
+
+class OrderNotPaidError(PaymentsDomainError):
+    """409 ORDER_NOT_PAID: no payment of the order reached paid (VS-030 L0)."""
+
+
+class OrderTotalMismatchError(PaymentsDomainError):
+    """409 ORDER_TOTAL_MISMATCH (Q-2): an integrity fault; nothing written, logged, alerted."""
+
+    def __init__(
+        self,
+        *,
+        order_total_cents: int,
+        line_total_cents: int,
+        payment_amount_cents: int,
+        payment_id: UUID | None = None,
+    ) -> None:
+        super().__init__("order total does not match its lines or its payment")
+        self.order_total_cents, self.line_total_cents = order_total_cents, line_total_cents
+        self.payment_amount_cents, self.payment_id = payment_amount_cents, payment_id
+
+
+class RefundExceedsAvailableError(PaymentsDomainError):
+    """422 REFUND_EXCEEDS_AVAILABLE with the balance per line and for the payment (L4)."""
+
+    def __init__(self, *, lines: dict[UUID, int], payment_cents: int) -> None:
+        super().__init__("refund exceeds the available balance")
+        self.lines, self.payment_cents = lines, payment_cents
+
+
+class RefundRequiresCancellationError(PaymentsDomainError):
+    """422 REFUND_REQUIRES_CANCELLATION: the item empties an unfinished physical line (L5)."""
+
+    def __init__(self, order_item_ids: tuple[UUID, ...]) -> None:
+        super().__init__("a full refund of an unfinished physical line needs a cancellation")
+        self.order_item_ids = order_item_ids
+
+
+class RefundNotFoundError(PaymentsDomainError):
+    """404: no such refund, order, or order line (a line of another order included)."""
+
+
+class RefundRefusedError(PaymentsDomainError):
+    """409 INVALID_STATE_TRANSITION with a stable `reason` (VS-030 plan 2.3, 2.4)."""
+
+    def __init__(self, reason: str, *, reissued_by: UUID | None = None) -> None:
+        super().__init__(reason)
+        self.reason, self.reissued_by = reason, reissued_by
+
+
+class OrderLockRequiredError(PaymentsDomainError):
+    """A refund fact read by a transaction that does not hold the order's row lock."""

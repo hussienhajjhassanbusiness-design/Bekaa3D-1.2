@@ -5,8 +5,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from app.fulfillment.application.ports import DeliveryNotices, DeliveryOrders
-from app.ordering.public import LineNotFoundError, LockedOrder, OrderStatus
+from app.fulfillment.application.ports import DeliveryNotices, DeliveryOrders, OrderPayments
+from app.ordering.public import LineNotFoundError, LockedOrder, OrderStatus, RefundFacts
 from app.platform.application.ports import AuditWriter
 
 
@@ -21,6 +21,7 @@ class DeliveryResult:
 
 async def mark_stl_delivered(
     orders: DeliveryOrders,
+    payments: OrderPayments,
     audit: AuditWriter,
     notices: DeliveryNotices,
     *,
@@ -39,6 +40,7 @@ async def mark_stl_delivered(
         audit,
         notices,
         locked,
+        refunds=await payments.refund_facts(order_id),
         item_id=item_id,
         admin_id=admin_id,
         at=at,
@@ -53,15 +55,16 @@ async def deliver_stl_line(
     notices: DeliveryNotices,
     locked: LockedOrder,
     *,
+    refunds: RefundFacts,
     item_id: UUID,
     admin_id: UUID,
     at: datetime,
     request_id: str | None,
     ip_hash: str | None,
 ) -> DeliveryResult:
-    """The delivery itself, on an order the caller has locked."""
+    """The delivery itself, on an order the caller has locked; `refunds` read after it."""
     line, order_status = await orders.mark_delivered(
-        locked, line_id=item_id, admin_id=admin_id, at=at
+        locked, line_id=item_id, admin_id=admin_id, at=at, refunds=refunds
     )
     await audit.record(
         actor_user_id=admin_id,

@@ -1,7 +1,8 @@
 # VS-030 — Refunds and Settlement: Implementation Plan
 
-**Status:** IN PROGRESS (PR A, branch `vs-030-schema`), revision 2. The owner answered Q1-Q12 on
-2026-10-23 (Revisions 1 and 2 below).
+**Status:** IN PROGRESS: PR B built on `vs-030-refund-core` (awaiting review); PR C next. Revision 2. PR A (`vs-030-schema`,
+migration `c01e53ab3e0f`) is merged as `7b346a4`. The owner answered Q1-Q12 on 2026-10-23
+(Revisions 1 and 2 below).
 **Date:** 2026-10-23
 **Planned against alembic head:** `0f43e238eaae` (`contact_message_order_link`, VS-029b, merged
 as `fc641dc` after revision 1 was written against `b6e1d0c4a2f7`).
@@ -430,8 +431,10 @@ I10 and I25):
 - It enumerates the 23,232 cases and collects every case where old ≠ new.
 - It asserts the set equals exactly the union of D-a … D-e, with each case classified by its
   predicate. A new difference, or a listed one disappearing, fails with the case printed.
-- It asserts every D-b, D-d and D-e case violates `consistent(i) = I1 ∧ I2 ∧ I3`, and that every
-  D-a and D-c case satisfies it. So the only reachable changes are the two intended ones.
+- It asserts every D-b, D-d and D-e case violates `consistent(i) = I1 ∧ I2 ∧ I3`, that every D-c
+  case satisfies it, and that a D-a case satisfies it **exactly when refunds do not cover the paid
+  money** (¬c; a covered D-a case breaks I1). So the only reachable changes are the two intended
+  ones. (Corrected in PR B: the first wording said every D-a case was consistent.)
 - It prints the per-class counts for the PR description.
 
 **ADR-042** states that it **amends SRS §20.2** (and database-design §17.2 and the entities
@@ -1211,7 +1214,21 @@ Never everything at once (memory, VS-041 audit §8).
 **CP1** (end of PR A): migration applied on a copy, the schema tests green, a single head.
 Reports: the head, the constraint list, and the downgrade result.
 
-### PR B: refund core (branch `vs-030-refunds`, from main after PR A)
+### PR B: refund core (branch `vs-030-refund-core`, from main after PR A)
+
+PR B as built (2026-10-24):
+- Every B1-B4 item is in, except the published interface's `create_refund` /
+  `refund_balances` for VS-031 and `refunded_cents_by_line` / `unsettled_refund_exists`.
+  Nothing calls those yet, so their owners (VS-031, VS-043, VS-045) add them.
+- The refund limits sit in `app.payments.domain.limits`, registered in `test_limits.py`.
+- E1 starts from a seeded paid order, not a checkout. R4, R5, R10 and R14 run 5 forced
+  rounds per commit order (the order is forced, so repeats add little), not 50.
+
+Owner decisions at PR B's start (2026-10-23):
+- The branch is `vs-030-refund-core`, not the `vs-030-refunds` first planned here.
+- ADR-042 stays **Proposed** in PR B, which only appends its decisions. PR C sets it Accepted.
+- PR B's paths lock in ranks 0-4 only (claim, `orders`, lines by id, `payments`, `refunds`), then
+  6-7 (cart and phone lock). Rank 5 (`chargebacks`) is reserved for PR C, and the code says so.
 1. The pure rules (§3.1, §3.2) with U1–U12.
 2. Ordering: the `RefundFacts` signature, `refund_lines`, the stop-gap removal, the strict-xfail
    conversion (one commit, named), and the allow-lists.

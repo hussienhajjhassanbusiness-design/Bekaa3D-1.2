@@ -70,6 +70,7 @@ DETAIL_KEYS = {
     "lines",
     "payment",
     "status_history",
+    "refunds",  # VS-030: the refund summary ADR-033 d7 deferred
 }
 LINE_KEYS = {
     "id",

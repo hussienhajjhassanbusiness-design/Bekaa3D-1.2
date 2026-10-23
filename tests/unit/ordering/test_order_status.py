@@ -1,11 +1,16 @@
-"""derive_order_status: every SRS 20.2 branch, in the SRS order (VS-023 plan 3.1, 6.1)."""
+"""derive_order_status: every SRS 20.2 branch, in the ADR-042 order (VS-030 plan 3.1, U1)."""
 
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from app.ordering.domain.enums import OrderItemStatus, OrderStatus, PaymentMethod
-from app.ordering.domain.order_status import LineState, OrderStatusInputs, derive_order_status
+from app.ordering.domain.order_status import (
+    LineState,
+    OrderStatusInputs,
+    RefundFacts,
+    derive_order_status,
+)
 
 S = OrderItemStatus
 ONLINE, CASH = PaymentMethod.ONLINE, PaymentMethod.CASH
@@ -17,8 +22,11 @@ def inputs(method: PaymentMethod, *states: OrderItemStatus, **over: bool) -> Ord
         cancelled_at_set=over.get("cancelled_at_set", False),
         payment_reached_paid=over.get("paid", False),
         lines=tuple(LineState(s) for s in states),
-        refunds_cover_paid=over.get("cover", False),
-        refund_present=over.get("refund", False),
+        refunds=RefundFacts(
+            covers_paid=over.get("cover", False),
+            present=over.get("refund", False),
+            owed=over.get("owed", False),
+        ),
     )
 
 
@@ -42,7 +50,12 @@ CASES = [
         inputs(ONLINE, S.DELIVERED, S.PENDING, paid=True, cover=True, refund=True),
         OrderStatus.REFUNDED,
     ),
-    ("paid-all-lines-refunded", inputs(ONLINE, S.REFUNDED, paid=True), OrderStatus.REFUNDED),
+    # Realistic: a fully refunded line means refunds cover the paid money (ADR-042, I2).
+    (
+        "paid-all-lines-refunded",
+        inputs(ONLINE, S.REFUNDED, paid=True, cover=True, refund=True),
+        OrderStatus.REFUNDED,
+    ),
     (
         "paid-refund-present",
         inputs(ONLINE, S.AWAITING_DELIVERY, paid=True, refund=True),
@@ -61,17 +74,17 @@ CASES = [
         OrderStatus.IN_PROGRESS,
     ),
     ("paid-returned-is-not-terminal", inputs(CASH, S.RETURNED, paid=True), OrderStatus.IN_PROGRESS),
-    # The PR #8 review cases (vertical-slice-plan.md:820): pinned to SRS 20.2 as written.
-    # A reorder is a VS-030 decision (ADR plus co-developer confirmation); change these then.
+    # The PR #8 review cases (vertical-slice-plan.md:820), flipped by ADR-042: money still
+    # owed never reads refunded (D-c, case A) or cancelled (D-a, case B).
     (
         "pr8-case-a-failed-full-refund-owed",
-        inputs(ONLINE, S.REFUNDED, paid=True, cover=False, refund=True),
-        OrderStatus.REFUNDED,
+        inputs(ONLINE, S.REFUNDED, paid=True, owed=True),
+        OrderStatus.PARTIALLY_REFUNDED,
     ),
     (
         "pr8-case-b-all-cancelled-refund-owed",
-        inputs(ONLINE, S.CANCELLED, S.CANCELLED, paid=True, refund=True),
-        OrderStatus.CANCELLED,
+        inputs(ONLINE, S.CANCELLED, S.CANCELLED, paid=True, owed=True),
+        OrderStatus.PARTIALLY_REFUNDED,
     ),
 ]
 
@@ -89,6 +102,7 @@ def test_each_branch(name: str, given_inputs: OrderStatusInputs, expected: Order
     paid=st.booleans(),
     cover=st.booleans(),
     refund=st.booleans(),
+    owed=st.booleans(),
 )
 def test_pending_payment_only_for_an_unpaid_online_order(
     method: PaymentMethod,
@@ -97,10 +111,10 @@ def test_pending_payment_only_for_an_unpaid_online_order(
     paid: bool,
     cover: bool,
     refund: bool,
+    owed: bool,
 ) -> None:
-    status = derive_order_status(
-        inputs(method, *states, cancelled_at_set=cancelled, paid=paid, cover=cover, refund=refund)
-    )
+    over = {"cancelled_at_set": cancelled, "paid": paid, "cover": cover, "refund": refund}
+    status = derive_order_status(inputs(method, *states, owed=owed, **over))
     assert status in OrderStatus
     if status is OrderStatus.PENDING_PAYMENT:
         assert method is ONLINE and not paid and not cancelled

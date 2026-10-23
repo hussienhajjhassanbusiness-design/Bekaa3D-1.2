@@ -19,6 +19,7 @@ class AlertKind(StrEnum):
     PROVIDER_UNREACHABLE = "provider_unreachable"
     PROVIDER_NOT_CONFIGURED = "provider_not_configured"
     REFERENCE_UNKNOWN = "reference_unknown"
+    REFUND_INTEGRITY = "refund_integrity"  # VS-030 Q-2: order total != its lines
 
 
 # What an admin needs to act, and nothing else: no redirect URL, provider reference or
@@ -54,6 +55,7 @@ _REPEAT = {
     AlertKind.EVENT_UNVERIFIED: ALERT_REPEAT_PER_PAYMENT,
     AlertKind.PROVIDER_UNAVAILABLE: ALERT_REPEAT_PER_PAYMENT,
     AlertKind.PROVIDER_NOT_CONFIGURED: ALERT_REPEAT_PER_PAYMENT,
+    AlertKind.REFUND_INTEGRITY: ALERT_REPEAT_PER_PAYMENT,
     AlertKind.PROVIDER_UNREACHABLE: ALERT_REPEAT_PER_PROVIDER,
 }
 

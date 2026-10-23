@@ -33,6 +33,7 @@ from tests.integration.fulfillment.delivery_support import (
     seed_stl_order,
     transition_path,
 )
+from tests.integration.fulfillment.order_support import seed_payment
 
 pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("configured_app")]
 
@@ -287,8 +288,29 @@ async def test_a_pending_physical_line_keeps_the_order_in_progress(
 async def test_delivery_on_a_partly_refunded_order_keeps_it_partially_refunded(
     db_engine: AsyncEngine, db_session: AsyncSession
 ) -> None:
-    """The stop-gap: VS-030 must compute the refund inputs from real refunds."""
+    """A real partial refund row keeps it so (ADR-042), not the order's previous status."""
     order, line = await seed_stl_order(db_session, order_status="partially_refunded")
+    admin = (await create_user(db_session, role=UserRole.ADMIN)).id
+    at = datetime.now(UTC)
+    await seed_payment(db_session, order.order_id, 1000, "partially_refunded", at=at)
+    refund = uuid.uuid4()
+    await db_session.execute(
+        text(
+            "INSERT INTO refunds (id, order_id, payment_id, payment_provider, kind, status,"
+            " amount_cents, reason, requested_by, initiated_at)"
+            " SELECT :r, p.order_id, p.id, p.provider, 'admin', 'pending', 1, 'Goodwill.',"
+            " :by, :at FROM payments p WHERE p.order_id = :o"
+        ),
+        {"r": refund, "o": order.order_id, "by": admin, "at": at},
+    )
+    await db_session.execute(
+        text(
+            "INSERT INTO refund_items (refund_id, order_id, order_item_id, amount_cents)"
+            " VALUES (:r, :o, :i, 1)"
+        ),
+        {"r": refund, "o": order.order_id, "i": line},
+    )
+    await db_session.commit()
     with client_for(main_app) as client:
         await mfa_admin(client, db_session)
         response = _send(client, order.order_id, line)

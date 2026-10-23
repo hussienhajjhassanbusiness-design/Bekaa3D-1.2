@@ -53,7 +53,13 @@ from app.ordering.domain.line_transitions import (
     available_targets,
     line_transition_refusal,
 )
-from app.ordering.domain.order_status import LineState, OrderStatusInputs, derive_order_status
+from app.ordering.domain.order_status import (
+    NO_REFUNDS,
+    LineState,
+    OrderStatusInputs,
+    RefundFacts,
+    derive_order_status,
+)
 from app.ordering.domain.orders import Order, OrderLine, StatusChange, StlDeliveryRow
 from app.ordering.domain.payment_recovery import (
     ReleaseRefusal,
@@ -69,6 +75,7 @@ from app.ordering.infrastructure.orders import SqlOrderStore
 
 __all__ = [
     "DELIVERY_FEE_NOTE",
+    "NO_REFUNDS",
     "AdminHistoryEntry",
     "AdminOrder",
     "AdminOrderFilters",
@@ -95,6 +102,7 @@ __all__ = [
     "OrderStatus",
     "OrderStatusInputs",
     "PaymentMethod",
+    "RefundFacts",
     "ReleaseRefusal",
     "SqlCashBlockStore",
     "StlDeliveryRow",
@@ -121,6 +129,7 @@ __all__ = [
     "orders_by_id",
     "payment_due",
     "recompute_order_status",
+    "refund_lines",
     "release_candidates",
     "release_unpaid_order",
     "status_inputs_for",
@@ -228,16 +237,19 @@ async def mark_order_paid(session: AsyncSession, locked: LockedOrder, *, at: dat
 
 
 def status_inputs_for(
-    locked: LockedOrder, lines: tuple[LineState, ...], *, reached_paid: bool
+    locked: LockedOrder,
+    lines: tuple[LineState, ...],
+    *,
+    reached_paid: bool,
+    refunds: RefundFacts,
 ) -> OrderStatusInputs:
-    """STOP-GAP: VS-030 must replace `refund_present` with the real refund query; until
-    then a `partially_refunded` order keeps that status."""
+    """`refunds` comes from Payments, read by the caller under the orders lock (ADR-042)."""
     return OrderStatusInputs(
         payment_method=locked.order.payment_method,
         cancelled_at_set=locked.order.cancelled_at is not None,
         payment_reached_paid=reached_paid,
         lines=lines,
-        refund_present=reached_paid and locked.order.status is OrderStatus.PARTIALLY_REFUNDED,
+        refunds=refunds,
     )
 
 
@@ -256,7 +268,13 @@ def line_context(locked: LockedOrder, line: OrderLine, *, reached_paid: bool) ->
 
 
 async def mark_stl_line_delivered(
-    session: AsyncSession, locked: LockedOrder, *, line_id: UUID, admin_id: UUID, at: datetime
+    session: AsyncSession,
+    locked: LockedOrder,
+    *,
+    line_id: UUID,
+    admin_id: UUID,
+    at: datetime,
+    refunds: RefundFacts,
 ) -> tuple[OrderLine, OrderStatus]:
     """Admin sent the file: STL `awaiting_delivery -> delivered`, history, recomputed status.
     The caller holds the orders and lines locks; the state is read from `locked`."""
@@ -289,7 +307,7 @@ async def mark_stl_line_delivered(
     order_status = await recompute_order_status(
         session,
         locked,
-        status_inputs_for(locked, states, reached_paid=True),
+        status_inputs_for(locked, states, reached_paid=True, refunds=refunds),
         actor_user_id=admin_id,
     )
     delivered = replace(
@@ -310,10 +328,11 @@ async def transition_physical_line(
     admin_id: UUID,
     at: datetime,
     reached_paid: bool,
+    refunds: RefundFacts,
     note: str | None,
 ) -> tuple[OrderLine, OrderStatus]:
     """A physical forward edge (VS-029), decided on the state in `locked`; history, then
-    the recomputed status. `reached_paid` is read after the caller took the locks."""
+    the recomputed status. `reached_paid` and `refunds` are read after the locks."""
     line = _line(locked, line_id)
     current = line.fulfillment_status
     refusal = line_transition_refusal(
@@ -349,7 +368,7 @@ async def transition_physical_line(
     order_status = await recompute_order_status(
         session,
         locked,
-        status_inputs_for(locked, states, reached_paid=reached_paid),
+        status_inputs_for(locked, states, reached_paid=reached_paid, refunds=refunds),
         actor_user_id=admin_id,
     )
     return replace(line, fulfillment_status=target), order_status
@@ -410,9 +429,9 @@ async def hand_over_cash_lines(
     after = tuple(
         LineState(done if line.id in ids else line.fulfillment_status) for line in locked.lines
     )
-    order_status = await recompute_order_status(
-        session, locked, status_inputs_for(locked, after, reached_paid=True), actor_user_id=admin_id
-    )
+    # The cash payment was inserted just now, so no refund can exist yet (VS-030 plan 3.4).
+    inputs = status_inputs_for(locked, after, reached_paid=True, refunds=NO_REFUNDS)
+    order_status = await recompute_order_status(session, locked, inputs, actor_user_id=admin_id)
     return tuple(replace(line, fulfillment_status=done) for line in live), order_status
 
 
@@ -449,6 +468,35 @@ async def stl_delivery_page(
 async def stl_owned(session: AsyncSession, *, user_id: UUID, product_id: UUID) -> bool:
     """A paid, unrefunded STL line (`awaiting_delivery` or `delivered`), ADR-019 d5."""
     return bool(await SqlOrderStore(session).owned_stl_product_ids(user_id, [product_id]))
+
+
+async def refund_lines(
+    session: AsyncSession,
+    locked: LockedOrder,
+    line_ids: tuple[UUID, ...],
+    *,
+    actor_user_id: UUID,
+    reason: str,
+    at: datetime,
+) -> None:
+    """Fully covered lines become `refunded` (VS-030 L6), with history; no recompute, the
+    caller does that with fresh refund facts. Caller holds `lock_order_for_change`."""
+    lines = [_line(locked, line_id) for line_id in line_ids]
+    store = SqlOrderStore(session)
+    await store.set_line_status(list(line_ids), OrderItemStatus.REFUNDED, at=at)
+    await store.add_history(
+        [
+            StatusChange(
+                locked.order.id,
+                line.fulfillment_status.value,
+                OrderItemStatus.REFUNDED.value,
+                order_item_id=line.id,
+                actor_user_id=actor_user_id,
+                reason=reason,
+            )
+            for line in lines
+        ]
+    )
 
 
 async def release_unpaid_order(
