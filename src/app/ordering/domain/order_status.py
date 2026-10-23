@@ -20,6 +20,20 @@ class LineState:
 
 
 @dataclass(frozen=True)
+class RefundFacts:
+    """Read under the orders lock (ADR-042); `late_capture` and voided refunds never count.
+    covers_paid: pending + settled + chargeback applied >= paid. present: any of those.
+    owed: a failed refund not yet reissued."""
+
+    covers_paid: bool = False
+    present: bool = False
+    owed: bool = False
+
+
+NO_REFUNDS = RefundFacts()
+
+
+@dataclass(frozen=True)
 class OrderStatusInputs:
     """`payment_reached_paid`: a payment is paid, partially_refunded or refunded. The two
     refund inputs stay False until VS-030 computes them."""

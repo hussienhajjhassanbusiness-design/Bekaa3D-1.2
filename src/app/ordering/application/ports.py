@@ -9,7 +9,10 @@ from uuid import UUID
 
 from app.catalog.application.ports import ProductType
 from app.ordering.domain.entities import Cart, CartLine
-from app.ordering.domain.enums import OrderItemStatus, OrderStatus
+from app.ordering.domain.enums import OrderItemStatus as OrderItemStatus  # re-exported (VS-030)
+from app.ordering.domain.enums import OrderStatus
+from app.ordering.domain.order_status import NO_REFUNDS as NO_REFUNDS  # re-exported (VS-030)
+from app.ordering.domain.order_status import RefundFacts as RefundFacts  # re-exported (VS-030)
 from app.ordering.domain.orders import (
     CustomerOrder,
     CustomerOrderLine,
