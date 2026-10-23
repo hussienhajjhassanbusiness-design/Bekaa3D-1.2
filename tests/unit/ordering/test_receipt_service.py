@@ -73,7 +73,7 @@ class FakeOrders:
         return self.lines
 
     async def stamp_receipt_confirmed(
-        self, line_ids: Sequence[uuid.UUID], *, at: datetime
+        self, order_id: uuid.UUID, line_ids: Sequence[uuid.UUID], *, at: datetime
     ) -> list[uuid.UUID]:
         self.calls.append("stamp")
         new = sorted(set(line_ids) - self.confirmed)
@@ -81,7 +81,7 @@ class FakeOrders:
         return new
 
     async def stamp_problem_reported(
-        self, line_ids: Sequence[uuid.UUID], *, at: datetime
+        self, order_id: uuid.UUID, line_ids: Sequence[uuid.UUID], *, at: datetime
     ) -> list[uuid.UUID]:
         self.calls.append("stamp")
         new = sorted(set(line_ids) - self.reported)
@@ -113,7 +113,9 @@ def _orders(*states: S) -> FakeOrders:
 
 async def _confirm(orders: FakeOrders, audit: FakeAudit, **over: Any) -> list[uuid.UUID]:
     args: dict[str, Any] = {"user_id": USER, "order_id": orders.order.id} | over
-    return await confirm_receipt(orders, audit, at=AT, request_id="r", ip_hash="h", **args)
+    return await confirm_receipt(
+        orders, audit, clock=lambda: AT, request_id="r", ip_hash="h", **args
+    )
 
 
 async def _report(orders: FakeOrders, inbox: FakeInbox, audit: FakeAudit, **over: Any) -> uuid.UUID:
@@ -124,7 +126,7 @@ async def _report(orders: FakeOrders, inbox: FakeInbox, audit: FakeAudit, **over
         audit,
         email="rana@example.com",
         message="Cracked.",
-        at=AT,
+        clock=lambda: AT,
         request_id="r",
         ip_hash="h",
         **args,

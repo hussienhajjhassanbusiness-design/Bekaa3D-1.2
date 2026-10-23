@@ -67,6 +67,10 @@ async def _report_rate_limit(
     )
 
 
+def _now() -> datetime:
+    return datetime.now(UTC)
+
+
 def _context(request: Request) -> tuple[str | None, str | None]:
     ip = client_ip(request)
     return getattr(request.state, "request_id", None), hash_ip(ip) if ip else None
@@ -102,7 +106,7 @@ async def confirm_my_receipt(
             SqlAuditWriter(session),
             user_id=user.id,
             order_id=order_id,
-            at=datetime.now(UTC),
+            clock=_now,
             request_id=request_id,
             ip_hash=ip_hash,
         )
@@ -117,7 +121,8 @@ async def confirm_my_receipt(
     "/{order_id}/report-problem",
     status_code=status.HTTP_201_CREATED,
     response_model=OrderDetailRead,
-    dependencies=[Depends(_report_rate_limit), Depends(require_csrf)],
+    # CSRF first, so a forged cross-site POST spends none of the customer's five.
+    dependencies=[Depends(require_csrf), Depends(_report_rate_limit)],
     summary="Report a problem with the delivered or picked-up items of your order",
     responses={
         **_RESPONSES,
@@ -143,7 +148,7 @@ async def report_my_problem(
             email=user.email,
             order_id=order_id,
             message=body.message,
-            at=datetime.now(UTC),
+            clock=_now,
             request_id=request_id,
             ip_hash=ip_hash,
         )

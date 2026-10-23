@@ -35,6 +35,20 @@ OWNED_STATES = (OrderItemStatus.AWAITING_DELIVERY, OrderItemStatus.DELIVERED)
 LIVE_STL_STATES = (OrderItemStatus.PENDING, *OWNED_STATES)
 
 _O, _I = OrderModel, OrderItemModel
+RECEIVED = (OrderItemStatus.DELIVERED, OrderItemStatus.PICKED_UP)
+
+
+def _received(order_id: UUID, line_ids: Sequence[UUID]) -> tuple[Any, ...]:
+    """VS-029b's stamps repeat the domain rule, so a stray id can never stamp another
+    order's line or one not received (defence in depth, ADR-041 d1)."""
+    return (
+        _I.order_id == order_id,
+        _I.id.in_(line_ids),
+        _I.product_type == ProductType.PHYSICAL,
+        _I.fulfillment_status.in_(RECEIVED),
+    )
+
+
 _ORDER_COLUMNS = (
     _O.id,
     _O.order_number,
@@ -242,20 +256,22 @@ class SqlOrderStore:
             await self._session.execute(update(_I).where(_I.id.in_(line_ids)).values(**values))
 
     async def stamp_receipt_confirmed(
-        self, line_ids: Sequence[UUID], *, at: datetime
+        self, order_id: UUID, line_ids: Sequence[UUID], *, at: datetime
     ) -> list[UUID]:
         result = await self._session.execute(
             update(_I)
-            .where(_I.id.in_(line_ids), _I.receipt_confirmed_at.is_(None))
+            .where(*_received(order_id, line_ids), _I.receipt_confirmed_at.is_(None))
             .values(receipt_confirmed_at=at, updated_at=at)
             .returning(_I.id)
         )
         return sorted(result.scalars())
 
-    async def stamp_problem_reported(self, line_ids: Sequence[UUID], *, at: datetime) -> list[UUID]:
+    async def stamp_problem_reported(
+        self, order_id: UUID, line_ids: Sequence[UUID], *, at: datetime
+    ) -> list[UUID]:
         result = await self._session.execute(
             update(_I)
-            .where(_I.id.in_(line_ids), _I.problem_reported_at.is_(None))
+            .where(*_received(order_id, line_ids), _I.problem_reported_at.is_(None))
             .values(problem_reported_at=at, updated_at=at)
             .returning(_I.id)
         )

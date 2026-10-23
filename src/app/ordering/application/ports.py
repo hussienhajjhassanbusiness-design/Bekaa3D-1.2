@@ -185,12 +185,14 @@ class ReceiptOrders(Protocol):
     async def lock_lines(self, order_id: UUID) -> list[OrderLine]: ...
 
     async def stamp_receipt_confirmed(
-        self, line_ids: Sequence[UUID], *, at: datetime
+        self, order_id: UUID, line_ids: Sequence[UUID], *, at: datetime
     ) -> list[UUID]:
         """Only where unset, so the first confirmation stays; returns the ids it set."""
         ...
 
-    async def stamp_problem_reported(self, line_ids: Sequence[UUID], *, at: datetime) -> list[UUID]:
+    async def stamp_problem_reported(
+        self, order_id: UUID, line_ids: Sequence[UUID], *, at: datetime
+    ) -> list[UUID]:
         """Only where unset, so the first report's time stays; returns the ids it set."""
         ...
 

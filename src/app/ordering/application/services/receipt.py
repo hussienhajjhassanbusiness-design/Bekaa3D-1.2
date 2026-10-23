@@ -1,6 +1,7 @@
 """Receipt confirmation and problem reports (VS-029b; FR-21, BR-147, ADR-041). Neither
 changes a line's state or the order status; both lock `orders`, then lines (ADR-024)."""
 
+from collections.abc import Callable
 from datetime import datetime
 from uuid import UUID
 
@@ -19,13 +20,14 @@ async def confirm_receipt(
     *,
     user_id: UUID,
     order_id: UUID,
-    at: datetime,
+    clock: Callable[[], datetime],
     request_id: str | None,
     ip_hash: str | None,
 ) -> list[UUID]:
-    """Idempotent: a repeat stamps nothing and writes no audit row. Returns the ids set."""
+    """Idempotent: a repeat stamps nothing and writes no audit row. Returns the ids set.
+    The clock is read once the locks are held, as offer checkout does (ADR-037)."""
     order, line_ids = await _received(orders, user_id, order_id)
-    stamped = await orders.stamp_receipt_confirmed(line_ids, at=at)
+    stamped = await orders.stamp_receipt_confirmed(order_id, line_ids, at=clock())
     if stamped:
         await audit.record(
             actor_user_id=user_id,
@@ -48,7 +50,7 @@ async def report_problem(
     email: str,
     order_id: UUID,
     message: str,
-    at: datetime,
+    clock: Callable[[], datetime],
     request_id: str | None,
     ip_hash: str | None,
 ) -> UUID:
@@ -63,7 +65,7 @@ async def report_problem(
         email=email,
         message=message,
     )
-    stamped = await orders.stamp_problem_reported(line_ids, at=at)
+    stamped = await orders.stamp_problem_reported(order_id, line_ids, at=clock())
     await audit.record(
         actor_user_id=user_id,
         action="order.problem_reported",

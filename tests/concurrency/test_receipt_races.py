@@ -1,6 +1,7 @@
 """VS-029b races on real Postgres (FR-21 concurrency; ADR-024 d9, ADR-041). As VS-029's,
 each racer waits on the held `orders` row lock before it is released, so they overlap."""
 
+import asyncio
 from collections.abc import Callable
 from typing import Any
 
@@ -11,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.identity.infrastructure.models import UserModel
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
-from tests.concurrency.test_admin_order_races import queued
+from tests.concurrency.test_admin_order_races import order_lock, queued
 from tests.integration.deep_support import PASSWORD, async_client, create_user, running_app
 from tests.integration.fulfillment.delivery_support import admin_client
 from tests.integration.fulfillment.order_support import (
@@ -176,3 +177,24 @@ async def test_a_report_racing_a_transition_on_another_line_has_both_outcomes(
     _, lines = await states(db_engine, order.order_id)
     assert sorted(lines) == ["delivered", "shipped"]
     assert len(await linked_messages(db_engine, order.order_id)) == 1
+
+
+@pytest.mark.parametrize("action", [CONFIRM, REPORT])
+async def test_another_customers_locked_order_is_a_404_without_waiting(
+    action: str,
+    make_app: Callable[[], FastAPI],
+    db_engine: AsyncEngine,
+    db_session: AsyncSession,
+) -> None:
+    """Money review finding 3: ownership is in the lock's WHERE, so a foreign row is
+    never locked or waited on, even while an administrator holds it."""
+    owner, caller = await create_user(db_session), await create_user(db_session)
+    order = await seed_physical_order(db_session, user_id=owner.id, line_states=["delivered"])
+    async with running_app(make_app) as app, order_lock(db_engine, order.order_id):
+        [client] = await _customers(app, caller, 1)
+        try:
+            response = await asyncio.wait_for(act(client, order.order_id, action), timeout=3)
+        finally:
+            await client.aclose()
+    assert response.status_code == 404, response.text
+    assert await stamps(db_engine, order.order_id) == [(None, None)]

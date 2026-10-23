@@ -15,6 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from app.engagement.infrastructure.repositories import NotificationRepository
 from app.identity.domain.enums import UserRole
 from app.identity.infrastructure.models import UserModel
+from app.ordering.infrastructure.orders import SqlOrderStore
+from app.platform.public import SqlAuditWriter
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
 from tests.integration.deep_support import (
     PASSWORD,
@@ -350,6 +352,33 @@ async def test_a_failed_notification_rolls_the_whole_report_back(
 
     monkeypatch.setattr(NotificationRepository, "add", broken)
     async with _customer(make_app, user) as client:
+        response = await act(client, order.order_id, REPORT)
+    assert response.status_code == 500
+    await _assert_nothing_written(db_engine, order.order_id)
+
+
+@pytest.mark.parametrize("step", ["stamp", "audit"])
+async def test_a_failure_after_the_message_is_queued_rolls_it_back_too(
+    step: str,
+    make_app: Callable[[], FastAPI],
+    db_engine: AsyncEngine,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """FR-21 failure: the report and its contact message commit together, so nothing
+    upstream of the stamp and the audit row may commit early."""
+    await create_user(db_session, role=UserRole.ADMIN)
+    user = await create_user(db_session)
+    order = await _order(db_session, user, line_states=["delivered"])
+
+    async def broken(*args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError(f"{step} failed")
+
+    async with _customer(make_app, user) as client:  # login audits, so patch after it
+        if step == "stamp":
+            monkeypatch.setattr(SqlOrderStore, "stamp_problem_reported", broken)
+        else:
+            monkeypatch.setattr(SqlAuditWriter, "record", broken)
         response = await act(client, order.order_id, REPORT)
     assert response.status_code == 500
     await _assert_nothing_written(db_engine, order.order_id)
