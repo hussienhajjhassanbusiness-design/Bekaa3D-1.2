@@ -1155,7 +1155,7 @@ batch_size_snapshot IS NULL
 - on a cash order, `delivered` / `picked_up` are reached only through the cash handover;
 - no physical line of an unpaid online order changes state (BR-148);
 - customers see `in_production` as `pending`, and their status history omits it;
-- receipt confirmation and problem reports never change `fulfillment_status`;
+- receipt confirmation and problem reports never change `fulfillment_status`; both timestamps stay null on STL lines (`ck_order_items_feedback_physical_only`, VS-029b, ADR-041);
 - STL lines are never self-cancellable.
 
 ### Index
@@ -1701,7 +1701,7 @@ As built by VS-034 (ADR-030): `scan_status` is the enum `upload_scan_status`, wh
 
 ## 12.6 `contact_messages`
 
-VS-033 built this table without `user_id` and `order_id`; VS-029b adds both, as its problem reports are their first writer.
+VS-033 built this table without `user_id` and `order_id`; VS-029b adds both (migration `0f43e238eaae`, ADR-041), as its problem reports are their first writer. `CHECK (order_id IS NULL OR user_id IS NOT NULL)`; partial indexes on each `WHERE … IS NOT NULL`; both FKs `ON DELETE RESTRICT`.
 
 | Column | Type | Null | Constraint |
 |---|---|---:|---|
