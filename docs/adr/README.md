@@ -47,6 +47,7 @@ Only expensive-to-reverse decisions belong here. Folder names and small refactor
 - [ADR-039: STL delivery workflow - Fulfillment owns the use case, Ordering keeps every `order_items` write, one transaction writes the delivery and its notices, the queue is keyset-paged by placement time (VS-023b)](ADR-039-stl-delivery-workflow.md)
 - [ADR-040: Admin order queue, physical fulfillment and cash handover - forward edges only, one notice per order per visible step, the handover as the only cash writer, a queue that never lists an unpaid online order (VS-029)](ADR-040-admin-order-queue-fulfillment-and-cash-handover.md)
 - [ADR-041: Receipt confirmation and problem report - physical lines only, first timestamp kept, a report is a linked contact message that alerts every administrator in the same transaction (VS-029b)](ADR-041-receipt-confirmation-and-problem-report.md)
+- [ADR-042: Refunds, voids and chargebacks - an owed refund is checked first, a voided status closes an obligation unpaid, chargebacks are their own record that absorbs open refunds (VS-030; Proposed)](ADR-042-refunds-voids-and-chargebacks.md)
 
 ## Governance
 

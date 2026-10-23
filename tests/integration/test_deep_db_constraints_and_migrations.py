@@ -318,6 +318,14 @@ RESTRICT_TO_USERS_ALLOWED = {
     ("offers", "user_id"),  # database-design.md:1913; submitting needs a verified email
     ("cash_payment_blocks", "user_id"),  # database-design.md:1953
     ("cash_payment_blocks", "cleared_by"),  # database-design.md:1955
+    # VS-030: who requested, approved, settled, failed or voided a refund, and who recorded
+    # a chargeback; administrators, so never reached by the unverified-account purge.
+    ("refunds", "requested_by"),
+    ("refunds", "approved_by"),
+    ("refunds", "settled_by"),
+    ("refunds", "failed_by"),
+    ("refunds", "voided_by"),
+    ("chargebacks", "recorded_by"),
 }
 
 _FKS_TO_USERS = (

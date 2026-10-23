@@ -25,6 +25,7 @@ BYI_REVISION = "26d5d039d72c"
 ORDERS_REVISION = "03a4730dd046"
 CAPTURED_REVISION = "00ce1ce252a6"
 CASH_REVISION = "fcd589e89e59"
+REFUNDS_REVISION = "c01e53ab3e0f"
 EXPECTED_ENUMS = {"user_role", "outbox_status", "setting_type", "notification_type"}
 
 
@@ -185,6 +186,36 @@ def test_full_downgrade_and_upgrade_round_trips() -> None:
         assert asyncio.run(fetch(cash_checks)) == both_cash_checks
         keys = asyncio.run(fetch(setting_keys))
         assert cash_keys <= keys and "free_shipping_threshold" not in keys
+
+        # VS-030 PR A: stepping back to its own parent (read from the chain, never pinned)
+        # drops the four tables, both enum types, the owner FK and the three composite keys.
+        refund_parent = chain[REFUNDS_REVISION].down_revision
+        assert isinstance(refund_parent, str)
+        refund_tables = {"refunds", "refund_items", "chargebacks", "chargeback_items"}
+        refund_enums = {"refund_kind", "refund_status"}
+        refund_keys = (
+            "SELECT conname FROM pg_constraint WHERE conname IN ('uq_orders_id_user',"
+            " 'uq_order_items_id_order', 'uq_payments_id_order_provider',"
+            " 'fk_order_items_order_owner')"
+        )
+        all_keys = {
+            "uq_orders_id_user",
+            "uq_order_items_id_order",
+            "uq_payments_id_order_provider",
+            "fk_order_items_order_owner",
+        }
+        assert refund_tables <= asyncio.run(fetch(table_query))
+        assert refund_enums <= asyncio.run(fetch(enum_query))
+        assert asyncio.run(fetch(refund_keys)) == all_keys
+        command.downgrade(config, refund_parent)
+        assert refund_tables.isdisjoint(asyncio.run(fetch(table_query)))
+        assert refund_enums.isdisjoint(asyncio.run(fetch(enum_query)))
+        assert asyncio.run(fetch(refund_keys)) == set()
+        assert "payment_provider" in asyncio.run(fetch(enum_query)), "payments still owns it"
+        assert {"orders", "payments"} <= asyncio.run(fetch(table_query)), "parents untouched"
+        command.upgrade(config, "head")
+        assert refund_tables <= asyncio.run(fetch(table_query))
+        assert asyncio.run(fetch(refund_keys)) == all_keys
 
         command.downgrade(config, "base")
 
