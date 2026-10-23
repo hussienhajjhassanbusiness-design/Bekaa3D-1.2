@@ -9107,6 +9107,7 @@
     },
     "/api/v1/admin/cash-blocks/search": {
       "post": {
+        "description": "One `cash_block.searched` audit row per search: filters, count and ids only, never\nthe phone or its hash (VS-030 2.6, Q8).",
         "operationId": "search_blocks_api_v1_admin_cash_blocks_search_post",
         "requestBody": {
           "content": {
