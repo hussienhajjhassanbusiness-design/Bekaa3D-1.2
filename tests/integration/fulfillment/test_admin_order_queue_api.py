@@ -316,3 +316,26 @@ async def test_the_internal_note_is_never_visible_to_the_customer(
         assert "friend of the owner" not in response.text
         assert "admin_note" not in response.text
     assert admin_routes == [404, 404, 404]
+
+
+async def test_a_paid_order_whose_lines_are_all_cancelled_is_still_listed(
+    db_session: AsyncSession,
+) -> None:
+    """Only the hold release sets `cancelled_at` on an online order (ADR-040 d8)."""
+    buyer = await create_user(db_session)
+    order = await seed_physical_order(
+        db_session,
+        user_id=buyer.id,
+        payment_method="online",
+        payment_status="paid",
+        line_states=["cancelled"],
+        order_status="cancelled",
+    )
+    await db_session.execute(
+        text("UPDATE orders SET cancelled_at = NULL WHERE id = :o"), {"o": order.order_id}
+    )
+    await db_session.commit()
+    with client_for(main_app) as client:
+        await mfa_admin(client, db_session)
+        listed = _ids(client, customer_id=str(buyer.id))
+    assert listed == [str(order.order_id)]

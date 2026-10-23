@@ -221,6 +221,7 @@ class HandoverRefusedError(OrderingDomainError):
 class CashAmountMismatchError(OrderingDomainError):
     """422 CASH_AMOUNT_MISMATCH: not exactly the live total above zero (BR-055, BR-143)."""
 
-    def __init__(self, due_cents: int) -> None:
+    def __init__(self, due_cents: int, currency: str) -> None:
         super().__init__("The cash entered differs from the amount due.")
         self.due_cents = due_cents
+        self.currency = currency

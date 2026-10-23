@@ -26,6 +26,7 @@ async def record_cash_handover(
     *,
     order_id: UUID,
     amount_cents: int,
+    currency: str,
     admin_id: UUID,
     at: datetime,
     note: str | None,
@@ -37,7 +38,7 @@ async def record_cash_handover(
     locked = await orders.lock(order_id)  # orders, then every line by id
     if locked is None:
         raise LineNotFoundError(f"order {order_id} does not exist")
-    due = check_cash_handover(locked, typed_cents=amount_cents)
+    due = check_cash_handover(locked, typed_cents=amount_cents, typed_currency=currency)
     payment_id = await payments.record_cash(
         order_id=order_id,
         amount_cents=due,

@@ -21,6 +21,11 @@ CASH_CHAIN = {
     "insert_cash_payment": {("fulfillment/infrastructure/delivery_side.py", "record_cash")},
     "record_cash": {("fulfillment/application/record_cash_handover.py", "record_cash_handover")},
     "record_cash_handover": {("fulfillment/api/admin_orders.py", "cash_handover")},
+    # The lines move as paid only beside that INSERT, and BR-148's flag is read under the lock.
+    "hand_over_cash_lines": {("fulfillment/infrastructure/delivery_side.py", "hand_over")},
+    "hand_over": {("fulfillment/application/record_cash_handover.py", "record_cash_handover")},
+    "transition_physical_line": {("fulfillment/infrastructure/delivery_side.py", "transition")},
+    "transition": {("fulfillment/application/transition_line.py", "transition_line")},
 }
 
 
@@ -83,6 +88,6 @@ def test_the_online_insert_can_only_write_an_online_payment() -> None:
     assert [ast.literal_eval(m) for m in methods if m is not None] == ["online"], module
 
 
-def test_only_the_handover_route_reaches_the_cash_insert() -> None:
+def test_only_the_handover_route_reaches_the_cash_insert_and_the_paid_lines() -> None:
     for name, callers in CASH_CHAIN.items():
         assert _sites(partial(_called, name=name)) == callers, name

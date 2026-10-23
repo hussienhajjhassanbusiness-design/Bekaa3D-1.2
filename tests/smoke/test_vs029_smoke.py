@@ -38,7 +38,7 @@ SMOKE_ELSEWHERE: dict[str, list[str]] = {
         f"{_HANDOVER}::test_a_line_not_yet_ready_is_a_409_and_changes_nothing",
     ],
     "only the handover creates a cash payment": [
-        f"{_STATIC}::test_only_the_handover_route_reaches_the_cash_insert"
+        f"{_STATIC}::test_only_the_handover_route_reaches_the_cash_insert_and_the_paid_lines"
     ],
     "two admins on one handover: one payment": [
         f"{_RACES}::test_two_administrators_recording_one_handover_record_one_payment"

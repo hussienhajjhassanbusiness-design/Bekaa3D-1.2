@@ -14,7 +14,8 @@ from app.payments.domain.payments import OrderPaymentRow
 from app.payments.infrastructure.models import PaymentModel
 
 _P = PaymentModel
-ONE_CASH_INDEX = "uq_payments_one_cash"
+# A second cash row breaks both; which one Postgres reports depends on index order.
+ALREADY_RECORDED = frozenset({"uq_payments_one_cash", "uq_payments_one_live"})
 
 
 def _constraint(error: IntegrityError) -> str | None:
@@ -52,7 +53,7 @@ async def insert_cash_payment(
                 )
             ).scalar_one()
     except IntegrityError as exc:
-        if _constraint(exc) == ONE_CASH_INDEX:
+        if _constraint(exc) in ALREADY_RECORDED:
             raise CashAlreadyRecordedError(f"order {order_id} already has its cash") from exc
         raise
     return payment_id

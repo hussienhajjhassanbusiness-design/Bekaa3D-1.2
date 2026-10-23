@@ -355,7 +355,7 @@ async def transition_physical_line(
     return replace(line, fulfillment_status=target), order_status
 
 
-def check_cash_handover(locked: LockedOrder, *, typed_cents: int) -> int:
+def check_cash_handover(locked: LockedOrder, *, typed_cents: int, typed_currency: str) -> int:
     """SRS 9.8.3 under the locks: the 409 reasons first, then the amount (422). Returns
     the amount due, `amount_due_cents` over the locked lines (ADR-033)."""
     order = locked.order
@@ -364,8 +364,10 @@ def check_cash_handover(locked: LockedOrder, *, typed_cents: int) -> int:
     if refusal is not None:
         raise HandoverRefusedError(refusal.value)
     due = amount_due_cents(locked.lines)
-    if not handover_amount_matches(due_cents=due, typed_cents=typed_cents):
-        raise CashAmountMismatchError(due)
+    if typed_currency != order.currency or not handover_amount_matches(
+        due_cents=due, typed_cents=typed_cents
+    ):
+        raise CashAmountMismatchError(due, order.currency)
     return due
 
 

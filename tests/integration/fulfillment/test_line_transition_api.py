@@ -25,6 +25,7 @@ from tests.integration.deep_support import (
     mfa_admin,
 )
 from tests.integration.fulfillment.order_support import (
+    REACHED_PAID,
     effects,
     emails,
     move,
@@ -219,7 +220,14 @@ async def test_skipped_cross_method_and_later_slice_edges_are_409s(
 @pytest.mark.parametrize("state", PHYSICAL_STATES)
 @pytest.mark.parametrize(
     ("payment_method", "payment_status"),
-    [("cash", None), ("online", "paid"), ("online", None)],
+    [
+        ("cash", None),
+        ("online", "paid"),
+        ("online", "partially_refunded"),
+        ("online", "refunded"),
+        ("online", "failed"),
+        ("online", None),
+    ],
 )
 @pytest.mark.parametrize("fulfillment", ["delivery", "pickup"])
 async def test_every_listed_action_succeeds_and_every_other_target_is_a_409(
@@ -249,7 +257,7 @@ async def test_every_listed_action_succeeds_and_every_other_target_is_a_409(
     assert {t: r.status_code for t, r in refused.items()} == dict.fromkeys(refused, 409)
     assert {t: r.status_code for t, r in accepted.items()} == dict.fromkeys(accepted, 200)
     assert len(listed) <= 1
-    if payment_method == "online" and payment_status is None:
+    if payment_method == "online" and payment_status not in REACHED_PAID:
         assert listed == []
     if payment_method == "cash":
         assert not set(listed) & {"delivered", "picked_up"}
@@ -485,3 +493,18 @@ async def test_the_note_is_kept_in_the_history_and_the_audit(
             {"i": order.line_ids[0]},
         )
     assert note == "Called the customer"
+
+
+async def test_a_mixed_order_keeps_its_stl_line_queued_while_the_physical_line_moves(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    order = await seed_physical_order(
+        db_session, payment_method="online", payment_status="paid", stl_line="awaiting_delivery"
+    )
+    with client_for(main_app) as client:
+        await mfa_admin(client, db_session)
+        for step in DELIVERY_PATH[1:]:
+            assert move(client, order, step).status_code == 200
+        queued = client.get("/api/v1/admin/stl-deliveries", params={"limit": 100}).json()
+    assert await states(db_engine, order.order_id) == ("in_progress", ["delivered"])
+    assert str(order.order_id) in {item["order_id"] for item in queued["items"]}

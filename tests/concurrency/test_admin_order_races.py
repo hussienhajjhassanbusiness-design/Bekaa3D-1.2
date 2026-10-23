@@ -32,6 +32,7 @@ from tests.integration.fulfillment.order_support import (
     states,
     transition_path,
 )
+from tests.integration.ordering.physical_support import random_phone, seed_block
 from tests.integration.payments.recovery_support import (
     YEARS_AHEAD,
     factory,
@@ -290,3 +291,58 @@ async def test_the_index_alone_refuses_a_second_cash_payment_from_two_unlocked_w
     outcomes = await asyncio.wait_for(asyncio.gather(write(), write()), RACE_TIMEOUT_SECONDS)
     assert sorted(outcomes) == ["refused", "written"]
     assert (await effects(db_engine, order.order_id))[4] == 1
+
+
+async def _block_waiters(engine: AsyncEngine, count: int) -> None:
+    deadline = asyncio.get_running_loop().time() + 10
+    while asyncio.get_running_loop().time() < deadline:
+        async with engine.connect() as conn:
+            waiting = await conn.scalar(
+                text(
+                    "SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock'"
+                    " AND datname = current_database()"
+                    " AND query ILIKE '%FROM cash_payment_blocks%FOR UPDATE%'"
+                )
+            )
+        if waiting is not None and waiting >= count:
+            return
+        await asyncio.sleep(0.05)
+    raise AssertionError(f"fewer than {count} clears ever waited on the block lock")
+
+
+async def test_two_administrators_clearing_one_block_write_one_audit_row(
+    make_app: Callable[[], FastAPI], db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    buyer = await create_user(db_session)
+    phone = random_phone()
+    await seed_block(db_session, buyer.id, phone)
+    block_id = await db_session.scalar(
+        text("SELECT id FROM cash_payment_blocks WHERE user_id = :u"), {"u": buyer.id}
+    )
+    path = f"/api/v1/admin/cash-blocks/{block_id}/clear"
+    async with running_app(make_app) as app:
+        clients = await _admins(app, db_session, 2)
+        try:
+            async with db_engine.connect() as held:
+                await held.execute(
+                    text("SELECT id FROM cash_payment_blocks WHERE id = :b FOR UPDATE"),
+                    {"b": block_id},
+                )
+                tasks = [asyncio.create_task(_post(c, path, {})()) for c in clients]
+                await _block_waiters(db_engine, 2)
+                await held.rollback()
+            first, second = await asyncio.wait_for(asyncio.gather(*tasks), RACE_TIMEOUT_SECONDS)
+        finally:
+            for client in clients:
+                await client.aclose()
+    assert (first.status_code, second.status_code) == (200, 200)
+    assert first.json() == second.json() and first.json()["active"] is False
+    async with db_engine.connect() as conn:
+        audits = await conn.scalar(
+            text(
+                "SELECT count(*) FROM audit_logs WHERE action = 'cash_block.cleared'"
+                " AND entity_id = :b"
+            ),
+            {"b": block_id},
+        )
+    assert audits == 1

@@ -9,6 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.main import app as main_app
+from app.payments.domain.exceptions import CashAlreadyRecordedError
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
 from tests.integration.deep_support import (
     PASSWORD,
@@ -282,3 +283,34 @@ async def test_the_customer_sees_the_order_paid_and_completed(db_session: AsyncS
     assert after["payment"] is not None
     assert after["lines"][0]["fulfillment_status"] == "delivered"
     assert "recorded_by" not in str(after)
+
+
+async def test_a_zero_total_order_takes_no_handover(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """BR-055: a cash payment is above zero; a $0 order is cancelled instead (VS-031)."""
+    order = await seed_physical_order(db_session, line_states=["shipped"], line_totals=[0])
+    with client_for(main_app) as client:
+        await mfa_admin(client, db_session)
+        response = hand_over(client, order, 0)
+    assert_problem(response, 422, "CASH_AMOUNT_MISMATCH")
+    assert response.json()["amount_due"] == usd(0)
+    assert await effects(db_engine, order.order_id) == (0, 0, 0, 0, 0)
+
+
+async def test_an_index_refusal_without_the_lock_is_a_409_not_a_500(
+    db_engine: AsyncEngine, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The order lock makes this unreachable today; the route still maps it."""
+    order = await seed_physical_order(db_session, line_states=["shipped"])
+
+    async def refused(*args: Any, **kwargs: Any) -> uuid.UUID:
+        raise CashAlreadyRecordedError("seeded")
+
+    monkeypatch.setattr("app.fulfillment.infrastructure.delivery_side.insert_cash_payment", refused)
+    with client_for(main_app) as client:
+        await mfa_admin(client, db_session)
+        response = hand_over(client, order, 1000)
+    assert_problem(response, 409, "INVALID_STATE_TRANSITION")
+    assert response.json()["reason"] == "already_recorded"
+    assert await effects(db_engine, order.order_id) == (0, 0, 0, 0, 0)

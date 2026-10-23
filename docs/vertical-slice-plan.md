@@ -856,7 +856,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 **Depends on:** VS-030
 **Goal:** A customer cancels before printing starts, the administrator cancels at any legal point, a returned item is re-shipped, reprinted, refunded or (unpaid cash) cancelled, and a whole-order cash refusal blocks cash for that customer and phone.
 - **Notes from VS-029 ([ADR-040](adr/ADR-040-admin-order-queue-fulfillment-and-cash-handover.md)):**
-  - Add the cancel and return edges to `ordering/domain/line_transitions.py`, with their `cancel_reasons`; `available_actions` and the endpoint read the same table.
+  - Add the cancel and return edges to `ordering/domain/line_transitions.py`, with their `cancel_reasons`, including the $0 `shipped → cancelled` edge that the VS-029 plan listed but ADR-040 d1 deferred here; `available_actions` and the endpoint read the same table.
   - One notice per order per visible step (`ordering/domain/fulfillment_steps.py`): a cancel can leave every remaining line at a step without any line moving, and `returned → shipped` reaches `shipped` a second time. Decide whether either sends a notice, and test it.
   - The queue hides an online order with `orders.cancelled_at` set (`ADMIN_QUEUE_PREDICATE`), which today only the hold release sets. If cancelling a paid online order sets it, change the predicate so that order stays listed.
   - The handover refuses an order with no live line (`409 no_live_line`) and computes the amount over live lines only, so a partly refused cash order needs no handover change.

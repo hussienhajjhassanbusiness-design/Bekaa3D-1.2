@@ -3,6 +3,8 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
+import pytest
+
 from app.ordering.domain.enums import OrderItemStatus as S
 from app.ordering.domain.enums import OrderSource, OrderStatus, PaymentMethod
 from app.ordering.domain.order_status import LineState, derive_order_status
@@ -72,3 +74,8 @@ def test_the_refund_stop_gap_never_applies_to_an_unpaid_order() -> None:
     assert _status(OrderStatus.PARTIALLY_REFUNDED, S.SHIPPED, paid=False) is (
         OrderStatus.PENDING_PAYMENT
     )
+
+
+@pytest.mark.xfail(strict=True, reason="VS-030 replaces the refund_present stop-gap (ADR-039 d7)")
+def test_a_refunded_order_stays_refunded_after_a_physical_transition() -> None:
+    assert _status(OrderStatus.REFUNDED, S.IN_PRODUCTION) is OrderStatus.REFUNDED

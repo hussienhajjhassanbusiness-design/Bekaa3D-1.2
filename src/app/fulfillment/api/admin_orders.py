@@ -237,6 +237,7 @@ async def cash_handover(
             SqlDeliveryNotices(session),
             order_id=order_id,
             amount_cents=body.amount_cents,
+            currency=body.currency,
             admin_id=claims.user_id,
             at=datetime.now(UTC),
             note=note,
@@ -260,6 +261,6 @@ async def cash_handover(
             code="CASH_AMOUNT_MISMATCH",
             title="Cash amount does not match",
             detail="The cash entered must equal the amount due.",
-            extensions={"amount_due": {"amount_cents": exc.due_cents, "currency": "USD"}},
+            extensions={"amount_due": {"amount_cents": exc.due_cents, "currency": exc.currency}},
         ) from exc
     return await order_detail(session, order_id)

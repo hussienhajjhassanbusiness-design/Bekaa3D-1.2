@@ -55,7 +55,7 @@ Body `{ "amount_cents": 3600, "currency": "USD", "note": "..." }`: the cash actu
 | Status | When |
 |---|---|
 | `409 INVALID_STATE_TRANSITION` | `reason`: `not_a_cash_order`, `no_live_line`, `already_recorded`, `lines_not_ready` (every live line must be `shipped` for delivery, `ready_for_pickup` for pickup) |
-| `422 CASH_AMOUNT_MISMATCH` | not exactly the live line total, or zero; carries `amount_due` |
+| `422 CASH_AMOUNT_MISMATCH` | not exactly the live line total in the order's currency, or zero; carries `amount_due` |
 | `422 VALIDATION_ERROR` | another currency, a non-integer or negative amount, an unknown field |
 
 Nothing is written on any refusal.

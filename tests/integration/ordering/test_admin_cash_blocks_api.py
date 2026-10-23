@@ -222,19 +222,31 @@ async def test_clearing_is_audited_and_a_second_clear_changes_nothing(
 async def test_after_clearing_checkout_offers_cash_again_by_account_and_phone(
     db_session: AsyncSession,
 ) -> None:
-    buyer = await create_user(db_session)
+    buyer, other = await create_user(db_session), await create_user(db_session)
     phone = random_phone()
     block_id = await _block(db_session, buyer.id, phone)
     lamp = await physical(db_session)
-    with client_for(main_app) as client:
-        login(client, buyer.email, PASSWORD)
-        add_to_cart(client, lamp)
-        refused = post(client, pickup_body(phone))
+    refused = {}
+    for user in (buyer, other):
+        with client_for(main_app) as client:
+            login(client, user.email, PASSWORD)
+            add_to_cart(client, lamp)
+            refused[user.id] = post(client, pickup_body(phone))
     with client_for(main_app) as client:
         await mfa_admin(client, db_session)
         assert client.post(clear_path(block_id), headers=csrf(client)).status_code == 200
-    with client_for(main_app) as client:
-        login(client, buyer.email, PASSWORD)
-        placed = post(client, pickup_body(spaced(phone)))
-    assert_problem(refused, 422, CASH_NOT_AVAILABLE)
-    assert placed.status_code == 201, placed.text
+    placed = {}
+    for user in (buyer, other):
+        with client_for(main_app) as client:
+            login(client, user.email, PASSWORD)
+            placed[user.id] = post(client, pickup_body(spaced(phone)))
+            if user is buyer:  # one open cash order per phone: let the other account in
+                order_id = placed[user.id].json()["order"]["id"]
+                await db_session.execute(
+                    text("UPDATE orders SET status = 'completed' WHERE id = :o"), {"o": order_id}
+                )
+                await db_session.commit()
+    for response in refused.values():
+        assert_problem(response, 422, CASH_NOT_AVAILABLE)
+    for response in placed.values():
+        assert response.status_code == 201, response.text
