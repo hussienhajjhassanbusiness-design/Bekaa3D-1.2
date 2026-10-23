@@ -1,5 +1,5 @@
-"""VS-030 PR B smoke (plan 6.6 E2): the refund routes exist, the schema is at PR A's head,
-and the obligations index the queue reads is there."""
+"""VS-030 smoke (plan 6.6 E2): the refund routes exist, the schema is at PR C's backfill
+head, and the obligations index the queue reads is there."""
 
 import pytest
 from fastapi.testclient import TestClient
@@ -35,5 +35,5 @@ async def test_the_schema_is_at_the_refund_head_with_the_obligations_index(
         index = await conn.scalar(
             text("SELECT indexdef FROM pg_indexes WHERE indexname = 'ix_refunds_obligations'")
         )
-    assert head == "c01e53ab3e0f"
+    assert head == "80e56abf0969"
     assert index is not None and "refunds" in index
