@@ -297,9 +297,10 @@ failed
 pending
 settled
 failed
+voided
 ```
 
-`failed` refunds stay owed until reissued (ADR-024).
+`failed` refunds stay owed until reissued (ADR-024). `voided` (ADR-042) closes a pending or owed obligation without paying it: a mistake, or one absorbed by a chargeback. A settled refund is never voided.
 
 ### `refund_kind`
 
@@ -307,10 +308,9 @@ failed
 admin
 cancellation
 late_capture
-chargeback
 ```
 
-Every V1 refund is manual, so there is no `refund_method` (ADR-024).
+Every V1 refund is manual, so there is no `refund_method` (ADR-024). A chargeback is its own record (`chargebacks`, 9.5), never a refund kind (ADR-042, amending ADR-024 d16).
 
 ### `offer_actor`
 
@@ -427,6 +427,8 @@ cash
 24. `webhook_events`
 25. `refunds`
 26. `refund_items`
+26a. `chargebacks` (ADR-042)
+26b. `chargeback_items` (ADR-042)
 
 ## Fulfillment
 
@@ -1061,6 +1063,8 @@ ix_orders_open_cash_phone: (contact_phone_hash) WHERE payment_method = 'cash' AN
 
 The fulfillment queue excludes `pending_payment` orders (BR-148). The open-cash-order count matches `user_id` (served by `(user_id, placed_at DESC)`) or `contact_phone_hash` (served by `ix_orders_open_cash_phone`, created by VS-028 PR A because `EXPLAIN` on an empty table cannot show the need; plan Q3). An unpaid, uncancelled cash order is exactly `payment_method = 'cash' AND status = 'in_progress'` (VS-028 plan D8). The "cash due" admin filter (unpaid cash orders) gets a partial index in VS-029 once `EXPLAIN` shows its shape.
 
+As built (VS-030, migration `c01e53ab3e0f`): `uq_orders_id_user UNIQUE (id, user_id)`, the key `order_items.fk_order_items_order_owner` references.
+
 ---
 
 ## 8.4 `order_items`
@@ -1165,6 +1169,15 @@ batch_size_snapshot IS NULL
 (fulfillment_status, order_id) WHERE product_type = 'physical'
 ix_order_items_stl_awaiting (created_at, id) WHERE product_type = 'stl' AND fulfillment_status = 'awaiting_delivery'   -- STL delivery queue (VS-023b)
 ```
+
+As built (VS-030, migration `c01e53ab3e0f`; VS-041 audit Q-1): a line's customer is its order's customer.
+
+```text
+fk_order_items_order_owner: (order_id, user_id) -> orders (id, user_id) ON DELETE RESTRICT ON UPDATE RESTRICT
+uq_order_items_id_order: UNIQUE (id, order_id)   -- what refund and chargeback items reference
+```
+
+The FK is added `NOT VALID` and then validated. The migration first refuses, and rolls back, if any existing line's `user_id` differs from its order's, naming order ids only.
 
 ---
 
@@ -1366,59 +1379,81 @@ VS-024 adds three `processing_error` values: `manual_confirmation_required` (the
 
 ## 9.3 `refunds`
 
-**Purpose:** Tracks a refund obligation from request through settlement.
+**Purpose:** Tracks a refund obligation from request through settlement. Built by VS-030 PR A (migration `c01e53ab3e0f`, ADR-042). No application code writes it until PR B.
 
 | Column | Type | Null | Constraint |
 |---|---|---:|---|
 | `id` | UUID | No | PK |
-| `order_id` | UUID | No | FK → `orders.id` |
-| `payment_id` | UUID | No | FK → `payments.id` |
+| `order_id` | UUID | No | part of the payment FK below |
+| `payment_id` | UUID | No | part of the payment FK below |
+| `payment_provider` | `payment_provider` | No | the payment's provider, enforced by the FK |
+| `kind` | `refund_kind` | No | `admin`, `cancellation` or `late_capture` |
+| `status` | `refund_status` | No | default `pending`; `pending`, `settled`, `failed` or `voided` |
 | `amount_cents` | BIGINT | No | CHECK > 0 |
-| `currency` | CHAR(3) | No | CHECK = `USD` |
-| `kind` | `refund_kind` | No | `admin`, `cancellation`, `late_capture` or `chargeback` |
-| `reason` | TEXT | No | free text for people; never used to classify a refund |
-| `requested_by` | UUID | Yes | FK → `users.id`; NULL only for `kind = late_capture` (created by the system) |
-| `approved_by` | UUID | Yes | FK → `users.id` |
-| `status` | `refund_status` | No | `pending`, `settled` or `failed` |
+| `currency` | CHAR(3) | No | `USD`, except that a `late_capture` stores the reported currency (never converted) |
+| `reason` | TEXT | No | 1-1000 chars; free text for people, never used to classify a refund |
+| `requested_by` | UUID | Yes | FK → `users.id` RESTRICT; NULL only for `kind = late_capture` (created by the system) |
+| `approved_by` | UUID | Yes | FK → `users.id` RESTRICT |
+| `reissue_of_refund_id` | UUID | Yes | FK → `refunds.id` RESTRICT; the failed refund this one reissues; UNIQUE |
 | `reissued_at` | TIMESTAMPTZ | Yes | set on a `failed` refund when it is reissued |
-| `reissue_of_refund_id` | UUID | Yes | FK → `refunds.id`; the failed refund this one reissues; UNIQUE |
-| `excess_cents` | BIGINT | Yes | chargebacks only: amount the bank took beyond the remaining balance; CHECK ≥ 0 |
+| `settled_at`, `settled_by` | TIMESTAMPTZ, UUID | Yes | `settled_by` FK → `users.id` RESTRICT |
+| `settlement_reference`, `settlement_note` | TEXT | Yes | 1-200 and 1-1000 chars |
+| `failed_at`, `failed_by`, `failure_reason` | TIMESTAMPTZ, UUID, TEXT | Yes | `failed_by` FK → `users.id` RESTRICT; reason 1-1000 chars |
+| `voided_at`, `voided_by`, `void_reason` | TIMESTAMPTZ, UUID, TEXT | Yes | `voided_by` FK → `users.id` RESTRICT; reason 1-1000 chars, required when voided |
 | `initiated_at` | TIMESTAMPTZ | No |  |
-| `settled_at` | TIMESTAMPTZ | Yes |  |
-| `created_at` | TIMESTAMPTZ | No |  |
-| `updated_at` | TIMESTAMPTZ | No |  |
+| `created_at`, `updated_at` | TIMESTAMPTZ | No | default `now()` |
 
-### Constraints
+There is no `excess_cents` column and no `chargeback` kind: chargebacks have their own table (9.5).
+
+### Constraints (names as built)
 
 ```text
-requested_by IS NULL → kind = 'late_capture'
-reissued_at IS NOT NULL → status = 'failed'
-kind = 'chargeback' → status = 'settled'
-excess_cents IS NOT NULL → kind = 'chargeback'
-UNIQUE(payment_id) WHERE kind = 'late_capture' AND status <> 'failed'
+fk_refunds_payment: (payment_id, order_id, payment_provider) -> payments (id, order_id, provider)   -- the order's own payment
+fk_refunds_reissue_of_refund_id, fk_refunds_{requested_by, approved_by, settled_by, failed_by, voided_by}
+uq_refunds_id_order: UNIQUE (id, order_id)   -- what refund_items reference
+uq_refunds_reissue_of: UNIQUE (reissue_of_refund_id)
+ck_refunds_amount: amount_cents > 0
+ck_refunds_currency: currency = 'USD' OR (kind = 'late_capture' AND currency ~ '^[A-Z]{3}$')
+ck_refunds_requester: requested_by IS NOT NULL OR kind = 'late_capture'
+ck_refunds_late_capture_online: kind <> 'late_capture' OR payment_provider <> 'cash'
+ck_refunds_reissued_failed: reissued_at IS NULL OR status = 'failed'   -- so a voided refund is never a reissued one
+ck_refunds_state_stamps: settled => settled_at, and settled_at only when settled (or voided, refused below);
+                         failed => failed_at, and failed_at only when failed or voided;
+                         voided <=> voided_at; voided => void_reason
+ck_refunds_void_never_settled: NOT (status = 'voided' AND settled_at IS NOT NULL)
+ck_refunds_text_lengths: reason, settlement_reference, settlement_note, failure_reason, void_reason lengths
+uq_refunds_one_live_late_capture: UNIQUE (payment_id) WHERE kind = 'late_capture' AND status NOT IN ('failed', 'voided')
 ```
+
+There is no separate `order_id → orders` FK: the payment FK already ties the refund to a payment of an existing order.
 
 ### Rules
 
-- partial refund supported;
-- refund may cover selected lines; there is no shipping component (ADR-024);
-- every V1 refund is manual: the administrator pays it in the provider dashboard or in cash and settles it here; the platform never calls a provider refund API;
-- a refund of a `cash` payment is capped at the cash recorded;
-- only paid lines are refundable (BR-149); a line's refundable amount is `line_total_cents` minus its items in non-failed refunds and in failed refunds not yet reissued, and a cancelled cash line has 0;
-- a line becomes `refunded` only when its refund items cover its whole total; a partial refund leaves it in its state; a refund that would empty an unfinished physical line (`pending`, `in_production`, `ready_to_ship`, `shipped`, `ready_for_pickup`) is refused (cancel instead);
-- a cancellation refund is the line's remaining balance, and none is created when that is 0;
-- a `failed` refund changes no line state and stays owed (in the obligations queue) until reissued; it never counts toward `refunded` status, but an owed one counts as a refund present;
-- a `late_capture` refund has no items and no requester, is created automatically, never counts toward the order status, and is exempt from the item-sum check;
-- a `chargeback` refund is created already `settled`, split per line, and never enters the obligations queue;
-- refund remains a tracked obligation until settled, or until reissued if it failed;
-- a fully refunded STL line becomes `refunded` and leaves the delivery queue if not yet sent;
-- an unsettled refund blocks account deletion.
+- Partial refunds are supported.
+- A refund may cover selected lines. There is no shipping component (ADR-024).
+- Every V1 refund is manual. The administrator pays it in the provider dashboard or in cash and settles it here. The platform never calls a provider refund API.
+- A refund of a `cash` payment is capped at the cash recorded.
+- Only paid lines are refundable (BR-149). A line's refundable amount is `line_total_cents` minus:
+  - its items in non-failed, non-voided refunds;
+  - its items in failed refunds not yet reissued;
+  - its chargeback items.
+
+  A cancelled cash line has 0.
+- A line becomes `refunded` only when its refund items cover its whole total. A partial refund leaves it in its state. A refund that would empty an unfinished physical line (`pending`, `in_production`, `ready_to_ship`, `shipped`, `ready_for_pickup`) is refused: the line is cancelled instead.
+- A cancellation refund is the line's remaining balance. None is created when that is 0.
+- A `failed` refund changes no line state and stays owed (in the obligations queue) until it is reissued or voided. It never counts toward `refunded` status, but an owed one keeps the order `partially_refunded`: ADR-042 amends SRS 20.2 so that an owed refund is checked first.
+- A `voided` refund counts nowhere. A settled refund is never voided.
+- A `late_capture` refund has no items and no requester. It is created automatically, never counts toward the order status, and is exempt from the item-sum check.
+- A refund remains a tracked obligation until it is settled, or, if it failed, until it is reissued or voided.
+- A fully refunded STL line becomes `refunded` and leaves the delivery queue if not yet sent.
+- An unsettled refund blocks account deletion.
 
 ### Index
 
 ```text
-(created_at)
-WHERE status = 'pending' OR (status = 'failed' AND reissued_at IS NULL)   -- obligations queue: pending and owed
+ix_refunds_obligations: (created_at, id) WHERE status = 'pending' OR (status = 'failed' AND reissued_at IS NULL)   -- obligations queue: pending and owed
+ix_refunds_order: (order_id, created_at)
+ix_refunds_payment: (payment_id)
 ```
 
 ---
@@ -1428,20 +1463,76 @@ WHERE status = 'pending' OR (status = 'failed' AND reissued_at IS NULL)   -- obl
 | Column | Type | Null | Constraint |
 |---|---|---:|---|
 | `id` | UUID | No | PK |
-| `refund_id` | UUID | No | FK → `refunds.id` |
-| `order_item_id` | UUID | No | FK → `order_items.id` |
+| `refund_id` | UUID | No | with `order_id`: FK → `refunds (id, order_id)` |
+| `order_id` | UUID | No | the refund's order |
+| `order_item_id` | UUID | No | with `order_id`: FK → `order_items (id, order_id)` |
 | `amount_cents` | BIGINT | No | CHECK > 0 |
 | `created_at` | TIMESTAMPTZ | No |  |
 
-### Constraint
-
-A line should appear at most once in the same refund:
+### Constraints (names as built)
 
 ```text
-UNIQUE(refund_id, order_item_id)
+fk_refund_items_refund_id: (refund_id, order_id) -> refunds (id, order_id)
+fk_refund_items_order_item: (order_item_id, order_id) -> order_items (id, order_id)   -- never another order's line
+uq_refund_items_line: UNIQUE (refund_id, order_item_id)
+ck_refund_items_amount: amount_cents > 0
+ix_refund_items_order_item: (order_item_id)
 ```
 
-Except for `kind = late_capture` (no items), the sum of refund-item amounts must be validated transactionally against `refunds.amount_cents` and against the amount originally paid/refundable. This is a cross-row invariant and is not a simple CHECK.
+Except for `kind = late_capture` (no items), the sum of refund-item amounts must be validated transactionally against `refunds.amount_cents` and against the amount originally paid or refundable. This is a cross-row invariant, not a simple CHECK. VS-030 enforces it under the `orders` lock.
+
+---
+
+## 9.5 `chargebacks`
+
+**Purpose:** A confirmed bank reversal of an online payment (SRS 9.7, ADR-042). It is recorded already settled and never enters the obligations queue. Recording one voids every pending and owed refund on its payment.
+
+| Column | Type | Null | Constraint |
+|---|---|---:|---|
+| `id` | UUID | No | PK |
+| `order_id`, `payment_id` | UUID | No | with `payment_provider`: FK → `payments (id, order_id, provider)` |
+| `payment_provider` | `payment_provider` | No | never `cash` |
+| `provider_dispute_reference` | TEXT | No | 1-200 chars; UNIQUE per provider |
+| `charged_cents` | BIGINT | No | what the bank took; > 0 |
+| `applied_cents` | BIGINT | No | the part split over lines; ≥ 0 |
+| `excess_cents` | BIGINT | No | the amount beyond the payment's remaining balance; ≥ 0; alerted |
+| `currency` | CHAR(3) | No | `USD` |
+| `reason` | TEXT | No | 1-1000 chars |
+| `recorded_by` | UUID | No | FK → `users.id` RESTRICT |
+| `received_at` | TIMESTAMPTZ | No | when the bank reported it |
+| `created_at` | TIMESTAMPTZ | No |  |
+
+### Constraints (names as built)
+
+```text
+fk_chargebacks_payment: (payment_id, order_id, payment_provider) -> payments (id, order_id, provider)
+fk_chargebacks_recorded_by
+uq_chargebacks_dispute: UNIQUE (payment_provider, provider_dispute_reference)
+uq_chargebacks_id_order: UNIQUE (id, order_id)
+ck_chargebacks_money: charged_cents > 0 AND applied_cents >= 0 AND excess_cents >= 0 AND applied_cents + excess_cents = charged_cents
+ck_chargebacks_online_only: payment_provider <> 'cash'
+ck_chargebacks_currency, ck_chargebacks_dispute_reference, ck_chargebacks_reason
+ix_chargebacks_order: (order_id, created_at)
+ix_chargebacks_payment: (payment_id)
+```
+
+A chargeback after a full settled refund records `applied_cents = 0`, with the whole amount as excess. Production has no online payment to charge back until VS-032 (`PAYMENT_PROVIDER=none`, ADR-036 d16).
+
+---
+
+## 9.6 `chargeback_items`
+
+This table has the same shape as `refund_items`:
+- `chargeback_id` with `order_id` → `chargebacks (id, order_id)`;
+- `order_item_id` with `order_id` → `order_items (id, order_id)`;
+- `amount_cents > 0`.
+
+```text
+fk_chargeback_items_chargeback_id, fk_chargeback_items_order_item
+uq_chargeback_items_line: UNIQUE (chargeback_id, order_item_id)
+ck_chargeback_items_amount: amount_cents > 0
+ix_chargeback_items_order_item: (order_item_id)
+```
 
 ---
 
@@ -1930,10 +2021,16 @@ for cleanup.
 | orders | order_status_history | 1:N | `order_status_history.order_id` | RESTRICT |
 | order_items | order_status_history | 1:N optional | `order_status_history.order_item_id` | RESTRICT |
 | orders | payments | 1:N | `payments.order_id` | RESTRICT |
-| orders | refunds | 1:N | `refunds.order_id` | RESTRICT |
-| payments | refunds | 1:N | `refunds.payment_id` | RESTRICT |
-| refunds | refund_items | 1:N | `refund_items.refund_id` | RESTRICT |
-| order_items | refund_items | 1:N | `refund_items.order_item_id` | RESTRICT |
+| payments | refunds | 1:N | `(refunds.payment_id, order_id, payment_provider)` → `payments(id, order_id, provider)` | RESTRICT; the order's own payment (VS-030) |
+| refunds | refund_items | 1:N | `(refund_items.refund_id, order_id)` → `refunds(id, order_id)` | RESTRICT |
+| order_items | refund_items | 1:N | `(refund_items.order_item_id, order_id)` → `order_items(id, order_id)` | RESTRICT; never another order's line |
+| refunds | refunds | 1:0..1 | `refunds.reissue_of_refund_id` | RESTRICT |
+| users | refunds | 1:N optional | `refunds.requested_by`, `approved_by`, `settled_by`, `failed_by`, `voided_by` | RESTRICT |
+| payments | chargebacks | 1:N | `(chargebacks.payment_id, order_id, payment_provider)` → `payments(id, order_id, provider)` | RESTRICT; online only (ADR-042) |
+| chargebacks | chargeback_items | 1:N | `(chargeback_items.chargeback_id, order_id)` → `chargebacks(id, order_id)` | RESTRICT |
+| order_items | chargeback_items | 1:N | `(chargeback_items.order_item_id, order_id)` → `order_items(id, order_id)` | RESTRICT |
+| users | chargebacks | 1:N | `chargebacks.recorded_by` | RESTRICT |
+| orders | order_items | 1:N | `(order_items.order_id, order_items.user_id)` → `orders(id, user_id)` | RESTRICT; a line's customer is its order's (VS-030, audit Q-1) |
 | users | order_items | 1:N | `order_items.user_id` (ownership copy) | RESTRICT; user anonymised instead |
 | users | order_items | 1:N optional | `order_items.delivered_by` | RESTRICT |
 | users | payments | 1:N optional | `payments.recorded_by` | RESTRICT |
