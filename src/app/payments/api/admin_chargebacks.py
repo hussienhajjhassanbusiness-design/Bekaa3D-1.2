@@ -145,9 +145,10 @@ def _refused(exc: Exception) -> ApiError | None:
         return ApiError(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             code="CHARGEBACK_ALLOCATION_INVALID",
-            title="Items exceed the available balance",
-            detail="An item exceeds its line's balance, or the items exceed the payment's "
-            "balance or what was charged beyond the absorbed refunds.",
+            title="Items do not match the charge",
+            detail="An item exceeds its line's balance, or the items do not total "
+            "`chargeable_cents`: the charge left after the absorbed refunds, capped by what "
+            "is still refundable.",
             extensions={
                 "available": {
                     "lines": [

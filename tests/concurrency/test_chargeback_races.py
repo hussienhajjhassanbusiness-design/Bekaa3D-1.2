@@ -203,14 +203,17 @@ async def test_r13_refund_create_racing_a_chargeback(
 async def test_r8_free_races_of_chargebacks_and_refunds_keep_the_payout_within_paid(
     world: World, db_engine: AsyncEngine, db_session: AsyncSession
 ) -> None:
+    """Free order: the charge writes when it commits first, else its exact total is wrong
+    (the creates it would absorb moved it) and it is refused; R13 forces both orders."""
     for _ in range(10):
         order, payment = await _order(db_session, db_engine)
         line = order.physical[0]
         results = await together(
             world.create(order.order_id, [(line, 500)]),
-            charge(world, order, payment, 700, [(line, 500)]),
+            charge(world, order, payment, 200, [(line, 200)]),
             world.create(order.order_id, [(line, 300)]),
         )
+        assert results[1] in ("charged:200:0", "cb_invalid"), results
         assert all(not r.startswith("db_error") for r in results), results
         await assert_m(db_engine, order.order_id)
 
@@ -270,6 +273,9 @@ async def test_the_same_key_twice_in_parallel_records_one_chargeback(
     assert codes in ([201, 201], [201, 409]), (first.text, second.text)
     if codes == [201, 201]:
         assert first.json() == second.json()
+    else:
+        loser = first if first.status_code == 409 else second
+        assert loser.json()["code"] == "IDEMPOTENCY_REQUEST_IN_PROGRESS", loser.text
     row = await _one(
         db_engine, "SELECT count(*) AS n FROM chargebacks WHERE order_id = :o", o=order.order_id
     )
