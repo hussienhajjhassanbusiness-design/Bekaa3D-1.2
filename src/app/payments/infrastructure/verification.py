@@ -18,7 +18,7 @@ from app.payments.domain.limits import PROVIDER_TIMEOUT_SECONDS, VERIFY_BATCH_SI
 from app.payments.domain.outcome import Outcome, ProviderResult
 from app.payments.domain.payments import Payment
 from app.payments.domain.release import Capability
-from app.payments.infrastructure.alerts import SqlLateCaptureAlerts, SqlPaymentAlerts
+from app.payments.infrastructure.alerts import SqlLateCaptureRefunds
 from app.payments.infrastructure.ordering_side import SqlOrderSide, SqlPaymentNotices
 from app.payments.infrastructure.payments import SqlPaymentStore
 from app.payments.infrastructure.webhook_events import (
@@ -56,7 +56,7 @@ async def apply_provider_result(
         actor_user_id=actor_user_id,
         provider_payment_id=provider_payment_id,
         at=datetime.now(UTC),
-        late_captures=SqlLateCaptureAlerts(SqlPaymentAlerts(session)),
+        late_captures=SqlLateCaptureRefunds(session),
     )
 
 

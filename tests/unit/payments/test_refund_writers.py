@@ -16,14 +16,20 @@ MODELS = {"RefundModel", "RefundItemModel", "ChargebackModel", "ChargebackItemMo
 
 KNOWN_WRITERS = {
     ("payments/infrastructure/refunds.py", "insert"),
+    ("payments/infrastructure/refunds.py", "insert_late_capture"),
+    ("payments/infrastructure/chargebacks.py", "_insert"),  # rank 5, after the refunds
     ("payments/infrastructure/refunds.py", "_move"),
     ("payments/infrastructure/refunds.py", "void"),
     ("payments/infrastructure/refunds.py", "mark_reissued"),
 }
 # Store writes -> the use cases allowed to call them, each after `_lock` (orders first).
-STORE_WRITES = {"insert", "settle", "fail", "void", "mark_reissued"}
+STORE_WRITES = {"insert", "insert_late_capture", "settle", "fail", "void", "mark_reissued"}
+STORES = {"refunds", "chargebacks"}
 KNOWN_STORE_CALLERS = {
     "create_refund",
+    "create_late_capture_refund",  # VS-024's Tx B holds ranks 1-3 (test below)
+    "record_chargeback",
+    "_void_and_remainders",  # called by record_chargeback after rank 4 (test below)
     "settle_refund",
     "fail_refund",
     "void_refund",
@@ -70,7 +76,7 @@ def _writers() -> set[tuple[str, str]]:
                 orm = (
                     isinstance(node, ast.Call)
                     and isinstance(node.func, ast.Name)
-                    and node.func.id in {"insert", "update", "delete"}
+                    and node.func.id in {"insert", "pg_insert", "update", "delete"}
                     and node.args
                     and isinstance(node.args[0], ast.Name)
                     and node.args[0].id in aliases
@@ -98,8 +104,10 @@ def _store_calls(function: ast.AST) -> set[str]:
         for node in ast.walk(function)
         if isinstance(node, ast.Call)
         and isinstance(node.func, ast.Attribute)
-        and isinstance(node.func.value, ast.Attribute)
-        and node.func.value.attr == "refunds"
+        and (
+            (isinstance(node.func.value, ast.Attribute) and node.func.value.attr in STORES)
+            or (isinstance(node.func.value, ast.Name) and node.func.value.id in STORES)
+        )
         and node.func.attr in STORE_WRITES
     }
 
@@ -153,3 +161,39 @@ def test_lo1_every_use_case_locks_before_it_writes() -> None:
         function = _service(name)
         first_write = min(_first_line(function, w) for w in _store_calls(function))
         assert _first_line(function, "_locked_refund") < first_write, name
+
+
+def test_lo1_a_late_capture_refund_locks_like_the_others() -> None:
+    late = _service("_lock_late")
+    assert _first_line(late, "lock") < _first_line(late, "lock_for_order")
+    locked_refund = _service("_locked_refund")
+    assert _first_line(locked_refund, "_lock_late") < _first_line(locked_refund, "lock")
+
+
+def test_lo1_the_late_capture_sink_runs_after_the_order_and_payment_locks() -> None:
+    """Plan 8.1 path 5: the obligation is inserted at rank 4, inside apply_result's Tx B."""
+    apply = SRC / "payments" / "application" / "services" / "apply.py"
+    tree = ast.parse(apply.read_text(encoding="utf-8"))
+    result = next(f for f in _functions(tree) if f.name == "apply_result")
+    late = next(f for f in _functions(tree) if f.name == "_late_capture")
+    assert (
+        _first_line(result, "lock")
+        < _first_line(result, "decide")
+        < _first_line(result, "_late_capture")
+    )
+    assert _first_line(late, "mark_late_capture") < _first_line(late, "late_capture_recorded")
+
+
+def test_lo1_a_chargeback_locks_orders_payments_open_refunds_then_inserts() -> None:
+    """Plan 8.1 path 6: ranks 1-2, 3, the refund reads, 4, then 5 (the chargeback INSERT)."""
+    path = SRC / "payments" / "application" / "services" / "chargebacks.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    record = next(f for f in _functions(tree) if f.name == "record_chargeback")
+    assert (
+        _first_line(record, "lock")
+        < _first_line(record, "lock_for_order")
+        < _first_line(record, "for_order")
+        < _first_line(record, "lock_open_for_payment")
+        < _first_line(record, "_void_and_remainders")
+        < _first_line(record, "insert")
+    )

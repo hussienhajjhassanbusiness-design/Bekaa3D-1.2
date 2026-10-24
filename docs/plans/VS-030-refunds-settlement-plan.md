@@ -1,6 +1,6 @@
 # VS-030 — Refunds and Settlement: Implementation Plan
 
-**Status:** IN PROGRESS: PR B built on `vs-030-refund-core` (awaiting review); PR C next. Revision 2. PR A (`vs-030-schema`,
+**Status:** DONE. PR A merged (#37), PR B merged (#38), PR C built on `vs-030-pr-c` (Revisions 3 and 4). PR A (`vs-030-schema`,
 migration `c01e53ab3e0f`) is merged as `7b346a4`. The owner answered Q1-Q12 on 2026-10-23
 (Revisions 1 and 2 below).
 **Date:** 2026-10-23
@@ -33,6 +33,35 @@ up to date at `326aa40`). Remote branches: `docs/adr-035-accept-decisions`,
 Every `file:line` below is on `main` at `326aa40`.
 
 ---
+
+## Revision 4 (2026-10-24): PR C review
+
+The SRS review of PR C found a money Blocker: under C1 as first built, a chargeback whose items named less than the charge recorded the rest as excess while that money stayed refundable, so it could be paid out twice. **Owner decision:** on a paid payment the items must total exactly `min(charged − absorbed, the payment's remaining balance)` (422 `CHARGEBACK_ALLOCATION_INVALID` with `chargeable_cents` otherwise), so excess exists only at a zero balance. R13 is back to "whichever commits second is refused". Q-2 still blocks a chargeback (owner). Both reviewers' other findings are fixed in the same pass (ADR-042 d16, d19, d20, d22).
+
+## Revision 3 (2026-10-24): PR C starts (branch `vs-030-pr-c`)
+
+The money review of PR B (`34af46d`) found no Blocker. The owner answered PR C's questions as
+recommended:
+
+| Q | Decision |
+|---|---|
+| C1 | **Absorption keeps coverage.** A chargeback voids every pending and owed refund on its payment (Q3), and each voided refund's items become the chargeback's first items, so no line's coverage changes and no `refunded` or `cancelled` line reopens. The admin's `items` add coverage on top. `applied` = absorbed + Σ admin items; `excess` = charged − applied. When charged < absorbed, absorption runs in (refund id, line id) order, and the unabsorbed part becomes one new pending refund per voided refund, of the same kind, reason `remainder after chargeback <id>` (the §3.3 step 4 late-capture rule, generalised). This replaces "allocate against the balances after the voids" in §2.5 and §3.3 step 3. |
+| C2 | The cash-block search audit stays as PR B built it: no phone and no hash (Q8). `docs/vertical-slice-plan.md:817` is reworded. |
+| C3 | Settle skips the Q-2 check: it records a payout already made and moves no money. Create, fail, void and reissue keep it. |
+| C4 | A chargeback on a late-captured payment whose open `late_capture` refund is not in USD records the whole amount as excess, voids nothing and raises the `chargeback_excess` alert. |
+
+**Defaults (accepted):**
+- A provider-reported late-capture currency that is not `^[A-Z]{3}$` after uppercasing falls back to the payment's currency, flagged in the reason, so a CHECK never rolls back Tx B.
+- Record-capture's `dashboard_reference` is kept in its audit row only.
+- Q-2 runs only where balances are derived, so not for a late-captured attempt's chargeback.
+- The §3.7 interface functions stay with VS-031, VS-043 and VS-045.
+
+**Review fixes carried by PR C:**
+- Void also refuses when a line of the refund is `cancelled` (`line_already_cancelled`). The 0-balance rule would otherwise strand the customer's money.
+- `check_request` refuses a line named twice.
+- Q-2 compares the payment's currency to the order's.
+- `facts_for` counts only the paid payment's refunds and chargebacks.
+- Late-capture refunds get their own lock step: the order, its lines, then the refund's own payment, with no paid payment required, no Q-2 and no status recompute. Settling one sends the Q7 notice.
 
 ## Revision 2 (2026-10-23): PR A starts
 
@@ -1248,6 +1277,14 @@ Owner decisions at PR B's start (2026-10-23):
 3. Chargebacks (§3.3) plus I17–I19, I23, I24, U13, R8 and R11–R13.
 4. Record-capture (Q5) plus I22.
 5. The docs and ADR-042 final (§7); the VS-032 dependency.
+
+PR C as built (2026-10-24, branch `vs-030-pr-c`, not `vs-030-late-capture-chargebacks`):
+- Every PR C item is in, with the Revision 3 answers. The review fixes of PR B come first.
+- R13 (Revision 4): whichever of the create and the chargeback commits second is refused, and invariant M also requires excess only at a zero balance.
+- One alert per chargeback, of kind `chargeback_excess` when there is excess, not two.
+- The late-capture sink also writes a `refund.created` audit row (actor NULL).
+- `ck_payments_captured_shape` made a malformed provider report roll back Tx B; the payment row now stores only what it holds (ADR-042 d19).
+- I24's "same reference on another provider" is covered by the PR A schema test only: `mock` is the one online provider.
 
 - **CP4:** the full sequential suite (§6.7) green. Reports the counts and any skips.
 - **CP5:** the slice status set to Done, and the docs merged.

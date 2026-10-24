@@ -1,6 +1,6 @@
 """LO2 and LO3 (VS-030 plan 6.4): the SQL each refund path runs takes its locks in rank
-order (orders < order_items < payments < refunds), and a random mixed workload of
-refunds, settles, fails, voids, reissues and transitions never deadlocks."""
+order (orders < order_items < payments < refunds < chargebacks), and a random mixed
+workload of refunds, late captures, chargebacks and transitions never deadlocks."""
 
 import asyncio
 import random
@@ -8,18 +8,28 @@ import re
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
+from functools import partial
 from typing import Any
 
 import pytest
-from sqlalchemy import event, text
+from sqlalchemy import event
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.identity.domain.enums import UserRole
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
-from tests.concurrency.test_refund_races import World
+from tests.concurrency.test_chargeback_races import assert_m, charge
+from tests.concurrency.test_refund_races import Racer, World
 from tests.integration.deep_support import create_user
-from tests.integration.payments.refund_support import Paid, paid_online
+from tests.integration.fulfillment.order_support import seed_physical_order
+from tests.integration.payments.refund_support import (
+    Paid,
+    attempt,
+    late_capture,
+    late_refunds,
+    paid_online,
+    payment_of,
+)
 
 pytestmark = [
     pytest.mark.integration,
@@ -35,6 +45,8 @@ RANKS = [
     (re.compile(r"FROM refunds\b.*FOR UPDATE", re.S), 4, "refunds FOR UPDATE"),
     (re.compile(r"^\s*INSERT INTO refunds\b", re.S), 4, "INSERT refunds"),
     (re.compile(r"^\s*INSERT INTO refund_items\b", re.S), 4, "INSERT refund_items"),
+    (re.compile(r"^\s*INSERT INTO chargebacks\b", re.S), 5, "INSERT chargebacks"),
+    (re.compile(r"^\s*INSERT INTO chargeback_items\b", re.S), 5, "INSERT chargeback_items"),
     (re.compile(r"^\s*UPDATE refunds\b", re.S), 4, "UPDATE refunds (held)"),
     (re.compile(r"^\s*UPDATE order_items\b", re.S), 2, "UPDATE order_items (held)"),
     (re.compile(r"^\s*UPDATE payments\b", re.S), 3, "UPDATE payments (held)"),
@@ -104,20 +116,86 @@ async def test_lo2_every_refund_path_locks_in_rank_order(
         assert ranks[:3] == [1, 2, 3], (name, trace)
 
 
+async def test_lo2_the_late_capture_paths_lock_in_rank_order(
+    world: World, db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """Plan 8.1 path 5, then the admin's steps on its refund (no paid payment needed)."""
+    order = await seed_physical_order(db_session, payment_method="online", payment_status="expired")
+    payment_id = await payment_of(db_engine, order.order_id)
+    traces: dict[str, list[tuple[int, str]]] = {}
+    with recorded(db_engine) as statements:
+        await late_capture(db_engine, payment_id, 1000)
+    traces["late capture"] = lock_trace(statements)
+    (row,) = await late_refunds(db_engine, payment_id)
+    for name in ("fail", "reissue"):
+        with recorded(db_engine) as statements:
+            result = await world.action(name, row.id)()
+        traces[name] = lock_trace(statements)
+    twin = uuid.UUID(result.split(":", 1)[1])
+    with recorded(db_engine) as statements:
+        await world.action("settle", twin)()
+    traces["settle"] = lock_trace(statements)
+    for name, trace in traces.items():
+        ranks = acquisitions(trace)
+        print(f"LO2 {name}: " + " -> ".join(label for _, label in trace))
+        assert ranks == sorted(ranks), (name, trace)
+        assert ranks[:3] == [1, 2, 3], (name, trace)
+    assert (4, "INSERT refunds") in traces["late capture"]
+
+
+async def test_lo2_the_chargeback_path_locks_in_rank_order(
+    world: World, db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """Plan 8.1 path 6: 1, 2, 3, the open refunds FOR UPDATE (4), their voids, then 5."""
+    order = await paid_online(db_session, stl=None, physical=("delivered",))
+    line = order.physical[0]
+    payment = await payment_of(db_engine, order.order_id)
+    await world.create(order.order_id, [(line, 1000)])()
+    with recorded(db_engine) as statements:
+        result = await charge(world, order, payment, 600, [])()
+    trace = lock_trace(statements)
+    print("LO2 chargeback: " + " -> ".join(label for _, label in trace))
+    assert result == "charged:600:0"
+    ranks = acquisitions(trace)
+    assert ranks == sorted(ranks), trace
+    assert ranks[:4] == [1, 2, 3, 4] and ranks[-1] == 5, trace
+
+
 async def test_lo3_a_random_mixed_workload_never_deadlocks(
     world: World, db_engine: AsyncEngine, db_session: AsyncSession
 ) -> None:
     orders: list[Paid] = [
         await paid_online(db_session, physical=("pending", "delivered")) for _ in range(3)
     ]
+    paid = {o.order_id: await payment_of(db_engine, o.order_id) for o in orders}
+    expired = {o.order_id: await attempt(db_session, o.order_id) for o in orders}
     refunds: list[uuid.UUID] = []
     rng = random.Random(30)
     outcomes: dict[str, int] = {}
+    kinds = ["create", "create", "settle", "fail", "void", "reissue", "move", "stl"]
+
+    async def late(order: Paid) -> str:
+        """VS-024's Tx B on the order's expired attempt: path 5, rank 4 last."""
+        outcome = await late_capture(db_engine, expired[order.order_id], rng.randint(1, 900))
+        return f"late:{outcome}"
 
     async def one() -> None:
         order = rng.choice(orders)
-        kind = rng.choice(["create", "create", "settle", "fail", "void", "reissue", "move", "stl"])
-        if kind == "create":
+        kind = rng.choice([*kinds, "late", "charge"])
+        racer: Racer
+        if kind == "late":
+            racer = partial(late, order)
+        elif kind == "charge":  # path 6; most allocations are refused, after every lock
+            line = rng.choice([order.physical[1], order.stl])
+            assert line is not None
+            racer = charge(
+                world,
+                order,
+                paid[order.order_id],
+                rng.randint(1, 400),
+                [(line, rng.randint(1, 60))],
+            )
+        elif kind == "create":
             line = rng.choice([order.physical[1], order.stl])
             assert line is not None
             racer = world.create(order.order_id, [(line, rng.randint(1, 60))])
@@ -147,19 +225,5 @@ async def test_lo3_a_random_mixed_workload_never_deadlocks(
     await asyncio.wait_for(asyncio.gather(*(worker(50) for _ in range(4))), timeout=240)
     print("LO3 outcomes:", dict(sorted(outcomes.items())))
     assert sum(outcomes.values()) >= 150
-    async with db_engine.connect() as conn:
-        for order in orders:
-            row = (
-                await conn.execute(
-                    text(
-                        "SELECT COALESCE(SUM(r.amount_cents) FILTER (WHERE r.status IN"
-                        " ('pending', 'settled')"
-                        " OR (r.status = 'failed' AND r.reissued_at IS NULL)), 0) AS out,"
-                        " p.amount_cents AS paid FROM payments p"
-                        " LEFT JOIN refunds r ON r.payment_id = p.id WHERE p.order_id = :o"
-                        " GROUP BY p.amount_cents"
-                    ),
-                    {"o": order.order_id},
-                )
-            ).one()
-            assert row.out <= row.paid
+    for order in orders:
+        await assert_m(db_engine, order.order_id)  # invariant M, chargebacks included

@@ -91,7 +91,8 @@ _TRANSITION = {
     409: {
         "description": "INVALID_STATE_TRANSITION (`reason`: `not_pending`, `not_failed`, "
         "`already_settled`, `already_reissued` with `reissued_by_refund_id`, "
-        "`line_already_refunded`), or ORDER_TOTAL_MISMATCH."
+        "`line_already_refunded`, `line_already_cancelled`), or ORDER_TOTAL_MISMATCH "
+        "(never on settle)."
     },
     422: {"description": "VALIDATION_ERROR."},
 }
@@ -360,7 +361,9 @@ async def _idempotent(
     key: str,
     body: dict[str, Any],
     write: Callable[[], Awaitable[UUID]],
+    detail: Callable[[AsyncSession, UUID], Awaitable[dict[str, Any]]] | None = None,
 ) -> Response:
+    """Claim, write, then store the 201 (a refund's detail unless `detail` reads another)."""
     claims = idempotency_store(session)
     claim = await claims.claim(
         scope=scope,
@@ -374,7 +377,7 @@ async def _idempotent(
     if isinstance(claim, InProgress | Conflict):
         raise _claim_refusal(claim)
     refund_id = await write()
-    read = await _detail(session, refund_id)
+    read = await (detail or _detail)(session, refund_id)
     await claims.attach(claim.record_id, resource_id=refund_id)
     await claims.complete(claim.record_id, status_code=status.HTTP_201_CREATED, body=read)
     return JSONResponse(read, status_code=status.HTTP_201_CREATED)

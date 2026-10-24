@@ -53,6 +53,7 @@ from app.identity.public import (
 from app.negotiation.api.admin_offers import admin_router as offers_router
 from app.ordering.api.admin_cash_blocks import admin_router as cash_blocks_router
 from app.ordering.api.admin_release import admin_router as order_release_router
+from app.payments.api.admin_chargebacks import admin_router as admin_chargebacks_router
 from app.payments.api.admin_payments import admin_router as admin_payments_router
 from app.payments.api.admin_refunds import admin_router as admin_refunds_router
 from app.platform.api.audit_logs import admin_router as audit_logs_router
@@ -115,6 +116,7 @@ router.include_router(engagement_analytics_router)
 # VS-024. Payment reconcile and manual confirm; the manual hold release.
 router.include_router(admin_payments_router)
 router.include_router(admin_refunds_router)  # VS-030
+router.include_router(admin_chargebacks_router)  # VS-030 PR C
 router.include_router(order_release_router)
 # VS-023b. The STL delivery queue and mark-as-sent.
 router.include_router(stl_deliveries_router)

@@ -9,10 +9,11 @@ from uuid import UUID
 
 from app.ordering.public import LockedOrder, OrderStatus, RefundFacts
 from app.payments.domain.alerts import AlertKind
+from app.payments.domain.chargebacks import NewChargeback
 from app.payments.domain.enums import PaymentProvider, PaymentStatus
 from app.payments.domain.outcome import ProviderResult
 from app.payments.domain.payments import Payment
-from app.payments.domain.refunds import NewRefund, Refund
+from app.payments.domain.refunds import ChargebackFact, NewRefund, Refund
 
 
 @dataclass(frozen=True)
@@ -256,6 +257,18 @@ class RefundOrders(Protocol):
         self, locked: LockedOrder, line_ids: tuple[UUID, ...], *, actor_user_id: UUID, at: datetime
     ) -> None: ...
 
+    async def chargeback_lines(
+        self,
+        locked: LockedOrder,
+        *,
+        refunded: tuple[UUID, ...],
+        cancelled: tuple[UUID, ...],
+        actor_user_id: UUID,
+        at: datetime,
+    ) -> None:
+        """D4: emptied lines become `refunded` or, unfinished, `cancelled`; no recompute."""
+        ...
+
     async def recompute(
         self,
         locked: LockedOrder,
@@ -263,8 +276,9 @@ class RefundOrders(Protocol):
         refunded: tuple[UUID, ...],
         refunds: RefundFacts,
         actor_user_id: UUID,
+        cancelled: tuple[UUID, ...] = (),
     ) -> OrderStatus:
-        """The order status from the locked lines (`refunded` now `refunded`) and facts."""
+        """The order status from the locked lines (as moved since the lock) and facts."""
         ...
 
 
@@ -285,6 +299,10 @@ class RefundStore(Protocol):
 
     async def insert(self, new: NewRefund) -> UUID: ...
 
+    async def insert_late_capture(self, new: NewRefund) -> UUID | None:
+        """None when the payment already has a live one (`uq_refunds_one_live_late_capture`)."""
+        ...
+
     async def settle(
         self, refund_id: UUID, *, by: UUID, at: datetime, reference: str | None, note: str | None
     ) -> bool:
@@ -296,6 +314,24 @@ class RefundStore(Protocol):
     async def void(self, refund_id: UUID, *, by: UUID, at: datetime, reason: str) -> bool: ...
 
     async def mark_reissued(self, refund_id: UUID, *, at: datetime) -> bool: ...
+
+    async def lock_open_for_payment(self, payment_id: UUID) -> list[Refund]:
+        """Pending or owed refunds of one payment, `FOR UPDATE ORDER BY id` (rank 4)."""
+        ...
+
+
+class ChargebackStore(Protocol):
+    """`chargebacks` and `chargeback_items`. Every method runs under the orders lock."""
+
+    async def for_order(self, order_id: UUID) -> list[ChargebackFact]:
+        """Plain reads; refuses unless this transaction holds the order's row lock."""
+        ...
+
+    async def dispute_exists(self, provider: PaymentProvider, reference: str) -> bool: ...
+
+    async def insert(self, new: NewChargeback) -> None:
+        """Rank 5: waits on `uq_chargebacks_dispute` behind a rival with the same reference."""
+        ...
 
 
 class RefundNotices(Protocol):

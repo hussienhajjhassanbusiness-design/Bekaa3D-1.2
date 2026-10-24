@@ -9,9 +9,11 @@ from typing import Any
 import httpx
 from fastapi.testclient import TestClient
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.identity.domain.enums import UserRole
+from app.payments.domain.outcome import Outcome, ProviderResult
+from app.payments.infrastructure.verification import apply_provider_result
 from tests.integration.deep_support import create_user, csrf
 from tests.integration.fulfillment.delivery_support import line_of
 from tests.integration.fulfillment.order_support import seed_physical_order
@@ -155,3 +157,107 @@ async def refund_count(engine: AsyncEngine, order_id: uuid.UUID) -> int:
 def queue_ids(client: TestClient, order_id: uuid.UUID) -> set[str]:
     body = ok(client.get(REFUNDS, params={"order_id": str(order_id)}))
     return {item["id"] for item in body["items"]}
+
+
+async def attempt(
+    db: AsyncSession, order_id: uuid.UUID, *, status: str = "expired", amount: int = 1000
+) -> uuid.UUID:
+    """Another `mock` attempt of the order, not live (a retry's predecessor)."""
+    at = datetime.now(UTC)
+    payment_id: uuid.UUID = (
+        await db.execute(
+            text(
+                "INSERT INTO payments (order_id, provider, order_payment_method,"
+                " provider_payment_id, status, amount_cents, initiated_at, failed_at, expired_at)"
+                " VALUES (:o, 'mock', 'online', :ref, CAST(:s AS payment_status), :a, :at,"
+                " :f, :x) RETURNING id"
+            ),
+            {
+                "o": order_id,
+                "ref": f"mock-{uuid.uuid4().hex}",
+                "s": status,
+                "a": amount,
+                "at": at,
+                "f": at if status == "failed" else None,
+                "x": at if status == "expired" else None,
+            },
+        )
+    ).scalar_one()
+    await db.commit()
+    return payment_id
+
+
+async def late_capture(
+    engine: AsyncEngine, payment_id: uuid.UUID, amount: int | None, currency: str | None = "USD"
+) -> Outcome:
+    """The provider's own answer for a non-live attempt, through VS-024's Tx B."""
+    async with async_sessionmaker(engine, expire_on_commit=False)() as session, session.begin():
+        return await apply_provider_result(
+            session,
+            payment_id,
+            ProviderResult("paid", amount, currency),
+            source="reconcile",
+            actor_user_id=None,
+        )
+
+
+async def late_refunds(engine: AsyncEngine, payment_id: uuid.UUID) -> list[Any]:
+    async with engine.connect() as conn:
+        rows = await conn.execute(
+            text(
+                "SELECT id, status::text AS status, amount_cents, currency, reason, requested_by,"
+                " reissue_of_refund_id, (SELECT count(*) FROM refund_items i"
+                " WHERE i.refund_id = r.id) AS items"
+                " FROM refunds r WHERE payment_id = :p AND kind = 'late_capture'"
+                " ORDER BY created_at, id"
+            ),
+            {"p": payment_id},
+        )
+        return list(rows)
+
+
+async def payment_of(engine: AsyncEngine, order_id: uuid.UUID) -> uuid.UUID:
+    async with engine.connect() as conn:
+        found = await conn.scalar(
+            text("SELECT id FROM payments WHERE order_id = :o ORDER BY initiated_at, id LIMIT 1"),
+            {"o": order_id},
+        )
+    assert isinstance(found, uuid.UUID)
+    return found
+
+
+def chargeback(
+    client: TestClient,
+    order_id: uuid.UUID,
+    payment_id: uuid.UUID,
+    charged_cents: int,
+    items: list[tuple[uuid.UUID, int]] | None = None,
+    *,
+    dispute: str | None = None,
+    idempotency_key: str | None = None,
+) -> httpx.Response:
+    response: httpx.Response = client.post(
+        f"{ADMIN}/orders/{order_id}/chargebacks",
+        json={
+            "payment_id": str(payment_id),
+            "provider_dispute_reference": dispute or f"dp_{uuid.uuid4().hex}",
+            "charged_cents": charged_cents,
+            "items": [{"order_item_id": str(i), "amount_cents": a} for i, a in items or []],
+            "reason": "Bank dispute: not received.",
+            "received_at": "2026-10-20T10:00:00Z",
+        },
+        headers=csrf(client) | {"Idempotency-Key": idempotency_key or key()},
+    )
+    return response
+
+
+async def refund_rows(engine: AsyncEngine, order_id: uuid.UUID) -> list[Any]:
+    async with engine.connect() as conn:
+        rows = await conn.execute(
+            text(
+                "SELECT id, kind::text AS kind, status::text AS status, amount_cents, reason,"
+                " void_reason FROM refunds WHERE order_id = :o ORDER BY created_at, id"
+            ),
+            {"o": order_id},
+        )
+        return list(rows)

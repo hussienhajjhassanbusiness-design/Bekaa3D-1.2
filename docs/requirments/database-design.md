@@ -1379,7 +1379,7 @@ VS-024 adds three `processing_error` values: `manual_confirmation_required` (the
 
 ## 9.3 `refunds`
 
-**Purpose:** Tracks a refund obligation from request through settlement. Built by VS-030 PR A (migration `c01e53ab3e0f`, ADR-042). No application code writes it until PR B.
+**Purpose:** Tracks a refund obligation from request through settlement. Built by VS-030 PR A (migration `c01e53ab3e0f`, ADR-042); written by the refund use cases (PR B), the late-capture sink, record-capture, chargebacks and the backfill migration `80e56abf0969` (PR C). See [`docs/refunds.md`](../refunds.md).
 
 | Column | Type | Null | Constraint |
 |---|---|---:|---|
@@ -1485,7 +1485,7 @@ Except for `kind = late_capture` (no items), the sum of refund-item amounts must
 
 ## 9.5 `chargebacks`
 
-**Purpose:** A confirmed bank reversal of an online payment (SRS 9.7, ADR-042). It is recorded already settled and never enters the obligations queue. Recording one voids every pending and owed refund on its payment.
+**Purpose:** A confirmed bank reversal of an online payment (SRS 9.7, ADR-042). It is recorded already settled and never enters the obligations queue. Recording one voids every pending and owed refund on its payment and absorbs them: their items become its first items, and what the bank did not cover stays owed as a new pending refund (ADR-042 d16).
 
 | Column | Type | Null | Constraint |
 |---|---|---:|---|
@@ -1494,8 +1494,8 @@ Except for `kind = late_capture` (no items), the sum of refund-item amounts must
 | `payment_provider` | `payment_provider` | No | never `cash` |
 | `provider_dispute_reference` | TEXT | No | 1-200 chars; UNIQUE per provider |
 | `charged_cents` | BIGINT | No | what the bank took; > 0 |
-| `applied_cents` | BIGINT | No | the part split over lines; ≥ 0 |
-| `excess_cents` | BIGINT | No | the amount beyond the payment's remaining balance; ≥ 0; alerted |
+| `applied_cents` | BIGINT | No | the absorbed refunds plus the administrator's items (for a late-captured attempt: the absorbed `late_capture` refund); ≥ 0 |
+| `excess_cents` | BIGINT | No | the rest of `charged_cents`, only once the payment's balance is 0; ≥ 0; alerted |
 | `currency` | CHAR(3) | No | `USD` |
 | `reason` | TEXT | No | 1-1000 chars |
 | `recorded_by` | UUID | No | FK → `users.id` RESTRICT |
@@ -1516,7 +1516,7 @@ ix_chargebacks_order: (order_id, created_at)
 ix_chargebacks_payment: (payment_id)
 ```
 
-A chargeback after a full settled refund records `applied_cents = 0`, with the whole amount as excess. Production has no online payment to charge back until VS-032 (`PAYMENT_PROVIDER=none`, ADR-036 d16).
+A chargeback after a full settled refund records `applied_cents = 0`, with the whole amount as excess. One on a late-captured attempt has no items and moves no status; if its open `late_capture` refund is not in USD, nothing is absorbed and the charge is all excess. Production has no online payment to charge back until VS-032 (`PAYMENT_PROVIDER=none`, ADR-036 d16).
 
 ---
 
@@ -2179,9 +2179,10 @@ pending -> processing -> paid -> partially_refunded -> refunded
    -> expired
               -> expired
 paid ---------------------------------------> refunded
+refunded -> partially_refunded -> paid      (a refund failed or voided; ADR-042)
 ```
 
-`paid` requires independent server-side payment verification for an online payment. A `cash` payment is inserted directly as `paid` by the cash handover (ADR-024).
+`paid` requires independent server-side payment verification for an online payment. A `cash` payment is inserted directly as `paid` by the cash handover (ADR-024). Once paid, the status is recomputed from the payment's refunds and chargebacks on every refund create, fail, reissue and void and every chargeback, never on settlement.
 
 ## 17.2 Order Projection
 
@@ -2195,15 +2196,15 @@ cash, no payment yet:
   otherwise                -> in_progress
 
 payment reached paid (paid, partially_refunded, refunded; online or cash):
+  an owed refund                  -> partially_refunded
   all lines cancelled             -> cancelled
   refunds cover all paid money    -> refunded
-  all lines refunded              -> refunded
-  any refund present              -> partially_refunded
+  any refund or chargeback        -> partially_refunded
   all lines terminal              -> completed
   otherwise                       -> in_progress
 ```
 
-Projection is recomputed in the same transaction as payment/line/refund changes, under the ADR-024 lock order. It takes `orders.cancelled_at` as an input. "Refunds cover all paid money" counts non-failed refund records, pending or settled, never `late_capture` refunds; "all lines refunded" means every line fully refunded.
+Projection is recomputed in the same transaction as payment/line/refund changes, under the ADR-024 lock order. It takes `orders.cancelled_at` as an input. "Refunds cover all paid money" counts pending and settled refunds and chargebacks' applied amounts on the paid payment, never `late_capture` or voided refunds. ADR-042 d1 moved "an owed refund" first and dropped "all lines refunded" (SRS 20.2).
 
 ## 17.3 Digital Order Line
 

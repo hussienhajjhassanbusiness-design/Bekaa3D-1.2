@@ -15,6 +15,7 @@ from app.ordering.public import OrderItemStatus
 from app.payments.domain.enums import RefundKind, RefundStatus
 from app.payments.domain.outcome import REACHED_PAID
 from app.payments.domain.refunds import (
+    ChargebackFact,
     ItemFact,
     Ledger,
     LineFact,
@@ -23,6 +24,7 @@ from app.payments.domain.refunds import (
     line_balances,
     payment_balance,
 )
+from app.payments.infrastructure.chargebacks import order_chargebacks
 from app.payments.infrastructure.models import PaymentModel
 from app.payments.infrastructure.refunds import RefundRow, order_refunds
 
@@ -66,7 +68,8 @@ class _Line(Protocol):
 async def admin_refunds(
     session: AsyncSession, order_id: UUID, total_cents: int, lines: Sequence[_Line]
 ) -> tuple[list[RefundRow], RefundBalances | None]:
-    """The order's refunds, oldest first, and the balances (None until paid)."""
+    """The order's refunds, oldest first, and the balances (None until paid); chargebacks
+    count against them (plan 3.2 L2, L3)."""
     rows = await order_refunds(session, order_id)
     paid = (
         await session.execute(
@@ -75,6 +78,7 @@ async def admin_refunds(
                 PaymentModel.provider,
                 PaymentModel.status,
                 PaymentModel.amount_cents,
+                PaymentModel.currency,
             ).where(PaymentModel.order_id == order_id, PaymentModel.status.in_(REACHED_PAID))
         )
     ).first()
@@ -86,8 +90,16 @@ async def admin_refunds(
             LineFact(line.id, line.product_type, line.fulfillment_status, line.line_total_cents)
             for line in lines
         ),
-        PaymentFact(paid.id, paid.provider, paid.status, paid.amount_cents),
+        PaymentFact(paid.id, paid.provider, paid.status, paid.amount_cents, paid.currency),
         tuple(_fact(row) for row in rows),
+        tuple(
+            ChargebackFact(
+                c.payment_id,
+                c.applied_cents,
+                tuple(ItemFact(i.order_item_id, i.amount_cents) for i in c.items),
+            )
+            for c in await order_chargebacks(session, order_id)
+        ),
     )
     return rows, RefundBalances(line_balances(ledger), payment_balance(ledger))
 

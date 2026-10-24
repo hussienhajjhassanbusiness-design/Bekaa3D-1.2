@@ -11,6 +11,7 @@ from uuid import UUID
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import client_ip, get_session
@@ -34,14 +35,16 @@ from app.ordering.public import (
     order_lines,
     orders_by_id,
 )
+from app.payments.api.admin_refunds import IdempotencyKey, _idempotent
 from app.payments.domain import limits
 from app.payments.domain.enums import PaymentProvider, PaymentStatus
 from app.payments.domain.exceptions import (
+    CaptureRecordRefusedError,
     ManualConfirmRefusedError,
     PaymentNotFoundError,
     PaymentReferenceMismatchError,
 )
-from app.payments.domain.manual import ConfirmRefusal
+from app.payments.domain.manual import CaptureRefusal, ConfirmRefusal
 from app.payments.domain.outcome import Outcome
 from app.payments.domain.payments import Payment
 from app.payments.domain.release import Capability
@@ -52,7 +55,7 @@ from app.payments.infrastructure.admin_reads import (
     payment_page,
     payment_row,
 )
-from app.payments.infrastructure.manual import confirm_payment_manually
+from app.payments.infrastructure.manual import confirm_payment_manually, record_capture_manually
 from app.payments.infrastructure.payments import SqlPaymentStore
 from app.payments.infrastructure.reconcile import reconcile_in_background
 from app.payments.infrastructure.release import answered_unknown
@@ -268,6 +271,119 @@ async def confirm_payment(
     payment = await SqlPaymentStore(session).get(payment_id)
     assert payment is not None
     return ManualConfirmRead(outcome=outcome, payment=PaymentSummary.of(payment))
+
+
+class RecordCaptureRequest(BaseModel):
+    """What the dashboard shows captured, when it differs from the attempt (VS-030 Q5)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    captured_amount_cents: Annotated[int, Field(gt=0, le=limits.REFUND_MAX_AMOUNT_CENTS)]
+    captured_currency: Annotated[str, Field(pattern=r"^[A-Z]{3}$")]
+    dashboard_reference: Annotated[PlainStr, Field(min_length=1, max_length=255)]
+    reason: Annotated[
+        MultilineStr, Field(min_length=limits.REASON_MIN, max_length=limits.REASON_MAX)
+    ]
+
+
+class RecordCaptureRead(BaseModel):
+    outcome: Outcome
+    payment: PaymentSummary
+    refund_id: UUID | None = Field(description="The late-capture obligation it created.")
+
+
+RECORD_CAPTURE_SCOPE = "admin_record_capture"
+_LIVE_LATE_REFUND = text(
+    "SELECT id FROM refunds WHERE payment_id = :p AND kind = 'late_capture'"
+    " AND status NOT IN ('failed', 'voided')"
+)
+
+
+@admin_router.post(
+    "/{payment_id}/record-capture",
+    status_code=status.HTTP_201_CREATED,
+    response_model=RecordCaptureRead,
+    dependencies=[
+        Depends(require_csrf),
+        Depends(_limit("admin_payment_record_capture", limits.CONFIRM_RATE_LIMIT)),
+    ],
+    summary="Record a capture the dashboard shows but the attempt's amount does not match",
+    responses={
+        **_RESPONSES,
+        409: {
+            "description": "MANUAL_CONFIRMATION_NOT_ALLOWED (the provider has a status API), "
+            "INVALID_STATE_TRANSITION (`reason`: `cash_payment`, `already_paid`, "
+            "`already_late_captured`, `use_confirm` for a matching amount), "
+            "IDEMPOTENCY_KEY_CONFLICT or IDEMPOTENCY_REQUEST_IN_PROGRESS."
+        },
+        422: {"description": "VALIDATION_ERROR."},
+    },
+)
+async def record_capture(
+    payment_id: UUID,
+    body: RecordCaptureRequest,
+    request: Request,
+    idempotency_key: IdempotencyKey,
+    claims: AccessTokenClaims = Depends(require_admin),
+) -> Response:
+    """A late capture plus its refund obligation (VS-024 Q2, VS-030 Q5): the admin then pays
+    it back in the dashboard and settles it. A mistaken one is voided."""
+    request_id, ip_hash = audit_context(request)
+    outcome: list[Outcome] = []
+
+    async def write(session: AsyncSession) -> UUID:
+        outcome.append(
+            await record_capture_manually(
+                session,
+                request.app.state.payment_providers,
+                payment_id,
+                admin_id=claims.user_id,
+                amount_cents=body.captured_amount_cents,
+                currency=body.captured_currency,
+                dashboard_reference=body.dashboard_reference,
+                reason=body.reason,
+                request_id=request_id,
+                ip_hash=ip_hash,
+            )
+        )
+        return payment_id
+
+    async def detail(session: AsyncSession, _: UUID) -> dict[str, Any]:
+        payment = await SqlPaymentStore(session).get(payment_id)
+        assert payment is not None
+        refund_id = await session.scalar(_LIVE_LATE_REFUND, {"p": payment_id})
+        read = RecordCaptureRead(
+            outcome=outcome[0], payment=PaymentSummary.of(payment), refund_id=refund_id
+        )
+        return read.model_dump(mode="json")
+
+    async with request.app.state.db_session_factory() as session, session.begin():
+        try:
+            return await _idempotent(
+                request,
+                session,
+                scope=RECORD_CAPTURE_SCOPE,
+                admin_id=claims.user_id,
+                key=idempotency_key,
+                body={"payment_id": str(payment_id)} | body.model_dump(mode="json"),
+                write=lambda: write(session),
+                detail=detail,
+            )
+        except PaymentNotFoundError as exc:
+            raise not_found_error() from exc
+        except CaptureRecordRefusedError as exc:
+            raise _capture_refused(exc) from exc
+
+
+def _capture_refused(exc: CaptureRecordRefusedError) -> ApiError:
+    if exc.refusal is CaptureRefusal.STATUS_QUERY_AVAILABLE:
+        return ApiError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="MANUAL_CONFIRMATION_NOT_ALLOWED",
+            title="Manual recording not allowed",
+            detail="This provider can be asked; reconcile the payment instead.",
+        )
+    return _invalid(str(exc.refusal))
 
 
 def _refused(exc: ManualConfirmRefusedError) -> ApiError:

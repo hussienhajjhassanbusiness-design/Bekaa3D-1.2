@@ -48,6 +48,6 @@ The contract for `GET /api/v1/me/orders` and `GET /api/v1/me/orders/{order_id}`.
 - Confirming again changes nothing; a line delivered since is stamped then.
 - A report is 1-5000 characters after trimming (`422` otherwise), 5 an hour per user (`429`). Each report becomes a contact message in the administrator's queue and an in-app alert for every administrator; `problem_reported_at` keeps the first report's time.
 
-## Not yet
+## Refund summary (VS-030)
 
-- Refund summary: VS-030.
+`OrderDetail.refunds[]`, oldest first: `{kind, status, amount, created_at}` for each `admin`, `cancellation` and `late_capture` refund (ADR-033 d7, ADR-042 d14). `status` is `processing` while it is pending or owed and `refunded` once settled. A voided refund, a failed one already reissued (its reissue is listed instead) and chargebacks are never shown. It is a display read: the balances live on the admin order detail only.

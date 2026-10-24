@@ -743,10 +743,10 @@ Exact enum names require an implementation decision.
 - `reason`
 - `requested_by`
 - `approved_by`
-- `kind` — `admin`, `cancellation`, `late_capture` or `chargeback` (ADR-024; every V1 refund is manual, so there is no method)
+- `kind` — `admin`, `cancellation` or `late_capture` (ADR-024, ADR-042; every V1 refund is manual, so there is no method; a chargeback is its own entity)
 - `settlement_state`
 - `reissued_at`, `reissue_of_refund_id` — link a failed refund to its reissue
-- `excess_cents` — chargebacks only
+- `voided_at`, `voided_by`, `void_reason`
 - `created_at`
 - `settled_at`
 
@@ -757,10 +757,12 @@ The SRS explicitly requires a pending obligation that remains open until settlem
 ```text
 PENDING
   ├── SETTLED
-  └── FAILED   (ADR-024: stays owed until reissued)
+  ├── FAILED   (ADR-024: stays owed until reissued or voided)
+  │     └── VOIDED (only while not reissued)
+  └── VOIDED   (ADR-042: closed unpaid; a mistake, or absorbed by a chargeback)
 ```
 
-`FAILED` is the documented decision of ADR-024 (SRS §9.6). Other states such as `cancelled` must not be introduced without a documented decision.
+`FAILED` is the documented decision of ADR-024 and `VOIDED` of ADR-042 (SRS §9.6). `SETTLED` and `VOIDED` are terminal. Other states such as `cancelled` must not be introduced without a documented decision.
 
 **Relationships:**
 
@@ -775,8 +777,8 @@ PENDING
 - **[Domain]** Refund amount must be positive.
 - **[DB]** Refund money uses integer cents and an explicit currency.
 - **[Application]** Total refunds cannot exceed the remaining refundable Payment amount.
-- **[Application]** Refunds may cover selected paid OrderItems, in full or in part; an item's refundable amount is its line total minus its items in non-failed refunds and in failed refunds not yet reissued, and a cancelled cash item has 0. A request that would empty an unfinished physical item gives 422 `REFUND_REQUIRES_CANCELLATION`.
-- **[Application]** A `late_capture` Refund has no RefundItems and no human requester, returns money captured but not applied, and never affects the Order projection; at most one non-failed exists per Payment.
+- **[Application]** Refunds may cover selected paid OrderItems, in full or in part; an item's refundable amount is its line total minus its items in pending, settled and owed refunds and in chargebacks, and a cancelled item without any has 0. A request that would empty an unfinished physical item gives 422 `REFUND_REQUIRES_CANCELLATION`.
+- **[Application]** A `late_capture` Refund has no RefundItems and no human requester, returns money captured but not applied, and never affects the Order projection; at most one live (not failed, not voided) exists per Payment. It is created with the late capture itself, or by the backfill migration `80e56abf0969`, or by record-capture (VS-030).
 - **[Application]** Every V1 refund is manual: the administrator pays it in the provider dashboard or in cash and settles it here; the platform never calls a provider refund API.
 - **[Application]** When refunds cover all paid money, the Order derives `refunded`.
 - **[Application]** A cash Payment is refunded only after its handover, up to the cash recorded.
@@ -785,8 +787,9 @@ PENDING
 - **[Application]** A pending Refund remains visible in the administrator obligations queue until settlement.
 - **[Application]** Refund requests use idempotency protection.
 - **[Authorization]** Only authorized administrators may issue Refunds.
-- **[DB/Application]** Refund creation, settlement, failure and chargeback recording lock the `orders` row, then items, then the Payment, then the Refund (ADR-024), and recheck the remaining balance.
-- **[Application]** A confirmed chargeback is a Refund of `kind = chargeback`, created already `SETTLED`, outside the obligations queue, split per item by the administrator; items it covers in full become `refunded` (an unfinished physical item is then cancelled with no further refund); any excess beyond the remaining balance is recorded and alerted.
+- **[DB/Application]** Refund creation, settlement, failure, void, reissue and chargeback recording lock the `orders` row, then every item, then the order's Payments, then the Refund(s), then (a chargeback) insert the Chargeback (ADR-042 d8), and recheck the remaining balance.
+- **[Authorization/Application]** A void needs an administrator and a reason, is audited, and is refused on a settled refund or one with an item already `refunded` or `cancelled`.
+- **[Application]** A confirmed chargeback is its own record (Chargeback, below), outside the obligations queue. It voids and absorbs the Payment's open refunds (ADR-042 d16).
 
 **Transition rules:**
 
@@ -801,8 +804,30 @@ PENDING
 - `FAILED` → reissued
   - The administrator reissues it: a new `PENDING` refund of the same kind, items and amount; `reissued_at` is set on the failed one, which leaves the queue.
 
+- `PENDING` or `FAILED` (not reissued) `→ VOIDED` (ADR-042)
+  - Performed by the administrator (a mistake), or by recording a chargeback (absorbed).
+  - Side effects: the balance is freed; Payment status and Order projection recalculated.
+
 **Deletion strategy:**
 **Retain permanently.** Refunds represent financial obligations and settlement evidence.
+
+## Entity: Chargeback (ADR-042)
+
+**Identity:** `chargeback_id`; unique per `(payment_provider, provider_dispute_reference)`.
+
+**Key attributes:** `order_id`, `payment_id`, `payment_provider`, `provider_dispute_reference`, `charged_cents`, `applied_cents`, `excess_cents`, `currency` (USD), `reason`, `recorded_by`, `received_at`; ChargebackItems per order item.
+
+**Lifecycle:** none. A chargeback is a recorded fact, never pending, settled or failed.
+
+**Rules:**
+
+- **[DB]** Online payments only (`ck_chargebacks_online_only` and a FK naming the payment's real provider); `charged = applied + excess`, `applied ≥ 0`, `excess ≥ 0`.
+- **[Application]** Recording one voids every pending and owed Refund on its Payment; their items become its first items, and what the bank did not cover stays owed as a new pending Refund of the same kind.
+- **[Application]** The administrator's items add coverage within each item's balance and total exactly the charge left (capped by the Payment's balance), so excess exists only once nothing is refundable; an item they bring to 0 becomes `refunded` (delivered, picked up, returned, digital) or `cancelled` with no refund (unfinished physical).
+- **[Application]** On a late-captured attempt: no items, its open `late_capture` Refund absorbed (all excess when not in USD); no status changes.
+- **[Application]** Idempotent by `Idempotency-Key`; audited; alerted (excess separately named).
+
+**Deletion strategy:** **Retain permanently**, like Refunds.
 
 ---
 

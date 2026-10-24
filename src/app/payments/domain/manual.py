@@ -29,3 +29,37 @@ def confirm_refusal(
     if typed_amount_cents != payment_amount_cents or typed_currency != "USD":
         return ConfirmRefusal.AMOUNT_MISMATCH
     return None
+
+
+class CaptureRefusal(StrEnum):
+    """Record-capture's refusals (VS-030 plan 3.6, Q5); nothing is written for any."""
+
+    CASH_PAYMENT = "cash_payment"  # 409 INVALID_STATE_TRANSITION
+    STATUS_QUERY_AVAILABLE = "status_query_available"  # 409 MANUAL_CONFIRMATION_NOT_ALLOWED
+    ALREADY_PAID = "already_paid"  # 409 INVALID_STATE_TRANSITION
+    ALREADY_LATE_CAPTURED = "already_late_captured"  # 409 INVALID_STATE_TRANSITION
+    USE_CONFIRM = "use_confirm"  # 409 INVALID_STATE_TRANSITION: a matching amount pays
+
+
+def capture_refusal(
+    *,
+    provider: PaymentProvider,
+    capability: Capability,
+    reached_paid: bool,
+    late_captured: bool,
+    payment_amount_cents: int,
+    typed_amount_cents: int,
+    typed_currency: str,
+) -> CaptureRefusal | None:
+    """First match wins; None means record the mismatch as a late capture."""
+    if provider is PaymentProvider.CASH:
+        return CaptureRefusal.CASH_PAYMENT
+    if capability is Capability.STATUS_QUERY:
+        return CaptureRefusal.STATUS_QUERY_AVAILABLE
+    if reached_paid:
+        return CaptureRefusal.ALREADY_PAID
+    if late_captured:
+        return CaptureRefusal.ALREADY_LATE_CAPTURED
+    if typed_amount_cents == payment_amount_cents and typed_currency == "USD":
+        return CaptureRefusal.USE_CONFIRM
+    return None

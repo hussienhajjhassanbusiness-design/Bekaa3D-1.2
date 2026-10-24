@@ -50,7 +50,7 @@
 | Maximum page size | 100 — V1 API design decision |
 | Sorting | comma-separated fields; `-` prefix means descending |
 | Filtering | allowlisted query parameters only |
-| Idempotency | `Idempotency-Key` required on normal checkout, offer checkout, and refund creation |
+| Idempotency | `Idempotency-Key` required on normal checkout, offer checkout, refund creation and reissue, chargeback recording and record-capture (VS-030) |
 | Rate limits | `RateLimit-*` response headers |
 | Request correlation | response/problem includes stable `request_id` |
 | Empty collection | `"items": []` |
@@ -186,6 +186,9 @@ These codes are implementation additions needed to give the frontend determinist
 | 409 | `PAYMENT_ALREADY_ACTIVE` | Live payment already exists (VS-024 retry; cannot occur on a fresh checkout); body carries `payment_id`, `payment_status` and `redirect_url` (null while `processing`) |
 | 409 | `PAYMENT_REFERENCE_MISMATCH` | Manual confirm: the typed provider reference differs from the stored one, or belongs to another payment (VS-024) |
 | 409 | `MANUAL_CONFIRMATION_NOT_ALLOWED` | Manual confirm on a provider that has a status API; reconcile it instead (VS-024, ADR-036) |
+| 409 | `ORDER_NOT_PAID` | Refund or chargeback on an order (or attempt) whose money was never taken, an unpaid cash order included (VS-030) |
+| 409 | `ORDER_TOTAL_MISMATCH` | The order's total differs from its lines, or an online payment from the total, or the payment's currency from the order's; nothing written, an error log and a `refund_integrity` alert (VS-030 Q-2) |
+| 409 | `CHARGEBACK_DUPLICATE` | This provider dispute reference is already recorded (VS-030) |
 | 409 | `IDEMPOTENCY_REQUEST_IN_PROGRESS` | Same `Idempotency-Key` and body while the first request is still running, or crashed between placing the order and starting the payment; body carries `order_id`, `order_number`; `Retry-After: 2` (VS-023, ADR-032) |
 | 409 | `CATEGORY_IN_USE` | Category, material or colour cannot be archived while a live product uses it (VS-013) |
 | 409 | `SLUG_CONFLICT` | Live slug already exists |
@@ -198,6 +201,9 @@ These codes are implementation additions needed to give the frontend determinist
 | 416 | `RANGE_NOT_SATISFIABLE` | Invalid byte range on an admin attachment download |
 | 422 | `REFUND_EXCEEDS_AVAILABLE` | Requested refund exceeds refundable amount |
 | 422 | `REFUND_REQUIRES_CANCELLATION` | The refund would empty an unfinished physical line; cancel the line instead (ADR-024) |
+| 422 | `CHARGEBACK_NOT_ONLINE` | A cash payment cannot be charged back (VS-030) |
+| 422 | `CHARGEBACK_ITEMS_FORBIDDEN` | A late-captured attempt paid no line, so its chargeback names none (VS-030) |
+| 422 | `CHARGEBACK_ALLOCATION_INVALID` | An item exceeds its line's balance, or the items do not total exactly the charge left after the absorbed refunds (or, if that is larger, the payment's remaining balance); body carries `available` with `chargeable_cents`, the total to name (VS-030) |
 | 422 | `INVALID_FULFILLMENT` | Address, contact phone or method does not match cart contents |
 | 422 | `PAYMENT_METHOD_NOT_ALLOWED` | Cash chosen for an order with an STL line or a zero total, or while cash is switched off; or an unconfigured online provider chosen (ADR-024) |
 | 422 | `CASH_PAYMENT_LIMIT_REACHED` | The recomputed total exceeds the cash maximum (`reason: order_total`, ADR-024) |
@@ -408,7 +414,7 @@ A materially changed retry uses a **new** idempotency key.
 |---|---|---|---|---|---|---|
 | `GET /api/v1/me/orders` | Authenticated | query params | `200 OrderPage` | 401, 422 | Cursor; optional `status`, `placed_after` (inclusive), `placed_before` (exclusive), both with a timezone; fixed `-placed_at, -id` | Own orders only. **As built (VS-025):** items are `OrderSummary`; see [`docs/order-history.md`](../order-history.md) |
 | `POST /api/v1/me/orders/{order_id}/payments` | Verified Customer; owner; CSRF | `PaymentRetryRequest` + required `Idempotency-Key` | `201 PaymentRetryRead` | 401, 403, 404, 409 `PAYMENT_ALREADY_ACTIVE` / `INVALID_STATE_TRANSITION` / `IDEMPOTENCY_KEY_CONFLICT` / `IDEMPOTENCY_REQUEST_IN_PROGRESS`, 422 `PAYMENT_METHOD_NOT_ALLOWED` / `VALIDATION_ERROR`, 429, 502 `PAYMENT_PROVIDER_UNAVAILABLE`, 503 `ONLINE_PAYMENT_UNAVAILABLE` | — | **As built (VS-024, ADR-036):** retry on the same order before `placed_at + checkout_hold_period`; the order's own total is charged; key scoped `payment_retry:{order_id}` per user; two transactions around the provider call; 10/hour. Full contract: [`docs/payment-recovery.md`](../payment-recovery.md) |
-| `GET /api/v1/me/orders/{order_id}` | Authenticated; owner | — | `200 OrderDetail` | 401, 404 | — | Includes lines, payment method, `payment_due`, `can_cancel`, payment projection, refund summary and status history needed by customer; `in_production` is shown as `pending` and omitted from the history. **As built (VS-025, ADR-033):** no refund summary until VS-030; another customer's order is the same 404 as an unknown id |
+| `GET /api/v1/me/orders/{order_id}` | Authenticated; owner | — | `200 OrderDetail` | 401, 404 | — | Includes lines, payment method, `payment_due`, `can_cancel`, payment projection, refund summary and status history needed by customer; `in_production` is shown as `pending` and omitted from the history. **As built (VS-025, ADR-033; VS-030):** `refunds[]` lists admin, cancellation and late-capture refunds as `processing` or `refunded`, never voided ones or chargebacks; another customer's order is the same 404 as an unknown id |
 | `POST /api/v1/me/orders/{order_id}/cancel` | Verified Customer; owner | `CustomerOrderCancelRequest` | `200 OrderDetail` | 401, 403, 404, 409 `ORDER_NOT_CANCELLABLE` / `INVALID_STATE_TRANSITION` | — | V1 decision: cancels all still-self-cancellable physical lines atomically; digital lines are never cancelled; allowed only when `can_cancel` is true (a live physical line, a cash order or a payment that reached `paid`, every live (not cancelled) physical line `pending`; already-cancelled lines are ignored, ADR-033); if cancellation is no longer legally possible, no partial silent cancellation occurs |
 | `POST /api/v1/me/orders/{order_id}/confirm-receipt` | Verified Customer; owner; CSRF | — | `200 OrderDetail` | 401, 403, 404, 409 `INVALID_STATE_TRANSITION` | — | Sets `receipt_confirmed_at` on delivered / picked-up lines; idempotent; no state change (ADR-024, VS-029b). **As built (ADR-041):** physical lines only; `409` carries `reason: no_delivered_line`; only unset timestamps are written; audited when a line was stamped; no rate limit. Contract: [`docs/order-history.md`](../order-history.md) |
 | `POST /api/v1/me/orders/{order_id}/report-problem` | Verified Customer; owner; CSRF | `ProblemReportCreate` | `201 OrderDetail` | 401, 403, 404, 409 `INVALID_STATE_TRANSITION`, 422, 429 | — | Sets `problem_reported_at` and creates a contact message linked to the order; no state change (ADR-024, VS-029b). **As built (ADR-041):** physical lines only; the first report's time is kept and every report is a new message; one in-app notification (`order.problem_reported`) per active administrator in the same transaction; 5/hour per user; audited without the body |
@@ -577,12 +583,16 @@ Every line of every `AdminOrderDetail` (including the one returned by a transiti
 
 | Method + Path | Request | Success | Errors | Pagination / Filter / Sort | Side Effects / Notes |
 |---|---|---|---|---|---|
-| `POST /api/v1/admin/orders/{order_id}/refunds` | `RefundCreate` + required `Idempotency-Key` | `201 RefundDetail` | 401/404, 409 `IDEMPOTENCY_KEY_CONFLICT`, 422 `REFUND_EXCEEDS_AVAILABLE` / `REFUND_REQUIRES_CANCELLATION`, 429 | — | Records a `kind = admin` refund the administrator pays by hand (provider dashboard or cash); the platform calls no provider. Locks the order, then the refunded lines, then the payment. Supports selected paid-line amounts (BR-149; no shipping, ADR-024); validates each line against `line_total` minus its items in non-failed refunds and in failed refunds not yet reissued (0 for a cancelled cash line) and the payment's balance; refuses to empty an unfinished physical line; a cash payment is refunded up to the cash recorded; a line becomes `refunded` only when fully refunded, and a fully refunded STL line leaves the delivery queue; records obligation; audit/outbox |
+| `POST /api/v1/admin/orders/{order_id}/refunds` | `RefundCreate` + required `Idempotency-Key` | `201 RefundDetail` | 401/404, 409 `ORDER_NOT_PAID` / `ORDER_TOTAL_MISMATCH` / `IDEMPOTENCY_KEY_CONFLICT` / `IDEMPOTENCY_REQUEST_IN_PROGRESS`, 422 `REFUND_EXCEEDS_AVAILABLE` (with `available`) / `REFUND_REQUIRES_CANCELLATION` / `VALIDATION_ERROR`, 429 | — | Records a `kind = admin` refund; the administrator then pays it by hand (provider dashboard or cash) and settles it. The platform calls no provider. One transaction with the key's claim: a 4xx stores nothing. Locks the order, every line, the order's payments, then the refund (ADR-042 d8). Supports selected paid-line amounts (BR-149; no shipping, ADR-024); validates each line against `line_total` minus its items in pending, settled and owed refunds and in chargebacks (0 for a cancelled line without any), and the sum against the payment's balance; refuses to empty an unfinished physical line; a cash payment is refunded up to the cash recorded; a line becomes `refunded` only when fully covered, and a fully refunded STL line leaves the delivery queue; recomputes payment and order status; audit; the customer's "refund issued" email and notification (Q7) |
 | `GET /api/v1/admin/refunds` | query params | `200 RefundPage` | 401/404 | Cursor; `status`, `kind`, order/customer/date; default oldest first when queueing | Obligations queue: pending refunds and owed refunds (failed, not reissued); chargebacks never appear as obligations |
 | `GET /api/v1/admin/refunds/{refund_id}` | — | `200 RefundDetail` | 401/404 | — | Full settlement/audit view |
-| `POST /api/v1/admin/refunds/{refund_id}/settle` | `RefundSettlementRequest` | `200 RefundDetail` | 401/404, 409 `INVALID_STATE_TRANSITION`, 422 | — | Used for manual-transfer settlement or provider-confirmed completion; locks order, lines, payment, refund (ADR-024); the order status does not change; append audit; notification/outbox |
-| `POST /api/v1/admin/refunds/{refund_id}/fail` | `RefundFailureRequest` | `200 RefundDetail` | 401/404, 409 `INVALID_STATE_TRANSITION` | — | Marks a pending refund `failed` when the money did not reach the customer (ADR-024): no line state changes; the refund stays owed in the obligations queue; recomputes payment and order status; audited. Not allowed on a chargeback |
-| `POST /api/v1/admin/refunds/{refund_id}/reissue` | — | `201 RefundDetail` | 401/404, 409 `INVALID_STATE_TRANSITION` | — | Only for a `failed` refund not yet reissued: creates a new pending refund of the same kind, items and amount, sets `reissued_at` on the failed one; audited |
+| `POST /api/v1/admin/refunds/{refund_id}/settle` | `RefundSettlementRequest` | `200 RefundDetail` | 401/404, 409 `INVALID_STATE_TRANSITION` (`not_pending`), 422 | — | Records that the administrator paid it: `pending → settled`; settling a settled refund answers 200 unchanged. Locks order, lines, payments, refund. No order or payment status changes, and no Q-2 check (it moves no money). A `late_capture` refund's "refund issued" notice goes out here (Q7); audited |
+| `POST /api/v1/admin/refunds/{refund_id}/fail` | `RefundFailureRequest` | `200 RefundDetail` | 401/404, 409 `INVALID_STATE_TRANSITION` / `ORDER_TOTAL_MISMATCH` | — | Marks a pending refund `failed` when the money did not reach the customer (ADR-024): no line state changes; the refund stays owed in the obligations queue; recomputes payment and order status (owed → `partially_refunded`); audited |
+| `POST /api/v1/admin/refunds/{refund_id}/void` | `RefundVoidRequest` | `200 RefundDetail` | 401/404, 409 `INVALID_STATE_TRANSITION` (`already_settled`, `already_reissued`, `line_already_refunded`, `line_already_cancelled`) / `ORDER_TOTAL_MISMATCH`, 422 | — | Closes a pending or owed refund created by mistake, unpaid (ADR-042 d2): frees its balance, recomputes payment and order status, one `refund.voided` audit row with the reason. A second void answers 200 with the first reason. Never a settled refund, never one whose line is already `refunded` or `cancelled`; a voided refund is never reissued |
+| `POST /api/v1/admin/refunds/{refund_id}/reissue` | — + required `Idempotency-Key` | `201 RefundDetail` | 401/404, 409 `INVALID_STATE_TRANSITION` (`not_failed`, `already_reissued` with `reissued_by_refund_id`) / `ORDER_TOTAL_MISMATCH` / `IDEMPOTENCY_KEY_CONFLICT` | — | Only for a `failed` refund not yet reissued: creates a new pending refund of the same kind, items and amount (`reason = reissue of <id>`), sets `reissued_at` on the failed one; recomputes status; audited, no customer notice |
+| `POST /api/v1/admin/orders/{order_id}/chargebacks` | `ChargebackCreate` + required `Idempotency-Key` | `201 ChargebackDetail` | 401/404, 409 `ORDER_NOT_PAID` / `CHARGEBACK_DUPLICATE` / `ORDER_TOTAL_MISMATCH` / `IDEMPOTENCY_KEY_CONFLICT` / `IDEMPOTENCY_REQUEST_IN_PROGRESS`, 422 `CHARGEBACK_NOT_ONLINE` / `CHARGEBACK_ITEMS_FORBIDDEN` / `CHARGEBACK_ALLOCATION_INVALID` / `VALIDATION_ERROR`, 429 | — | ADR-042 d3-d5, d16: voids every pending and owed refund on the payment and absorbs their items; a remainder the bank did not cover stays owed as a new pending refund; the administrator's items add coverage and must total exactly the charge left (capped by the remaining balance), a line they empty becomes `refunded` (delivered, picked up, returned, STL) or `cancelled` (unfinished physical, no refund); the rest is excess. Recomputes payment and order status (none on a late-captured attempt); audit `chargeback.recorded`; one alert per chargeback (`chargeback_excess` when there is excess). Never in the obligations queue |
+| `GET /api/v1/admin/orders/{order_id}/chargebacks` | — | `200 list[ChargebackDetail]` | 401/404 | Oldest first | An order's chargebacks |
+| `GET /api/v1/admin/chargebacks/{chargeback_id}` | — | `200 ChargebackDetail` | 401/404 | — | One chargeback with its items |
 
 Refund settlement is explicit because the SRS requires obligations to remain tracked until actually settled.
 
@@ -596,6 +606,7 @@ Refund settlement is explicit because the SRS requires obligations to remain tra
 | `GET /api/v1/admin/payments/{payment_id}` | — | `200 AdminPaymentDetail` | 401/404 | — | **As built (VS-024):** the order with `hold_expires_at` and `manual_release_available_at`, events without payloads, the audit history (newest first, at most 100) and `available_actions` |
 | `POST /api/v1/admin/payments/{payment_id}/reconcile` | — | `202 ReconcileQueued` | 401/404, 409 `INVALID_STATE_TRANSITION` (cash), 429, 503 `PAYMENT_VERIFICATION_UNAVAILABLE` | — | **As built (VS-024):** answers 202 after its audit row commits; the provider is queried afterwards in a background task with no transaction open; no answer or `unknown` is audited as `payment.reconcile_deferred`; 60/hour per admin |
 | `POST /api/v1/admin/payments/{payment_id}/confirm` | `ManualPaymentConfirmRequest` | `200 ManualConfirmRead` | 401/404, 409 `MANUAL_CONFIRMATION_NOT_ALLOWED` / `PAYMENT_REFERENCE_MISMATCH` / `INVALID_STATE_TRANSITION`, 422 `PAYMENT_AMOUNT_MISMATCH` / `VALIDATION_ERROR`, 429 | — | Online payments on a provider without a status API only (VS-024, ADR-036). A typed amount or currency that differs from the attempt is 422 and writes nothing. Otherwise, on a live attempt of an uncancelled order it applies the payment; on an attempt no longer live, or on a cancelled order, it records a late capture (alert) instead. STL delivery queue/status/audit/outbox side effects; 30/hour per admin. Cash is recorded by the cash handover instead |
+| `POST /api/v1/admin/payments/{payment_id}/record-capture` | `RecordCaptureRequest` + required `Idempotency-Key` | `201 RecordCaptureRead` | 401/404, 409 `MANUAL_CONFIRMATION_NOT_ALLOWED` / `INVALID_STATE_TRANSITION` (`cash_payment`, `already_paid`, `already_late_captured`, `use_confirm`) / `IDEMPOTENCY_KEY_CONFLICT`, 422, 429 | — | VS-030 Q5 (VS-024 Q2): a capture the dashboard shows on a provider without a status API, whose amount or currency differs from an attempt that never reached paid. Recorded as a late capture through the normal path (a live attempt is failed), so the alert and the `late_capture` refund obligation follow; a matching amount is refused (`use_confirm`). Audit `payment.capture_recorded` keeps the typed values; 30/hour per admin |
 | `POST /api/v1/admin/orders/{order_id}/release` | `OrderReleaseRequest` | `200 OrderReleaseRead` | 401/404, 409 `INVALID_STATE_TRANSITION` (`cash_order`, `order_cancelled`, `order_not_payable`, `grace_not_elapsed` with `release_available_at`, `unprocessed_events` with `count`), 422, 429 | — | **As built (VS-024, ADR-036):** the manual hold release, from the hold deadline plus 24 h; mandatory `reason`; `events_reviewed` dismisses unprocessed events; expires the live attempt; never calls the provider; 30/hour per admin |
 
 A callback alone never authorizes these state changes.
@@ -1154,14 +1165,50 @@ Rules:
 - every amount is validated against remaining refundable value;
 - overall refund total is derived server-side;
 - a fully refunded STL line becomes `refunded` and leaves the delivery queue; a partial refund leaves the line in its state;
-- every V1 refund is manual (ADR-024): the administrator pays it outside the platform and settles it here; the refund is recorded with `kind = admin`;
-- a request that would empty an unfinished physical line gives 422 `REFUND_REQUIRES_CANCELLATION`.
+- every V1 refund is manual (ADR-024): the administrator records it, pays it outside the platform, then settles it here; the route always records `kind = admin`;
+- a request that would empty an unfinished physical line gives 422 `REFUND_REQUIRES_CANCELLATION`;
+- `items` 1-50, each `order_item_id` once, `amount_cents` 1 to 10^9; `reason` 1-1000.
+
+### `RefundSettlementRequest`, `RefundFailureRequest`, `RefundVoidRequest`
+
+```text
+settle: reference: str ≤200 | null, note: str ≤1000 | null
+fail:   reason: str 1..1000
+void:   reason: str 1..1000
+```
+
+### `ChargebackCreate` (VS-030, ADR-042)
+
+```text
+payment_id: UUID
+provider_dispute_reference: str 1..200   # unique per provider
+charged_cents: int > 0
+items: [{order_item_id: UUID, amount_cents: int > 0}]   # 0..50; beyond the absorbed refunds,
+       # totalling min(charged - absorbed, remaining balance) exactly
+reason: str 1..1000
+received_at: datetime with offset
+```
+
+`ChargebackDetail` adds `id`, `order_number`, `payment_provider`, `applied_cents`, `excess_cents`, `currency`, `recorded_by`, `created_at` and the items with their product names. It never carries a phone, hash, address or the payment's provider reference.
+
+### `RecordCaptureRequest` (VS-030 Q5)
+
+```text
+captured_amount_cents: int > 0
+captured_currency: str  # ^[A-Z]{3}$, stored as reported, never converted
+dashboard_reference: str 1..255
+reason: str
+```
+
+`RecordCaptureRead` is `{outcome, payment, refund_id}`.
 
 ### `CashBlockSearchRequest`
 
 ```text
 phone: str   # normalised and hashed server-side; never logged
 ```
+
+Each search writes one `cash_block.searched` audit row with the filters, the result count and the block ids: never the phone or its hash (VS-030 Q8, ADR-038).
 
 ### `RefundFailureRequest`
 
@@ -1332,7 +1379,7 @@ customer-visible status history (omits in_production)
 
 `admin_note` is never returned by customer endpoints.
 
-As built in VS-025 ([ADR-033](../adr/ADR-033-customer-order-read-model.md), [`docs/order-history.md`](../order-history.md)): `{id, order_number, source, status, fulfillment_method, payment_method, payment_due, can_cancel, subtotal, tax, total, delivery_address, contact_phone, delivery_fee_note, estimated_dispatch_at, placed_at, completed_at, cancelled_at, customer_note, lines[], payment, status_history[]}`. Each line is `{id, product_id, product_type, name, image_url, unit_price, quantity, line_total, fulfillment_status, fulfilled_at, cancelled_at}`; `payment` is `{status, provider, amount}` or null; each history entry is `{order_item_id, from_status, to_status, at}`. The refund summary arrives with VS-030. VS-041 added `can_retry_payment` and `hold_expires_at` (ADR-037 d10). VS-028 added `amount_due` (a `PriceRead`): the total of the lines not cancelled while `payment_due`, else null.
+As built in VS-025 ([ADR-033](../adr/ADR-033-customer-order-read-model.md), [`docs/order-history.md`](../order-history.md)): `{id, order_number, source, status, fulfillment_method, payment_method, payment_due, can_cancel, subtotal, tax, total, delivery_address, contact_phone, delivery_fee_note, estimated_dispatch_at, placed_at, completed_at, cancelled_at, customer_note, lines[], payment, status_history[]}`. Each line is `{id, product_id, product_type, name, image_url, unit_price, quantity, line_total, fulfillment_status, fulfilled_at, cancelled_at}`; `payment` is `{status, provider, amount}` or null; each history entry is `{order_item_id, from_status, to_status, at}`. VS-030 added `refunds[]`: `{kind, status, amount, created_at}`, `status` being `processing` (pending or owed) or `refunded` (settled); voided refunds, a reissued failure and chargebacks are never listed (Q9). VS-041 added `can_retry_payment` and `hold_expires_at` (ADR-037 d10). VS-028 added `amount_due` (a `PriceRead`): the total of the lines not cancelled while `payment_due`, else null.
 
 ## `OrderSummary`
 
@@ -1523,7 +1570,8 @@ Unknown filter/sort fields produce `400 VALIDATION_ERROR`; they are never interp
 | Refund | refund obligation + refund items + fully refunded lines to `refunded` (STL leaves delivery queue) + order projection + audit + outbox |
 | Refund failure | refund `failed` (stays owed in the obligations queue; no line state change) + payment and order projection + audit |
 | Refund reissue | new pending refund of the same kind, items and amount + `reissued_at` on the failed one + audit |
-| Chargeback | settled `chargeback` refund split per line + fully covered lines `refunded` + order projection + audit; excess recorded and alerted |
+| Chargeback | open refunds on the payment voided and absorbed + remainder refund + chargeback and its items + emptied lines `refunded` or `cancelled` + payment and order projection + audit + alert |
+| Refund void | refund `voided` (balance freed) + payment and order projection + audit |
 | Late capture | `late_captured_at` on the attempt + automatic `late_capture` refund obligation + alert; order and lines untouched |
 | Offer create/counter/accept/reject/withdraw | append offer round + state/deadline + audit + outbox/notification |
 | Review create/update/delete/moderate | review mutation + rating/review-count aggregate |
@@ -1669,7 +1717,7 @@ This section verifies that every V1 feature in the SRS has an API or an intentio
 | F-071 Removed (ADR-024) | — |
 | F-072 Obligation tracking | `/admin/refunds*` |
 | F-073 STL line leaves delivery queue on refund | refund transaction side effect |
-| F-074 Pending queue | `GET /admin/refunds?status=pending` |
+| F-074 Pending queue | `GET /admin/refunds` (default `queue=true`: pending or owed) |
 
 ## 35.6 Digital Marketplace
 

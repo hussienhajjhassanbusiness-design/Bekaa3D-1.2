@@ -32,7 +32,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 | VS-027 | Shipping zones | — | Removed (ADR-024) |
 | VS-028 | Physical checkout: delivery, pickup, payment method, dispatch estimate | VS-023, VS-024, VS-026 | Done |
 | VS-029 | Admin order queue, fulfillment and cash handover | VS-028, VS-023b, VS-024, VS-025 | Done |
-| VS-030 | Refunds and settlement | VS-029, VS-024 | Not started |
+| VS-030 | Refunds and settlement | VS-029, VS-024 | Done |
 | VS-031 | Cancellation and returns | VS-030 | Not started |
 | VS-033 | Contact form and captcha | VS-005 | Done |
 | VS-029b | Receipt confirmation and problem report | VS-029, VS-033 | Done |
@@ -52,7 +52,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 | **Final phase** | **Needs a server; built after everything above is finished and tested locally** | | |
 | VS-020 | Staging environment and deploy pipeline | VS-015 | Not started |
 | VS-021 | Production email delivery | VS-020 | Not started |
-| VS-032 | Live online payment provider | VS-020, VS-024, VS-030 | Not started |
+| VS-032 | Live online payment provider | VS-020, VS-024, VS-030, VS-031 | Not started |
 | VS-047 | Backups, restore drill and monitoring | VS-020 | Not started |
 | VS-048 | Launch readiness | VS-011 – VS-047 | Not started |
 
@@ -564,7 +564,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - The cash CHECKs are the full list: cash line physical, `provider = 'cash'` iff a cash order, one cash payment per order, a cash payment `paid`/`partially_refunded`/`refunded` with `recorded_by` and `verified_at` and above zero, `late_captured_at` never on cash or a paid row, `recorded_by` never on an online payment.
   - `webhook_events` carries `provider_payment_id` and `payment_id`, resolved at receipt (the provider's reference first, then our `payments.id`); an event that cannot be applied is stored already processed with `processing_error`.
   - Verification runs in a background task after the webhook's 200, with the `verify_payments` job (every minute) as fallback; SRS §23 lists both new jobs.
-  - Paid only on an exact amount in USD on a live attempt of an uncancelled order; anything else is a late capture, recorded once. Until VS-030 the only supported view of late captures is the SQL listing in [`checkout.md`](checkout.md).
+  - Paid only on an exact amount in USD on a live attempt of an uncancelled order; anything else is a late capture, recorded once. Since VS-030 each one is a `late_capture` refund obligation in the queue ([`refunds.md`](refunds.md)).
   - `PAYMENT_PROVIDER=none` gives `503 ONLINE_PAYMENT_UNAVAILABLE`; boot refuses the mock outside development, test and staging (and staging with the default secret) in the API and the worker.
   - `scripts/mock_pay.py` is the only way to pay a mock payment outside the tests.
 
@@ -596,7 +596,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - Migration `7a1c3e9b5d24`: `ix_order_items_stl_awaiting` on `(created_at, id)` (partial), and `daily_download_cap` deleted (the downgrade re-seeds it). No columns were added: `fulfilled_at` and `delivered_by` came with VS-023. The plan's `delivered_at` is `fulfilled_at` in the code.
   - The queue pages the lines first and joins `orders` after, so the index orders and limits. `created_at` is the placement time; no paid timestamp exists on a line or an order.
   - The transition response is the provisional `OrderItemTransitionRead`; VS-029 replaces it with `AdminOrderDetail` and adds the physical edges to `ordering/domain/line_transitions.py`.
-  - STOP-GAP: `ordering.public.status_inputs_for` sets `refund_present` for a `partially_refunded` order; VS-030 must replace it with the real refund query.
+  - ~~STOP-GAP: `ordering.public.status_inputs_for` sets `refund_present` for a `partially_refunded` order.~~ Replaced by real refund facts in VS-030 PR B (ADR-042 d9).
 
 ## VS-024 — Payment recovery: reconciliation, stale checkouts, manual confirm
 **Status:** Done ([ADR-036](adr/ADR-036-payment-recovery.md), [`docs/payment-recovery.md`](payment-recovery.md), [plan](plans/VS-024-payment-recovery-plan.md)). As built: an order is released automatically only on an explicit `failed` or `expired` for its latest attempt; an administrator releases the rest after the hold plus 24 h; manual confirm refuses a differing amount (422) and only serves providers without a status API.
@@ -785,7 +785,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - A physical order reaches `completed` with either payment method.
 
 ## VS-030 — Refunds and settlement
-**Status:** Not started
+**Status:** Done. PR A (#37, schema, migration `c01e53ab3e0f`), PR B (#38, refund core) and PR C (late capture, backfill migration `80e56abf0969`, chargebacks, record-capture, docs). **As built:** [ADR-042](adr/ADR-042-refunds-voids-and-chargebacks.md) (Accepted), [`docs/refunds.md`](refunds.md), [plan](plans/VS-030-refunds-settlement-plan.md) (Revisions 1-4). It supersedes the model bullets below where they differ: chargebacks have their own tables, `refunds.status` gains `voided`, and there is no `excess_cents` on refunds.
 **Depends on:** VS-029, VS-024
 - **Notes from VS-029 ([ADR-040](adr/ADR-040-admin-order-queue-fulfillment-and-cash-handover.md)):** a cash order's one payment is created only by `record_cash_handover` (`tests/unit/payments/test_cash_payment_writers.py` lists every `payments` INSERT), `paid` for exactly the live line total, with `recorded_by`; refunds of a cash line refund against that row. Every transition and the handover take the `orders` lock first, so a refund must too. The `refund_present` stop-gap in `ordering.public.status_inputs_for` is still there.
 - **Notes from VS-023:**
@@ -814,7 +814,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - The payment and order statuses are recomputed from refund records at creation: non-failed refunds covering all paid money make the order `refunded` (unless every line is cancelled); any non-failed or owed refund makes it at least `partially_refunded`; `late_capture` refunds never count; settlement never changes either status.
   - A cash payment is refunded up to the cash recorded.
   - Sends a "refund issued" email.
-  - Audit cash-block phone searches (audit row with the phone hash only, never the number).
+  - Audit cash-block phone searches: one `cash_block.searched` row with the filters, the result count and the block ids, never the phone or its hash (owner answer Q8, ADR-038).
 - **Tests:**
   - Concurrent partial refunds never exceed the paid amount, on an online and on a cash payment.
   - An order whose `total_cents` no longer equals the sum of its lines (seeded directly) refuses a refund and writes nothing; the database refuses a line whose `user_id` differs from its order's.
@@ -843,8 +843,8 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 - **Done when:**
   - A refund cannot exceed any line's or the payment's balance, never touches an unpaid line, and never empties an unfinished physical line.
   - A line is `refunded` only when fully refunded.
-  - No refund obligation, pending or failed, leaves the queue until it is settled or reissued.
-- **Must resolve before build** (final PR #8 review; recorded per the owner's stop rule, not yet decided):
+  - No refund obligation, pending or failed, leaves the queue until it is settled, reissued or voided (ADR-042 d2: by the administrator, or absorbed by a chargeback).
+- **Must resolve before build** (final PR #8 review). **All six resolved** by [ADR-042](adr/ADR-042-refunds-voids-and-chargebacks.md): 1 by d1 (PR B); 2 by d2, d4 and d16; 3 by d3; 4 by d4 and d17; 5 by d4, d5 and the VS-032 dependency on VS-031; 6 by d5 (tests U4 and U5, PR B). The original text follows.
   1. **Order status after a refund fails (both reviewers).** SRS §20.2 checks "all lines refunded → refunded" before "any non-failed or owed refund → partially_refunded", and database-design §17.2 and the entities projection do the same. But a failed refund reverts no line, so on a single-line order (or one where every line is fully refunded) a full refund that later fails leaves the line `refunded`. The order then reads `refunded` while money is still owed, which breaks ADR-024 decision 11 ("an owed one keeps the order `partially_refunded`") and this slice's tests. Read by coverage instead of line state, the rule is redundant with "refunds cover all paid money". Separately, "all lines cancelled → cancelled" is checked first, so an all-cancelled order whose cancellation refund failed reads `cancelled`, not `partially_refunded`. Suggested fix: drop "all lines refunded" or define it by non-failed coverage; evaluate "an owed refund exists" before both refunded rules; state where an all-cancelled order with an owed refund lands; add order-status assertions to the failed-refund tests (resolve with VS-023's `derive_order_status`).
   2. **A chargeback leaves pending and owed refunds payable, and no obligation can be closed without paying it (money reviewer).** The remaining balance subtracts pending and owed refunds, and anything beyond it becomes `excess_cents`. Refund states are only pending, settled and failed, and a `cancelled` refund state is forbidden. Scenario: $50 paid → $10 goodwill refund pending → the bank charges back $50 → the chargeback records $40 + $10 excess → the admin, following the queue, still pays the $10: $60 out on a $50 payment. The same happens with an owed refund reissued after a chargeback. A refund created by mistake can only be falsely settled or left owed forever, which keeps the order `partially_refunded` and blocks account deletion. A chargeback on a late-captured attempt with a pending `late_capture` refund is undefined. Suggested fix: a terminal `voided` refund outcome (audited, admin-only, reason required); chargeback recording voids or absorbs pending and owed refunds on the payment before computing excess; define chargebacks on late-captured payments.
   3. **A chargeback on a payment with zero remaining balance cannot be recorded (money reviewer).** `refunds.amount_cents` has `CHECK > 0`, but a chargeback after a full settled refund would be `amount_cents = 0, excess_cents = 5000`. The CHECK rejects it, so the double-dip leaves no record, alert or audit. Suggested fix: allow `amount_cents >= 0` when `kind = 'chargeback'` and `excess_cents > 0`, or keep chargebacks in their own table.
@@ -855,6 +855,12 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 ## VS-031 — Cancellation and returns
 **Status:** Not started
 **Depends on:** VS-030
+- **Notes from VS-030 ([ADR-042](adr/ADR-042-refunds-voids-and-chargebacks.md), [plan §3.7](plans/VS-030-refunds-settlement-plan.md#37-published-interface-what-vs-031-vs-032-vs-036-vs-043-and-vs-045-consume)):**
+  - Build the published interface the cancel needs in `app.payments.public`: `refund_balances(session, locked)` and a `create_refund(..., kind="cancellation", cancelling=...)` that runs under the caller's `lock_order_for_change` and leaves the recompute to the caller. Today's `create_refund` (`app.payments.application.services.refunds`) takes the locks itself and already honours `cancelling` (L5, L6).
+  - Cancel lines with your own Ordering writer and add it to `KNOWN_LINE_STATUS_CALLERS`; a chargeback's `cancel_lines_for_chargeback` is not the cancel writer.
+  - A voided refund on a `cancelled` line is refused (`line_already_cancelled`): a cancellation refund created by mistake is settled or failed, never voided.
+  - A full chargeback already cancels an unfinished line and refunds a `returned` one (ADR-042 d17): no `returned → refunded` override is needed for it.
+  - U5 fails if an edge out of `delivered` or `picked_up` is added; revisit `SqlCashChecks.open_order_count` then (ADR-042 d5).
 **Goal:** A customer cancels before printing starts, the administrator cancels at any legal point, a returned item is re-shipped, reprinted, refunded or (unpaid cash) cancelled, and a whole-order cash refusal blocks cash for that customer and phone.
 - **Notes from VS-029 ([ADR-040](adr/ADR-040-admin-order-queue-fulfillment-and-cash-handover.md)):**
   - Add the cancel and return edges to `ordering/domain/line_transitions.py`, with their `cancel_reasons`, including the $0 `shipped → cancelled` edge that the VS-029 plan listed but ADR-040 d1 deferred here; `available_actions` and the endpoint read the same table.
@@ -917,7 +923,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 
 ## VS-032 — Live online payment provider
 **Status:** Not started (final phase: needs a server)
-**Depends on:** VS-020, VS-024, VS-030 (and the SRS §30.4 provider decision and merchant credentials)
+**Depends on:** VS-020, VS-024, VS-030, VS-031 (a chargeback test cancels a line; ADR-042 d5), and the SRS §30.4 provider decision and merchant credentials
 **Go-live gate:** [ADR-032](adr/ADR-032-checkout-idempotency-and-payment-verification.md) decision 24: no real online provider is configured in production before VS-024 and VS-030 are merged, unless an operational alert on late captures and stuck payments exists. Every adapter must sign its webhooks (ADR-032 decision 15).
 **Goal:** Real online revenue: configuring the chosen provider(s) runs the same checkout, verification and recovery flows against them. Refunds stay manual (ADR-024).
 - **Model / migration:** Adds the chosen provider value(s) to `payment_provider`; provider metadata only if needed.
@@ -926,13 +932,12 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - Reuses the payment port from VS-023.
   - Replaces the single `payment_provider` setting with a list of configured online providers, and renames the Whish-specific settings in `src/app/core/config.py` and `.env.example` (`whish_*`, `whish_webhook_ips`) to per-provider names. If §30.4 chooses both, checkout and retry let the customer pick one, stored on the payment row (VS-023, VS-024).
   - The adapter implements create-payment and redirect, signature check (if offered), and status query (if not offered, manual confirmation from VS-024 stays on). It has no refund operation: every V1 refund is manual, even if the provider offers a refund API. A card gateway uses a hosted or redirect page so card data never reaches the platform.
-  - Chargebacks are recorded as a refund of `kind = chargeback`, already `settled` and never in the obligations queue, split across lines by the administrator, under the ADR-024 lock order (`orders`, lines, `payments`, `refunds`). Lines covered in full become `refunded`; an unfinished physical line covered in full is then cancelled with no further refund (balance 0). Any amount beyond the payment's remaining balance is recorded as `excess_cents` and alerted.
+  - Chargebacks are built in VS-030 ([ADR-042](adr/ADR-042-refunds-voids-and-chargebacks.md) d3-d5, d16-d18; [`refunds.md`](refunds.md)): their own record, recorded by `POST /api/v1/admin/orders/{id}/chargebacks`. VS-032 only wires provider disputes, if the provider sends any, into `record_chargeback`, with `provider_dispute_reference` as the dedupe key.
   - Record the decision and the provider's answers to SRS §30.1 in an ADR.
 - **Tests:**
   - The same contract fixtures as the mock (paid, underpaid, failed, bad signature, duplicate, timeout, late success after expiry), run against the provider's sandbox; an end-to-end payment on staging.
-  - A chargeback on a mixed order whose physical line is still `in_production`: the chargeback is `settled` at once and never appears as a pending obligation; the STL line becomes `refunded`; the admin then cancels the physical line and no second refund is created; the order status is correct.
-  - A chargeback after a partial refund: allocations stay within each line's balance, and any amount beyond the payment's remaining balance is recorded as `excess_cents` with an alert.
-  - A chargeback can never be settled again or marked failed.
+  - A provider dispute delivered twice (if the provider sends disputes) records one chargeback, through `record_chargeback`, with the VS-030 rules (tested there: I17-I19, R8, R11-R13).
+  - With VS-031 built, a chargeback that leaves an unfinished line partly covered, then the admin's cancel of that line, creates a cancellation refund for its remaining balance only.
 - **Done when:**
   - Every fixture passes against the sandbox.
   - No checkout, order or cash-handover code changed.
@@ -1162,6 +1167,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 ## VS-043 — Business analytics
 **Status:** Not started
 **Depends on:** VS-029, VS-030, VS-031, VS-036, VS-039
+- **Notes from VS-030 ([ADR-042](adr/ADR-042-refunds-voids-and-chargebacks.md), plan §3.7):** add `refunded_cents_by_line(session, line_ids)` to `app.payments.public`: pending and settled refund items plus chargeback items, never failed, voided or `late_capture` refunds. Revenue is the line total less that; a chargeback's excess is not attributed to lines.
 **Goal:** The administrator sees revenue split by physical and STL (attributed per line), recent purchases, customer statistics, pending offers, top-rated products and best-selling STLs.
 - **Model / migration:** None.
 - **Endpoints / jobs:** `GET /api/v1/admin/analytics/overview`, `/revenue`, `/recent-purchases`, `/customers`, `/top-rated-products`, `/stl-sales` (best-selling STLs from paid, unrefunded lines, plus lines awaiting delivery; replaces the removed download analytics).
@@ -1199,6 +1205,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 ## VS-045 — Account deletion by anonymisation
 **Status:** Not started
 **Depends on:** VS-026, VS-031, VS-036, VS-038, VS-039
+- **Notes from VS-030 ([ADR-042](adr/ADR-042-refunds-voids-and-chargebacks.md), plan §3.7):** an "unsettled refund" (BR-126) is a pending one, an owed one (failed, not reissued, not voided) or a live `late_capture` one. Add `unsettled_refund_exists(session, user_id)` to `app.payments.public`; `ix_refunds_obligations` serves it.
 **Goal:** A customer deletes their account. Personal data is stripped and login disabled, while financial and STL delivery records survive anonymised.
 - **Model / migration:** None.
 - **Endpoints / jobs:** `DELETE /api/v1/me`. The current password is required in the body; this is the fresh-auth check.

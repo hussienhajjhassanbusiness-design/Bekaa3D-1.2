@@ -15,7 +15,7 @@ from app.payments.domain.exceptions import (
     RefundExceedsAvailableError,
     RefundRequiresCancellationError,
 )
-from app.payments.domain.outcome import REACHED_PAID
+from app.payments.domain.outcome import REACHED_PAID, readable_currency
 
 S = OrderItemStatus
 # Only a physical line can be in these on a paid order (an STL line leaves `pending` when paid).
@@ -93,10 +93,45 @@ class NewRefund:
     approved_by: UUID | None
     initiated_at: datetime
     reissue_of_refund_id: UUID | None = None
+    late_amount_cents: int | None = None  # `late_capture` only: it has no items
 
     @property
     def amount_cents(self) -> int:
+        if self.late_amount_cents is not None:
+            return self.late_amount_cents
         return sum(item.amount_cents for item in self.items)
+
+
+NO_AMOUNT_NOTE = "provider reported no amount; check the dashboard"
+BAD_CURRENCY_NOTE = "provider currency unreadable; check the dashboard"
+
+
+@dataclass(frozen=True)
+class LateCaptureAmount:
+    amount_cents: int
+    currency: str
+    notes: tuple[str, ...]
+
+
+def late_capture_amount(
+    *,
+    captured_amount_cents: int | None,
+    captured_currency: str | None,
+    payment_amount_cents: int,
+    payment_currency: str,
+) -> LateCaptureAmount:
+    """Q6: what the provider captured, in the currency it reported (never converted, else
+    the attempt's, flagged); with no amount, the attempt's amount in its own currency
+    (flagged). The caller skips amounts <= 0."""
+    if captured_amount_cents is None:
+        return LateCaptureAmount(payment_amount_cents, payment_currency, (NO_AMOUNT_NOTE,))
+    notes: list[str] = []
+    amount = captured_amount_cents
+    currency = readable_currency(captured_currency or payment_currency)
+    if currency is None:
+        currency = payment_currency
+        notes.append(BAD_CURRENCY_NOTE)
+    return LateCaptureAmount(amount, currency, tuple(notes))
 
 
 @dataclass(frozen=True)
@@ -114,6 +149,7 @@ class PaymentFact:
     provider: PaymentProvider
     status: PaymentStatus
     amount_cents: int
+    currency: str
 
 
 @dataclass(frozen=True)
@@ -173,12 +209,15 @@ def payment_balance(ledger: Ledger) -> int:
     return ledger.payment.amount_cents - refunded - charged
 
 
-def check_order_totals(ledger: Ledger) -> None:
-    """L7 (Q-2): total = sum of line totals; online, the payment amount equals it too."""
+def check_order_totals(ledger: Ledger, *, order_currency: str) -> None:
+    """L7 (Q-2): total = sum of line totals, in the payment's currency; online, the payment
+    amount equals the total too."""
     lines = sum(line.line_total_cents for line in ledger.lines)
     online = ledger.payment.provider is not PaymentProvider.CASH
-    if ledger.order_total_cents != lines or (
-        online and ledger.payment.amount_cents != ledger.order_total_cents
+    if (
+        ledger.order_total_cents != lines
+        or ledger.payment.currency != order_currency
+        or (online and ledger.payment.amount_cents != ledger.order_total_cents)
     ):
         raise OrderTotalMismatchError(
             order_total_cents=ledger.order_total_cents,
@@ -193,6 +232,8 @@ def check_request(
 ) -> None:
     """L4 then L5. Each item within its line's balance and the sum within the payment's;
     an item that empties an unfinished physical line needs VS-031's cancellation."""
+    if len({item.order_item_id for item in items}) != len(items):
+        raise ValueError("one item per line: a repeated line would escape its balance")
     balances = line_balances(ledger)
     available = payment_balance(ledger)
     over_line = any(item.amount_cents > balances[item.order_item_id] for item in items)
@@ -235,15 +276,16 @@ def facts_for(
     refunds: Iterable[RefundFact],
     chargebacks: Iterable[ChargebackFact] = (),
 ) -> RefundFacts:
-    """L8 without the lines: what a status recompute needs (refund items are not read)."""
-    refunds = tuple(refunds)
+    """L8 without the lines: what a status recompute needs (refund items are not read).
+    Only the paid payment's rows count: a late-captured attempt's never do."""
+    refunds = tuple(r for r in refunds if r.payment_id == payment.id)
     live = [
         r
         for r in refunds
         if r.kind is not RefundKind.LATE_CAPTURE
         and r.status in (RefundStatus.PENDING, RefundStatus.SETTLED)
     ]
-    applied = [c for c in chargebacks if c.applied_cents > 0]
+    applied = [c for c in chargebacks if c.payment_id == payment.id and c.applied_cents > 0]
     covered = sum(r.amount_cents for r in live) + sum(c.applied_cents for c in applied)
     return RefundFacts(
         covers_paid=covered >= payment.amount_cents,
@@ -274,6 +316,7 @@ class RefundRefusal(StrEnum):
     ALREADY_SETTLED = "already_settled"
     ALREADY_REISSUED = "already_reissued"
     LINE_ALREADY_REFUNDED = "line_already_refunded"
+    LINE_ALREADY_CANCELLED = "line_already_cancelled"
 
 
 @dataclass(frozen=True)
@@ -288,9 +331,15 @@ _NOOP = RefundStep()
 
 
 def refund_step(
-    status: RefundStatus, action: RefundAction, *, reissued: bool, line_refunded: bool = False
+    status: RefundStatus,
+    action: RefundAction,
+    *,
+    reissued: bool,
+    line_refunded: bool = False,
+    line_cancelled: bool = False,
 ) -> RefundStep:
-    """U16. Reissue's target is the new refund's status; the old one stays `failed`."""
+    """U16. Reissue's target is the new refund's status; the old one stays `failed`. A void
+    never reopens a closed line: its balance is 0 by state, so the money would be stranded."""
     if action is RefundAction.SETTLE:
         if status is RefundStatus.SETTLED:
             return _NOOP
@@ -317,4 +366,6 @@ def refund_step(
         return RefundStep(refusal=RefundRefusal.ALREADY_REISSUED)
     if line_refunded:
         return RefundStep(refusal=RefundRefusal.LINE_ALREADY_REFUNDED)
+    if line_cancelled:
+        return RefundStep(refusal=RefundRefusal.LINE_ALREADY_CANCELLED)
     return RefundStep(RefundStatus.VOIDED)

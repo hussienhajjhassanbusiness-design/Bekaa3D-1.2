@@ -14,18 +14,22 @@ from app.ordering.public import (
     OrderItemStatus,
     OrderStatus,
     RefundFacts,
+    cancel_lines_for_chargeback,
     lock_order_for_change,
     recompute_order_status,
     refund_lines,
     status_inputs_for,
 )
 from app.payments.application.services.refunds import RefundDeps
+from app.payments.infrastructure.alerts import SqlPaymentAlerts
+from app.payments.infrastructure.chargebacks import SqlChargebackStore
 from app.payments.infrastructure.payments import SqlPaymentStore
 from app.payments.infrastructure.refunds import SqlRefundStore
 from app.platform.public import SqlAuditWriter, SqlOutboxWriter
 
 REFUND_TEMPLATE = "order_refund_issued"
 LINE_REFUNDED_REASON = "refund"
+LINE_CHARGEBACK_REASON = "chargeback"
 
 
 class SqlRefundOrders:
@@ -47,6 +51,29 @@ class SqlRefundOrders:
             at=at,
         )
 
+    async def chargeback_lines(
+        self,
+        locked: LockedOrder,
+        *,
+        refunded: tuple[UUID, ...],
+        cancelled: tuple[UUID, ...],
+        actor_user_id: UUID,
+        at: datetime,
+    ) -> None:
+        if refunded:
+            await refund_lines(
+                self._session,
+                locked,
+                refunded,
+                actor_user_id=actor_user_id,
+                reason=LINE_CHARGEBACK_REASON,
+                at=at,
+            )
+        if cancelled:
+            await cancel_lines_for_chargeback(
+                self._session, locked, cancelled, actor_user_id=actor_user_id, at=at
+            )
+
     async def recompute(
         self,
         locked: LockedOrder,
@@ -54,11 +81,14 @@ class SqlRefundOrders:
         refunded: tuple[UUID, ...],
         refunds: RefundFacts,
         actor_user_id: UUID,
+        cancelled: tuple[UUID, ...] = (),
     ) -> OrderStatus:
-        states = tuple(
-            LineState(OrderItemStatus.REFUNDED if line.id in refunded else line.fulfillment_status)
-            for line in locked.lines
-        )
+        def state(line_id: UUID, current: OrderItemStatus) -> OrderItemStatus:
+            if line_id in refunded:
+                return OrderItemStatus.REFUNDED
+            return OrderItemStatus.CANCELLED if line_id in cancelled else current
+
+        states = tuple(LineState(state(line.id, line.fulfillment_status)) for line in locked.lines)
         return await recompute_order_status(
             self._session,
             locked,
@@ -103,4 +133,6 @@ def refund_deps(session: AsyncSession) -> RefundDeps:
         refunds=SqlRefundStore(session),
         audit=SqlAuditWriter(session),
         notices=SqlRefundNotices(session),
+        chargebacks=SqlChargebackStore(session),
+        alerts=SqlPaymentAlerts(session),
     )

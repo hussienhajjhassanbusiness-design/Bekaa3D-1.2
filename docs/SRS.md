@@ -241,7 +241,7 @@ Every rule is numbered for traceability. `BR-` prefix.
 | BR-061 | Physical orders are refundable at the administrator's discretion, on a published baseline policy.                                |
 | BR-062 | Refunds may be partial and per-line, including part of a line; a line becomes refunded only when its whole line total is refunded. There is no shipping to refund (ADR-024). |
 | BR-063 | Every refund creates a tracked obligation record that remains pending until settled. Every V1 refund is manual: the administrator pays it in the provider dashboard or in cash and settles it here. A failed refund stays owed until reissued. |
-| BR-064 | A refunded digital line is marked refunded; if it has not been sent yet it leaves the delivery queue and must not be sent.       |
+| BR-064 | A digital line covered in full by refunds or a chargeback is marked refunded; if it has not been sent yet it leaves the delivery queue and must not be sent. A partial refund leaves it in its state. |
 | BR-065 | A file already emailed cannot be recalled; the protections are the all-sales-final consent record and the delivery record.     |
 | BR-066 | A customer may cancel their own order while every live (not cancelled) physical line is still `pending`, whether it was paid online or is an unpaid cash order; lines an administrator already cancelled are ignored (owner decision 2026-10-19, ADR-033). |
 | BR-067 | Once the administrator marks any line "start printing" (`in_production`), self-cancellation closes and cancellation becomes an admin decision. |
@@ -775,17 +775,26 @@ A database constraint permits only one payment per order in any state other than
 
 ### 9.6 Refund Execution
 
-**Every refund is manual in V1.** The platform never calls a provider refund API: the administrator refunds in the provider dashboard or in cash, then settles the refund here. Each refund carries a typed `kind`: `admin` (issued by the administrator), `cancellation` (created by a cancel), `late_capture` (§9.2) or `chargeback` (§9.7).
+**Every refund is manual in V1.** The platform never calls a provider refund API: the administrator records the refund here, pays it in the provider dashboard or in cash, then settles it here (create → pay → settle). Each refund carries a typed `kind`: `admin` (issued by the administrator), `cancellation` (created by a cancel) or `late_capture` (§9.2). A chargeback is its own record, not a refund kind (§9.7, [ADR-042](adr/ADR-042-refunds-voids-and-chargebacks.md)).
 
-Refunds may cover any subset of paid lines (BR-149); there is no shipping component. A line's refundable amount is its line total minus its items in refunds that are not failed and minus failed refunds not yet reissued (whose amount is reserved for the reissue); a cancelled cash line has 0. A refund of part of a line leaves the line in its state; a line becomes `refunded` when its refunds cover its whole line total — so a goodwill refund on an STL line still awaiting delivery keeps it in the queue and keeps the ownership. **An unfinished physical line** (`pending`, `in_production`, `ready_to_ship`, `shipped`, `ready_for_pickup`) cannot be refunded down to 0: the request gives 422 `REFUND_REQUIRES_CANCELLATION`, and the administrator cancels the line instead (a `shipped` line after it comes back). A cancel's refund is the line's remaining balance, and none is created when that is 0. Each refund records amount, currency, kind, reason, requester (none for `late_capture`), approver and settlement state. A fully refunded digital line becomes `refunded`; one not yet sent leaves the delivery queue.
+Refunds may cover any subset of paid lines (BR-149); there is no shipping component. A line's refundable amount is its line total minus its items in refunds that are not failed and minus failed refunds not yet reissued (whose amount is reserved for the reissue); a cancelled cash line has 0. A refund of part of a line leaves the line in its state; a line becomes `refunded` when its refunds cover its whole line total — so a goodwill refund on an STL line still awaiting delivery keeps it in the queue and keeps the ownership. **An unfinished physical line** (`pending`, `in_production`, `ready_to_ship`, `shipped`, `ready_for_pickup`) cannot be refunded down to 0: the request gives 422 `REFUND_REQUIRES_CANCELLATION`, and the administrator cancels the line instead (a `shipped` line is refunded from `returned` once it comes back). A cancel's refund is the line's remaining balance, and none is created when that is 0. Each refund records amount, currency, kind, reason, requester (none for `late_capture`), approver and settlement state. A fully refunded digital line becomes `refunded`; one not yet sent leaves the delivery queue.
 
 **Failed refunds stay owed.** A refund is marked `failed` when the money did not reach the customer (a bounced transfer, a rejected dashboard refund). Lines keep their state; nothing is reverted. The failed refund stays in the obligations queue as owed until the administrator reissues it, which creates a new pending refund of the same kind, items and amount and records `reissued_at` on the failed one. A failed refund never counts toward `refunded` order or payment status, but an owed one keeps the order `partially_refunded`, so an order with money still owed never reads `completed`.
 
-The record remains a **tracked pending obligation** until settled — exactly the kind of task that gets forgotten without a queue driving it. The obligations queue lists pending refunds and owed (failed, not reissued) refunds. A cash payment is refunded up to the cash recorded.
+The record remains a **tracked pending obligation** until settled — exactly the kind of task that gets forgotten without a queue driving it. The obligations queue lists pending refunds and owed (failed, not reissued) refunds. A cash payment is refunded up to the cash recorded. A line's or payment's refundable amount always counts what owed refunds reserve, so a failed amount is paid again only through its reissue.
+
+**Voiding closes an obligation unpaid.** A pending or owed refund created by mistake is `voided` by the administrator, with a reason, audited (ADR-042 d2). A settled refund is never voided, a voided one is never reissued, and a refund whose line is already `refunded` or `cancelled` cannot be voided: such a line has no balance left, so its money would be stranded. Recording a chargeback voids the payment's open refunds itself (§9.7).
 
 ### 9.7 Chargeback Handling
 
-A confirmed reversal is recorded as a refund of `kind = chargeback`, already `settled` (the bank has moved the money, so it never enters the obligations queue), split across lines by the administrator. Lines it covers in full become `refunded` (an STL line not yet sent leaves the delivery queue); an unfinished physical line it covers is then cancelled with no further refund, because its balance is 0. Any amount the bank took beyond the payment's remaining balance is recorded as `excess_cents` and alerted; recovering it is outside the platform. The event is audited. A file already emailed cannot be recalled; the mitigations are the recorded consent and the delivery record as evidence. Chargebacks apply to online payments only.
+A confirmed reversal is recorded as a **chargeback**, its own record (ADR-042 d3), never in the obligations queue: the bank has already moved the money. It is recorded once per provider dispute reference, with a required `Idempotency-Key`, on online payments only.
+
+- **Open refunds are absorbed.** Recording it voids every pending and owed refund on that payment; their items become the chargeback's first items, so no line's coverage changes. If the bank took less than those refunds, the rest stays owed as a new pending refund ("remainder after chargeback"). Total payout therefore never exceeds the money paid.
+- **The administrator's items** split the rest of the charge across lines, within each line's balance, and must total exactly that rest or, if it is larger, everything still refundable on the payment; anything else is refused (422 `CHARGEBACK_ALLOCATION_INVALID`). A line they bring to 0 becomes `refunded` if it is delivered, picked up, returned or an STL line (one not yet sent leaves the delivery queue), or `cancelled`, with no refund, if it is an unfinished physical line (ADR-042 d4).
+- **Excess.** Whatever the bank took beyond that is recorded as excess and alerted. Excess therefore exists only once nothing is left to refund on the payment, so it can never be refunded again; recovering it is outside the platform.
+- **A late-captured attempt** paid no line: its chargeback names no items and absorbs the open `late_capture` refund the same way, leaving a remainder when partial. One in a currency other than USD is not compared: the whole charge is excess. No order or payment status changes.
+
+The event is audited. A file already emailed cannot be recalled; the mitigations are the recorded consent and the delivery record as evidence.
 
 ### 9.8 Cash on Delivery and Cash at Pickup
 
@@ -826,7 +835,7 @@ A customer **owns** an STL when they hold a paid, unrefunded STL line for it, wh
 
 ### 10.4 Refunds and Chargebacks
 
-A refunded STL line becomes `refunded`. If it was still awaiting delivery, it leaves the queue and must not be sent. If it was already sent, the file cannot be recalled; the protections are the all-sales-final consent recorded at checkout and the delivery record. A customer whose line was refunded may buy the product again.
+An STL line becomes `refunded` once refunds (or a chargeback) cover its whole total; a partial refund leaves it awaiting delivery and owned. Once `refunded`, a line still awaiting delivery leaves the queue and must not be sent. If it was already sent, the file cannot be recalled; the protections are the all-sales-final consent recorded at checkout and the delivery record. A customer whose line was refunded may buy the product again.
 
 ### 10.5 Re-sending
 
@@ -1163,9 +1172,11 @@ pending ──> processing ──> paid ──> partially_refunded ──> refun
    │             │           └────────────────────────────> refunded
    │             ├──> failed
    └──> expired  └──> expired
+
+refunded ──> partially_refunded ──> paid      (a refund failed or voided; ADR-042)
 ```
 
-For an online payment, `paid` is reachable only through independent server-side verification of a live attempt on an uncancelled order. A success found for a `failed` or `expired` attempt, or on a cancelled order, is a late capture (§9.2): it sets `late_captured_at`, never changes the status to `paid`, and is refunded automatically. A cash payment is never `pending` or `processing`: it is created directly as `paid` by the handover action (§9.8), and may then be refunded like any other. "A payment that reached `paid`" means status `paid`, `partially_refunded` or `refunded`.
+For an online payment, `paid` is reachable only through independent server-side verification of a live attempt on an uncancelled order. A success found for a `failed` or `expired` attempt, or on a cancelled order, is a late capture (§9.2): it sets `late_captured_at`, never changes the status to `paid`, and is refunded automatically. A cash payment is never `pending` or `processing`: it is created directly as `paid` by the handover action (§9.8), and may then be refunded like any other. "A payment that reached `paid`" means status `paid`, `partially_refunded` or `refunded`. That status is a projection of its refunds and chargebacks, recomputed with the order's: it moves back when a refund fails or is voided, and never changes on settlement.
 
 ### 20.2 Order Status (derived projection)
 
@@ -1177,15 +1188,17 @@ cash order, no payment yet:
     all lines cancelled              → cancelled
     otherwise                        → in_progress
 payment reached paid (online or cash):
+    an owed refund                   → partially_refunded
     all lines cancelled              → cancelled
     refunds cover all paid money     → refunded
-    all lines refunded               → refunded
-    any non-failed or owed refund    → partially_refunded
+    any refund or chargeback         → partially_refunded
     all lines terminal               → completed
     otherwise                        → in_progress
 ```
 
-Recomputed within the same transaction as any payment, line or refund change, under the lock order of §20.8. A failed or expired attempt leaves the order `pending_payment`, so it can be retried, until the hold release sets `cancelled_at`. "Refunds cover all paid money" counts non-failed refund records, pending or settled, so the status does not change again on settlement. `late_capture` refunds never count in any rule; a failed refund never counts toward `refunded`, but an owed (not reissued) one counts as a refund present; "all lines refunded" means every line fully refunded; a mixed order whose physical line was cancelled with a refund and whose STL line was refunded is `refunded`. An unpaid cash order is `in_progress`; the API exposes derived `payment_due` and `can_cancel` flags so the customer and the "cash due" admin filter can tell it apart.
+Amended by [ADR-042](adr/ADR-042-refunds-voids-and-chargebacks.md) d1: an owed refund is checked first, and "all lines refunded" is gone (it fired only when refunds already covered the paid money). The only outputs that changed are an all-cancelled order and an all-refunded order whose refund failed: both read `partially_refunded` until the reissue.
+
+Recomputed within the same transaction as any payment, line or refund change, under the lock order of §20.8. A failed or expired attempt leaves the order `pending_payment`, so it can be retried, until the hold release sets `cancelled_at`. "Refunds cover all paid money" counts pending and settled refunds plus what chargebacks applied, on the payment that reached paid, so the status does not change again on settlement. `late_capture` and voided refunds never count in any rule; a failed refund never counts toward `refunded`, and an owed (not reissued) one keeps the order `partially_refunded`; a mixed order whose physical line was cancelled with a refund and whose STL line was refunded is `refunded`. An unpaid cash order is `in_progress`; the API exposes derived `payment_due` and `can_cancel` flags so the customer and the "cash due" admin filter can tell it apart.
 
 ### 20.3 Order Line — Digital
 
@@ -1253,7 +1266,7 @@ new ──> contacted ──> quoted ──> in_progress ──> completed ─�
 
 ### 20.8 Lock Order
 
-Every write that changes an order's lines, payment or refunds locks the `orders` row first, then the lines it reads or changes in `id` order, then the payment row, and recomputes the order status under those locks: line transitions, customer self-cancel, admin cancel, cash handover, payment apply (including late captures), payment retry, reconciliation marking an attempt failed or expired, manual confirmation, refund creation, refund settlement or failure, chargeback recording, receipt confirmation and problem reports, and `release_stale_checkouts`. Nothing locks `payments` before `orders`, including batch selection: a job selects candidate ids without locking, then locks each order and re-reads. Locking a line before its order would deadlock against the handover, and two parallel line changes could each derive the order status from a stale view of the other (ADR-024). A payment that pays an STL then takes a transaction-scoped advisory lock on (customer, product) and that product's live offers by id, last (ADR-037); offer submission takes the same advisory lock, and offer checkout inserts its order before it locks the offer.
+Every write that changes an order's lines, payment or refunds locks the `orders` row first, then the lines it reads or changes in `id` order (refund and chargeback paths lock every line), then the payment row (refund and chargeback paths lock all of the order's payments by `id`), then the refund rows (`FOR UPDATE` or INSERT), then a chargeback's INSERT (ADR-042 d8), and recomputes the order status under those locks: line transitions, customer self-cancel, admin cancel, cash handover, payment apply (including late captures), payment retry, reconciliation marking an attempt failed or expired, manual confirmation, refund creation, settlement, failure, reissue and void, chargeback recording, record-capture, receipt confirmation and problem reports, and `release_stale_checkouts`. Nothing locks `payments` before `orders`, including batch selection: a job selects candidate ids without locking, then locks each order and re-reads. Locking a line before its order would deadlock against the handover, and two parallel line changes could each derive the order status from a stale view of the other (ADR-024). A payment that pays an STL then takes a transaction-scoped advisory lock on (customer, product) and that product's live offers by id, last (ADR-037); offer submission takes the same advisory lock, and offer checkout inserts its order before it locks the offer.
 
 ---
 
@@ -1318,7 +1331,7 @@ Catalogue indexes are **partial**, filtered on non-deleted and visible rows — 
 | (status, responds_by) on offers                 | Expiry job                   |
 | (send_after) partial pending outbox             | Email dispatch               |
 | (status, initiated) partial processing payments | Reconciliation job           |
-| (created) partial pending refunds               | Obligations queue            |
+| (created, id) partial pending or owed refunds   | Obligations queue            |
 
 ### 21.4 Partitioning & Retention
 

@@ -560,14 +560,14 @@ Given:
 
 The order has a confirmed payment
 The refunded lines are paid lines: a cancelled line of a cash order was never paid and has nothing refundable
-The administrator has refunded the money by hand (provider dashboard or cash); the platform never calls a provider refund API
+The administrator records the refund, pays it by hand (provider dashboard or cash), then settles it; the platform never calls a provider refund API
 The refundable amount is greater than zero
 The requested amount does not exceed the remaining refundable balance
 
 When:
 
 The administrator refunds one or more lines (there is no shipping fee to refund)
-A payment reversal or chargeback is confirmed, and is recorded already settled, split per line, outside the obligations queue
+A payment reversal or chargeback is confirmed, and is recorded as a chargeback (its own record, ADR-042), outside the obligations queue: it absorbs the payment's open refunds and splits the rest of the charge per line
 
 Then:
 
@@ -583,7 +583,8 @@ Audit and customer-notification records are created
 
 Negative cases:
 
-The total refunded amount cannot exceed the paid amount, and no line's refund can exceed its line total minus its items in non-failed refunds
+The total refunded amount cannot exceed the paid amount, and no line's refund can exceed its line total minus its items in pending, settled and owed refunds and in chargebacks (an owed refund's amount stays reserved for its reissue)
+A settled refund cannot be voided; a voided one cannot be reissued; a refund whose line is already refunded or cancelled cannot be voided
 A refund item on a cancelled cash line is rejected
 The same amount cannot be refunded twice
 Unpaid orders cannot be refunded, including cash orders whose cash has not been recorded
@@ -596,13 +597,14 @@ Paid → partially_refunded
 Paid or partially_refunded → refunded
 Digital awaiting_delivery or delivered → refunded
 Physical terminal state → refunded (only when fully refunded)
-Refund pending → settled or failed
+Refund pending → settled, failed or voided; failed (not reissued) → voided
+Payment refunded → partially_refunded → paid when a refund fails or is voided
 Refund pending → failed → stays owed in the obligations queue, changes no line state, never counts toward refunded status, and is reissued as a new pending refund
 
 Concurrent access:
 
 Refund requests use idempotency protection
-Concurrent partial refunds lock the order row, then the refunded lines, then the payment, and recheck the remaining balance
+Concurrent partial refunds lock the order row, then its lines, then its payments, then the refund, and recheck the remaining balance; a chargeback takes the payment's open refunds next and inserts last (ADR-042 d8)
 Only amounts within the remaining balance may commit
 
 Failure behaviour:

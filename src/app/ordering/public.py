@@ -112,6 +112,7 @@ __all__ = [
     "amount_due_cents",
     "available_targets",
     "can_retry_payment",
+    "cancel_lines_for_chargeback",
     "cash_block_store",
     "cash_due",
     "check_cash_handover",
@@ -493,6 +494,34 @@ async def refund_lines(
                 order_item_id=line.id,
                 actor_user_id=actor_user_id,
                 reason=reason,
+            )
+            for line in lines
+        ]
+    )
+
+
+async def cancel_lines_for_chargeback(
+    session: AsyncSession,
+    locked: LockedOrder,
+    line_ids: tuple[UUID, ...],
+    *,
+    actor_user_id: UUID,
+    at: datetime,
+) -> None:
+    """Unfinished physical lines a chargeback emptied become `cancelled`, with no refund and
+    no `cancel_reason` (VS-030 D4). No recompute. Caller holds `lock_order_for_change`."""
+    lines = [_line(locked, line_id) for line_id in line_ids]
+    store = SqlOrderStore(session)
+    await store.set_line_status(list(line_ids), OrderItemStatus.CANCELLED, at=at, cancelled_at=at)
+    await store.add_history(
+        [
+            StatusChange(
+                locked.order.id,
+                line.fulfillment_status.value,
+                OrderItemStatus.CANCELLED.value,
+                order_item_id=line.id,
+                actor_user_id=actor_user_id,
+                reason="chargeback",
             )
             for line in lines
         ]
