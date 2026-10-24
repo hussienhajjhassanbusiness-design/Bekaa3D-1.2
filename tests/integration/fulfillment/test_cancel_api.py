@@ -384,3 +384,30 @@ async def test_available_actions_list_the_cancel_reasons(db_session: AsyncSessio
     assert line["available_actions"] == [
         {"target_status": "cancelled", "cancel_reasons": ["refused", "no_show", "other"]}
     ]
+
+
+async def test_a_mixed_pickup_order_not_collected_refunds_the_physical_line_only(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """ADR-024 appendix: `ready_for_pickup -> cancelled` with a refund, beside an STL line."""
+    order = await seed_physical_order(
+        db_session,
+        payment_method="online",
+        payment_status="paid",
+        fulfillment="pickup",
+        line_states=["ready_for_pickup"],
+        stl_line="awaiting_delivery",
+    )
+    with client_for(main_app) as client:
+        await mfa_admin(client, db_session)
+        response = admin_cancel(client, order.order_id, "no_show")
+    assert response.status_code == 200, response.text
+    assert await statuses(db_engine, order.order_id) == (
+        "partially_refunded",
+        "partially_refunded",
+    )
+    [refund] = await refunds_of(db_engine, order.order_id)
+    assert refund.items == {str(order.line_ids[0]): 1000}
+    stl = [line for line in response.json()["lines"] if line["product_type"] == "stl"]
+    assert stl[0]["fulfillment_status"] == "awaiting_delivery"
+    assert await blocks_of(db_engine, order.order_id) == []

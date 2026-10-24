@@ -1062,7 +1062,7 @@ The fact that an order actually contains physical/digital lines is cross-row and
 ix_orders_open_cash_phone: (contact_phone_hash) WHERE payment_method = 'cash' AND status = 'in_progress'
 ```
 
-The fulfillment queue excludes `pending_payment` orders (BR-148). The open-cash-order count matches `user_id` (served by `(user_id, placed_at DESC)`) or `contact_phone_hash` (served by `ix_orders_open_cash_phone`, created by VS-028 PR A because `EXPLAIN` on an empty table cannot show the need; plan Q3). An unpaid, uncancelled cash order is exactly `payment_method = 'cash' AND status = 'in_progress'` (VS-028 plan D8). The "cash due" admin filter (unpaid cash orders) gets a partial index in VS-029 once `EXPLAIN` shows its shape.
+The fulfillment queue excludes `pending_payment` orders (BR-148). The open-cash-order count matches `user_id` (served by `(user_id, placed_at DESC)`) or `contact_phone_hash` (served by `ix_orders_open_cash_phone`, created by VS-028 PR A because `EXPLAIN` on an empty table cannot show the need; plan Q3). An unpaid, uncancelled cash order is exactly `payment_method = 'cash' AND status = 'in_progress'` (VS-028 plan D8); since VS-031 the count adds cash orders with `customer_cancelled_at` in the last 24 hours (ADR-038 d23). The "cash due" admin filter (unpaid cash orders) gets a partial index in VS-029 once `EXPLAIN` shows its shape.
 
 As built (VS-030, migration `c01e53ab3e0f`): `uq_orders_id_user UNIQUE (id, user_id)`, the key `order_items.fk_order_items_order_owner` references.
 
@@ -2157,7 +2157,7 @@ Not every business rule can be expressed as a local SQL CHECK. These must be imp
 18. Dispatch estimate is calculated from physical order-line snapshots.
 19. Kill switch blocks new checkout but not an in-flight payment.
 20. Category cannot be archived/deleted while live products remain assigned.
-21. Cash checkout respects `cash_payment_enabled`, uncleared blocks for the customer or phone hash, `cash_max_open_orders` for the customer or phone hash, and a **recomputed** total above 0 and within `cash_max_order_total`; checked after the recompute, under the cart lock; the block and the open-order count also under an advisory lock on the phone hash, taken after the checks that need no phone (ADR-038).
+21. Cash checkout respects `cash_payment_enabled`, uncleared blocks for the customer or phone hash, `cash_max_open_orders` for the customer or phone hash (a self-cancelled cash order counting for 24 hours, ADR-038 d23), and a **recomputed** total above 0 and within `cash_max_order_total`; checked after the recompute, under the cart lock; the block and the open-order count also under an advisory lock on the phone hash, taken after the checks that need no phone (ADR-038).
 22. The cash handover requires at least one live line, marks every live line delivered / picked up and creates the single cash payment for exactly their total (above zero), in one transaction under the ADR-024 lock order.
 23. A cash refusal or no-show (`ready_to_ship`, `returned` or `ready_for_pickup` → `cancelled`) creates no refund; when a cancel leaves the order with no live line and every such cancelled line carries `refused` or `no_show` (at least one), a `cash_payment_blocks` row is inserted in the same transaction, under the phone advisory lock, independent of cancel order.
 24. No physical line of an unpaid online order changes state (BR-148), except the hold release cancelling its `pending` lines; a payment that reached `paid` (`paid`, `partially_refunded`, `refunded`) allows transitions.
@@ -2223,8 +2223,8 @@ pending                          # received
       -> ready_to_ship           # finished
           -> shipped
               -> delivered       # cash order: only via the cash handover
-              -> cancelled       # unpaid cash line totalling 0 only; reason other
                   -> refunded    # paid only
+              -> cancelled       # unpaid cash line totalling 0 only; reason other
               -> returned
                   -> shipped
                   -> in_production

@@ -345,3 +345,35 @@ async def _cart_waiters(engine: AsyncEngine, count: int, seconds: float = 10.0) 
             return
         await asyncio.sleep(0.05)
     raise AssertionError(f"fewer than {count} requests ever waited on the cart lock")
+
+
+# --- FR-08: one paid line, two cancels ------------------------------------------------------
+
+
+@pytest.mark.parametrize("second", ["transition", "order_cancel", "customer"])
+async def test_two_cancels_of_one_paid_line_refund_it_exactly_once(
+    second: str, app: FastAPI, db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """The loser re-reads the line under the orders lock: one 200, one 409, one refund."""
+    admin, _ = await admin_client(app, db_session)
+    other, _ = await admin_client(app, db_session)
+    customer, user_id = await _customer(app, db_session)
+    order = await seed_physical_order(
+        db_session, payment_method="online", payment_status="paid", user_id=user_id
+    )
+    racers = {
+        "transition": _move(other, order, "cancelled", line=0),
+        "order_cancel": _post(other, f"{ORDERS}/{order.order_id}/cancel", {"reason": "x"}),
+        "customer": _post(customer, customer_cancel_path(order.order_id), {}),
+    }
+    try:
+        first, loser = await _queued(
+            db_engine, order.order_id, _move(admin, order, "cancelled", line=0), racers[second]
+        )
+    finally:
+        for client in (admin, other, customer):
+            await client.aclose()
+    _no_deadlock(first, loser)
+    assert (first.status_code, loser.status_code) == (200, 409), loser.text
+    assert await _refunds(db_engine, order.order_id) == 1
+    assert await statuses(db_engine, order.order_id) == ("cancelled", "refunded")

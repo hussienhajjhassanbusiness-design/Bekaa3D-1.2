@@ -410,7 +410,8 @@ async def transition_physical_line(
     refusal = line_transition_refusal(
         line_context(locked, line, reached_paid=reached_paid), current, target
     )
-    if line.product_type is not ProductType.PHYSICAL:
+    # `-> cancelled` is `cancel_lines`, with its refund (ADR-043 d1); never a bare move.
+    if line.product_type is not ProductType.PHYSICAL or target is OrderItemStatus.CANCELLED:
         refusal = refusal or TransitionRefusal.NOT_A_LEGAL_EDGE
     if refusal is not None:
         raise InvalidLineTransitionError(

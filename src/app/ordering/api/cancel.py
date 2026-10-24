@@ -19,7 +19,11 @@ from app.identity.public import User, current_verified_user, not_found_error, re
 from app.ordering.api.order_schemas import OrderDetailRead
 from app.ordering.api.orders import order_detail_read
 from app.ordering.domain.exceptions import LineNotFoundError, OrderNotCancellableError
-from app.payments.public import OrderTotalMismatchError, RefundExceedsAvailableError
+from app.payments.public import (
+    OrderTotalMismatchError,
+    RefundExceedsAvailableError,
+    alert_refund_integrity,
+)
 
 router = APIRouter(prefix="/me/orders", tags=["orders"])
 
@@ -98,6 +102,10 @@ async def cancel_my_order(
         )
     except LineNotFoundError as exc:
         raise not_found_error() from exc
-    except (OrderNotCancellableError, OrderTotalMismatchError, RefundExceedsAvailableError) as exc:
+    except OrderNotCancellableError as exc:
+        raise _not_cancellable() from exc
+    except (OrderTotalMismatchError, RefundExceedsAvailableError) as exc:
+        # An integrity failure, not the customer's: the administrators are alerted.
+        await alert_refund_integrity(request.app.state.db_session_factory, exc, order_id)
         raise _not_cancellable() from exc
     return await order_detail_read(session, user_id=user.id, order_id=order_id)

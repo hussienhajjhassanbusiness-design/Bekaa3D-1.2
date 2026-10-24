@@ -118,7 +118,7 @@ async def transition_item(
     except LineNotFoundError as exc:
         raise not_found_error() from exc
     except (OrderTotalMismatchError, RefundExceedsAvailableError) as exc:
-        raise await cancel_refusal(exc, order_id) from exc
+        raise await cancel_refusal(request, exc, order_id) from exc
     except InvalidLineTransitionError as exc:
         extensions: dict[str, Any] = {"reason": exc.reason}
         if exc.fulfilled_at is not None:

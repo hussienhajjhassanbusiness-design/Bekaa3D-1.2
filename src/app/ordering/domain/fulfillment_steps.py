@@ -45,7 +45,7 @@ def step_newly_reached(
     method: FulfillmentMethod | None, before: Sequence[S], after: Sequence[S]
 ) -> S | None:
     """A cancel moves no line forward, yet can leave every live line at a step (VS-031):
-    the furthest visible step reached now and not before, so no step is announced twice."""
+    the furthest visible step reached now and not before this cancel."""
     if method is None:
         return None
     rank = _RANK[method]

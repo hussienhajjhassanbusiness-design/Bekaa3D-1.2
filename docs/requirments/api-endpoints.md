@@ -873,7 +873,7 @@ Rules:
 - physical delivery → fulfillment=`delivery`, address required; the contact phone is the address's phone;
 - physical pickup → fulfillment=`pickup`, no address; `contact_phone` (Lebanese number) required;
 - mixed order follows physical fulfillment rules and must be `online`;
-- `payment_method=cash` requires every line physical, cash enabled, no uncleared block for the customer or the normalised contact phone, fewer than `cash_max_open_orders` open unpaid cash orders for the customer or that phone, the **recomputed** total above 0 and ≤ `cash_max_order_total`, and `accept_cash_terms=true`;
+- `payment_method=cash` requires every line physical, cash enabled, no uncleared block for the customer or the normalised contact phone, fewer than `cash_max_open_orders` open unpaid cash orders, or cash orders the customer cancelled themselves in the last 24 hours (ADR-038 d23), for the customer or that phone, the **recomputed** total above 0 and ≤ `cash_max_order_total`, and `accept_cash_terms=true`;
 - `payment_provider` must be a configured online provider; it is stored on the payment row;
 - the contact phone is stored normalised to E.164;
 - `accept_digital_final_sale=true` is required when any digital line exists;

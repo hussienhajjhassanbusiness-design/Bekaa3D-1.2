@@ -6,7 +6,6 @@ from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import UUID
 
-import structlog
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from pydantic import AwareDatetime
@@ -64,11 +63,10 @@ from app.payments.public import (
     OrderTotalMismatchError,
     RefundExceedsAvailableError,
     admin_refunds,
+    alert_refund_integrity,
     order_chargebacks,
 )
 from app.platform.public import SqlAuditWriter
-
-logger = structlog.get_logger()
 
 admin_router = APIRouter(prefix="/orders", tags=["admin"], route_class=AdminBoundaryRoute)
 
@@ -330,13 +328,11 @@ CANCEL_409 = (
 CancelRefused = InvalidLineTransitionError | OrderTotalMismatchError | RefundExceedsAvailableError
 
 
-async def cancel_refusal(exc: CancelRefused, order_id: UUID) -> ApiError:
+async def cancel_refusal(request: Request, exc: CancelRefused, order_id: UUID) -> ApiError:
     """Every cancel's 409 (VS-031). A refund that cannot cover the balance refuses the whole
-    cancel: no paid line is ever cancelled partly covered (ADR-043)."""
+    cancel: no paid line is ever cancelled partly covered (ADR-043); that one is alerted."""
     if not isinstance(exc, InvalidLineTransitionError):
-        await logger.aerror(
-            "cancel_refund_refused", order_id=str(order_id), error=type(exc).__name__
-        )
+        await alert_refund_integrity(request.app.state.db_session_factory, exc, order_id)
     if isinstance(exc, OrderTotalMismatchError):
         return ApiError(
             status_code=status.HTTP_409_CONFLICT,
@@ -403,5 +399,5 @@ async def cancel_order(
         OrderTotalMismatchError,
         RefundExceedsAvailableError,
     ) as exc:
-        raise await cancel_refusal(exc, order_id) from exc
+        raise await cancel_refusal(request, exc, order_id) from exc
     return await order_detail(session, order_id)

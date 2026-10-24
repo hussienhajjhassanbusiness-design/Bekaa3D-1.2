@@ -5,7 +5,8 @@ from collections.abc import Mapping
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy.ext.asyncio import AsyncSession
+import structlog
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.ordering.public import LockedOrder
 from app.payments.application.ports import (
@@ -20,6 +21,7 @@ from app.payments.application.services.payments import (
     start_online_payment,
 )
 from app.payments.domain import limits
+from app.payments.domain.alerts import AlertKind, repeat_window
 from app.payments.domain.exceptions import (
     CashAlreadyRecordedError,
     ManualReleaseRefusedError,
@@ -32,6 +34,7 @@ from app.payments.domain.exceptions import (
 from app.payments.domain.limits import CHECKOUT_RATE_LIMIT, CHECKOUT_RATE_WINDOW_SECONDS
 from app.payments.domain.outcome import Outcome, ProviderResult
 from app.payments.domain.payments import OrderPaymentRow
+from app.payments.infrastructure.alerts import SqlPaymentAlerts
 from app.payments.infrastructure.cash_payments import insert_cash_payment, order_payment_rows
 from app.payments.infrastructure.chargebacks import ChargebackRow, order_chargebacks
 from app.payments.infrastructure.manual import confirm_payment_manually
@@ -55,6 +58,8 @@ from app.payments.infrastructure.verification import (
     verify_unprocessed,
 )
 
+logger = structlog.get_logger()
+
 __all__ = [
     "CHECKOUT_RATE_LIMIT",
     "CHECKOUT_RATE_WINDOW_SECONDS",
@@ -77,6 +82,7 @@ __all__ = [
     "RefundExceedsAvailableError",
     "RefundRow",
     "admin_refunds",
+    "alert_refund_integrity",
     "apply_provider_result",
     "configured_payment_providers",
     "confirm_payment_manually",
@@ -161,3 +167,23 @@ async def create_cancellation_refund(
         at=at,
         approved_by=None if by_customer else actor_user_id,
     )
+
+
+async def alert_refund_integrity(
+    session_factory: async_sessionmaker[AsyncSession],
+    exc: OrderTotalMismatchError | RefundExceedsAvailableError,
+    order_id: UUID,
+) -> None:
+    """A cancel's refund refused on integrity (VS-031): an error log and, for Q-2, the
+    `refund_integrity` alert, in their own transaction after the cancel rolled back."""
+    await logger.aerror("cancel_refund_refused", order_id=str(order_id), error=type(exc).__name__)
+    async with session_factory() as session, session.begin():
+        await SqlPaymentAlerts(session).raise_alert(
+            AlertKind.REFUND_INTEGRITY,
+            payment_id=getattr(exc, "payment_id", None),
+            order_id=order_id,
+            details={"reason": "order_total_mismatch"}
+            if isinstance(exc, OrderTotalMismatchError)
+            else {"reason": "refund_exceeds_available"},
+            dedupe_window=repeat_window(AlertKind.REFUND_INTEGRITY),
+        )

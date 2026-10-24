@@ -36,7 +36,7 @@ Return edges: `shipped -> returned`, then `returned -> shipped` (re-ship) or `->
 
 ## Cash block (BR-144)
 
-A block is written after a cancel that leaves an unpaid cash order with no live line, when every recorded `cancel_reason` on the order is `refused` or `no_show` (at least one). It is keyed on the customer and the order's phone hash, under the cart lock and then the phone lock. A partial refusal, any `other` cancel and an online order never block.
+A block is written after a cancel that leaves an unpaid cash order with no live line, when every recorded `cancel_reason` on the order is `refused` or `no_show` (at least one). It is keyed on the customer and the order's phone hash, under the cart lock and then the phone lock. A partial refusal, any `other` cancel and an online order never block. A cancel with no reason (the customer's, or from `pending` / `in_production`) is neutral: a customer cancelling the last live line after an administrator refused the others completes the block.
 
 ## Cash limit (ADR-038 d23)
 
