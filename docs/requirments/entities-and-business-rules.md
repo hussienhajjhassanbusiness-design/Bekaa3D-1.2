@@ -823,7 +823,7 @@ PENDING
 
 - **[DB]** Online payments only (`ck_chargebacks_online_only` and a FK naming the payment's real provider); `charged = applied + excess`, `applied ≥ 0`, `excess ≥ 0`.
 - **[Application]** Recording one voids every pending and owed Refund on its Payment; their items become its first items, and what the bank did not cover stays owed as a new pending Refund of the same kind.
-- **[Application]** The administrator's items add coverage within each item's and the Payment's balance; an item they bring to 0 becomes `refunded` (delivered, picked up, returned, digital) or `cancelled` with no refund (unfinished physical).
+- **[Application]** The administrator's items add coverage within each item's balance and total exactly the charge left (capped by the Payment's balance), so excess exists only once nothing is refundable; an item they bring to 0 becomes `refunded` (delivered, picked up, returned, digital) or `cancelled` with no refund (unfinished physical).
 - **[Application]** On a late-captured attempt: no items, its open `late_capture` Refund absorbed (all excess when not in USD); no status changes.
 - **[Application]** Idempotent by `Idempotency-Key`; audited; alerted (excess separately named).
 

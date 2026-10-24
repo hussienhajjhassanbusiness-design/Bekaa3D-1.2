@@ -27,6 +27,7 @@ class ProviderResult:
 
 
 _CURRENCY = re.compile(r"[A-Z]{3}")
+MAX_CAPTURE_CENTS = 10**12  # the backfill's bound too
 
 
 def readable_currency(raw: str | None) -> str | None:
@@ -36,10 +37,10 @@ def readable_currency(raw: str | None) -> str | None:
 
 
 def stored_capture(result: ProviderResult) -> tuple[int | None, str | None]:
-    """What `ck_payments_captured_shape` can hold of a capture: a negative amount is
-    unknown, and an unknown amount stores no currency (VS-030 Q6 default)."""
+    """What `ck_payments_captured_shape` (and a BIGINT) can hold of a capture: a negative or
+    absurd amount is unknown, and an unknown amount stores no currency (VS-030 Q6 default)."""
     amount = result.captured_amount_cents
-    if amount is None or amount < 0:
+    if amount is None or not 0 <= amount <= MAX_CAPTURE_CENTS:
         return None, None
     return amount, readable_currency(result.currency)
 

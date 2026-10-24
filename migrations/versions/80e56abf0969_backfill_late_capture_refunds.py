@@ -45,6 +45,11 @@ _PAYMENTS = sa.text(
     " captured_currency, late_captured_at FROM payments"
     " WHERE late_captured_at IS NOT NULL AND id > :after ORDER BY id LIMIT :limit"
 )
+# Any late-capture refund at all, whatever its status: a failed or voided one is already
+# the admin's to handle, so a rerun never adds a second obligation beside it.
+_HANDLED = sa.text(
+    "SELECT DISTINCT payment_id FROM refunds WHERE kind = 'late_capture' AND payment_id = ANY(:ids)"
+)
 _AUDITS = sa.text(
     "SELECT DISTINCT ON (entity_id) entity_id, after_data FROM audit_logs"
     " WHERE entity_type = 'payment' AND action = 'payment.late_capture'"
@@ -77,8 +82,8 @@ def resolve(payment: Any, audit: object) -> tuple[int, str, bool] | str:
     currency = audit.get("captured_currency")
     if currency is not None and not (isinstance(currency, str) and _CURRENCY.fullmatch(currency)):
         return "audit_malformed"
-    if audit["captured_amount_cents"] is None:  # the provider reported none (Q6)
-        return payment.amount_cents, currency or payment.currency, True
+    if audit["captured_amount_cents"] is None:  # none reported: the attempt's, in its own (Q6)
+        return payment.amount_cents, payment.currency, True
     amount = _cents(audit["captured_amount_cents"])
     if amount is None:
         return "audit_malformed"
@@ -86,7 +91,8 @@ def resolve(payment: Any, audit: object) -> tuple[int, str, bool] | str:
 
 
 def backfill(bind: sa.Connection, *, batch_size: int = BATCH_SIZE) -> dict[str, int]:
-    """Keyset batches on `payments.id`; each batch one INSERT ... ON CONFLICT DO NOTHING."""
+    """Keyset batches on `payments.id`; each batch one INSERT ... ON CONFLICT DO NOTHING
+    (the index still decides against a concurrent live late capture)."""
     counts = {"scanned": 0, "created": 0, "existing": 0, "skipped": 0, "batches": 0}
     skipped: list[dict[str, str]] = []
     after = "00000000-0000-0000-0000-000000000000"
@@ -94,12 +100,14 @@ def backfill(bind: sa.Connection, *, batch_size: int = BATCH_SIZE) -> dict[str, 
         after = rows[-1].id
         counts["batches"] += 1
         counts["scanned"] += len(rows)
-        audits = {
-            row.entity_id: row.after_data
-            for row in bind.execute(_AUDITS, {"ids": [p.id for p in rows]})
-        }
+        ids = [p.id for p in rows]
+        handled = set(bind.execute(_HANDLED, {"ids": ids}).scalars())
+        audits = {row.entity_id: row.after_data for row in bind.execute(_AUDITS, {"ids": ids})}
         values = []
         for payment in rows:
+            if payment.id in handled:
+                counts["existing"] += 1
+                continue
             outcome = resolve(payment, audits.get(payment.id, _NO_AUDIT))
             if isinstance(outcome, str):
                 logger.warning(

@@ -37,16 +37,16 @@ The order and payment statuses are recomputed on create, fail, reissue, void and
 ## Late captures
 
 - A late capture (VS-024: money for a failed or expired attempt, a cancelled order, or a wrong amount) creates one pending `late_capture` refund in the same transaction: no items, no requester, the captured amount (an overpayment is owed in full), the reported currency, never converted.
-- With no reported amount it uses the attempt's, and an unreadable currency falls back to the attempt's; both are flagged in the reason ("check the dashboard"). A zero capture creates nothing.
+- With no reported amount (or a negative or absurd one) it uses the attempt's amount in the attempt's currency, and an unreadable currency falls back to the attempt's; both are flagged in the reason ("check the dashboard"). A zero capture creates nothing.
 - `uq_refunds_one_live_late_capture` keeps one live obligation per payment against a second event or the backfill.
 - Its settle, fail, reissue and void work although the order was never paid. The customer's "refund issued" notice goes out when it is settled.
-- Migration `80e56abf0969` backfilled every older late capture, marked `late capture (backfill 80e56abf0969)`. It skipped payments whose audit row was malformed: they are listed in the `refund.backfill_skipped` audit row, to be recorded by hand.
+- Migration `80e56abf0969` backfilled every older late capture, marked `late capture (backfill 80e56abf0969)`. It never adds one beside an existing late-capture refund of any status, and it skipped payments whose audit row was malformed: they are listed in the `refund.backfill_skipped` audit row, to be recorded by hand.
 - **Record-capture** is for a provider with no status API: when the dashboard shows a capture whose amount or currency differs from an attempt that never reached paid, record it there. A matching amount is refused (`use_confirm`: use manual confirm instead). It goes through the normal late-capture path, so the alert and the obligation follow.
 
 ## Chargebacks
 
 - **Open refunds are absorbed.** Recording one voids every pending and owed refund on its payment (`void_reason = absorbed by chargeback <id>`). Their items become the chargeback's first items, so no line's coverage changes. If the bank took less than those refunds, the rest stays owed as a new pending refund (`remainder after chargeback <id>`), of the same kind.
-- **The form's `items`** add coverage on top, within each line's balance, the payment's balance and the charge left. A line they empty becomes `refunded` (delivered, picked up, returned, STL) or `cancelled` with no refund (unfinished physical). Anything else the bank took is `excess_cents`.
+- **The form's `items`** add coverage on top, within each line's balance, and must total exactly the charge left after the absorbed refunds or, if that is larger, everything still refundable (otherwise 422 `CHARGEBACK_ALLOCATION_INVALID`, whose `chargeable_cents` says the total to name). A line they empty becomes `refunded` (delivered, picked up, returned, STL) or `cancelled` with no refund (unfinished physical). Anything else the bank took is `excess_cents`: it exists only once nothing is left to refund.
 - **One alert per chargeback,** of kind `chargeback`, or `chargeback_excess` when there is excess. An audit row `chargeback.recorded` lists the voided and remainder refund ids.
 - **On a late-captured attempt:** no items; its open `late_capture` refund is absorbed the same way. If that refund is not in USD, nothing is absorbed and the charge is all excess. No status changes.
 - **Refusals:** online payments only (422 `CHARGEBACK_NOT_ONLINE`); one record per provider dispute reference (409 `CHARGEBACK_DUPLICATE`); 409 `ORDER_NOT_PAID` for an attempt that never took money.
@@ -64,4 +64,4 @@ Claim, then `orders`, every line by id, the order's payments by id, the refund(s
 4. **It bounced:** mark it failed. It stays in the queue as owed; reissue it when you pay again, then settle the reissue.
 5. **It was a mistake:** void it with the reason, unless it is settled or its line is already `refunded` or `cancelled` (settle or fail it instead).
 6. **The queue shows a `late_capture` refund:** the provider took money that paid nothing. Check the dashboard (the reason says if the amount or currency was a guess), refund it there, then settle it here. A wrong one is voided.
-7. **The bank charged back:** record the chargeback with the dispute reference and the lines it covers beyond the open refunds. Read any excess alert.
+7. **The bank charged back:** record the chargeback with the dispute reference and the lines it covers beyond the open refunds; a 422 tells you the exact total to name (`chargeable_cents`). Read any excess alert.

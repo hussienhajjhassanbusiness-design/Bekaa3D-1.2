@@ -49,6 +49,7 @@ CASES: dict[str, tuple[int | None, str | None, Any]] = {
     "h": (50000, "LBP", None),
     "i": (None, None, {"captured_amount_cents": None, "captured_currency": None}),
     "j": (None, None, {"captured_amount_cents": 12.5}),
+    "k": (None, None, {"captured_amount_cents": None, "captured_currency": "LBP"}),
 }
 
 
@@ -182,6 +183,7 @@ def test_i16_the_backfill_migration() -> None:
                 "f": (1000, "USD", flagged),
                 "h": (50000, "LBP", marker),  # never converted
                 "i": (1000, "USD", flagged),
+                "k": (1000, "USD", flagged),  # the attempt's amount, in its own currency
             }
             for case, (amount, currency, reason) in expected.items():
                 (row,) = rows[ids[case]]
@@ -204,28 +206,33 @@ def test_i16_the_backfill_migration() -> None:
             assert "abc" not in str(report)  # ids and reason codes only, never the payload
 
             again = asyncio.run(_rerun(url, module))
-            assert (again["created"], again["existing"], again["skipped"]) == (0, 6, 4)
-            assert sum(len(v) for k, v in asyncio.run(_rows(url)).items() if k.int) == 6
+            assert (again["created"], again["existing"], again["skipped"]) == (0, 7, 4)
+            assert sum(len(v) for k, v in asyncio.run(_rows(url)).items() if k.int) == 7
 
-            asyncio.run(
-                _execute(
-                    url,
-                    "UPDATE refunds SET status = 'settled', settled_at = now()"
-                    " WHERE payment_id = :p",
-                    p=ids["a"],
+            for case, change in (
+                ("a", "status = 'settled', settled_at = now()"),
+                ("f", "status = 'failed', failed_at = now()"),
+                ("h", "status = 'voided', voided_at = now(), void_reason = 'mistake'"),
+            ):
+                asyncio.run(
+                    _execute(url, f"UPDATE refunds SET {change} WHERE payment_id = :p", p=ids[case])
                 )
-            )
             command.downgrade(config, PARENT)
             after = asyncio.run(_rows(url))
-            assert [r.status for r in after[ids["a"]]] == ["settled"]  # money history stays
+            kept = {case: [r.status for r in after[ids[case]]] for case in ("a", "f", "h")}
+            assert kept == {"a": ["settled"], "f": ["failed"], "h": ["voided"]}  # money history
             assert [r.reason for r in after[ids["g"]]] == [LIVE_REASON]
-            for case in ("b", "f", "h", "i"):
+            for case in ("b", "i", "k"):
                 assert ids[case] not in after, case
 
             asyncio.run(_seed_many(url, 1200))
             counts = asyncio.run(_rerun(url, module))
             assert counts["batches"] == 3 and counts["scanned"] == 1200 + len(CASES)
-            assert counts["created"] == 1200 + 4  # b, f, h, i again; a is settled, g live
+            # b, i and k again; a (settled), f (owed), h (voided) and g (live) are handled.
+            assert counts["created"] == 1200 + 3
+            final = asyncio.run(_rows(url))
+            assert [r.status for r in final[ids["f"]]] == ["failed"]
+            assert [r.status for r in final[ids["h"]]] == ["voided"]
     finally:
         if previous is None:
             os.environ.pop("DATABASE_URL", None)

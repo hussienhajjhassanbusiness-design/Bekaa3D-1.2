@@ -120,13 +120,13 @@ def late_capture_amount(
     payment_amount_cents: int,
     payment_currency: str,
 ) -> LateCaptureAmount:
-    """Q6: what the provider captured, else the attempt's amount (flagged); its currency as
-    reported, never converted, else the attempt's (flagged). The caller skips amounts <= 0."""
+    """Q6: what the provider captured, in the currency it reported (never converted, else
+    the attempt's, flagged); with no amount, the attempt's amount in its own currency
+    (flagged). The caller skips amounts <= 0."""
+    if captured_amount_cents is None:
+        return LateCaptureAmount(payment_amount_cents, payment_currency, (NO_AMOUNT_NOTE,))
     notes: list[str] = []
     amount = captured_amount_cents
-    if amount is None:
-        amount = payment_amount_cents
-        notes.append(NO_AMOUNT_NOTE)
     currency = readable_currency(captured_currency or payment_currency)
     if currency is None:
         currency = payment_currency

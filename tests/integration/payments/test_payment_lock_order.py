@@ -55,8 +55,8 @@ def writes(statements: list[str]) -> list[str]:
         (ProviderResult("expired", None, None), ["UPDATE payments", "INSERT audit_logs"]),
         (
             ProviderResult("paid", 900, "USD"),
-            # VS-030 D10: the refund obligation, and its audit row, after the alert.
-            ["UPDATE payments", "INSERT audit_logs", ALERT, "INSERT refunds", "INSERT audit_logs"],
+            # VS-030 D10: the refund obligation and its audit row, then the alert (lock last).
+            ["UPDATE payments", "INSERT audit_logs", "INSERT refunds", "INSERT audit_logs", ALERT],
         ),
     ],
     ids=["paid", "expiry", "late-capture"],

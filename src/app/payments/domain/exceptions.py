@@ -121,8 +121,8 @@ class ChargebackItemsForbiddenError(PaymentsDomainError):
 
 
 class ChargebackAllocationInvalidError(PaymentsDomainError):
-    """422 CHARGEBACK_ALLOCATION_INVALID: an item over its line's balance, or the items over
-    the payment's balance or over what the bank charged beyond the absorbed refunds."""
+    """422 CHARGEBACK_ALLOCATION_INVALID: an item over its line's balance, or items that do
+    not total `chargeable_cents` (the charge left after absorption, capped by the balance)."""
 
     def __init__(
         self, *, lines: dict[UUID, int], payment_cents: int, chargeable_cents: int

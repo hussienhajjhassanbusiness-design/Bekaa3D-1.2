@@ -302,3 +302,68 @@ async def test_the_customer_never_sees_a_chargeback(
         ("admin", "processing", 100)
     ]
     assert "chargeback" not in str(body)
+
+
+async def test_an_under_allocated_chargeback_is_refused_so_excess_is_never_refundable(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """The PR C review Blocker: excess may only appear once nothing is left to refund."""
+    order = await paid_online(db_session, stl=None)
+    payment = await payment_of(db_engine, order.order_id)
+    line = order.physical[0]
+    with client_for(main_app) as client:
+        await _admin(client, db_session)
+        refused = chargeback(client, order.order_id, payment, 1000, [(line, 400)])
+        assert_problem(refused, 422, "CHARGEBACK_ALLOCATION_INVALID")
+        assert refused.json()["available"]["chargeable_cents"] == 1000
+        assert await count(db_engine, CHARGEBACKS, o=order.order_id) == 0
+        ok(chargeback(client, order.order_id, payment, 1000, [(line, 1000)]), 201)
+        assert_problem(create(client, order.order_id, [(line, 1)]), 422, "REFUND_EXCEEDS_AVAILABLE")
+    assert await statuses(db_engine, order.order_id) == ("refunded", "refunded")
+
+
+async def test_a_late_attempts_owed_obligation_is_absorbed_with_a_remainder(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    order = await seed_physical_order(db_session, payment_method="online", payment_status="expired")
+    payment = await payment_of(db_engine, order.order_id)
+    await late_capture(db_engine, payment, 1200)
+    (late,) = await late_refunds(db_engine, payment)
+    with client_for(main_app) as client:
+        await _admin(client, db_session)
+        ok(act(client, late.id, "fail", {"reason": "Card closed."}))
+        body = ok(chargeback(client, order.order_id, payment, 500), 201)
+    assert (body["applied_cents"], body["excess_cents"]) == (500, 0)
+    rows = await late_refunds(db_engine, payment)
+    assert [(r.status, r.amount_cents) for r in rows] == [("voided", 1200), ("pending", 700)]
+
+
+async def test_a_mixed_order_charged_back_in_full_after_a_partial_stl_refund(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """Partial STL refund, physical line delivered, the bank takes everything."""
+    order = await paid_online(db_session, physical=("delivered",))  # 1000 + STL 500
+    assert order.stl is not None
+    payment = await payment_of(db_engine, order.order_id)
+    line = order.physical[0]
+    with client_for(main_app) as client:
+        await _admin(client, db_session)
+        partial = ok(create(client, order.order_id, [(order.stl, 200)]), 201)["id"]
+        refused = chargeback(client, order.order_id, payment, 1500, [(line, 1000)])
+        assert refused.json()["available"]["chargeable_cents"] == 1300
+        body = ok(
+            chargeback(client, order.order_id, payment, 1500, [(line, 1000), (order.stl, 300)]),
+            201,
+        )
+        assert partial not in queue_ids(client, order.order_id)
+    assert (body["applied_cents"], body["excess_cents"]) == (1500, 0)
+    assert [await line_state(db_engine, i) for i in (line, order.stl)] == ["refunded", "refunded"]
+    assert await statuses(db_engine, order.order_id) == ("refunded", "refunded")
+    owned = await db_session.scalar(
+        text(
+            "SELECT count(*) FROM order_items WHERE id = :i"
+            " AND fulfillment_status = 'awaiting_delivery'"
+        ),
+        {"i": order.stl},
+    )
+    assert owned == 0  # out of the delivery queue, ownership freed

@@ -1,19 +1,31 @@
 """VS-030 chargeback races on real Postgres (plan 6.3 R8, R11-R13). Forced orders queue the
-racers behind a held `orders` lock. Every run checks invariant M: refunds still to pay or
-paid, plus what chargebacks applied, never exceed the paid amount; and no deadlock."""
+racers behind a held `orders` lock. Invariant M: refunds still to pay or paid, plus what
+chargebacks applied, never exceed the paid amount, and excess exists only at zero balance."""
 
+import asyncio
 import uuid
+from collections.abc import Callable
 from datetime import UTC, datetime
+from functools import partial
+from typing import Any, cast
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+from fastapi import FastAPI
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.identity.domain.enums import UserRole
+from app.payments.application.ports import PaymentProviderPort
 from app.payments.application.services.chargebacks import record_chargeback
-from app.payments.domain.exceptions import ChargebackAllocationInvalidError
+from app.payments.domain.exceptions import (
+    CaptureRecordRefusedError,
+    ChargebackAllocationInvalidError,
+    ChargebackDuplicateError,
+)
 from app.payments.domain.refunds import ItemFact
+from app.payments.infrastructure.manual import record_capture_manually
 from app.payments.infrastructure.refund_side import refund_deps
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
+from tests.concurrency.barrier import meet_or_fail
 from tests.concurrency.test_refund_races import (
     Racer,
     World,
@@ -23,8 +35,17 @@ from tests.concurrency.test_refund_races import (
     queued,
     together,
 )
-from tests.integration.deep_support import create_user
-from tests.integration.payments.refund_support import Paid, paid_online, payment_of
+from tests.integration.deep_support import create_user, csrf, running_app
+from tests.integration.fulfillment.delivery_support import admin_client
+from tests.integration.fulfillment.order_support import seed_physical_order
+from tests.integration.payments.refund_support import (
+    Paid,
+    key,
+    late_refunds,
+    paid_online,
+    payment_of,
+)
+from tests.integration.payments.test_verification_recovery import NoStatus
 
 pytestmark = [
     pytest.mark.integration,
@@ -45,40 +66,52 @@ def charge(
     payment: uuid.UUID,
     charged: int,
     items: list[tuple[uuid.UUID, int]],
+    dispute: str | None = None,
 ) -> Racer:
     async def work(session: AsyncSession) -> str:
-        try:
-            out = await record_chargeback(
-                refund_deps(session),
-                order_id=order.order_id,
-                payment_id=payment,
-                dispute_reference=f"dp_{uuid.uuid4().hex}",
-                charged_cents=charged,
-                items=[ItemFact(i, a) for i, a in items],
-                reason="race",
-                received_at=datetime.now(UTC),
-                ctx=world.ctx,
-                at=datetime.now(UTC),
-            )
-        except ChargebackAllocationInvalidError:
-            return "cb_invalid"
+        out = await record_chargeback(
+            refund_deps(session),
+            order_id=order.order_id,
+            payment_id=payment,
+            dispute_reference=dispute or f"dp_{uuid.uuid4().hex}",
+            charged_cents=charged,
+            items=[ItemFact(i, a) for i, a in items],
+            reason="race",
+            received_at=datetime.now(UTC),
+            ctx=world.ctx,
+            at=datetime.now(UTC),
+        )
         return f"charged:{out.allocation.applied_cents}:{out.allocation.excess_cents}"
 
-    return lambda: world._tx(work)
+    async def run() -> str:
+        """Refusals escape the transaction, as in the route, so a loser writes nothing."""
+        try:
+            return await world._tx(work)
+        except ChargebackAllocationInvalidError:
+            return "cb_invalid"
+        except ChargebackDuplicateError:
+            return "duplicate"
+
+    return run
 
 
-async def applied(engine: AsyncEngine, order_id: uuid.UUID) -> int:
+async def charged(engine: AsyncEngine, order_id: uuid.UUID) -> tuple[int, int]:
+    """(applied, excess) over the order's chargebacks."""
     row = await _one(
         engine,
-        "SELECT COALESCE(SUM(applied_cents), 0) AS a FROM chargebacks WHERE order_id = :o",
+        "SELECT COALESCE(SUM(applied_cents), 0) AS a, COALESCE(SUM(excess_cents), 0) AS x"
+        " FROM chargebacks WHERE order_id = :o",
         o=order_id,
     )
-    return int(row.a)
+    return int(row.a), int(row.x)
 
 
 async def assert_m(engine: AsyncEngine, order_id: uuid.UUID) -> None:
     out, paid = await money(engine, order_id)
-    assert out + await applied(engine, order_id) <= paid
+    applied, excess = await charged(engine, order_id)
+    assert out + applied <= paid
+    if excess:  # the bank took more only once nothing was left to refund
+        assert out + applied == paid
 
 
 async def _order(db: AsyncSession, engine: AsyncEngine) -> tuple[Paid, uuid.UUID]:
@@ -125,16 +158,19 @@ async def test_r12_chargeback_racing_reissue(
         line = order.physical[0]
         refund = await _id(await world.create(order.order_id, [(line, 200)])())
         assert await world.action("fail", refund)() == f"fail:{refund}"
-        racers = [world.action("reissue", refund), charge(world, order, payment, 1000, [])]
+        racers = [
+            world.action("reissue", refund),
+            charge(world, order, payment, 1000, [(line, 800)]),
+        ]
         results = await queued(
             db_engine, order.order_id, *(racers if first == "reissue" else racers[::-1])
         )
         if first == "reissue":
             twin = await _id(results[0])
-            assert results[1] == "charged:200:800" and await _status(db_engine, twin) == "voided"
+            assert results[1] == "charged:1000:0" and await _status(db_engine, twin) == "voided"
             assert await _status(db_engine, refund) == "failed"  # keeps reissued_at
         else:
-            assert results == ["charged:200:800", "refused:not_failed"]
+            assert results == ["charged:1000:0", "refused:not_failed"]
             assert await _status(db_engine, refund) == "voided"
         out, _ = await money(db_engine, order.order_id)
         assert out == 0  # no live obligation remains
@@ -145,21 +181,22 @@ async def test_r12_chargeback_racing_reissue(
 async def test_r13_refund_create_racing_a_chargeback(
     first: str, world: World, db_engine: AsyncEngine, db_session: AsyncSession
 ) -> None:
-    """Paid 1000: a create for 600 and a charge of 1000 naming 400 (C1: on top of absorbed)."""
+    """Paid 1000: a create for 600 and a charge of 1000 naming the whole line. Whichever
+    commits second is refused: the items must cover exactly what is still refundable."""
     for _ in range(ROUNDS):
         order, payment = await _order(db_session, db_engine)
         line = order.physical[0]
         racers = [
             world.create(order.order_id, [(line, 600)]),
-            charge(world, order, payment, 1000, [(line, 400)]),
+            charge(world, order, payment, 1000, [(line, 1000)]),
         ]
         results = await queued(
             db_engine, order.order_id, *(racers if first == "create" else racers[::-1])
         )
         if first == "create":
-            assert results[1] == "charged:1000:0"  # the 600 absorbed, then 400 named
+            assert results[0].startswith("created:") and results[1] == "cb_invalid"
         else:
-            assert results[0] == "charged:400:600" and results[1].startswith("created:")
+            assert results == ["charged:1000:0", "exceeds"]
         await assert_m(db_engine, order.order_id)
 
 
@@ -176,3 +213,100 @@ async def test_r8_free_races_of_chargebacks_and_refunds_keep_the_payout_within_p
         )
         assert all(not r.startswith("db_error") for r in results), results
         await assert_m(db_engine, order.order_id)
+
+
+async def test_one_dispute_reference_on_two_orders_in_parallel_records_one(
+    world: World, db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """The loser's 409 rolls back its voids: its goodwill refund is still payable."""
+    for _ in range(ROUNDS):
+        orders = [await _order(db_session, db_engine) for _ in range(2)]
+        refunds = [
+            await _id(await world.create(o.order_id, [(o.physical[0], 200)])()) for o, _ in orders
+        ]
+        dispute = f"dp_shared_{uuid.uuid4().hex}"
+        results = await together(
+            *(charge(world, o, p, 1000, [(o.physical[0], 800)], dispute) for o, p in orders)
+        )
+        assert sorted(results) == ["charged:1000:0", "duplicate"]
+        loser = results.index("duplicate")
+        assert await _status(db_engine, refunds[loser]) == "pending"
+        assert await _status(db_engine, refunds[1 - loser]) == "voided"
+        row = await _one(
+            db_engine,
+            "SELECT count(*) AS n FROM chargebacks WHERE provider_dispute_reference = :d",
+            d=dispute,
+        )
+        assert row.n == 1
+
+
+async def test_the_same_key_twice_in_parallel_records_one_chargeback(
+    db_engine: AsyncEngine, db_session: AsyncSession, make_app: Callable[[], FastAPI]
+) -> None:
+    order, payment = await _order(db_session, db_engine)
+    async with running_app(make_app) as app:
+        client, _ = await admin_client(app, db_session)
+        try:
+            body = {
+                "payment_id": str(payment),
+                "provider_dispute_reference": f"dp_{uuid.uuid4().hex}",
+                "charged_cents": 1000,
+                "items": [{"order_item_id": str(order.physical[0]), "amount_cents": 1000}],
+                "reason": "Parallel key.",
+                "received_at": "2026-10-20T10:00:00Z",
+            }
+            path = f"/api/v1/admin/orders/{order.order_id}/chargebacks"
+            headers = csrf(client) | {"Idempotency-Key": key()}
+            barrier = asyncio.Barrier(2)
+
+            async def post() -> Any:
+                await meet_or_fail(barrier)
+                return await client.post(path, json=body, headers=headers)
+
+            first, second = await asyncio.gather(post(), post())
+        finally:
+            await client.aclose()
+    codes = sorted([first.status_code, second.status_code])
+    assert codes in ([201, 201], [201, 409]), (first.text, second.text)
+    if codes == [201, 201]:
+        assert first.json() == second.json()
+    row = await _one(
+        db_engine, "SELECT count(*) AS n FROM chargebacks WHERE order_id = :o", o=order.order_id
+    )
+    assert row.n == 1
+
+
+async def test_two_record_captures_in_parallel_leave_one_obligation(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    for _ in range(ROUNDS):
+        order = await seed_physical_order(
+            db_session, payment_method="online", payment_status="expired"
+        )
+        payment = await payment_of(db_engine, order.order_id)
+        admin = (await create_user(db_session, role=UserRole.ADMIN)).id
+        results = await together(
+            partial(_record, db_engine, payment, admin, 1200),
+            partial(_record, db_engine, payment, admin, 1300),
+        )
+        assert sorted(results) == ["late_capture", "refused:already_late_captured"]
+        assert len(await late_refunds(db_engine, payment)) == 1
+
+
+async def _record(engine: AsyncEngine, payment: uuid.UUID, admin: uuid.UUID, amount: int) -> str:
+    providers = {"mock": cast(PaymentProviderPort, NoStatus())}
+    try:
+        async with async_sessionmaker(engine)() as session, session.begin():
+            outcome = await record_capture_manually(
+                session,
+                providers,
+                payment,
+                admin_id=admin,
+                amount_cents=amount,
+                currency="USD",
+                dashboard_reference="dash",
+                reason="dashboard shows a capture",
+            )
+    except CaptureRecordRefusedError as exc:
+        return f"refused:{exc.refusal}"
+    return str(outcome)

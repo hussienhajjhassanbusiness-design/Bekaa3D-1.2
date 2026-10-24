@@ -99,22 +99,18 @@ def allocate_paid(
     charged_cents: int,
     items: Sequence[ItemFact],
 ) -> Allocation:
-    """A paid payment: absorb its open refunds, then the admin's items within each line's
-    balance, the payment's balance and the charge left. A line emptied by them is
-    `refunded` once delivered (or STL), or `cancelled` while unfinished (D4)."""
+    """A paid payment: absorb its open refunds, then the admin's items, which must cover
+    exactly the charge left or, if less, all that is still refundable: excess exists only
+    once nothing is. An emptied line is `refunded` (delivered, STL) or `cancelled` (D4)."""
     if len({item.order_item_id for item in items}) != len(items):
         raise ValueError("one item per line")
     absorbed, absorbed_cents, remainders = _absorb(open_refunds, charged_cents)
     balances, available = line_balances(ledger), payment_balance(ledger)
-    room = charged_cents - absorbed_cents
+    required = min(charged_cents - absorbed_cents, available)
     added = sum(item.amount_cents for item in items)
-    if (
-        any(item.amount_cents > balances[item.order_item_id] for item in items)
-        or added > available
-        or added > room
-    ):
+    if added != required or any(item.amount_cents > balances[item.order_item_id] for item in items):
         raise ChargebackAllocationInvalidError(
-            lines=balances, payment_cents=available, chargeable_cents=room
+            lines=balances, payment_cents=available, chargeable_cents=required
         )
     by_id = {line.id: line for line in ledger.lines}
     emptied = [by_id[i.order_item_id] for i in items if i.amount_cents == balances[i.order_item_id]]

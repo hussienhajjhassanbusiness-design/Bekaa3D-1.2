@@ -110,8 +110,10 @@ async def test_an_overpayment_on_a_live_attempt_is_owed_in_full(
         (90000, "LBP", 90000, "LBP", ()),
         (90000, "lbp", 90000, "LBP", ()),
         (700, "L$", 700, "USD", (BAD_CURRENCY_NOTE,)),
+        (None, "LBP", 1000, "USD", (NO_AMOUNT_NOTE,)),  # the attempt's amount, in USD
+        (-5, "LBP", 1000, "USD", (NO_AMOUNT_NOTE,)),  # a negative amount is no amount
     ],
-    ids=["no-amount", "lbp", "lowercase", "unreadable"],
+    ids=["no-amount", "lbp", "lowercase", "unreadable", "no-amount-lbp", "negative-lbp"],
 )
 async def test_q6_the_reported_amount_and_currency(
     db_engine: AsyncEngine,

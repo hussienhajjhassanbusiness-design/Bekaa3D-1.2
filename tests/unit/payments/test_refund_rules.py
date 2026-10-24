@@ -502,7 +502,8 @@ def test_a_voided_refund_is_never_reissued() -> None:
         (5000, "LBP", (5000, "LBP", ())),  # never converted
         (5000, " lbp ", (5000, "LBP", ())),
         (5000, "L$", (5000, "USD", (BAD_CURRENCY_NOTE,))),
-        (None, "dollars", (1000, "USD", (NO_AMOUNT_NOTE, BAD_CURRENCY_NOTE))),
+        (None, "dollars", (1000, "USD", (NO_AMOUNT_NOTE,))),
+        (None, "LBP", (1000, "USD", (NO_AMOUNT_NOTE,))),  # the attempt's amount, its currency
         (0, "USD", (0, "USD", ())),  # the caller skips it
     ],
 )
@@ -543,6 +544,7 @@ def test_a_late_capture_refund_carries_its_amount_without_items() -> None:
         (900, "L$", (900, None)),
         (None, "USD", (None, None)),  # never a currency without an amount
         (-5, "USD", (None, None)),
+        (10**12 + 1, "USD", (None, None)),  # beyond any real capture: unknown, never an overflow
     ],
 )
 def test_the_payment_row_stores_only_what_its_check_holds(

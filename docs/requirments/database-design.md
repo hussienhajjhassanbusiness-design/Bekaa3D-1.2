@@ -1495,7 +1495,7 @@ Except for `kind = late_capture` (no items), the sum of refund-item amounts must
 | `provider_dispute_reference` | TEXT | No | 1-200 chars; UNIQUE per provider |
 | `charged_cents` | BIGINT | No | what the bank took; > 0 |
 | `applied_cents` | BIGINT | No | the absorbed refunds plus the administrator's items (for a late-captured attempt: the absorbed `late_capture` refund); ≥ 0 |
-| `excess_cents` | BIGINT | No | the rest of `charged_cents`; ≥ 0; alerted |
+| `excess_cents` | BIGINT | No | the rest of `charged_cents`, only once the payment's balance is 0; ≥ 0; alerted |
 | `currency` | CHAR(3) | No | `USD` |
 | `reason` | TEXT | No | 1-1000 chars |
 | `recorded_by` | UUID | No | FK → `users.id` RESTRICT |

@@ -1,6 +1,6 @@
 """LO2 and LO3 (VS-030 plan 6.4): the SQL each refund path runs takes its locks in rank
-order (orders < order_items < payments < refunds), and a random mixed workload of
-refunds, settles, fails, voids, reissues and transitions never deadlocks."""
+order (orders < order_items < payments < refunds < chargebacks), and a random mixed
+workload of refunds, late captures, chargebacks and transitions never deadlocks."""
 
 import asyncio
 import random
@@ -8,21 +8,23 @@ import re
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
+from functools import partial
 from typing import Any
 
 import pytest
-from sqlalchemy import event, text
+from sqlalchemy import event
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.identity.domain.enums import UserRole
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
-from tests.concurrency.test_chargeback_races import charge
-from tests.concurrency.test_refund_races import World
+from tests.concurrency.test_chargeback_races import assert_m, charge
+from tests.concurrency.test_refund_races import Racer, World
 from tests.integration.deep_support import create_user
 from tests.integration.fulfillment.order_support import seed_physical_order
 from tests.integration.payments.refund_support import (
     Paid,
+    attempt,
     late_capture,
     late_refunds,
     paid_online,
@@ -165,14 +167,35 @@ async def test_lo3_a_random_mixed_workload_never_deadlocks(
     orders: list[Paid] = [
         await paid_online(db_session, physical=("pending", "delivered")) for _ in range(3)
     ]
+    paid = {o.order_id: await payment_of(db_engine, o.order_id) for o in orders}
+    expired = {o.order_id: await attempt(db_session, o.order_id) for o in orders}
     refunds: list[uuid.UUID] = []
     rng = random.Random(30)
     outcomes: dict[str, int] = {}
+    kinds = ["create", "create", "settle", "fail", "void", "reissue", "move", "stl"]
+
+    async def late(order: Paid) -> str:
+        """VS-024's Tx B on the order's expired attempt: path 5, rank 4 last."""
+        outcome = await late_capture(db_engine, expired[order.order_id], rng.randint(1, 900))
+        return f"late:{outcome}"
 
     async def one() -> None:
         order = rng.choice(orders)
-        kind = rng.choice(["create", "create", "settle", "fail", "void", "reissue", "move", "stl"])
-        if kind == "create":
+        kind = rng.choice([*kinds, "late", "charge"])
+        racer: Racer
+        if kind == "late":
+            racer = partial(late, order)
+        elif kind == "charge":  # path 6; most allocations are refused, after every lock
+            line = rng.choice([order.physical[1], order.stl])
+            assert line is not None
+            racer = charge(
+                world,
+                order,
+                paid[order.order_id],
+                rng.randint(1, 400),
+                [(line, rng.randint(1, 60))],
+            )
+        elif kind == "create":
             line = rng.choice([order.physical[1], order.stl])
             assert line is not None
             racer = world.create(order.order_id, [(line, rng.randint(1, 60))])
@@ -202,19 +225,5 @@ async def test_lo3_a_random_mixed_workload_never_deadlocks(
     await asyncio.wait_for(asyncio.gather(*(worker(50) for _ in range(4))), timeout=240)
     print("LO3 outcomes:", dict(sorted(outcomes.items())))
     assert sum(outcomes.values()) >= 150
-    async with db_engine.connect() as conn:
-        for order in orders:
-            row = (
-                await conn.execute(
-                    text(
-                        "SELECT COALESCE(SUM(r.amount_cents) FILTER (WHERE r.status IN"
-                        " ('pending', 'settled')"
-                        " OR (r.status = 'failed' AND r.reissued_at IS NULL)), 0) AS out,"
-                        " p.amount_cents AS paid FROM payments p"
-                        " LEFT JOIN refunds r ON r.payment_id = p.id WHERE p.order_id = :o"
-                        " GROUP BY p.amount_cents"
-                    ),
-                    {"o": order.order_id},
-                )
-            ).one()
-            assert row.out <= row.paid
+    for order in orders:
+        await assert_m(db_engine, order.order_id)  # invariant M, chargebacks included

@@ -55,7 +55,7 @@ async def test_s2_refund_and_chargeback_records_never_leak(
         second = ok(create(client, order.order_id, [(b, 100)]), 201)
         responses += [second, ok(act(client, second["id"], "void", {"reason": "Twice."}))]
         responses.append(
-            ok(chargeback(client, order.order_id, payment, 500, [(b, 400)], dispute=DISPUTE), 201)
+            ok(chargeback(client, order.order_id, payment, 500, [(b, 500)], dispute=DISPUTE), 201)
         )
     async with db_engine.connect() as conn:
         written = (
@@ -80,6 +80,7 @@ async def test_s2_refund_and_chargeback_records_never_leak(
     shown = json.dumps(responses, default=str)
     logs = app_logs.getvalue()
     assert written, "the scan must see the rows it checks"
+    assert "refund_created" in logs, "the scan must see the app's log lines"
     for secret in (order.phone, hash_phone(order.phone), str(reference), "Zahle", "Blue door"):
         for where, haystack in (("stored", stored), ("responses", shown), ("logs", logs)):
             assert secret not in haystack, (secret, where)

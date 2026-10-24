@@ -1,6 +1,6 @@
 # VS-030 — Refunds and Settlement: Implementation Plan
 
-**Status:** DONE. PR A merged (#37), PR B merged (#38), PR C built on `vs-030-pr-c` (Revision 3). Revision 2. PR A (`vs-030-schema`,
+**Status:** DONE. PR A merged (#37), PR B merged (#38), PR C built on `vs-030-pr-c` (Revisions 3 and 4). PR A (`vs-030-schema`,
 migration `c01e53ab3e0f`) is merged as `7b346a4`. The owner answered Q1-Q12 on 2026-10-23
 (Revisions 1 and 2 below).
 **Date:** 2026-10-23
@@ -33,6 +33,10 @@ up to date at `326aa40`). Remote branches: `docs/adr-035-accept-decisions`,
 Every `file:line` below is on `main` at `326aa40`.
 
 ---
+
+## Revision 4 (2026-10-24): PR C review
+
+The SRS review of PR C found a money Blocker: under C1 as first built, a chargeback whose items named less than the charge recorded the rest as excess while that money stayed refundable, so it could be paid out twice. **Owner decision:** on a paid payment the items must total exactly `min(charged − absorbed, the payment's remaining balance)` (422 `CHARGEBACK_ALLOCATION_INVALID` with `chargeable_cents` otherwise), so excess exists only at a zero balance. R13 is back to "whichever commits second is refused". Q-2 still blocks a chargeback (owner). Both reviewers' other findings are fixed in the same pass (ADR-042 d16, d19, d20, d22).
 
 ## Revision 3 (2026-10-24): PR C starts (branch `vs-030-pr-c`)
 
@@ -1276,7 +1280,7 @@ Owner decisions at PR B's start (2026-10-23):
 
 PR C as built (2026-10-24, branch `vs-030-pr-c`, not `vs-030-late-capture-chargebacks`):
 - Every PR C item is in, with the Revision 3 answers. The review fixes of PR B come first.
-- R13 asserts invariant M in both commit orders instead of "the create gets 422": under C1 the chargeback's items are coverage beyond the absorbed refunds (ADR-042 consequences).
+- R13 (Revision 4): whichever of the create and the chargeback commits second is refused, and invariant M also requires excess only at a zero balance.
 - One alert per chargeback, of kind `chargeback_excess` when there is excess, not two.
 - The late-capture sink also writes a `refund.created` audit row (actor NULL).
 - `ck_payments_captured_shape` made a malformed provider report roll back Tx B; the payment row now stores only what it holds (ADR-042 d19).

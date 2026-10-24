@@ -58,8 +58,16 @@ async def test_customers_get_404_admins_without_mfa_401_and_the_write_needs_csrf
         assert_problem(
             client.post(write, json=body, headers={"Idempotency-Key": key()}), 403, "CSRF_INVALID"
         )
-        missing = client.post(write, json=body, headers=csrf(client))
-        assert_problem(missing, 422, "VALIDATION_ERROR")  # no Idempotency-Key
+        valid = body | {
+            "provider_dispute_reference": "dp-no-key",
+            "charged_cents": 1000,
+            "items": [{"order_item_id": str(order.physical[0]), "amount_cents": 1000}],
+            "reason": "Bank dispute.",
+            "received_at": "2026-10-20T10:00:00Z",
+        }
+        missing = client.post(write, json=valid, headers=csrf(client))
+        assert_problem(missing, 422, "VALIDATION_ERROR")  # only the Idempotency-Key is missing
+        assert "idempotency" in missing.text.lower()
     customer = await create_user(db_session)
     admin = await create_user(db_session, role=UserRole.ADMIN)
     for email, expected in ((customer.email, 404), (admin.email, 401)):

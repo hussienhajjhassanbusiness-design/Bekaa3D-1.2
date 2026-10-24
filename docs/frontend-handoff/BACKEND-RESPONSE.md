@@ -2412,7 +2412,7 @@ There is no total: compute one for display if you need it; checkout recomputes i
 - **Every refund is manual:** record it, pay it in the provider's dashboard or in cash, then settle it. Settling changes no order or payment status.
 - A refund's lines become `refunded` when the refund is created and covers them in full; a partial refund leaves a line as it is. An unfinished physical line cannot be refunded to 0: cancel it (VS-031).
 - **Void** closes a mistaken pending or owed refund unpaid, with a reason. It is refused once settled, or when one of its lines is already `refunded` or `cancelled`.
-- **Chargebacks** absorb the payment's open refunds (they are voided, and anything the bank did not cover stays owed as a new pending refund); the form's items add coverage on top. Production stays on `PAYMENT_PROVIDER=none` until VS-032, so chargebacks happen only in dev and staging until then.
+- **Chargebacks** absorb the payment's open refunds (they are voided, and anything the bank did not cover stays owed as a new pending refund); the form's items add coverage on top and must total exactly what the 422's `chargeable_cents` says (the charge left, capped by what is still refundable). Production stays on `PAYMENT_PROVIDER=none` until VS-032, so chargebacks happen only in dev and staging until then.
 
 ### Domain / item: P2-1 — Captcha provider (BYI/contact)
 

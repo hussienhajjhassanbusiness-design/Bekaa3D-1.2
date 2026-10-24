@@ -223,27 +223,63 @@ def test_absorption_runs_oldest_refund_first_then_by_line() -> None:
     assert owed == {first.id: (ItemFact(b.id, 500),), second.id: (ItemFact(a.id, 500),)}
 
 
-@settings(database=None, deadline=None, max_examples=300, derandomize=True)
+@settings(database=None, deadline=None, max_examples=400, derandomize=True)
 @given(
-    amounts=st.lists(st.integers(1, 3000), min_size=0, max_size=3),
-    charged=st.integers(1, 10000),
-    extra=st.integers(0, 6000),
+    open_amounts=st.lists(st.integers(1, 3000), max_size=3),
+    settled=st.integers(0, 3000),
+    charged=st.integers(1, 12000),
+    off_by=st.sampled_from([-1, 0, 1]),
 )
-def test_payout_never_exceeds_what_was_paid(amounts: list[int], charged: int, extra: int) -> None:
+def test_payout_never_exceeds_what_was_paid_and_excess_needs_a_zero_balance(
+    open_amounts: list[int], settled: int, charged: int, off_by: int
+) -> None:
     a = line(total=10000)
-    refunds = tuple(refund((a, x)) for x in amounts if x)
-    book = ledger(a, refunds=refunds)
-    try:
-        got = allocate_paid(
-            book,
-            list(refunds),
-            charged_cents=charged,
-            items=[ItemFact(a.id, extra)] if extra else [],
-        )
-    except ChargebackAllocationInvalidError:
+    opened = tuple(refund((a, x)) for x in open_amounts)
+    done = (refund((a, settled), status=RefundStatus.SETTLED),) if settled else ()
+    book = ledger(a, refunds=(*done, *opened))
+    absorbed = min(charged, sum(open_amounts))
+    required = min(charged - absorbed, 10000 - settled - sum(open_amounts))
+    named = required + off_by
+    if named < 0 or (named == 0 and off_by):
         return
-    still_owed = sum(r.amount_cents for r in got.remainders)
+    items = [ItemFact(a.id, named)] if named else []
+    if off_by:
+        with pytest.raises(ChargebackAllocationInvalidError) as refused:
+            allocate_paid(book, list(opened), charged_cents=charged, items=items)
+        assert refused.value.chargeable_cents == required
+        return
+    got = allocate_paid(book, list(opened), charged_cents=charged, items=items)
+    still_owed = settled + sum(r.amount_cents for r in got.remainders)
     assert got.applied_cents + got.excess_cents == charged
-    assert got.applied_cents + still_owed <= book.payment.amount_cents  # invariant M
+    assert still_owed + got.applied_cents <= book.payment.amount_cents  # invariant M
+    if got.excess_cents:  # the bank took more only once nothing was left to refund
+        assert still_owed + got.applied_cents == book.payment.amount_cents
     covered = sum(i.amount_cents for i in got.items) + still_owed
-    assert covered == sum(amounts) + extra  # coverage never drops (C1)
+    assert covered == settled + sum(open_amounts) + named  # coverage never drops (C1)
+
+
+def test_an_under_allocated_chargeback_is_refused_so_excess_is_never_refundable() -> None:
+    """The PR C review Blocker: paid 1000, charged 1000 naming nothing."""
+    a = line(total=1000)
+    with pytest.raises(ChargebackAllocationInvalidError) as refused:
+        allocate_paid(ledger(a), [], charged_cents=1000, items=[])
+    assert refused.value.chargeable_cents == 1000 and refused.value.payment_cents == 1000
+    got = allocate_paid(ledger(a), [], charged_cents=1000, items=[ItemFact(a.id, 1000)])
+    assert (got.applied_cents, got.excess_cents, got.refunded) == (1000, 0, (a.id,))
+
+
+def test_a_second_chargeback_absorbs_the_first_ones_remainder() -> None:
+    a = line(S.REFUNDED, total=1000)
+    full = refund((a, 1000))
+    first = allocate_paid(ledger(a, refunds=(full,)), [full], charged_cents=600, items=[])
+    (rest,) = first.remainders
+    remainder = refund((a, rest.amount_cents))
+    book = Ledger(
+        1000,
+        (a,),
+        ledger(a).payment,
+        (replace(full.fact(), status=RefundStatus.VOIDED), remainder.fact()),
+        (ChargebackFact(PAY, first.applied_cents, first.items),),
+    )
+    second = allocate_paid(book, [remainder], charged_cents=400, items=[])
+    assert (second.applied_cents, second.excess_cents, second.remainders) == (400, 0, ())

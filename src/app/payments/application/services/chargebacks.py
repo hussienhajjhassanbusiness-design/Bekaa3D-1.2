@@ -142,17 +142,21 @@ async def _void_and_remainders(
     ctx: AuditContext,
     at: datetime,
 ) -> list[Refund]:
-    """The absorbed refunds become `voided`; what the bank left owed is a new pending one."""
-    for refund_id in allocation.voided:
-        voided = await deps.refunds.void(
-            refund_id,
-            by=ctx.actor_user_id,
-            at=at,
-            reason=f"absorbed by chargeback {chargeback_id}",
-        )
-        if not voided:  # locked FOR UPDATE above: only a broken lock order gets here
-            raise RuntimeError(f"refund {refund_id} left its open state under the lock")
+    """The absorbed refunds become `voided`; what the bank left owed is a new pending one.
+    Each gets its own audit row, so a refund's history is complete on its own."""
     by_id = {r.id: r for r in open_refunds}
+    for refund_id in allocation.voided:
+        reason = f"absorbed by chargeback {chargeback_id}"
+        if not await deps.refunds.void(refund_id, by=ctx.actor_user_id, at=at, reason=reason):
+            raise RuntimeError(f"refund {refund_id} left its open state under the lock")
+        await _refund_audit(
+            deps,
+            ctx,
+            "refund.voided",
+            by_id[refund_id],
+            before={"status": by_id[refund_id].status.value},
+            after={"status": RefundStatus.VOIDED.value, "reason": reason},
+        )
     created: list[Refund] = []
     for remainder in allocation.remainders:
         source = by_id[remainder.source.id]
@@ -170,21 +174,53 @@ async def _void_and_remainders(
             late_amount_cents=None if remainder.items else remainder.amount_cents,
         )
         refund_id = await deps.refunds.insert(new)
-        created.append(
-            Refund(
-                refund_id,
-                new.order_id,
-                new.payment_id,
-                new.provider,
-                new.kind,
-                RefundStatus.PENDING,
-                new.amount_cents,
-                new.currency,
-                None,
-                new.items,
-            )
+        row = Refund(
+            refund_id,
+            new.order_id,
+            new.payment_id,
+            new.provider,
+            new.kind,
+            RefundStatus.PENDING,
+            new.amount_cents,
+            new.currency,
+            None,
+            new.items,
+        )
+        created.append(row)
+        await _refund_audit(
+            deps,
+            ctx,
+            "refund.created",
+            row,
+            before=None,
+            after={
+                "status": RefundStatus.PENDING.value,
+                "kind": new.kind.value,
+                "reason": new.reason,
+            },
         )
     return created
+
+
+async def _refund_audit(
+    deps: RefundDeps,
+    ctx: AuditContext,
+    action: str,
+    refund: Refund,
+    *,
+    before: dict[str, object] | None,
+    after: dict[str, object],
+) -> None:
+    await deps.audit.record(
+        actor_user_id=ctx.actor_user_id,
+        action=action,
+        entity_type="refund",
+        entity_id=refund.id,
+        before_data=before,
+        after_data=after | {"order_id": str(refund.order_id), "amount_cents": refund.amount_cents},
+        request_id=ctx.request_id,
+        ip_hash=ctx.ip_hash,
+    )
 
 
 async def _move_and_recompute(

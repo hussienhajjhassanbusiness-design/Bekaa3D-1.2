@@ -86,7 +86,10 @@ class SqlPaymentAlerts:
         payload: dict[str, Any],
         window: timedelta | None,
     ) -> bool:
-        """Per payment, or per provider when there is no payment (`ix_audit_logs_*`)."""
+        """Per payment, or per provider when there is no payment (`ix_audit_logs_*`). A zero
+        window never folds: no clock comparison can then swallow an alert."""
+        if window is not None and window <= timedelta(0):
+            return False
         matching = {"kind": str(kind)}
         if payment_id is None and payload.get("provider"):
             matching["provider"] = str(payload["provider"])
@@ -131,8 +134,8 @@ class SqlPaymentAlerts:
 
 
 class SqlLateCaptureRefunds:
-    """VS-024's `LateCaptureSink`: one `late_capture` alert per payment, ever (3.5), then
-    VS-030's refund obligation for what was captured (plan 3.5, D10), in the same Tx B."""
+    """VS-024's `LateCaptureSink`: VS-030's refund obligation for what was captured (plan
+    3.5, D10), then one `late_capture` alert per payment, ever, its advisory lock last."""
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -147,6 +150,16 @@ class SqlLateCaptureRefunds:
         reason: str,
         at: datetime,
     ) -> None:
+        await create_late_capture_refund(
+            SqlRefundStore(self._session),
+            SqlAuditWriter(self._session),
+            locked,
+            payment,
+            captured_amount_cents=captured_amount_cents,
+            captured_currency=captured_currency,
+            reason=reason,
+            at=at,
+        )
         await SqlPaymentAlerts(self._session).raise_alert(
             AlertKind.LATE_CAPTURE,
             payment_id=payment.id,
@@ -160,16 +173,6 @@ class SqlLateCaptureRefunds:
                 "expected_amount_cents": payment.amount_cents,
             },
             dedupe_window=None,
-        )
-        await create_late_capture_refund(
-            SqlRefundStore(self._session),
-            SqlAuditWriter(self._session),
-            locked,
-            payment,
-            captured_amount_cents=captured_amount_cents,
-            captured_currency=captured_currency,
-            reason=reason,
-            at=at,
         )
 
 
