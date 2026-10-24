@@ -49,6 +49,14 @@ def _payment(payment_method: str) -> str | None:
     return "paid" if payment_method == "online" else None
 
 
+# VS-031's edges, listed beside the forward step; tested in test_cancel_api.py.
+SIDE_EDGES = frozenset({"cancelled", "returned"})
+
+
+def _forward(actions: list[str]) -> list[str]:
+    return [a for a in actions if a not in SIDE_EDGES]
+
+
 def _actions(client: TestClient, order_id: uuid.UUID) -> dict[str, list[str]]:
     detail = client.get(order_path(order_id))
     assert detail.status_code == 200, detail.text
@@ -79,12 +87,12 @@ async def test_each_legal_edge_moves_the_line_and_lists_the_next_one(
     with client_for(main_app) as client:
         admin, _, _ = await mfa_admin(client, db_session)
         for step in steps:
-            assert _actions(client, order.order_id)[line] == [step]
+            assert _forward(_actions(client, order.order_id)[line]) == [step]
             response = move(client, order, step)
             assert response.status_code == 200, response.text
             [item] = response.json()["lines"]
             assert item["fulfillment_status"] == step
-        final = _actions(client, order.order_id)[line]
+        final = _forward(_actions(client, order.order_id)[line])
     assert final == []
     status, lines = await states(db_engine, order.order_id)
     assert lines == [steps[-1]]
@@ -187,8 +195,9 @@ async def test_a_cash_order_reaches_its_last_step_only_through_the_handover(
         ("pickup", "in_production", "ready_to_ship"),
         ("pickup", "ready_for_pickup", "shipped"),
         ("delivery", "pending", "ready_to_ship"),
-        ("delivery", "shipped", "returned"),
-        ("delivery", "pending", "cancelled"),
+        ("delivery", "delivered", "returned"),
+        ("delivery", "returned", "delivered"),
+        ("delivery", "returned", "refunded"),  # through the refund endpoint (VS-031 Q2)
         ("delivery", "delivered", "refunded"),
     ],
 )
@@ -238,25 +247,33 @@ async def test_every_listed_action_succeeds_and_every_other_target_is_a_409(
     db_engine: AsyncEngine,
     db_session: AsyncSession,
 ) -> None:
-    order = await seed_physical_order(
-        db_session,
-        payment_method=payment_method,
-        payment_status=payment_status,
-        fulfillment=fulfillment,
-        line_states=[state],
-        order_status="cancelled" if state == "cancelled" else None,
-    )
+    async def seed() -> Any:
+        return await seed_physical_order(
+            db_session,
+            payment_method=payment_method,
+            payment_status=payment_status,
+            fulfillment=fulfillment,
+            line_states=[state],
+            order_status="cancelled" if state == "cancelled" else None,
+        )
+
+    order = await seed()
     with client_for(main_app) as client:
         await mfa_admin(client, db_session)
         detail = client.get(order_path(order.order_id)).json()
         [line] = detail["lines"]
-        listed = [a["target_status"] for a in line["available_actions"]]
-        assert all(a["cancel_reasons"] == [] for a in line["available_actions"])
+        reasons = {a["target_status"]: a["cancel_reasons"] for a in line["available_actions"]}
+        listed = list(reasons)
         refused = {t: move(client, order, t) for t in PHYSICAL_STATES if t not in listed}
-        accepted = {t: move(client, order, t) for t in listed}
+        accepted = {}
+        for target in listed:  # each on a fresh order: the first move changes the line
+            fresh = await seed()
+            extra = {"cancel_reason": reasons[target][0]} if reasons[target] else {}
+            accepted[target] = move(client, fresh, target, **extra)
     assert {t: r.status_code for t, r in refused.items()} == dict.fromkeys(refused, 409)
     assert {t: r.status_code for t, r in accepted.items()} == dict.fromkeys(accepted, 200)
-    assert len(listed) <= 1
+    assert all(r == [] for t, r in reasons.items() if t != "cancelled")
+    assert len(_forward(listed)) <= 2  # `returned` -> shipped or in_production
     if payment_method == "online" and payment_status not in REACHED_PAID:
         assert listed == []
     if payment_method == "cash":
@@ -469,10 +486,13 @@ async def test_a_transition_needs_csrf_and_a_foreign_line_is_a_404(
             json={"target_status": "in_production"},
             headers=csrf(client),
         )
-        extra = move(client, order, "in_production", cancel_reason="other")
+        extra = move(client, order, "in_production", note="unknown field")
+        reason = move(client, order, "in_production", cancel_reason="other")
     assert_problem(no_csrf, 403, "CSRF_INVALID")
     assert_problem(foreign, 404, "NOT_FOUND")
     assert_problem(extra, 422, "VALIDATION_ERROR")
+    assert_problem(reason, 409, "INVALID_STATE_TRANSITION")
+    assert reason.json()["reason"] == "cancel_reason_not_allowed"
     assert (await states(db_engine, order.order_id))[1] == ["pending"]
     assert (await states(db_engine, other.order_id))[1] == ["pending"]
 

@@ -89,7 +89,9 @@ async def test_a_cash_pickup_order_is_printed_handed_over_and_completed(
     with client_for(main_app) as admin:
         await mfa_admin(admin, db_session)
         ready = _move(admin, order["id"], line["id"], "ready_for_pickup")
-        assert [a["target_status"] for a in ready["lines"][0]["available_actions"]] == []
+        assert [a["target_status"] for a in ready["lines"][0]["available_actions"]] == [
+            "cancelled"  # VS-031: a refusal or no-show; the handover is its own route
+        ]
         handed = admin.post(
             handover_path(uuid.UUID(order["id"])),
             json={"amount_cents": 3600, "currency": "USD"},
