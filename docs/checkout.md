@@ -87,14 +87,14 @@ Every refusal before the order commits leaves the cart, the order tables and the
 
 **Delay from webhook to paid:** typically one provider query after the `200` (0.16 s against the mock); at worst about 60 s when the background task is lost, and up to about 560 s with a degraded provider.
 
-**Late captures until VS-030.** Each one raises a `late_capture` alert to every administrator and is listed by `GET /api/v1/admin/payments?late_captured=true` (VS-024, [`payment-recovery.md`](payment-recovery.md)). This SQL listing still works, run by an operator:
+**Late captures (VS-030).** Each one raises a `late_capture` alert to every administrator and creates one pending `late_capture` refund obligation for what was captured, in the obligations queue (`GET /api/v1/admin/refunds`, [`refunds.md`](refunds.md)). Rows from before VS-030 were backfilled by migration `80e56abf0969`. The attempts stay listed by `GET /api/v1/admin/payments?late_captured=true`, and this SQL listing still works:
 
 ```sql
 SELECT id, order_id, provider, amount_cents, status, late_captured_at
 FROM payments WHERE late_captured_at IS NOT NULL ORDER BY late_captured_at;
 ```
 
-Each late capture also has an audit row (`payment.late_capture`, with its reason). VS-030 turns late captures into refund obligations.
+Each late capture also has an audit row (`payment.late_capture`, with its reason).
 
 **Go-live gate:** no real online provider is configured in production before VS-024 and VS-030 are merged, unless an operational alert on late captures and stuck payments exists (ADR-032). VS-024's alerts meet that clause only if someone reads them ([ADR-036](adr/ADR-036-payment-recovery.md)). Production accepts only `PAYMENT_PROVIDER=none` until VS-032 adds a real adapter.
 

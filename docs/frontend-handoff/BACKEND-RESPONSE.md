@@ -2388,45 +2388,31 @@ There is no total: compute one for display if you need it; checkout recomputes i
 
 ### Domain / item: P1-13 — Refunds
 
-**Status:** not built. PROVISIONAL. Slice: VS-030. Several refund rules are still marked "must resolve before build".
+**Status:** **built** (VS-030). Decisions: [ADR-042](../adr/ADR-042-refunds-voids-and-chargebacks.md); as-built reference: [`../refunds.md`](../refunds.md).
 
-**Confirmed endpoint:** none yet. Planned (six, not four):
-- `POST /api/v1/admin/orders/{order_id}/refunds`
-- `GET /api/v1/admin/refunds`, `GET /api/v1/admin/refunds/{refund_id}`
-- `POST /api/v1/admin/refunds/{refund_id}/settle`
-- `POST /api/v1/admin/refunds/{refund_id}/fail`
-- `POST /api/v1/admin/refunds/{refund_id}/reissue`
+**Confirmed endpoints** (all administrator, MFA; every POST needs `X-CSRF-Token`):
+- `POST /api/v1/admin/orders/{order_id}/refunds` (`Idempotency-Key` required)
+- `GET /api/v1/admin/refunds` (the obligations queue by default; `queue=false` for the history), `GET /api/v1/admin/refunds/{refund_id}`
+- `POST /api/v1/admin/refunds/{refund_id}/settle`, `…/fail`, `…/void`
+- `POST /api/v1/admin/refunds/{refund_id}/reissue` (`Idempotency-Key` required)
+- `POST /api/v1/admin/orders/{order_id}/chargebacks` (`Idempotency-Key` required), `GET /api/v1/admin/orders/{order_id}/chargebacks`, `GET /api/v1/admin/chargebacks/{chargeback_id}`
+- `POST /api/v1/admin/payments/{payment_id}/record-capture` (`Idempotency-Key` required): a dashboard capture whose amount differs, on a provider with no status API
 
-**Request schema:** provisional; see api-endpoints.md section 29.13: `RefundCreate` (`items: [{order_item_id, amount_cents}]`, `reason`), `RefundSettlementRequest` (`reference`, `note`, both optional), `RefundFailureRequest` (`reason`). Reissue has no body.
+**Request and response schemas:** `openapi.json` (`RefundCreate`, `RefundSettlementRequest`, `RefundFailureRequest`, `RefundVoidRequest`, `RefundDetail`, `RefundPage`, `ChargebackCreate`, `ChargebackDetail`, `RecordCaptureRequest`, `RecordCaptureRead`); api-endpoints.md sections 19 and 29.13.
 
-**Response schema:** provisional: `RefundDetail`, `RefundPage`. Field lists are not written yet.
+**Enums:** refund status `"pending" | "settled" | "failed" | "voided"`; refund kind `"admin" | "cancellation" | "late_capture"`. A chargeback is its own record, not a refund kind. `RefundDetail.owed` is true for a failed refund not yet reissued.
 
-**Enums/statuses/actions:** provisional. Refund status: `"pending" | "settled" | "failed"`. Refund kind: `"admin" | "cancellation" | "late_capture" | "chargeback"`.
+**Errors:** `422 REFUND_EXCEEDS_AVAILABLE` (with `available.lines[]` and `available.payment_cents`), `422 REFUND_REQUIRES_CANCELLATION` (with `order_item_ids`), `409 ORDER_NOT_PAID`, `409 ORDER_TOTAL_MISMATCH`, `409 INVALID_STATE_TRANSITION` (with `reason`: `not_pending`, `not_failed`, `already_settled`, `already_reissued` plus `reissued_by_refund_id`, `line_already_refunded`, `line_already_cancelled`), and for chargebacks `409 CHARGEBACK_DUPLICATE`, `422 CHARGEBACK_NOT_ONLINE`, `422 CHARGEBACK_ITEMS_FORBIDDEN`, `422 CHARGEBACK_ALLOCATION_INVALID` (with `available`, including `chargeable_cents`). Idempotency answers as in [C12](#domain--item-c12--idempotency-key-mechanism).
 
-**Errors:** provisional:
-- `422 REFUND_EXCEEDS_AVAILABLE` — over a line's balance or the payment's balance. This is also the over-refund race answer.
-- `422 REFUND_REQUIRES_CANCELLATION` — the refund would empty a physical line that is not finished; cancel the line instead.
-- `409 IDEMPOTENCY_KEY_CONFLICT`, `409 INVALID_STATE_TRANSITION`.
+**Refundable balance:** `AdminOrderDetail.refund_balance` (`lines[]` of `{order_item_id, balance_cents}`, and `payment_cents`), null until a payment reached paid. The server computes it; the form must not. `AdminOrderDetail.refunds[]` and `.chargebacks[]` list the order's records.
 
-**Auth/CSRF/MFA:** administrator with MFA plus `X-CSRF-Token`. Create also needs `Idempotency-Key`.
+**Customer view:** `OrderDetail.refunds[]` (`{kind, status, amount, created_at}`, status `processing` or `refunded`); voided refunds and chargebacks are never shown.
 
-**Concurrency/idempotency:** create is idempotent by `Idempotency-Key` ([C12](#domain--item-c12--idempotency-key-mechanism)). Balances are computed under a lock on the order, so two simultaneous refunds cannot together exceed what was paid.
-
-**Example success JSON:** none; not built.
-
-**Example error JSON:** none; not built.
-
-**Fixture/test account:** none possible yet.
-
-**Authoritative source/OpenAPI file:** none yet. Plan: VS-030; api-endpoints.md sections 19 and 29.13; ADR-024 decisions 11, 12, 16.
-
-**Notes:** your questions, provisionally.
-- **Every refund is manual.** The platform never calls a provider. The administrator records the refund here, pays it in the provider's dashboard or in cash, then marks it settled. There is no "manual versus provider" choice and no `method` field.
-- **There is no shipping refund**: nothing was charged for shipping. Drop that row.
-- **Refundable balance:** computed by the server per line (line total, minus refunds that have not failed, minus failed refunds not yet reissued). The frontend must not compute it. **Which response carries it is not specified**; it has to be on the admin order detail for your form to work. See section 7.
-- **Digital refunds and revocation:** there is no entitlement to revoke. An STL line becomes `refunded` when its refunds cover its whole price, and that happens **when the refund is created**, not when it is settled. A partial refund leaves the line as it is. A refund after the file was sent cannot take the file back. So the "revocation confirmation gate" should become a plain warning.
-- A failed refund stays owed and can be reissued. That is why `fail` and `reissue` exist.
-- The queue (`GET /api/v1/admin/refunds`) lists refunds still owed: pending ones, and failed ones not yet reissued.
+**Notes:**
+- **Every refund is manual:** record it, pay it in the provider's dashboard or in cash, then settle it. Settling changes no order or payment status.
+- A refund's lines become `refunded` when the refund is created and covers them in full; a partial refund leaves a line as it is. An unfinished physical line cannot be refunded to 0: cancel it (VS-031).
+- **Void** closes a mistaken pending or owed refund unpaid, with a reason. It is refused once settled, or when one of its lines is already `refunded` or `cancelled`.
+- **Chargebacks** absorb the payment's open refunds (they are voided, and anything the bank did not cover stays owed as a new pending refund); the form's items add coverage on top. Production stays on `PAYMENT_PROVIDER=none` until VS-032, so chargebacks happen only in dev and staging until then.
 
 ### Domain / item: P2-1 — Captcha provider (BYI/contact)
 
@@ -2774,7 +2760,7 @@ These are not backend gaps to be filled by reading code. Each needed a decision,
 | 3 | Payment return URL, its query parameters, and the polling interval, backoff, maximum duration and timeout (C7). | FVS-027 | Partly answered (VS-023): with the mock, `{frontend}/checkout/return?order=<order_number>`; verification typically completes within a second of the provider's webhook, at worst about a minute. A real provider's parameters stay open (SRS section 30.4) |
 | 4 | Which online payment provider: Whish, a card gateway, or both (SRS section 30.4). | FVS-026, FVS-027 | Open. Product owner, before VS-032 |
 | 5 | Idempotency key lifetime and required format (C12). | FVS-026, FVS-032 | **Answered (VS-023):** 24 hours; 8–255 characters of `[A-Za-z0-9._:-]`; a replay counts against the 30/hour checkout limit |
-| 6 | Where the refundable balance per line is returned (P1-13). | FVS-032 | Open. Backend, in VS-030 |
+| 6 | Where the refundable balance per line is returned (P1-13). | FVS-032 | Answered (VS-030): `AdminOrderDetail.refund_balance` |
 | 7 | Captcha vendor, and whether captcha also covers registration, resend and password reset (P2-1, P2-7; SRS SEC-12). | FVS-002, FVS-004, FVS-015, FVS-016 | **Decided:** Cloudflare Turnstile on register, resend verification, the password-reset request, contact and Bring Your Idea; VS-033 builds the captcha port and applies it to all five. Built in VS-033: a refused token is `400 CAPTCHA_INVALID`, an outage `503 SERVICE_UNAVAILABLE` ([ADR-026](../adr/ADR-026-captcha-refusal-and-outage.md)). |
 | 8 | Consent wording: terms, digital final sale, cash terms (C6; SRS section 30.2). | FVS-026 | Open. Product owner; legal text |
 | 9 | STL delivery-time promise shown on product pages and at checkout (C10; SRS section 30.2). | FVS-014, FVS-026 | Open. Product owner |

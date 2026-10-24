@@ -1,6 +1,6 @@
 # VS-030 — Refunds and Settlement: Implementation Plan
 
-**Status:** IN PROGRESS: PR B built on `vs-030-refund-core` (awaiting review); PR C next. Revision 2. PR A (`vs-030-schema`,
+**Status:** DONE. PR A merged (#37), PR B merged (#38), PR C built on `vs-030-pr-c` (Revision 3). Revision 2. PR A (`vs-030-schema`,
 migration `c01e53ab3e0f`) is merged as `7b346a4`. The owner answered Q1-Q12 on 2026-10-23
 (Revisions 1 and 2 below).
 **Date:** 2026-10-23
@@ -1273,6 +1273,14 @@ Owner decisions at PR B's start (2026-10-23):
 3. Chargebacks (§3.3) plus I17–I19, I23, I24, U13, R8 and R11–R13.
 4. Record-capture (Q5) plus I22.
 5. The docs and ADR-042 final (§7); the VS-032 dependency.
+
+PR C as built (2026-10-24, branch `vs-030-pr-c`, not `vs-030-late-capture-chargebacks`):
+- Every PR C item is in, with the Revision 3 answers. The review fixes of PR B come first.
+- R13 asserts invariant M in both commit orders instead of "the create gets 422": under C1 the chargeback's items are coverage beyond the absorbed refunds (ADR-042 consequences).
+- One alert per chargeback, of kind `chargeback_excess` when there is excess, not two.
+- The late-capture sink also writes a `refund.created` audit row (actor NULL).
+- `ck_payments_captured_shape` made a malformed provider report roll back Tx B; the payment row now stores only what it holds (ADR-042 d19).
+- I24's "same reference on another provider" is covered by the PR A schema test only: `mock` is the one online provider.
 
 - **CP4:** the full sequential suite (§6.7) green. Reports the counts and any skips.
 - **CP5:** the slice status set to Done, and the docs merged.

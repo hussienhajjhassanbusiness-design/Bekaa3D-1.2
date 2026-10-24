@@ -13,6 +13,7 @@ Retry, reconciliation, the checkout hold release and manual confirmation, as bui
 | `GET /api/v1/admin/payments/{payment_id}` | admin with MFA | `200 AdminPaymentDetail` |
 | `POST /api/v1/admin/payments/{payment_id}/reconcile` | admin with MFA, CSRF | `202 ReconcileQueued` |
 | `POST /api/v1/admin/payments/{payment_id}/confirm` | admin with MFA, CSRF | `200 ManualConfirmRead` |
+| `POST /api/v1/admin/payments/{payment_id}/record-capture` | admin with MFA, CSRF, `Idempotency-Key` | `201 RecordCaptureRead`: a mismatched dashboard capture as a late capture plus its refund obligation (VS-030, [`refunds.md`](refunds.md)) |
 | `POST /api/v1/admin/orders/{order_id}/release` | admin with MFA, CSRF | `200 OrderReleaseRead` |
 
 Schemas are in [`frontend-handoff/openapi.json`](frontend-handoff/openapi.json). No admin response carries provider metadata (so no redirect URL), a webhook payload or the customer's email.
