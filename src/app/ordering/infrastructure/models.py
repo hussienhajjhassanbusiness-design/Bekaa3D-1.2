@@ -37,6 +37,7 @@ PHONE_HASH_FORMAT = "^[0-9a-f]{64}$"
 ADMIN_QUEUE_PREDICATE = (
     "status <> 'pending_payment' AND (payment_method = 'cash' OR cancelled_at IS NULL)"
 )
+SELF_CANCELLED_CASH = "payment_method = 'cash' AND customer_cancelled_at IS NOT NULL"
 
 
 def _pg_enum(enum: type[StrEnum], name: str) -> Enum:
@@ -163,6 +164,8 @@ class OrderModel(Base):
     placed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # VS-031 (595b7e6e2792): set only by the customer's own cancel (ADR-038 d23).
+    customer_cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -236,6 +239,19 @@ class OrderModel(Base):
             text("placed_at DESC"),
             text("id DESC"),
             postgresql_where=text(ADMIN_QUEUE_PREDICATE),
+        ),
+        # VS-031 (595b7e6e2792): the 24-hour self-cancel count, by customer and by phone.
+        Index(
+            "ix_orders_cash_self_cancel_user",
+            "user_id",
+            "customer_cancelled_at",
+            postgresql_where=text(SELF_CANCELLED_CASH),
+        ),
+        Index(
+            "ix_orders_cash_self_cancel_phone",
+            "contact_phone_hash",
+            "customer_cancelled_at",
+            postgresql_where=text(SELF_CANCELLED_CASH),
         ),
     )
 

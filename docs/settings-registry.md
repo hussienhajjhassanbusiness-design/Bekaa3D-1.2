@@ -38,7 +38,7 @@ to apply now.
 | `checkout_hold_period` | duration | seconds | `1800` (30 min) | 300 – 7 200 | ❌ — also bounds payment retry (from `placed_at`); the release deadline runs from the later of placement and the latest attempt (VS-024) |
 | `unverified_account_purge_period` | duration | seconds | `2592000` (30 d) | 604 800 – 7 776 000 | ❌ |
 | `cash_payment_enabled` | boolean | — | `true` | — | ✅ |
-| `cash_max_open_orders` | integer | unpaid, uncancelled cash orders / customer or contact phone | `1` | 1 – 10 | ❌ |
+| `cash_max_open_orders` | integer | unpaid, uncancelled cash orders, plus those the customer cancelled in the last 24 h (ADR-038 d23), / customer or contact phone | `1` | 1 – 10 | ❌ |
 | `cash_max_order_total` | money | cents (USD) | `10000` (100 USD) | 1 – 1 000 000 cents | ✅ |
 | `pickup_address` | string | — | `null` | ≤ 500 chars | ✅ |
 | `pickup_hours` | string | — | `null` | ≤ 200 chars | ✅ |

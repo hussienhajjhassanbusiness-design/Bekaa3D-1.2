@@ -6,7 +6,14 @@ import re
 from pathlib import Path
 
 SRC = Path(__file__).resolve().parents[3] / "src" / "app"
-MUTABLE = {"status", "updated_at", "cancelled_at", "completed_at", "admin_note"}
+MUTABLE = {
+    "status",
+    "updated_at",
+    "cancelled_at",
+    "completed_at",
+    "admin_note",
+    "customer_cancelled_at",  # VS-031: an event, not a snapshot
+}
 RAW_UPDATE = re.compile(
     r"\bUPDATE\s+orders\s+SET\s+(.*?)(?:\bWHERE\b|$)", re.IGNORECASE | re.DOTALL
 )

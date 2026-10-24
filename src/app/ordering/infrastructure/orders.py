@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalog.application.ports import ProductType
+from app.ordering.domain.cancellation import LineCancel
 from app.ordering.domain.enums import OrderItemStatus, OrderStatus, PaymentMethod
 from app.ordering.domain.exceptions import OrderNumberExhaustedError, ProductAlreadyOwnedError
 from app.ordering.domain.orders import (
@@ -71,6 +72,8 @@ _ORDER_COLUMNS = (
     _O.area,
     _O.street,
     _O.landmark_notes,
+    _O.contact_phone_hash,
+    _O.customer_cancelled_at,
 )
 _LINE_COLUMNS = (
     _I.id,
@@ -87,6 +90,7 @@ _LINE_COLUMNS = (
     _I.offer_id,
     _I.fulfilled_at,
     _I.delivered_by,
+    _I.cancel_reason,
 )
 
 
@@ -340,6 +344,35 @@ class SqlOrderStore:
             )
             for row in await self._session.execute(query)
         ]
+
+    async def cancel_order_lines(self, cancels: Sequence[LineCancel], *, at: datetime) -> int:
+        """VS-031: each line only from the state read under the locks, with its reason."""
+        moved = 0
+        for cancel in cancels:
+            result = await self._session.execute(
+                update(_I)
+                .where(
+                    _I.id == cancel.line_id,
+                    _I.product_type == ProductType.PHYSICAL,
+                    _I.fulfillment_status == cancel.from_status,
+                )
+                .values(
+                    fulfillment_status=OrderItemStatus.CANCELLED,
+                    cancelled_at=at,
+                    cancel_reason=cancel.cancel_reason,
+                    updated_at=at,
+                )
+            )
+            moved += int(getattr(result, "rowcount", 0))
+        return moved
+
+    async def set_customer_cancelled(self, order_id: UUID, *, at: datetime) -> None:
+        """The customer's own cancel (ADR-038 d23); only under the orders lock."""
+        await self._session.execute(
+            update(_O)
+            .where(_O.id == order_id, _O.customer_cancelled_at.is_(None))
+            .values(customer_cancelled_at=at, updated_at=at)
+        )
 
     async def set_cancelled(self, order_id: UUID, *, at: datetime) -> None:
         """The first writer of `orders.cancelled_at`; only under the orders lock."""

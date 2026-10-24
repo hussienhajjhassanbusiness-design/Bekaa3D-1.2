@@ -177,7 +177,10 @@ class CashChecks(Protocol):
 
     async def active_block(self, user_id: UUID, phone_hash: str) -> bool: ...
 
-    async def open_order_count(self, user_id: UUID, phone_hash: str) -> int: ...
+    async def open_order_count(self, user_id: UUID, phone_hash: str, *, at: datetime) -> int:
+        """Open cash orders, and those the customer cancelled in the last 24 hours
+        (ADR-038 d23), matching the customer or the phone."""
+        ...
 
 
 class ReceiptOrders(Protocol):

@@ -251,6 +251,17 @@ def check_request(
         raise RefundRequiresCancellationError(blocked)
 
 
+def cancellation_items(
+    ledger: Ledger, cancelling: Collection[UUID], balances: dict[UUID, int]
+) -> tuple[ItemFact, ...]:
+    """VS-031 (ADR-043): a cancel refunds each paid line's whole remaining balance, so no
+    `cancelled` line is left partly covered and every chargeback stays satisfiable."""
+    by_id = {line.id: line for line in ledger.lines}
+    if any(by_id[i].status not in UNFINISHED_PHYSICAL for i in cancelling):
+        raise ValueError("only an unfinished physical line is cancelled with a refund")
+    return tuple(ItemFact(i, balances[i]) for i in sorted(cancelling, key=str) if balances[i] > 0)
+
+
 def lines_becoming_refunded(ledger: Ledger, items: Sequence[ItemFact]) -> tuple[UUID, ...]:
     """L6: requested lines whose balance reaches 0 in a refundable state; a partial stays."""
     balances = line_balances(ledger)

@@ -1,6 +1,6 @@
 # ADR-038: Physical checkout and cash eligibility - a hash-only cash block table that can only reference a cash order, canonical phone spellings in the database, and a never-rotated phone-hash key (VS-028)
 
-**Status:** Accepted in full. Decisions 1-7 (schema) are built in VS-028 PR A (migration `fcd589e89e59`); decisions 8-18 (checkout, plan D3-D13) in PR B (#31); decisions 19-22 by the review follow-up of 2026-10-22.
+**Status:** Accepted in full. Decisions 1-7 (schema) are built in VS-028 PR A (migration `fcd589e89e59`); decisions 8-18 (checkout, plan D3-D13) in PR B (#31); decisions 19-22 by the review follow-up of 2026-10-22; decision 23 by VS-031 (migration `595b7e6e2792`, 2026-10-24).
 **Date:** 2026-10-20
 **Source basis:** Owner decisions of 2026-10-20 on the [VS-028 plan](../plans/VS-028-physical-checkout-plan.md) (Q1-Q17, Revisions 1-3); SRS §7.3, §7.4, §9.8; BR-141, BR-144, BR-145; database-design.md §8.3, §8.6, §14; [ADR-024](ADR-024-cash-on-delivery-and-courier-priced-shipping.md); [ADR-027](ADR-027-address-book-decisions.md); [ADR-028](ADR-028-keyed-monthly-rotated-ip-hashes.md); [ADR-032](ADR-032-checkout-idempotency-and-payment-verification.md)
 **Applies first to:** `cash_payment_blocks`; `orders.contact_phone_snapshot` and `orders.contact_phone_hash`; the `cash_*` settings; `PHONE_HASH_SALT`; `GET /api/v1/settings/public`; `POST /api/v1/checkout`; `amount_due` on the order reads.
@@ -62,6 +62,15 @@ PR B (branch `vs-028-checkout`) follows the plan's D3-D13 as written; only these
 22. **The remaining probe is accepted.** A verified customer with a physical cart can still learn that a phone is blocked or has an open cash order: try cash with it and get `CASH_NOT_AVAILABLE` instead of an order. It is bounded by the 30-per-hour checkout limit, and the first probe that does not match places a real cash order on the prober's own account. From then on every cash checkout from that account is refused whatever the phone, until that order is handed over or cancelled (with the default `cash_max_open_orders = 1`). The answer never names the rule or the account.
     - **The bound holds only until VS-031.** Once a customer can cancel their own unpaid cash order (an `other` cancel, which writes no block and frees the slot), a prober can cancel each miss and probe again: about 30 phones per hour per verified account. VS-031 must resolve this (slice plan, VS-031 "Must resolve" item 1).
     - **A miss is not free for the phone's owner.** The prober's order carries that phone's hash, so the owner is refused cash until it is resolved, and an administrator who cancels it as `refused` or `no_show` blocks the phone. This is the risk ADR-024 d6 already accepts ("a customer can enter someone else's phone"): the administrator calls before printing and can clear a block.
+
+## VS-031 follow-up (2026-10-24, owner decision)
+
+23. **A cash order the customer cancelled themselves counts toward `cash_max_open_orders` for 24 hours**, for that customer and for that phone hash (amends d22, SRS §9 step 9 and BR-145, which counted only "unpaid, uncancelled" cash orders). This closes the probe d22 left open until VS-031: place a cash order on a phone, cancel it, probe again. Each self-cancelled miss now holds the prober's own account, and the phone, off cash for a day, as an open order would.
+    - **What counts.** `orders.customer_cancelled_at`, set only by `POST /api/v1/me/orders/{id}/cancel` (never by an administrator's cancel, the hold release or a chargeback), with `customer_cancelled_at > now - 24h`. An order counts once, open or self-cancelled. `SqlCashChecks.open_order_count` reads it under the phone lock, as before, through the partial indexes `ix_orders_cash_self_cancel_user` and `ix_orders_cash_self_cancel_phone`.
+    - **The window is a constant, not a setting** (`SELF_CANCEL_WINDOW` in `ordering/domain/cash.py`): no requirement asks to tune it, and a setting an administrator lowers to zero would reopen the probe.
+    - **The boundary.** At exactly 24 hours the order no longer counts (`tests/integration/ordering/test_cash_self_cancel_window.py` tests -1 s, 0 and +1 s).
+    - **What it costs.** A genuine customer who cancels a cash order and wants to re-order with cash waits a day or pays online; an administrator's `other` cancel (for a customer who phones in) does not count. The refusal stays the one `CASH_NOT_AVAILABLE` of d19.
+    - **Rejected:** rate-limiting cash self-cancels (it bounds the probe rate but not each miss's cost, and needs its own counter) and accepting the wider bound (about 30 phones per hour per account).
 
 ## Consequences
 

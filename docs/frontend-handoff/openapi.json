@@ -815,6 +815,33 @@
         "title": "AdminOfferSummaryRead",
         "type": "object"
       },
+      "AdminOrderCancelRequest": {
+        "additionalProperties": false,
+        "description": "Cancels every line before shipping or collection (VS-031); `cancel_reason` is\nrecorded on the `ready_to_ship` and `ready_for_pickup` lines, which require one.",
+        "properties": {
+          "cancel_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CancelReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "AdminOrderCancelRequest",
+        "type": "object"
+      },
       "AdminOrderChargebackRead": {
         "description": "One chargeback of the order (VS-030); the full record is `GET /admin/chargebacks/{id}`.",
         "properties": {
@@ -2919,7 +2946,7 @@
       "AvailableActionRead": {
         "properties": {
           "cancel_reasons": {
-            "description": "Empty: the transition takes no reason. Always empty until VS-031.",
+            "description": "Empty: the transition takes no reason; otherwise one is required.",
             "items": {
               "$ref": "#/components/schemas/CancelReason"
             },
@@ -5138,6 +5165,25 @@
         "title": "CustomRequestTransition",
         "type": "object"
       },
+      "CustomerOrderCancelRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "title": "CustomerOrderCancelRequest",
+        "type": "object"
+      },
       "DeliveryAddressRead": {
         "properties": {
           "area": {
@@ -6643,6 +6689,17 @@
       "OrderItemTransitionRequest": {
         "additionalProperties": false,
         "properties": {
+          "cancel_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CancelReason"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required for `-> cancelled` from `ready_to_ship`, `returned`, `ready_for_pickup` or `shipped`; `no_show` from `ready_for_pickup` only (VS-031)."
+          },
           "reason": {
             "anyOf": [
               {
@@ -14123,6 +14180,146 @@
         ]
       }
     },
+    "/api/v1/admin/orders/{order_id}/cancel": {
+      "post": {
+        "operationId": "cancel_order_api_v1_admin_orders__order_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Order Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminOrderCancelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminOrderDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "MALFORMED_REQUEST: the body is not valid JSON."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "AUTH_REQUIRED, or MFA_REQUIRED for an administrator."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "CSRF_INVALID."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "NOT_FOUND: no such order (customers always get this)."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INVALID_STATE_TRANSITION with `reason`: `payment_required` (an unpaid online order, BR-148), `no_cancellable_line`, `cancel_reason_required`, `cancel_reason_not_allowed`, `not_a_legal_edge`, `line_closed` or `refund_exceeds_available`; or ORDER_TOTAL_MISMATCH."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "VALIDATION_ERROR."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "RATE_LIMITED: shared with the line transitions."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the database or Redis is unreachable; retry later."
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Cancel every line not yet shipped or collected, refunding paid ones",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      }
+    },
     "/api/v1/admin/orders/{order_id}/cash-handover": {
       "post": {
         "operationId": "cash_handover_api_v1_admin_orders__order_id__cash_handover_post",
@@ -14610,7 +14807,7 @@
                 }
               }
             },
-            "description": "INVALID_STATE_TRANSITION with `reason` and the line's `fulfillment_status`: `payment_required` (an unpaid online order, BR-148), `cash_handover_required`, `not_a_legal_edge`, `line_closed`, or for an STL line `already_delivered` (with `fulfilled_at`) and `not_awaiting_delivery`."
+            "description": "INVALID_STATE_TRANSITION with `reason` and the line's `fulfillment_status`: `payment_required` (an unpaid online order, BR-148), `cash_handover_required`, `not_a_legal_edge`, `line_closed`, `cancel_reason_required`, `cancel_reason_not_allowed`, `refund_exceeds_available`, or for an STL line `already_delivered` (with `fulfilled_at`) and `not_awaiting_delivery`; or ORDER_TOTAL_MISMATCH."
           },
           "422": {
             "content": {
@@ -22832,6 +23029,153 @@
           }
         ],
         "summary": "One of the caller's own orders, as bought",
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/api/v1/me/orders/{order_id}/cancel": {
+      "post": {
+        "description": "Every live physical line, all still `pending`, or nothing (FR-09); a paid order's\nrefund is each line's whole remaining balance, pending until settled (ADR-043).",
+        "operationId": "cancel_my_order_api_v1_me_orders__order_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Order Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/CustomerOrderCancelRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderDetailRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "MALFORMED_REQUEST: the body is not valid JSON."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No valid session cookie was presented."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "CSRF_INVALID, or EMAIL_VERIFICATION_REQUIRED."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "NOT_FOUND: no such order, or not yours."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "ORDER_NOT_CANCELLABLE: `can_cancel` is false now (printing started, an unpaid online or STL-only order, or nothing left to cancel). Nothing changed."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "VALIDATION_ERROR."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "RATE_LIMITED: too many cancellations this hour."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the database or Redis is unreachable; retry later."
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Cancel your order's physical items before printing starts",
         "tags": [
           "orders"
         ]

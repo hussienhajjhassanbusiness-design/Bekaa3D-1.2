@@ -5,6 +5,7 @@ from app.engagement.api.wishlist import router as engagement_wishlist_router
 from app.identity.api.addresses import router as identity_addresses_router
 from app.identity.api.profile import router as identity_profile_router
 from app.negotiation.api.offers import router as negotiation_offers_router
+from app.ordering.api.cancel import router as ordering_cancel_router
 from app.ordering.api.offer_checkout import router as ordering_offer_checkout_router
 from app.ordering.api.orders import router as ordering_orders_router
 from app.ordering.api.ownership import router as ordering_ownership_router
@@ -22,6 +23,7 @@ router.include_router(ordering_payment_retry_router)
 router.include_router(ordering_orders_router)
 # VS-029b: "I got it" and "Report a problem" on the customer's own order.
 router.include_router(ordering_receipt_router)
+router.include_router(ordering_cancel_router)
 router.include_router(negotiation_offers_router)
 # VS-041: offer checkout lives with Ordering, which owns orders and checkout (ADR-037).
 router.include_router(ordering_offer_checkout_router)

@@ -217,7 +217,10 @@ async def test_the_detail_shows_what_only_the_administrator_may_see(
     assert body["payments"] == []
     [line] = body["lines"]
     assert line["fulfillment_status"] == "ready_to_ship"
-    assert line["available_actions"] == [{"target_status": "shipped", "cancel_reasons": []}]
+    assert line["available_actions"] == [
+        {"target_status": "shipped", "cancel_reasons": []},
+        {"target_status": "cancelled", "cancel_reasons": ["refused", "other"]},  # VS-031
+    ]
 
 
 async def test_an_unknown_order_is_a_404(db_session: AsyncSession) -> None:

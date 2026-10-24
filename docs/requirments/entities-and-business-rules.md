@@ -433,7 +433,7 @@ This is a projection rule rather than a normal command-driven state machine. A f
 - **[Application]** Delivery Orders require an address snapshot.
 - **[Application]** Pickup Orders require no delivery address.
 - **[DB]** Every Order with a fulfillment method has a contact phone snapshot.
-- **[Application]** `payment_method = cash` requires every OrderItem to be physical, cash enabled, no uncleared CashPaymentBlock for the customer or the contact phone hash, fewer than `cash_max_open_orders` open unpaid cash Orders for the customer or that hash, and a **recomputed** total above 0 and within `cash_max_order_total`; checked after the totals are recomputed, under the cart lock; the block and the open-order count also under an advisory lock on the phone hash, taken after the checks that need no phone (ADR-038).
+- **[Application]** `payment_method = cash` requires every OrderItem to be physical, cash enabled, no uncleared CashPaymentBlock for the customer or the contact phone hash, fewer than `cash_max_open_orders` open unpaid cash Orders, or cash Orders the customer cancelled themselves in the last 24 hours (ADR-038 d23), for the customer or that hash, and a **recomputed** total above 0 and within `cash_max_order_total`; checked after the totals are recomputed, under the cart lock; the block and the open-order count also under an advisory lock on the phone hash, taken after the checks that need no phone (ADR-038).
 - **[DB]** `payment_method` is copied onto every OrderItem and Payment under a composite foreign key to `orders(id, payment_method)`; CHECKs forbid an STL item on a cash Order and require `provider = cash` exactly on cash Orders.
 - **[Application]** The contact phone snapshot is stored normalised to E.164, with `contact_phone_hash` (keyed `HMAC-SHA256`, secret `PHONE_HASH_SALT`, never rotated) for matching.
 - **[Application]** A cash Order has no checkout hold and no Payment until the cash handover.
@@ -516,6 +516,7 @@ PENDING                                  (received)
   │     │     ├── SHIPPED
   │     │     │     ├── DELIVERED
   │     │     │     │     └── REFUNDED   (paid only)
+  │     │     │     ├── CANCELLED      (unpaid cash line totalling 0; other)
   │     │     │     └── RETURNED
   │     │     │           ├── SHIPPED
   │     │     │           ├── IN_PRODUCTION
@@ -534,7 +535,7 @@ PENDING
   │     ├── READY_FOR_PICKUP
   │     │     ├── PICKED_UP
   │     │     │     └── REFUNDED   (paid only)
-  │     │     └── CANCELLED        (no-show)
+  │     │     └── CANCELLED        (refused, no_show or other)
   │     └── CANCELLED
   └── CANCELLED
 ```

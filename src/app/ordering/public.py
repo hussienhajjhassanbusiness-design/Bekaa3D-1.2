@@ -3,6 +3,7 @@
 Every write here follows the ADR-024 lock order: the `orders` row first, then its lines
 by id; a caller that also locks a payment does so only after `lock_order_for_change`."""
 
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from uuid import UUID
@@ -17,6 +18,14 @@ from app.ordering.domain.admin_orders import (
     AdminOrderLine,
     CashBlock,
     cash_due,
+)
+from app.ordering.domain.cancellation import (
+    LineCancel,
+    OrderFacts,
+    admin_cancels,
+    cash_block_reason,
+    customer_cancels,
+    line_cancel,
 )
 from app.ordering.domain.cash import amount_due_cents
 from app.ordering.domain.customer_view import payment_due
@@ -37,10 +46,11 @@ from app.ordering.domain.exceptions import (
     OfferCheckoutExpiredError,
     OfferCheckoutNotFoundError,
     OfferNotCheckoutableError,
+    OrderNotCancellableError,
     OrderNotReleasableError,
 )
 from app.ordering.domain.fulfillment import DELIVERY_FEE_NOTE
-from app.ordering.domain.fulfillment_steps import step_reached
+from app.ordering.domain.fulfillment_steps import step_newly_reached, step_reached
 from app.ordering.domain.handover import (
     HANDED_OVER,
     HandoverRefusal,
@@ -50,6 +60,7 @@ from app.ordering.domain.handover import (
 from app.ordering.domain.line_transitions import (
     LineContext,
     TransitionRefusal,
+    available_actions,
     available_targets,
     line_transition_refusal,
 )
@@ -69,6 +80,7 @@ from app.ordering.domain.payment_recovery import (
     manual_release_refusal,
 )
 from app.ordering.infrastructure.admin_orders import SqlAdminOrders
+from app.ordering.infrastructure.carts import SqlCartStore
 from app.ordering.infrastructure.cash import SqlCashBlockStore
 from app.ordering.infrastructure.cash import lock_cash_phone as _lock_cash_phone
 from app.ordering.infrastructure.orders import SqlOrderStore
@@ -87,6 +99,7 @@ __all__ = [
     "HandoverRefusal",
     "HandoverRefusedError",
     "InvalidLineTransitionError",
+    "LineCancel",
     "LineContext",
     "LineNotFoundError",
     "LineState",
@@ -95,8 +108,10 @@ __all__ = [
     "OfferCheckoutExpiredError",
     "OfferCheckoutNotFoundError",
     "OfferNotCheckoutableError",
+    "OrderFacts",
     "OrderItemStatus",
     "OrderLine",
+    "OrderNotCancellableError",
     "OrderNotReleasableError",
     "OrderSource",
     "OrderStatus",
@@ -107,25 +122,33 @@ __all__ = [
     "SqlCashBlockStore",
     "StlDeliveryRow",
     "TransitionRefusal",
+    "admin_cancels",
     "admin_order_page",
     "admin_orders",
     "amount_due_cents",
+    "available_actions",
     "available_targets",
     "can_retry_payment",
+    "cancel_lines",
     "cancel_lines_for_chargeback",
+    "cash_block_reason",
     "cash_block_store",
     "cash_due",
     "check_cash_handover",
+    "customer_cancels",
     "derive_order_status",
     "hand_over_cash_lines",
     "hold_deadline",
+    "line_cancel",
     "line_context",
+    "lock_cart_for_cash_block",
     "lock_cash_phone",
     "lock_order_for_change",
     "manual_release_available_at",
     "manual_release_refusal",
     "mark_order_paid",
     "mark_stl_line_delivered",
+    "order_facts",
     "order_lines",
     "orders_by_id",
     "payment_due",
@@ -134,6 +157,7 @@ __all__ = [
     "release_candidates",
     "release_unpaid_order",
     "status_inputs_for",
+    "step_newly_reached",
     "step_reached",
     "stl_delivery_page",
     "stl_owned",
@@ -152,6 +176,12 @@ async def lock_cash_phone(session: AsyncSession, phone_hash: str) -> None:
     """The cash phone advisory lock, the one checkout takes (VS-028 D6). Call it only after
     the customer's cart lock (ADR-024 d9); `test_cash_lock_order` allowlists the callers."""
     await _lock_cash_phone(session, phone_hash)
+
+
+async def lock_cart_for_cash_block(session: AsyncSession, user_id: UUID) -> None:
+    """The customer's cart FOR UPDATE, created if missing, so a block serialises against
+    their next checkout whatever its phone (ADR-024 d9). Only after the orders lock."""
+    await SqlCartStore(session).lock(user_id, create=True)
 
 
 def cash_block_store(session: AsyncSession) -> SqlCashBlockStore:
@@ -264,7 +294,48 @@ def _line(locked: LockedOrder, line_id: UUID) -> OrderLine:
 def line_context(locked: LockedOrder, line: OrderLine, *, reached_paid: bool) -> LineContext:
     order = locked.order
     return LineContext(
-        line.product_type, order.fulfillment_method, order.payment_method, reached_paid
+        line.product_type,
+        order.fulfillment_method,
+        order.payment_method,
+        reached_paid,
+        line.line_total_cents,
+    )
+
+
+def order_facts(locked: LockedOrder, *, reached_paid: bool) -> OrderFacts:
+    order = locked.order
+    return OrderFacts(order.status, order.fulfillment_method, order.payment_method, reached_paid)
+
+
+async def cancel_lines(
+    session: AsyncSession,
+    locked: LockedOrder,
+    cancels: Sequence[LineCancel],
+    *,
+    actor_user_id: UUID,
+    at: datetime,
+    note: str | None,
+    by_customer: bool,
+) -> None:
+    """VS-031's cancel writer: each line from the state it was decided on, with its reason,
+    and history. No recompute: the caller does that last. Caller holds the locks."""
+    store = SqlOrderStore(session)
+    if await store.cancel_order_lines(cancels, at=at) != len(cancels):
+        raise InvalidLineTransitionError(TransitionRefusal.NOT_A_LEGAL_EDGE.value)
+    if by_customer:
+        await store.set_customer_cancelled(locked.order.id, at=at)
+    await store.add_history(
+        [
+            StatusChange(
+                locked.order.id,
+                cancel.from_status.value,
+                OrderItemStatus.CANCELLED.value,
+                order_item_id=cancel.line_id,
+                actor_user_id=actor_user_id,
+                reason=note,
+            )
+            for cancel in cancels
+        ]
     )
 
 
@@ -339,7 +410,8 @@ async def transition_physical_line(
     refusal = line_transition_refusal(
         line_context(locked, line, reached_paid=reached_paid), current, target
     )
-    if line.product_type is not ProductType.PHYSICAL:
+    # `-> cancelled` is `cancel_lines`, with its refund (ADR-043 d1); never a bare move.
+    if line.product_type is not ProductType.PHYSICAL or target is OrderItemStatus.CANCELLED:
         refusal = refusal or TransitionRefusal.NOT_A_LEGAL_EDGE
     if refusal is not None:
         raise InvalidLineTransitionError(

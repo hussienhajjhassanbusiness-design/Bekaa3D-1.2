@@ -8,7 +8,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ordering.domain.admin_orders import CashBlock
-from app.ordering.domain.cash import CASH_PHONE_LOCK_NS
+from app.ordering.domain.cash import CASH_PHONE_LOCK_NS, SELF_CANCEL_WINDOW
 from app.ordering.domain.enums import CancelReason, OrderStatus, PaymentMethod
 from app.ordering.infrastructure.models import CashPaymentBlockModel, OrderModel
 
@@ -45,14 +45,16 @@ class SqlCashChecks:
         stmt = select(by_user).union_all(select(by_phone))
         return any((await self._session.execute(stmt)).scalars())
 
-    async def open_order_count(self, user_id: UUID, phone_hash: str) -> int:
-        open_cash = (
-            _O.payment_method == PaymentMethod.CASH,
-            _O.status == OrderStatus.IN_PROGRESS,
-        )
+    async def open_order_count(self, user_id: UUID, phone_hash: str, *, at: datetime) -> int:
+        """Each branch matches one partial index; an order counts once (ADR-038 d23)."""
+        cash = _O.payment_method == PaymentMethod.CASH
+        open_cash = (cash, _O.status == OrderStatus.IN_PROGRESS)
+        self_cancelled = (cash, _O.customer_cancelled_at > at - SELF_CANCEL_WINDOW)
         ids = union(
             select(_O.id).where(*open_cash, _O.user_id == user_id),
             select(_O.id).where(*open_cash, _O.contact_phone_hash == phone_hash),
+            select(_O.id).where(*self_cancelled, _O.user_id == user_id),
+            select(_O.id).where(*self_cancelled, _O.contact_phone_hash == phone_hash),
         ).subquery()
         return (await self._session.execute(select(func.count()).select_from(ids))).scalar_one()
 

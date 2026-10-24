@@ -6,6 +6,7 @@ from uuid import UUID
 
 from app.catalog.application.ports import ProductType
 from app.ordering.domain.enums import (
+    CancelReason,
     FulfillmentMethod,
     OrderItemStatus,
     OrderSource,
@@ -84,6 +85,8 @@ class Order:
     area: str | None = None
     street: str | None = None
     landmark_notes: str | None = None
+    contact_phone_hash: str | None = None  # a cash block copies it (VS-031)
+    customer_cancelled_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -102,6 +105,7 @@ class OrderLine:
     offer_id: UUID | None = None
     fulfilled_at: datetime | None = None
     delivered_by: UUID | None = None
+    cancel_reason: CancelReason | None = None
 
 
 @dataclass(frozen=True)

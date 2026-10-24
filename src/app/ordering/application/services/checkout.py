@@ -159,7 +159,7 @@ async def place_order(
         await cash.lock_phone(phone_hash)
         cash_limits(
             blocked=await cash.active_block(customer.id, phone_hash),
-            open_orders=await cash.open_order_count(customer.id, phone_hash),
+            open_orders=await cash.open_order_count(customer.id, phone_hash, at=now),
             max_open=await settings.get_int("cash_max_open_orders"),
         )
 

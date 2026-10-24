@@ -14,7 +14,7 @@ from app.api.text import MultilineStr
 from app.core.exceptions import ApiError
 from app.core.rate_limit import enforce_rate_limit
 from app.fulfillment.api.admin_order_schemas import AdminOrderDetail
-from app.fulfillment.api.admin_orders import audit_context, order_detail
+from app.fulfillment.api.admin_orders import audit_context, cancel_refusal, order_detail
 from app.fulfillment.application.transition_line import transition_line
 from app.fulfillment.domain import limits
 from app.fulfillment.infrastructure.delivery_side import (
@@ -29,7 +29,13 @@ from app.identity.public import (
     require_admin,
     require_csrf,
 )
-from app.ordering.public import InvalidLineTransitionError, LineNotFoundError, OrderItemStatus
+from app.ordering.public import (
+    CancelReason,
+    InvalidLineTransitionError,
+    LineNotFoundError,
+    OrderItemStatus,
+)
+from app.payments.public import OrderTotalMismatchError, RefundExceedsAvailableError
 from app.platform.public import SqlAuditWriter
 
 admin_router = APIRouter(prefix="/orders", tags=["admin"], route_class=AdminBoundaryRoute)
@@ -43,6 +49,11 @@ class OrderItemTransitionRequest(BaseModel):
         MultilineStr | None,
         Field(max_length=limits.NOTE_MAX, description="A note kept in the status history."),
     ] = None
+    cancel_reason: CancelReason | None = Field(
+        default=None,
+        description="Required for `-> cancelled` from `ready_to_ship`, `returned`, "
+        "`ready_for_pickup` or `shipped`; `no_show` from `ready_for_pickup` only (VS-031).",
+    )
 
 
 async def _rate_limit(
@@ -70,8 +81,10 @@ async def _rate_limit(
         409: {
             "description": "INVALID_STATE_TRANSITION with `reason` and the line's "
             "`fulfillment_status`: `payment_required` (an unpaid online order, BR-148), "
-            "`cash_handover_required`, `not_a_legal_edge`, `line_closed`, or for an STL "
-            "line `already_delivered` (with `fulfilled_at`) and `not_awaiting_delivery`."
+            "`cash_handover_required`, `not_a_legal_edge`, `line_closed`, "
+            "`cancel_reason_required`, `cancel_reason_not_allowed`, `refund_exceeds_available`, "
+            "or for an STL line `already_delivered` (with `fulfilled_at`) and "
+            "`not_awaiting_delivery`; or ORDER_TOTAL_MISMATCH."
         },
         422: {"description": "VALIDATION_ERROR."},
         429: {"description": "RATE_LIMITED: the per-administrator hourly limit."},
@@ -100,9 +113,12 @@ async def transition_item(
             note=(body.reason or "").strip() or None,
             request_id=request_id,
             ip_hash=ip_hash,
+            cancel_reason=body.cancel_reason,
         )
     except LineNotFoundError as exc:
         raise not_found_error() from exc
+    except (OrderTotalMismatchError, RefundExceedsAvailableError) as exc:
+        raise await cancel_refusal(request, exc, order_id) from exc
     except InvalidLineTransitionError as exc:
         extensions: dict[str, Any] = {"reason": exc.reason}
         if exc.fulfilled_at is not None:

@@ -1,6 +1,7 @@
 """Cash rules (VS-028 plan 3.1; SRS 9.8.1, BR-141, BR-145). Pure: counts arrive as arguments."""
 
 from collections.abc import Iterable, Sequence
+from datetime import timedelta
 from typing import Final, Protocol
 
 from app.catalog.application.ports import ProductType
@@ -14,6 +15,8 @@ from app.ordering.domain.orders import NewOrderLine
 
 # int4 namespace of the two-int advisory lock; the one-bigint locks are another key space.
 CASH_PHONE_LOCK_NS: Final = 0x43415348
+# A cash order the customer cancelled counts toward the open-order limit this long (ADR-038 d23).
+SELF_CANCEL_WINDOW: Final = timedelta(hours=24)
 
 
 class _Priced(Protocol):
@@ -28,13 +31,15 @@ def cash_precheck(
     lines: Sequence[NewOrderLine], total_cents: int, *, enabled: bool, max_total: int
 ) -> None:
     """Before the phone lock, so no phone-free refusal can follow a phone-matched one: all
-    physical, enabled, a total above zero and within the cap (ADR-038)."""
+    physical, enabled, a total above zero, no line priced 0 (ADR-043 d12), within the cap."""
     if any(line.product_type is not ProductType.PHYSICAL for line in lines):
         raise PaymentMethodNotAllowedError("cash_requires_physical")
     if not enabled:
         raise PaymentMethodNotAllowedError("cash_disabled")
     if total_cents <= 0:
         raise PaymentMethodNotAllowedError("zero_total")
+    if any(line.unit_price_cents == 0 for line in lines):  # a free line escapes BR-144
+        raise CashNotAvailableError("Cash on delivery is not available for this order.")
     if total_cents > max_total:
         raise CashLimitReachedError("order_total")
 

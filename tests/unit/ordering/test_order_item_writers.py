@@ -15,6 +15,7 @@ KNOWN_WRITERS = {
     ("ordering/infrastructure/orders.py", "set_line_status"): "only under the orders lock",
     ("ordering/infrastructure/orders.py", "set_line_delivered"): "only under the orders lock",
     ("ordering/infrastructure/orders.py", "move_line"): "only under the orders lock",  # VS-029
+    ("ordering/infrastructure/orders.py", "cancel_order_lines"): "only under the orders lock",
     # VS-029b: timestamps only, never a state.
     ("ordering/infrastructure/orders.py", "stamp_receipt_confirmed"): "only under the orders lock",
     ("ordering/infrastructure/orders.py", "stamp_problem_reported"): "only under the orders lock",
@@ -104,6 +105,8 @@ def test_every_order_items_writer_is_known() -> None:
 
 def test_line_statuses_change_only_under_the_orders_lock() -> None:
     assert _callers("set_line_status") == KNOWN_LINE_STATUS_CALLERS
+    # VS-031's cancel writer, called with the caller's LockedOrder.
+    assert _callers("cancel_order_lines") == {("ordering/public.py", "cancel_lines")}
     source = (SRC / "ordering" / "public.py").read_text(encoding="utf-8")
     mark = next(f for f in _functions(ast.parse(source)) if f.name == "mark_order_paid")
     assert any(arg.arg == "locked" for arg in mark.args.args), "takes a LockedOrder"

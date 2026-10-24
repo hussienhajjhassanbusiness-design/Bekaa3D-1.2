@@ -517,6 +517,22 @@ async def test_blocks_match_by_account_and_by_phone_and_cleared_blocks_do_not(
     assert cleared.status_code == 201, cleared.text
 
 
+async def test_a_cart_with_a_free_physical_line_is_refused_cash_but_can_pay_online(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """ADR-043 d12: a refusal leaving only a $0 line would end with `other` and escape the
+    BR-144 block, so cash refuses the cart outright, with the one generic refusal."""
+    lamp, free = await physical(db_session), await physical(db_session, price_cents=0)
+    with client_for(main_app) as client:
+        buyer = await signed_in_buyer(client, db_session, lamp, free)
+        refused = await refused_cash(client, db_engine, buyer, pickup_body(random_phone()))
+        online = post(
+            client, checkout_body(fulfillment_method="pickup", contact_phone=random_phone())
+        )
+    assert_cash_not_available(refused)
+    assert online.status_code == 201, online.text
+
+
 async def test_block_and_open_order_refusals_by_account_or_phone_are_byte_identical(
     db_engine: AsyncEngine, db_session: AsyncSession
 ) -> None:

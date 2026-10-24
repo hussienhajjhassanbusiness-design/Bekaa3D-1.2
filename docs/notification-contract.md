@@ -59,10 +59,12 @@ Rules enforced by `app.engagement.domain.payload`:
 | `offer.expiring_soon` | `offer` | the customer | `offer_id`, `product_id`, `product_name`, `amount_cents`, `currency`, `responds_by` | VS-040 |
 | `offer.checkout_expired` | `offer` | the customer | `offer_id`, `product_id` | VS-040 |
 | `stl.delivered` | `download` | the customer | `order_id`, `order_number`, `item_id`, `product_name` | VS-023b |
+| `order.cancelled` | `order` | the customer, once per cancel request ([`cancellation.md`](cancellation.md)) | `order_id`, `order_number`, `items` (`item_id`, `product_name`), `order_cancelled`, `amount_due_cents`, `refund_cents`, `currency` | VS-031 |
 | `order.ready_to_ship`, `order.shipped`, `order.ready_for_pickup`, `order.delivered`, `order.picked_up` | `order` | the customer, once per order per step ([`fulfillment.md`](fulfillment.md)) | `order_id`, `order_number`, `step`, `fulfillment_method`, `payment_method`, `delivery_fee_note`, `receipt_actions`; `pickup_address`, `pickup_hours` for pickup; `cash_receipt` after a cash handover | VS-029 |
 
 Emails with them (outbox templates; no phone, hash or address ever appears in a payload):
 - `order_payment_confirmed` (VS-023): `order_id`, `order_number`, `total_cents`, `currency`; VS-028 adds `fulfillment_method`, `estimated_dispatch_at` and `delivery_fee_note` (delivery only).
+- `order_cancelled` (VS-031): the `order.cancelled` payload above; a paid cancel also sends VS-030's `order_refund_issued`.
 - `order_cash_placed` (VS-028): `order_id`, `order_number`, `amount_due_cents`, `currency`, `fulfillment_method`, `estimated_dispatch_at`, `delivery_fee_note` (delivery only), `pickup`.
 
 ### On `event`

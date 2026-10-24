@@ -72,7 +72,7 @@ class AdminOrderPage(BaseModel):
 class AvailableActionRead(BaseModel):
     target_status: OrderItemStatus
     cancel_reasons: list[CancelReason] = Field(
-        description="Empty: the transition takes no reason. Always empty until VS-031."
+        description="Empty: the transition takes no reason; otherwise one is required."
     )
 
 
@@ -123,8 +123,8 @@ class AdminOrderLineRead(BaseModel):
             receipt_confirmed_at=line.receipt_confirmed_at,
             problem_reported_at=line.problem_reported_at,
             available_actions=[
-                AvailableActionRead(target_status=target, cancel_reasons=[])
-                for target in item.available
+                AvailableActionRead(target_status=target, cancel_reasons=list(reasons))
+                for target, reasons in item.available
             ],
         )
 
@@ -303,6 +303,16 @@ class AdminOrderUpdate(BaseModel):
 
     def note(self) -> str | None:
         return (self.admin_note or "").strip() or None
+
+
+class AdminOrderCancelRequest(BaseModel):
+    """Cancels every line before shipping or collection (VS-031); `cancel_reason` is
+    recorded on the `ready_to_ship` and `ready_for_pickup` lines, which require one."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    reason: Annotated[MultilineStr, Field(min_length=1, max_length=limits.NOTE_MAX)]
+    cancel_reason: CancelReason | None = None
 
 
 class CashHandoverRequest(BaseModel):

@@ -1,13 +1,20 @@
 """`POST …/items/{item_id}/transition` (VS-029): one line, one edge, one transaction (the
-caller's): lock, decide on the locked state, history, status, audit, any order notice."""
+caller's): lock, decide on the locked state, history, status, audit, any order notice.
+`-> cancelled` is VS-031's cancel, so it refunds and may block cash like the others."""
 
 from datetime import datetime
 from uuid import UUID
 
 from app.catalog.application.ports import ProductType
+from app.fulfillment.application.cancel_lines import (
+    CancelContext,
+    CancelDeps,
+    cancel_line_by_admin,
+)
 from app.fulfillment.application.mark_stl_delivered import deliver_stl_line
 from app.fulfillment.application.ports import FulfillmentNotices, FulfillmentOrders, OrderPayments
 from app.ordering.public import (
+    CancelReason,
     InvalidLineTransitionError,
     LineNotFoundError,
     OrderItemStatus,
@@ -32,7 +39,19 @@ async def transition_line(
     note: str | None,
     request_id: str | None,
     ip_hash: str | None,
+    cancel_reason: CancelReason | None = None,
 ) -> OrderStatus:
+    if target is OrderItemStatus.CANCELLED:
+        outcome = await cancel_line_by_admin(
+            CancelDeps(orders, payments, audit, notices),
+            order_id=order_id,
+            item_id=item_id,
+            cancel_reason=cancel_reason,
+            ctx=CancelContext(admin_id, at, note, request_id, ip_hash),
+        )
+        return outcome.order_status
+    if cancel_reason is not None:
+        raise InvalidLineTransitionError(TransitionRefusal.CANCEL_REASON_NOT_ALLOWED.value)
     locked = await orders.lock(order_id)
     if locked is None:
         raise LineNotFoundError(f"order {order_id} does not exist")

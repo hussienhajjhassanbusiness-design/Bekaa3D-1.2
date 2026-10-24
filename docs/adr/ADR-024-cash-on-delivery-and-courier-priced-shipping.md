@@ -114,9 +114,9 @@ The final review of PR #8 (money and SRS reviewers, 2026-10-10) found no Blocker
 - SRS §9.6, decision 11 and the `REFUND_REQUIRES_CANCELLATION` text say a `shipped` line is "cancelled after it comes back". A paid line cannot be cancelled from `returned`; it is refunded (`returned → refunded`). Fix the wording.
 
 **VS-031**
-- A customer who adds a $0 item to every cash order escapes the block: a refusal leaves only the $0 line, which is cancelled with `other`, and `other` prevents the block. This needs $0 catalogue products to exist.
-- Database-design §17.4 indents `-> refunded # paid only` under the $0 `-> cancelled`, which reads as `cancelled → refunded`.
-- The entities delivery diagram lacks `SHIPPED → CANCELLED` for a $0 unpaid cash line, and the pickup diagram labels its cancel "(no-show)" although `refused` and `other` also apply.
+- ~~A customer who adds a $0 item to every cash order escapes the block.~~ **Resolved** by [ADR-043](ADR-043-cancellation-and-returns.md) d12: cash refuses a cart with any physical line priced 0.
+- ~~Database-design §17.4 indents `-> refunded # paid only` under the $0 `-> cancelled`.~~ **Fixed** in VS-031.
+- ~~The entities delivery diagram lacks `SHIPPED → CANCELLED` for a $0 unpaid cash line; the pickup diagram labels its cancel "(no-show)".~~ **Fixed** in VS-031.
 
 **VS-032**
 - No `UNIQUE(provider, provider_payment_id)` on `payments`. If a provider reuses a transaction id across a retry, one capture could be applied to the retry and also late-captured on the old attempt. A genuine second capture on one attempt also collapses into one refund.
