@@ -184,7 +184,7 @@ no_show
 other
 ```
 
-Recorded on an administrator cancel from `ready_to_ship` or `returned` (`refused` or `other`) or `ready_for_pickup` (`refused`, `no_show` or `other`). Only `refused` and `no_show` can create a cash payment block (ADR-024).
+Recorded on an administrator cancel from `ready_to_ship` or `returned` (`refused` or `other`) or `ready_for_pickup` (`refused`, `no_show` or `other`), and as `other` on the `shipped -> cancelled` of an unpaid $0 cash line (VS-031, ADR-043 d3). Only `refused` and `no_show` can create a cash payment block (ADR-024).
 
 ## 3.5 `order_source`
 
@@ -990,7 +990,8 @@ but determining whether the referenced product is STL is cross-table. VS-022 the
 | `cash_terms_accepted_at` | TIMESTAMPTZ | Yes | required when `payment_method = cash` |
 | `placed_at` | TIMESTAMPTZ | No |  |
 | `completed_at` | TIMESTAMPTZ | Yes |  |
-| `cancelled_at` | TIMESTAMPTZ | Yes |  |
+| `cancelled_at` | TIMESTAMPTZ | Yes | set only by the hold release (VS-024); a cancelled paid or cash order leaves it NULL (ADR-043 d7) |
+| `customer_cancelled_at` | TIMESTAMPTZ | Yes | VS-031 (`595b7e6e2792`): set only by the customer's own cancel; a cash order so cancelled counts toward `cash_max_open_orders` for 24 hours (ADR-038 d23), through `ix_orders_cash_self_cancel_user (user_id, customer_cancelled_at)` and `ix_orders_cash_self_cancel_phone (contact_phone_hash, customer_cancelled_at)`, both `WHERE payment_method = 'cash' AND customer_cancelled_at IS NOT NULL` |
 | `created_at` | TIMESTAMPTZ | No |  |
 | `updated_at` | TIMESTAMPTZ | No |  |
 
@@ -1092,7 +1093,7 @@ As built (VS-030, migration `c01e53ab3e0f`): `uq_orders_id_user UNIQUE (id, user
 | `fulfilled_at` | TIMESTAMPTZ | Yes | for STL: when marked delivered |
 | `delivered_by` | UUID | Yes | FK → `users.id`; STL only: administrator who marked it delivered |
 | `payment_method` | `payment_method` | No | copy of the order's; composite FK `(order_id, payment_method)` → `orders(id, payment_method)` |
-| `cancel_reason` | `cancel_reason` | Yes | set only with `fulfillment_status = 'cancelled'` from `ready_to_ship`, `returned` or `ready_for_pickup` |
+| `cancel_reason` | `cancel_reason` | Yes | set only with `fulfillment_status = 'cancelled'` from `ready_to_ship`, `returned` or `ready_for_pickup`, or `other` from `shipped` on an unpaid $0 cash line (VS-031) |
 | `receipt_confirmed_at` | TIMESTAMPTZ | Yes | physical only: customer pressed "I got it" (ADR-024) |
 | `problem_reported_at` | TIMESTAMPTZ | Yes | physical only: customer reported a problem (ADR-024) |
 | `created_at` | TIMESTAMPTZ | No |  |
