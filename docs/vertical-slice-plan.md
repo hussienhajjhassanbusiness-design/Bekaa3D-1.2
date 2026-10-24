@@ -33,7 +33,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 | VS-028 | Physical checkout: delivery, pickup, payment method, dispatch estimate | VS-023, VS-024, VS-026 | Done |
 | VS-029 | Admin order queue, fulfillment and cash handover | VS-028, VS-023b, VS-024, VS-025 | Done |
 | VS-030 | Refunds and settlement | VS-029, VS-024 | Done |
-| VS-031 | Cancellation and returns | VS-030 | Not started |
+| VS-031 | Cancellation and returns | VS-030 | Done |
 | VS-033 | Contact form and captcha | VS-005 | Done |
 | VS-029b | Receipt confirmation and problem report | VS-029, VS-033 | Done |
 | VS-034 | Bring Your Idea submission | VS-014, VS-033 | Done |
@@ -853,7 +853,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   6. **The open-cash-order count relies on the order status (VS-028 review, 2026-10-22).** `SqlCashChecks.open_order_count` and `ix_orders_open_cash_phone` treat `payment_method = 'cash' AND status = 'in_progress'` as "unpaid and not cancelled" ([ADR-038](adr/ADR-038-physical-checkout-and-cash-eligibility.md) d13). That holds only while an unpaid cash order derives `in_progress` until every line is cancelled, and a cash order whose payment reached `paid` never derives `in_progress`. Item 1 reorders `derive_order_status`: if a refund, an owed refund or a chargeback can move an unpaid cash order to another status, the cash limit silently stops counting it; if a paid one can read `in_progress`, a customer who paid stays refused cash. Suggested fix: keep both properties and test them over every combination of status inputs for both payment methods; or count from line states and `payments` instead of `status`, which needs a new index.
 
 ## VS-031 — Cancellation and returns
-**Status:** Not started
+**Status:** Done (migration `595b7e6e2792`). **As built:** [ADR-043](adr/ADR-043-cancellation-and-returns.md), [ADR-038](adr/ADR-038-physical-checkout-and-cash-eligibility.md) d23, [`docs/cancellation.md`](cancellation.md). Both must-resolve items are answered by the owner (2026-10-24): 1 by ADR-038 d23 (a self-cancelled cash order counts toward the limit for 24 hours), 2 by ADR-043 d1 (every cancel of a paid line refunds its whole remaining balance).
 **Depends on:** VS-030
 - **Notes from VS-030 ([ADR-042](adr/ADR-042-refunds-voids-and-chargebacks.md), [plan §3.7](plans/VS-030-refunds-settlement-plan.md#37-published-interface-what-vs-031-vs-032-vs-036-vs-043-and-vs-045-consume)):**
   - Build the published interface the cancel needs in `app.payments.public`: `refund_balances(session, locked)` and a `create_refund(..., kind="cancellation", cancelling=...)` that runs under the caller's `lock_order_for_change` and leaves the recompute to the caller. Today's `create_refund` (`app.payments.application.services.refunds`) takes the locks itself and already honours `cancelling` (L5, L6).
@@ -938,7 +938,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 - **Tests:**
   - The same contract fixtures as the mock (paid, underpaid, failed, bad signature, duplicate, timeout, late success after expiry), run against the provider's sandbox; an end-to-end payment on staging.
   - A provider dispute delivered twice (if the provider sends disputes) records one chargeback, through `record_chargeback`, with the VS-030 rules (tested there: I17-I19, R8, R11-R13).
-  - With VS-031 built, a chargeback that leaves an unfinished line partly covered, then the admin's cancel of that line, creates a cancellation refund for its remaining balance only.
+  - With VS-031 built, a chargeback that leaves an unfinished line partly covered, then the admin's cancel of that line, creates a cancellation refund for its remaining balance only. **Notes from VS-031:** `create_cancellation_refund` already derives that remaining balance (ADR-043 d1); `tests/integration/payments/test_mixed_cancel_refunds.py` covers the reverse order (cancel, then a chargeback for the whole payment).
 - **Done when:**
   - Every fixture passes against the sandbox.
   - No checkout, order or cash-handover code changed.
@@ -1168,6 +1168,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 ## VS-043 — Business analytics
 **Status:** Not started
 **Depends on:** VS-029, VS-030, VS-031, VS-036, VS-039
+- **Notes from VS-031 ([ADR-043](adr/ADR-043-cancellation-and-returns.md)):** a cancel's refund is `kind = cancellation`, one per cancel request, its items each cancelled line's whole remaining balance; a customer's own has `approved_by` NULL. `orders.customer_cancelled_at` marks the customer's own cancels (never an administrator's); `orders.cancelled_at` stays the hold release's. A cancelled line of an unpaid cash order has no refund and no revenue (BR-149).
 - **Notes from VS-030 ([ADR-042](adr/ADR-042-refunds-voids-and-chargebacks.md), plan §3.7):** add `refunded_cents_by_line(session, line_ids)` to `app.payments.public`: pending and settled refund items plus chargeback items, never failed, voided or `late_capture` refunds. Revenue is the line total less that; a chargeback's excess is not attributed to lines.
 **Goal:** The administrator sees revenue split by physical and STL (attributed per line), recent purchases, customer statistics, pending offers, top-rated products and best-selling STLs.
 - **Model / migration:** None.
