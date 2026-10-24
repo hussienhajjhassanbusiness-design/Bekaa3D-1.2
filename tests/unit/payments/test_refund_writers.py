@@ -26,7 +26,7 @@ KNOWN_WRITERS = {
 STORE_WRITES = {"insert", "insert_late_capture", "settle", "fail", "void", "mark_reissued"}
 STORES = {"refunds", "chargebacks"}
 KNOWN_STORE_CALLERS = {
-    "create_refund",
+    "_write_refund",  # after `_hold` in create_refund and create_cancellation_refund (below)
     "create_late_capture_refund",  # VS-024's Tx B holds ranks 1-3 (test below)
     "record_chargeback",
     "_void_and_remainders",  # called by record_chargeback after rank 4 (test below)
@@ -143,12 +143,12 @@ def _service(name: str) -> ast.AsyncFunctionDef:
 
 
 def test_lo1_the_lock_step_takes_orders_then_payments_then_reads_refunds() -> None:
-    lock = _service("_lock")
+    lock, hold = _service("_lock"), _service("_hold")
+    assert _first_line(lock, "lock") < _first_line(lock, "_hold")
     assert (
-        _first_line(lock, "lock")
-        < _first_line(lock, "lock_for_order")
-        < _first_line(lock, "for_order")
-        < _first_line(lock, "check_order_totals")
+        _first_line(hold, "lock_for_order")
+        < _first_line(hold, "for_order")
+        < _first_line(hold, "check_order_totals")
     )
 
 
@@ -156,7 +156,11 @@ def test_lo1_every_use_case_locks_before_it_writes() -> None:
     locked_refund = _service("_locked_refund")
     assert _first_line(locked_refund, "_lock") < _first_line(locked_refund, "lock")
     create = _service("create_refund")
-    assert _first_line(create, "_lock") < _first_line(create, "insert")
+    assert _first_line(create, "_lock") < _first_line(create, "_write_refund")
+    # VS-031: the caller holds ranks 1-2 (`lock_order_for_change`); `_hold` takes rank 3.
+    cancel = _service("create_cancellation_refund")
+    assert _first_line(cancel, "_hold") < _first_line(cancel, "_write_refund")
+    assert _first_line(_service("refund_balances"), "_hold")
     for name in ("settle_refund", "fail_refund", "void_refund", "reissue_refund"):
         function = _service(name)
         first_write = min(_first_line(function, w) for w in _store_calls(function))

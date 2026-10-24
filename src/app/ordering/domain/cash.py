@@ -1,6 +1,7 @@
 """Cash rules (VS-028 plan 3.1; SRS 9.8.1, BR-141, BR-145). Pure: counts arrive as arguments."""
 
 from collections.abc import Iterable, Sequence
+from datetime import timedelta
 from typing import Final, Protocol
 
 from app.catalog.application.ports import ProductType
@@ -14,6 +15,8 @@ from app.ordering.domain.orders import NewOrderLine
 
 # int4 namespace of the two-int advisory lock; the one-bigint locks are another key space.
 CASH_PHONE_LOCK_NS: Final = 0x43415348
+# A cash order the customer cancelled counts toward the open-order limit this long (ADR-038 d23).
+SELF_CANCEL_WINDOW: Final = timedelta(hours=24)
 
 
 class _Priced(Protocol):

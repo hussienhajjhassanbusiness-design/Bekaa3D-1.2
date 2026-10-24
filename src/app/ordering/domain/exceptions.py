@@ -235,3 +235,7 @@ class CashAmountMismatchError(OrderingDomainError):
         super().__init__("The cash entered differs from the amount due.")
         self.due_cents = due_cents
         self.currency = currency
+
+
+class OrderNotCancellableError(OrderingDomainError):
+    """409 ORDER_NOT_CANCELLABLE: the customer's cancel cannot occur now (VS-031, FR-09)."""

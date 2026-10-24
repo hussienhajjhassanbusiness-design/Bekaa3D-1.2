@@ -148,8 +148,8 @@ async def test_r1_two_accounts_one_phone_place_one_cash_order(
         await meet_or_fail(barrier)
         return await lock_cart(*args, **kwargs)
 
-    async def slow_count(self: SqlCashChecks, *args: Any) -> int:
-        found = await count(self, *args)
+    async def slow_count(self: SqlCashChecks, *args: Any, **kwargs: Any) -> int:
+        found = await count(self, *args, **kwargs)
         await asyncio.sleep(HOLD_SECONDS)
         return found
 
@@ -312,8 +312,8 @@ async def test_r3_c_a_checkout_holding_the_phone_lock_commits_before_the_block(
     holding, release = asyncio.Event(), asyncio.Event()
     count = SqlCashChecks.open_order_count
 
-    async def held(self: SqlCashChecks, *args: Any) -> int:
-        found = await count(self, *args)
+    async def held(self: SqlCashChecks, *args: Any, **kwargs: Any) -> int:
+        found = await count(self, *args, **kwargs)
         holding.set()
         await asyncio.wait_for(release.wait(), timeout=10)
         return found

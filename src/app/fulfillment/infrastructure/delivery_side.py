@@ -10,19 +10,30 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.engagement.public import NotificationType, create_notification
 from app.ordering.public import (
     DELIVERY_FEE_NOTE,
+    CancelReason,
     FulfillmentMethod,
+    LineCancel,
+    LineState,
     LockedOrder,
     OrderItemStatus,
     OrderLine,
     OrderStatus,
     RefundFacts,
+    cancel_lines,
+    cash_block_store,
     hand_over_cash_lines,
+    lock_cart_for_cash_block,
+    lock_cash_phone,
     lock_order_for_change,
     mark_stl_line_delivered,
+    recompute_order_status,
+    status_inputs_for,
     transition_physical_line,
 )
 from app.payments.public import (
+    CancellationRefund,
     OrderPaymentRow,
+    create_cancellation_refund,
     insert_cash_payment,
     order_payment_reader,
     order_payment_rows,
@@ -31,6 +42,7 @@ from app.payments.public import (
 from app.platform.public import SqlOutboxWriter, settings_reader
 
 DELIVERED_TEMPLATE = "order_stl_delivered"
+CANCELLED_TEMPLATE = "order_cancelled"
 # One template per visible step (SRS 16.1); the handover reuses the last two.
 STEP_TEMPLATES = {
     OrderItemStatus.READY_TO_SHIP: "order_ready",
@@ -93,6 +105,60 @@ class SqlDeliveryOrders:
             self._session, locked, admin_id=admin_id, at=at, note=note
         )
 
+    async def cancel(
+        self,
+        locked: LockedOrder,
+        cancels: tuple[LineCancel, ...],
+        *,
+        actor_user_id: UUID,
+        at: datetime,
+        note: str | None,
+        by_customer: bool,
+    ) -> None:
+        await cancel_lines(
+            self._session,
+            locked,
+            cancels,
+            actor_user_id=actor_user_id,
+            at=at,
+            note=note,
+            by_customer=by_customer,
+        )
+
+    async def insert_cash_block(
+        self, locked: LockedOrder, *, reason: CancelReason, at: datetime
+    ) -> bool:
+        """After the orders lock: the cart, then the phone, so it serialises against the
+        customer's checkouts with any phone and any account's with this one (ADR-024 d9)."""
+        order = locked.order
+        if order.contact_phone_hash is None:  # a physical order always has one (VS-028)
+            raise RuntimeError(f"cash order {order.id} has no contact phone hash")
+        await lock_cart_for_cash_block(self._session, order.user_id)
+        await lock_cash_phone(self._session, order.contact_phone_hash)
+        return await cash_block_store(self._session).insert_block(
+            user_id=order.user_id,
+            phone_hash=order.contact_phone_hash,
+            order_id=order.id,
+            reason=reason,
+            at=at,
+        )
+
+    async def recompute(
+        self,
+        locked: LockedOrder,
+        lines: tuple[LineState, ...],
+        *,
+        reached_paid: bool,
+        refunds: RefundFacts,
+        actor_user_id: UUID,
+    ) -> OrderStatus:
+        return await recompute_order_status(
+            self._session,
+            locked,
+            status_inputs_for(locked, lines, reached_paid=reached_paid, refunds=refunds),
+            actor_user_id=actor_user_id,
+        )
+
 
 class SqlOrderPayments:
     def __init__(self, session: AsyncSession) -> None:
@@ -119,6 +185,29 @@ class SqlOrderPayments:
 
     async def rows(self, order_id: UUID) -> list[OrderPaymentRow]:
         return await order_payment_rows(self._session, order_id)
+
+    async def cancellation_refund(
+        self,
+        locked: LockedOrder,
+        cancelling: frozenset[UUID],
+        *,
+        actor_user_id: UUID,
+        by_customer: bool,
+        at: datetime,
+        request_id: str | None,
+        ip_hash: str | None,
+    ) -> CancellationRefund | None:
+        return await create_cancellation_refund(
+            self._session,
+            locked,
+            cancelling=cancelling,
+            reason="customer cancellation" if by_customer else "cancellation",
+            actor_user_id=actor_user_id,
+            by_customer=by_customer,
+            at=at,
+            request_id=request_id,
+            ip_hash=ip_hash,
+        )
 
 
 class SqlDeliveryNotices:
@@ -153,6 +242,31 @@ class SqlDeliveryNotices:
             DELIVERED_TEMPLATE,
             "stl.delivered",
             {"item_id": str(line.id), "product_name": line.product_name_snapshot},
+        )
+
+    async def order_cancelled(
+        self,
+        locked: LockedOrder,
+        cancelled: tuple[OrderLine, ...],
+        *,
+        order_cancelled: bool,
+        amount_due_cents: int | None,
+        refund_cents: int | None,
+    ) -> None:
+        await self._send(
+            locked,
+            CANCELLED_TEMPLATE,
+            "order.cancelled",
+            {
+                "items": [
+                    {"item_id": str(line.id), "product_name": line.product_name_snapshot}
+                    for line in cancelled
+                ],
+                "order_cancelled": order_cancelled,
+                "amount_due_cents": amount_due_cents,
+                "refund_cents": refund_cents,
+                "currency": locked.order.currency,
+            },
         )
 
     async def step_reached(self, locked: LockedOrder, step: OrderItemStatus) -> None:

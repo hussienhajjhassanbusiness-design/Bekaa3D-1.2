@@ -4,7 +4,7 @@ import pytest
 
 from app.ordering.domain.enums import FulfillmentMethod as M
 from app.ordering.domain.enums import OrderItemStatus as S
-from app.ordering.domain.fulfillment_steps import step_reached
+from app.ordering.domain.fulfillment_steps import step_newly_reached, step_reached
 
 
 def _sent_while_moving(method: M, path: list[S], lines: int) -> list[tuple[int, S]]:
@@ -58,3 +58,42 @@ def test_a_step_from_the_other_method_never_notifies() -> None:
     assert not step_reached(M.PICKUP, S.SHIPPED, [S.SHIPPED])
     assert not step_reached(M.DELIVERY, S.READY_FOR_PICKUP, [S.READY_FOR_PICKUP])
     assert not step_reached(None, S.SHIPPED, [S.SHIPPED])
+
+
+# --- VS-031: a cancel that leaves the rest at a step ---------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("method", "before", "after", "expected"),
+    [
+        # The line behind is cancelled: the other one's step is announced now.
+        (
+            M.DELIVERY,
+            [S.READY_TO_SHIP, S.IN_PRODUCTION],
+            [S.READY_TO_SHIP, S.CANCELLED],
+            S.READY_TO_SHIP,
+        ),
+        (M.DELIVERY, [S.SHIPPED, S.PENDING], [S.SHIPPED, S.CANCELLED], S.SHIPPED),
+        (
+            M.PICKUP,
+            [S.READY_FOR_PICKUP, S.PENDING],
+            [S.READY_FOR_PICKUP, S.CANCELLED],
+            S.READY_FOR_PICKUP,
+        ),
+        # Already announced when both reached it: never twice.
+        (M.DELIVERY, [S.READY_TO_SHIP, S.READY_TO_SHIP], [S.READY_TO_SHIP, S.CANCELLED], None),
+        # Nothing left, or the rest at no visible step.
+        (M.DELIVERY, [S.PENDING], [S.CANCELLED], None),
+        (M.DELIVERY, [S.IN_PRODUCTION, S.PENDING], [S.IN_PRODUCTION, S.CANCELLED], None),
+        (None, [S.PENDING], [S.CANCELLED], None),
+    ],
+)
+def test_step_newly_reached(
+    method: M | None, before: list[S], after: list[S], expected: S | None
+) -> None:
+    assert step_newly_reached(method, before, after) is expected
+
+
+def test_a_reship_announces_shipped_again() -> None:
+    assert step_reached(M.DELIVERY, S.SHIPPED, [S.SHIPPED])
+    assert step_reached(M.DELIVERY, S.SHIPPED, [S.SHIPPED, S.RETURNED])

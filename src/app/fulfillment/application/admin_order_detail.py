@@ -9,9 +9,10 @@ from app.ordering.public import (
     AdminHistoryEntry,
     AdminOrder,
     AdminOrderLine,
+    CancelReason,
     LineContext,
     OrderItemStatus,
-    available_targets,
+    available_actions,
     payment_due,
 )
 from app.payments.public import OrderPaymentRow
@@ -20,7 +21,7 @@ from app.payments.public import OrderPaymentRow
 @dataclass(frozen=True)
 class LineWithActions:
     line: AdminOrderLine
-    available: tuple[OrderItemStatus, ...]
+    available: tuple[tuple[OrderItemStatus, tuple[CancelReason, ...]], ...]
 
 
 @dataclass(frozen=True)
@@ -43,9 +44,13 @@ async def admin_order_detail(
     lines = [
         LineWithActions(
             line,
-            available_targets(
+            available_actions(
                 LineContext(
-                    line.product_type, order.fulfillment_method, order.payment_method, paid
+                    line.product_type,
+                    order.fulfillment_method,
+                    order.payment_method,
+                    paid,
+                    line.line_total_cents,
                 ),
                 line.fulfillment_status,
             ),

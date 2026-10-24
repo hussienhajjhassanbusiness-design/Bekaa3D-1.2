@@ -9,7 +9,7 @@ from uuid import UUID
 
 import structlog
 
-from app.ordering.public import LockedOrder, OrderItemStatus, OrderStatus
+from app.ordering.public import LockedOrder, OrderItemStatus, OrderStatus, RefundFacts
 from app.payments.application.ports import (
     ChargebackStore,
     PaymentAlerts,
@@ -33,11 +33,14 @@ from app.payments.domain.refunds import (
     PaymentFact,
     Refund,
     RefundAction,
+    cancellation_items,
     check_order_totals,
     check_request,
     late_capture_amount,
+    line_balances,
     lines_becoming_refunded,
     paid_payment,
+    payment_balance,
     payment_status,
     refund_facts,
     refund_step,
@@ -89,6 +92,12 @@ async def _lock(deps: RefundDeps, order_id: UUID, *, check_totals: bool = True) 
     locked = await deps.orders.lock(order_id)  # ranks 1 and 2
     if locked is None:
         raise RefundNotFoundError(f"order {order_id} does not exist")
+    return await _hold(deps, locked, check_totals=check_totals)
+
+
+async def _hold(deps: RefundDeps, locked: LockedOrder, *, check_totals: bool = True) -> _Locked:
+    """Rank 3 and the ledger, for an order whose ranks 1 and 2 the caller holds."""
+    order_id = locked.order.id
     attempts = await deps.payments.lock_for_order(order_id)  # rank 3, by id
     facts = {
         p.id: PaymentFact(p.id, p.provider, p.status, p.amount_cents, p.currency) for p in attempts
@@ -113,6 +122,12 @@ async def _lock(deps: RefundDeps, order_id: UUID, *, check_totals: bool = True) 
     return _Locked(locked, paid, ledger)
 
 
+async def _mark_payment(deps: RefundDeps, held: _Locked, facts: RefundFacts, at: datetime) -> None:
+    target = payment_status(facts)
+    if target is not held.paid.status:
+        await deps.payments.mark_status(held.paid.id, target, at=at)
+
+
 async def _recompute(
     deps: RefundDeps,
     held: _Locked,
@@ -124,9 +139,7 @@ async def _recompute(
 ) -> OrderStatus:
     """Both projections from the rows as they now stand (never on settle)."""
     facts = refund_facts(ledger)
-    target = payment_status(facts)
-    if target is not held.paid.status:
-        await deps.payments.mark_status(held.paid.id, target, at=at)
+    await _mark_payment(deps, held, facts, at)
     return await deps.orders.recompute(
         held.order, refunded=refunded, refunds=facts, actor_user_id=actor_user_id
     )
@@ -154,6 +167,91 @@ async def create_refund(
     """L0-L8 under the locks, then the refund, the covered lines, both statuses, audit and
     (admin, cancellation) the customer's notice. `cancelling`: VS-031's lines."""
     held = await _lock(deps, order_id)
+    written = await _write_refund(
+        deps,
+        held,
+        kind=kind,
+        items=items,
+        reason=reason,
+        ctx=ctx,
+        at=at,
+        cancelling=cancelling,
+        approved_by=ctx.actor_user_id,
+    )
+    status = await deps.orders.recompute(
+        held.order, refunded=written.covered, refunds=written.facts, actor_user_id=ctx.actor_user_id
+    )
+    return RefundOutcome(written.refund_id, True, status)
+
+
+@dataclass(frozen=True)
+class CancellationRefund:
+    refund_id: UUID
+    amount_cents: int
+
+
+async def refund_balances(deps: RefundDeps, locked: LockedOrder) -> tuple[dict[UUID, int], int]:
+    """L2 per line and L3 for the paid payment, locking it (rank 3); the caller holds ranks
+    1-2 (VS-031). Raises OrderNotPaidError, or OrderTotalMismatchError on Q-2."""
+    held = await _hold(deps, locked)
+    return line_balances(held.ledger), payment_balance(held.ledger)
+
+
+async def create_cancellation_refund(
+    deps: RefundDeps,
+    locked: LockedOrder,
+    *,
+    cancelling: frozenset[UUID],
+    reason: str,
+    ctx: AuditContext,
+    at: datetime,
+    approved_by: UUID | None,
+) -> CancellationRefund | None:
+    """VS-031 under the caller's ranks 1-2: one pending `cancellation` refund for the whole
+    remaining balance of every line being cancelled (none when that is 0). It updates the
+    payment status but not the order's: the caller cancels the lines, then recomputes."""
+    held = await _hold(deps, locked)
+    balances = line_balances(held.ledger)
+    items = cancellation_items(held.ledger, cancelling, balances)
+    if not items:
+        return None
+    written = await _write_refund(
+        deps,
+        held,
+        kind=RefundKind.CANCELLATION,
+        items=items,
+        reason=reason,
+        ctx=ctx,
+        at=at,
+        cancelling=cancelling,
+        approved_by=approved_by,
+    )
+    return CancellationRefund(written.refund_id, written.amount_cents)
+
+
+@dataclass(frozen=True)
+class _Written:
+    refund_id: UUID
+    amount_cents: int
+    covered: tuple[UUID, ...]
+    facts: RefundFacts
+
+
+async def _write_refund(
+    deps: RefundDeps,
+    held: _Locked,
+    *,
+    kind: RefundKind,
+    items: Sequence[ItemFact],
+    reason: str,
+    ctx: AuditContext,
+    at: datetime,
+    cancelling: frozenset[UUID],
+    approved_by: UUID | None,
+) -> _Written:
+    """L4-L6 and the write: the refund, its covered lines, the payment status, audit and
+    the notice. The order status is the caller's, last."""
+    order_id = held.order.order.id
     known = {line.id for line in held.order.lines}
     if any(item.order_item_id not in known for item in items):
         raise RefundNotFoundError(f"a line is not on order {order_id}")
@@ -168,7 +266,7 @@ async def create_refund(
         currency=held.order.order.currency,
         reason=reason,
         requested_by=ctx.actor_user_id,
-        approved_by=ctx.actor_user_id,
+        approved_by=approved_by,
         initiated_at=at,
     )
     refund_id = await deps.refunds.insert(new)
@@ -189,9 +287,8 @@ async def create_refund(
     after = replace(
         _with_lines(held.ledger, covered), refunds=(*held.ledger.refunds, pending.fact())
     )
-    status = await _recompute(
-        deps, held, after, refunded=covered, actor_user_id=ctx.actor_user_id, at=at
-    )
+    facts = refund_facts(after)
+    await _mark_payment(deps, held, facts, at)
     await _audit(
         deps,
         ctx,
@@ -218,7 +315,7 @@ async def create_refund(
             held.order, refund_id=refund_id, amount_cents=new.amount_cents, currency=new.currency
         )
     await logger.ainfo("refund_created", refund_id=str(refund_id), order_id=str(order_id))
-    return RefundOutcome(refund_id, True, status)
+    return _Written(refund_id, new.amount_cents, covered, facts)
 
 
 @dataclass(frozen=True)

@@ -1,10 +1,12 @@
-"""`GET/PATCH /api/v1/admin/orders[/{id}]` and `POST …/{id}/cash-handover` (VS-029; F-060,
-F-062, F-054). Admin, MFA; customers get 404 from the boundary (ADR-017)."""
+"""`GET/PATCH /api/v1/admin/orders[/{id}]`, `POST …/{id}/cash-handover` (VS-029; F-060,
+F-062, F-054) and `POST …/{id}/cancel` (VS-031, F-066). Admin, MFA; customers get 404
+from the boundary (ADR-017)."""
 
 from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import UUID
 
+import structlog
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from pydantic import AwareDatetime
@@ -18,6 +20,7 @@ from app.core.rate_limit import enforce_rate_limit
 from app.core.security import hash_ip
 from app.fulfillment.api.admin_order_schemas import (
     AdminLineBalanceRead,
+    AdminOrderCancelRequest,
     AdminOrderChargebackRead,
     AdminOrderDetail,
     AdminOrderPage,
@@ -29,6 +32,7 @@ from app.fulfillment.api.admin_order_schemas import (
 )
 from app.fulfillment.api.stl_deliveries import decode_cursor, encode_cursor
 from app.fulfillment.application.admin_order_detail import admin_order_detail
+from app.fulfillment.application.cancel_lines import CancelContext, CancelDeps, cancel_by_admin
 from app.fulfillment.application.record_cash_handover import record_cash_handover
 from app.fulfillment.domain import limits
 from app.fulfillment.infrastructure.delivery_side import (
@@ -48,14 +52,23 @@ from app.ordering.public import (
     CashAmountMismatchError,
     FulfillmentMethod,
     HandoverRefusedError,
+    InvalidLineTransitionError,
     LineNotFoundError,
     OrderStatus,
     PaymentMethod,
     admin_order_page,
     admin_orders,
 )
-from app.payments.public import CashAlreadyRecordedError, admin_refunds, order_chargebacks
+from app.payments.public import (
+    CashAlreadyRecordedError,
+    OrderTotalMismatchError,
+    RefundExceedsAvailableError,
+    admin_refunds,
+    order_chargebacks,
+)
 from app.platform.public import SqlAuditWriter
+
+logger = structlog.get_logger()
 
 admin_router = APIRouter(prefix="/orders", tags=["admin"], route_class=AdminBoundaryRoute)
 
@@ -306,4 +319,89 @@ async def cash_handover(
             detail="The cash entered must equal the amount due.",
             extensions={"amount_due": {"amount_cents": exc.due_cents, "currency": exc.currency}},
         ) from exc
+    return await order_detail(session, order_id)
+
+
+CANCEL_409 = (
+    "INVALID_STATE_TRANSITION with `reason`: `payment_required` (an unpaid online order, "
+    "BR-148), `no_cancellable_line`, `cancel_reason_required`, `cancel_reason_not_allowed`, "
+    "`not_a_legal_edge`, `line_closed` or `refund_exceeds_available`; or ORDER_TOTAL_MISMATCH."
+)
+CancelRefused = InvalidLineTransitionError | OrderTotalMismatchError | RefundExceedsAvailableError
+
+
+async def cancel_refusal(exc: CancelRefused, order_id: UUID) -> ApiError:
+    """Every cancel's 409 (VS-031). A refund that cannot cover the balance refuses the whole
+    cancel: no paid line is ever cancelled partly covered (ADR-043)."""
+    if not isinstance(exc, InvalidLineTransitionError):
+        await logger.aerror(
+            "cancel_refund_refused", order_id=str(order_id), error=type(exc).__name__
+        )
+    if isinstance(exc, OrderTotalMismatchError):
+        return ApiError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="ORDER_TOTAL_MISMATCH",
+            title="Order totals do not match",
+            detail="The order's total does not match its lines or its payment. Nothing changed.",
+        )
+    extensions: dict[str, Any] = {"reason": "refund_exceeds_available"}
+    if isinstance(exc, InvalidLineTransitionError):
+        extensions = {"reason": exc.reason}
+        if exc.current_status is not None:
+            extensions["fulfillment_status"] = exc.current_status
+    return ApiError(
+        status_code=status.HTTP_409_CONFLICT,
+        code="INVALID_STATE_TRANSITION",
+        title="Cancellation refused",
+        detail="This cannot be cancelled now. Nothing changed.",
+        extensions=extensions,
+    )
+
+
+def cancel_deps(session: AsyncSession) -> CancelDeps:
+    return CancelDeps(
+        SqlDeliveryOrders(session),
+        SqlOrderPayments(session),
+        SqlAuditWriter(session),
+        SqlDeliveryNotices(session),
+    )
+
+
+@admin_router.post(
+    "/{order_id}/cancel",
+    response_model=AdminOrderDetail,
+    dependencies=[
+        Depends(require_csrf),
+        Depends(_limit("admin_stl_delivery", limits.STL_DELIVERY_RATE_LIMIT)),
+    ],
+    summary="Cancel every line not yet shipped or collected, refunding paid ones",
+    responses={
+        **_COMMON,
+        403: {"description": "CSRF_INVALID."},
+        409: {"description": CANCEL_409},
+        422: {"description": "VALIDATION_ERROR."},
+        429: {"description": "RATE_LIMITED: shared with the line transitions."},
+    },
+)
+async def cancel_order(
+    order_id: UUID,
+    body: AdminOrderCancelRequest,
+    request: Request,
+    claims: AccessTokenClaims = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+) -> AdminOrderDetail:
+    request_id, ip_hash = audit_context(request)
+    ctx = CancelContext(claims.user_id, datetime.now(UTC), body.reason.strip(), request_id, ip_hash)
+    try:
+        await cancel_by_admin(
+            cancel_deps(session), order_id=order_id, cancel_reason=body.cancel_reason, ctx=ctx
+        )
+    except LineNotFoundError as exc:
+        raise not_found_error() from exc
+    except (
+        InvalidLineTransitionError,
+        OrderTotalMismatchError,
+        RefundExceedsAvailableError,
+    ) as exc:
+        raise await cancel_refusal(exc, order_id) from exc
     return await order_detail(session, order_id)

@@ -4,6 +4,7 @@
 from collections.abc import Iterable, Sequence
 from dataclasses import replace
 from datetime import datetime, timedelta
+from typing import Protocol
 from uuid import UUID
 
 from app.catalog.application.ports import ProductType
@@ -14,6 +15,14 @@ from app.ordering.domain.payment_recovery import hold_deadline, retry_refusal
 HIDDEN_STATUS = OrderItemStatus.IN_PRODUCTION
 CANCELLABLE_ORDER_STATUSES = frozenset({OrderStatus.IN_PROGRESS, OrderStatus.PARTIALLY_REFUNDED})
 LIVE_ATTEMPT_STATUSES = frozenset({"pending", "processing"})
+
+
+class _Line(Protocol):
+    @property
+    def product_type(self) -> ProductType: ...
+
+    @property
+    def fulfillment_status(self) -> OrderItemStatus: ...
 
 
 def customer_line_status(status: OrderItemStatus) -> OrderItemStatus:
@@ -58,7 +67,7 @@ def can_cancel(
     status: OrderStatus,
     payment_method: PaymentMethod,
     reached_paid: bool,
-    lines: Iterable[CustomerOrderLine],
+    lines: Iterable[_Line],
 ) -> bool:
     """SRS 8.9 as amended by the owner (ADR-033 d4), on unmasked states: a live (not
     cancelled) physical line, cash or paid, a cancellable status, every live one `pending`."""
