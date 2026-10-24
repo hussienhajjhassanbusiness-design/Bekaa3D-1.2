@@ -1,5 +1,6 @@
 """The SRS 7.4 matrix, dispatch estimate, cash limits and amount due (VS-028 plan 6.1)."""
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from itertools import product
 from typing import Any
@@ -158,6 +159,15 @@ def test_cash_precheck_reasons_and_precedence() -> None:
     assert reason([line(1, 1, 1)], 101, True) == "order_total"
     cash_precheck([line(1, 1, 1)], 1, enabled=True, max_total=100)
     cash_precheck([line(1, 1, 1)], 100, enabled=True, max_total=100)  # total == cap passes
+
+
+def test_cash_refuses_a_cart_with_a_line_priced_zero() -> None:
+    """ADR-043 d12: a free line would let a refusal end with `other` and escape BR-144."""
+    free = replace(line(1, 1, 1), unit_price_cents=0, line_total_cents=0)
+    with pytest.raises(CashNotAvailableError):
+        cash_precheck([line(1, 1, 1), free], 100, enabled=True, max_total=1000)
+    with pytest.raises(PaymentMethodNotAllowedError):  # all free: the zero total comes first
+        cash_precheck([free], 0, enabled=True, max_total=1000)
 
 
 LIMITS: dict[str, Any] = {"blocked": False, "open_orders": 0, "max_open": 1}

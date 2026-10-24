@@ -126,8 +126,8 @@ class CashLimitReachedError(OrderingDomainError):
 
 
 class CashNotAvailableError(OrderingDomainError):
-    """422 CASH_NOT_AVAILABLE: a block or an open cash order, never saying which, nor
-    whether the account or the phone matched (ADR-038)."""
+    """422 CASH_NOT_AVAILABLE: a block, an open cash order or a line priced 0 (ADR-043
+    d12), never saying which, nor whether the account or the phone matched (ADR-038)."""
 
 
 class ProductAlreadyOwnedError(OrderingDomainError):

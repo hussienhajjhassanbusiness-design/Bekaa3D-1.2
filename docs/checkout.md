@@ -58,7 +58,7 @@ A replay of the same key and body returns the stored response with `Idempotent-R
 | 422 | `INVALID_FULFILLMENT` | the fulfillment fields do not fit the kept lines (table above); an unknown, another customer's or a deleted `address_id` (one answer for all three); pickup while `pickup_address` is not set |
 | 422 | `PAYMENT_METHOD_NOT_ALLOWED` | `reason`: `cash_requires_physical`, `cash_disabled`, `zero_total`, `provider_not_configured`, `provider_required`, `provider_not_applicable` (a provider sent with cash) |
 | 422 | `CASH_PAYMENT_LIMIT_REACHED` | `reason`: `order_total` (the live total is above `cash_max_order_total`) |
-| 422 | `CASH_NOT_AVAILABLE` | no `reason`: an uncleared cash block, or `cash_max_open_orders` unpaid cash orders (a cash order the customer cancelled counts for 24 hours, ADR-038 d23), for this account **or** this phone. Detail: "Cash on delivery isn't available for this order; please pay online." |
+| 422 | `CASH_NOT_AVAILABLE` | no `reason`: an uncleared cash block, or `cash_max_open_orders` unpaid cash orders (a cash order the customer cancelled counts for 24 hours, ADR-038 d23), for this account **or** this phone; or a cart with a physical line priced 0 (ADR-043 d12). Detail: "Cash on delivery isn't available for this order; please pay online." |
 | 422 | `VALIDATION_ERROR` | schema, a client-sent total, an invalid `contact_phone`, or a missing `accept_digital_final_sale` / `accept_cash_terms` |
 | 429 | `RATE_LIMITED` | 30 checkouts per user per hour (a replay counts) |
 | 502 | `PAYMENT_PROVIDER_UNAVAILABLE` | the order exists unpaid; the provider could not start the payment; `order_id`, `order_number`; replayed for the same key |

@@ -38,6 +38,8 @@ Return edges: `shipped -> returned`, then `returned -> shipped` (re-ship) or `->
 
 A block is written after a cancel that leaves an unpaid cash order with no live line, when every recorded `cancel_reason` on the order is `refused` or `no_show` (at least one). It is keyed on the customer and the order's phone hash, under the cart lock and then the phone lock. A partial refusal, any `other` cancel and an online order never block. A cancel with no reason (the customer's, or from `pending` / `in_production`) is neutral: a customer cancelling the last live line after an administrator refused the others completes the block.
 
+A cart with any physical line priced 0 cannot be paid in cash (ADR-043 d12), so a free item cannot turn a refusal into an `other` cancel that escapes the block.
+
 ## Cash limit (ADR-038 d23)
 
 A cash order the customer cancelled themselves (`orders.customer_cancelled_at`) counts toward `cash_max_open_orders` for 24 hours, for that customer and that phone. At exactly 24 hours it stops counting.

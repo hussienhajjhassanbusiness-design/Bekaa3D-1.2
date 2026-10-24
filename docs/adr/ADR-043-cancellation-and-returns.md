@@ -3,7 +3,7 @@
 **Status:** Accepted (2026-10-24, owner approval of the VS-031 plan, items 1-13 and both must-resolve answers)
 **Date:** 2026-10-24
 **Source basis:** [VS-031 slice](../vertical-slice-plan.md#vs-031--cancellation-and-returns) and its two "Must resolve before build" items; SRS §8.9, §20.4-20.5, BR-144, BR-148, BR-149; FR-08, FR-09, FR-20; [ADR-024](ADR-024-cash-on-delivery-and-courier-priced-shipping.md) d8, d9; [ADR-033](ADR-033-customer-order-read-model.md) d4; [ADR-040](ADR-040-admin-order-queue-fulfillment-and-cash-handover.md) d1, d2; [ADR-042](ADR-042-refunds-voids-and-chargebacks.md) d5, d16, d17; VS-030 plan §3.7.
-**Amends:** database-design §3.4b (`shipped -> cancelled` records `other`); api-endpoints §21 (the admin cancel's 409 reasons). Must-resolve 1 is [ADR-038](ADR-038-physical-checkout-and-cash-eligibility.md) d23.
+**Amends:** database-design §3.4b (`shipped -> cancelled` records `other`); api-endpoints §21 (the admin cancel's 409 reasons); SRS BR-145, §9 step 9 and §9.8.1 (d12: no cash for a cart with a line priced 0). Must-resolve 1 is [ADR-038](ADR-038-physical-checkout-and-cash-eligibility.md) d23.
 **Applies first to:** migration `595b7e6e2792` (`orders.customer_cancelled_at`).
 
 ## Context
@@ -52,6 +52,7 @@ VS-030 built refunds and chargebacks but left cancellation to VS-031. Two items 
 9. **No `Idempotency-Key`** on a cancel (Q4): under the lock a repeat finds the lines already cancelled, so it is a 409 and never a second refund.
 10. **One `order.cancelled` audit row per request** (Q10). It records the lines with their previous state and reason, the refund id and amount, whether a block was written, the note, and the actor (customer or administrator). It holds no phone or hash.
 11. **Rate limits** (Q12): the customer has 10 cancels per hour; the administrator's cancels share the transition endpoint's per-administrator limit. The customer's optional `reason` (at most 500 characters) is kept in the status history.
+12. **Cash refuses a cart with any physical line priced 0** (owner decision 2026-10-24, closing ADR-024's appendix item for VS-031). Otherwise a customer who adds a free item to every cash order and refuses only the paid lines at the door ends with the free line cancelled `other`, and `other` prevents the BR-144 block every time. The refusal is the one generic `422 CASH_NOT_AVAILABLE` of ADR-038 d19, raised in `cash_precheck` before the phone lock, so it says nothing about the account or the phone (ADR-038 d20). A cart whose whole total is 0 keeps its earlier `PAYMENT_METHOD_NOT_ALLOWED` (`zero_total`). The same cart can still be paid online. The `$0` cancel edges (`shipped -> cancelled` with `other`) stay for cash orders placed before this rule.
 
 ## Consequences
 
