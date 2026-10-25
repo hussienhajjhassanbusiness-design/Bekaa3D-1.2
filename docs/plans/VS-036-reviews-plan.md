@@ -1,6 +1,7 @@
 # VS-036 — Reviews and Verified Purchase Badge: Implementation Plan
 
-**Status:** IN PROGRESS (PR A, branch `vs-036-schema`). Revision 1: the owner answered
+**Status:** IN PROGRESS. PR A built on `vs-036-schema` (migration `eeed201dcfd2`, ADR-044
+Proposed), not yet merged; PR B not started. Revision 1: the owner answered
 Q1-Q10 on 2026-10-25 (Q1, Q2, Q4-Q10 as recommended; Q3: never show the badge on
 WhatsApp-only products, keep the purchase data).
 **Date:** 2026-10-25

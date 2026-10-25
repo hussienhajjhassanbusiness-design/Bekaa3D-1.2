@@ -49,6 +49,7 @@ Only expensive-to-reverse decisions belong here. Folder names and small refactor
 - [ADR-041: Receipt confirmation and problem report - physical lines only, first timestamp kept, a report is a linked contact message that alerts every administrator in the same transaction (VS-029b)](ADR-041-receipt-confirmation-and-problem-report.md)
 - [ADR-042: Refunds, voids and chargebacks - an owed refund is checked first, a voided status closes an obligation unpaid, chargebacks are their own record that absorbs open refunds (VS-030)](ADR-042-refunds-voids-and-chargebacks.md)
 - [ADR-043: Cancellation and returns - every cancel of a paid line refunds its whole remaining balance, one use case for the customer, the administrator and the transition endpoint (VS-031)](ADR-043-cancellation-and-returns.md)
+- [ADR-044: Reviews and the Verified Purchase badge - the badge is a projection of current line facts, recomputed in Ordering's line writers; ratings are exact aggregates under the product lock (VS-036) - Proposed](ADR-044-reviews-and-verified-purchase-badge.md)
 
 ## Governance
 
