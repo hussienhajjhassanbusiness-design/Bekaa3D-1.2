@@ -2,14 +2,17 @@
 d4, ADR-043). Every refusal asserts that nothing changed."""
 
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from app.fulfillment.public import cancel_order_by_customer
 from app.main import app as main_app
+from app.ordering.public import LineNotFoundError
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
 from tests.integration.deep_support import (
     assert_problem,
@@ -21,6 +24,7 @@ from tests.integration.deep_support import (
 from tests.integration.fulfillment.cancel_support import (
     as_customer,
     cancel_audits,
+    cancel_history,
     customer_cancel,
     customer_cancel_path,
     customer_cancelled_at,
@@ -84,6 +88,15 @@ async def test_a_paid_physical_order_is_cancelled_and_refunded_in_full(
     assert audit.actor_user_id == buyer.id
     assert (audit.after_data["by"], audit.after_data["refund_cents"]) == ("customer", 2000)
     assert audit.after_data["note"] == "Changed my mind"
+    assert await cancel_history(db_engine, order.order_id) == {
+        (line, "pending", buyer.id, "Changed my mind") for line in order.line_ids
+    }
+    shown = {
+        (h["order_item_id"], h["from_status"])
+        for h in body["status_history"]
+        if h["to_status"] == "cancelled" and h["order_item_id"] is not None
+    }
+    assert shown == {(str(line), "pending") for line in order.line_ids}
     templates = [m[0] for m in await emails(db_engine, order.order_id)]
     assert sorted(templates) == ["order_cancelled", "order_refund_issued"]
     assert sorted(await notifications(db_engine, order.order_id)) == [
@@ -249,6 +262,32 @@ async def test_another_customers_order_is_a_404_and_unchanged(
     for response in as_customer(other.email, both):
         assert_problem(response, 404, "NOT_FOUND")
     assert await states(db_engine, order.order_id) == ("in_progress", ["pending"])
+
+
+async def test_the_use_case_refuses_another_customers_order_by_itself(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """The ownership check, not the route's later 404 read, stops a foreign cancel (A-01)."""
+    owner, other = await _buyer(db_session), await _buyer(db_session)
+    order = await seed_physical_order(
+        db_session, user_id=owner.id, payment_method="online", payment_status="paid"
+    )
+    before = (await states(db_engine, order.order_id), await effects(db_engine, order.order_id))
+    with pytest.raises(LineNotFoundError):
+        async with async_sessionmaker(db_engine)() as session, session.begin():
+            await cancel_order_by_customer(
+                session,
+                order_id=order.order_id,
+                user_id=other.id,
+                at=datetime.now(UTC),
+                note=None,
+                request_id=None,
+                ip_hash=None,
+            )
+    after = (await states(db_engine, order.order_id), await effects(db_engine, order.order_id))
+    assert after == before
+    assert await refunds_of(db_engine, order.order_id) == []
+    assert await customer_cancelled_at(db_engine, order.order_id) is None
 
 
 async def test_csrf_and_a_verified_email_are_required(

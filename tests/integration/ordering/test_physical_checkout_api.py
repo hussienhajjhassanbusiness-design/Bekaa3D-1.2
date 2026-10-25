@@ -102,7 +102,8 @@ async def test_a_physical_delivery_online_keeps_lines_pending_and_totals_add_up(
     lamp = await physical(db_session, price_cents=1000)
     with client_for(main_app) as client:
         user_id = await signed_in_buyer(client, db_session, lamp)
-        address = await seed_address(db_session, user_id, "+96171123456")
+        phone = random_phone()
+        address = await seed_address(db_session, user_id, phone)
         response = post(
             client, checkout_body(fulfillment_method="delivery", address_id=str(address))
         )
@@ -114,10 +115,10 @@ async def test_a_physical_delivery_online_keeps_lines_pending_and_totals_add_up(
     assert order["delivery_address"]["recipient_name"] == "Rita Customer"
     assert order["delivery_fee_note"] and order["estimated_dispatch_at"]
     assert response.json()["payment"]["provider"] == "mock"
-    assert "contact_phone" not in order and "71123456" not in response.text
+    assert "contact_phone" not in order and phone[4:] not in response.text
     stored = await order_row(db_engine, order["id"])
-    assert stored.contact_phone_snapshot == "+96171123456"
-    assert stored.contact_phone_hash == hash_phone("+96171123456")
+    assert stored.contact_phone_snapshot == phone
+    assert stored.contact_phone_hash == hash_phone(phone)
 
 
 async def test_a_physical_pickup_online_and_a_mixed_cart_online(
@@ -726,7 +727,8 @@ async def test_snapshots_survive_later_edits_to_the_address_and_the_product(
     lamp = await physical(db_session)
     with client_for(main_app) as client:
         user_id = await signed_in_buyer(client, db_session, lamp)
-        address = await seed_address(db_session, user_id, "+96171123456")
+        phone = random_phone()
+        address = await seed_address(db_session, user_id, phone)
         placed = post(client, delivery_body(address)).json()["order"]
     before = await order_row(db_engine, placed["id"])
     await db_session.execute(
@@ -746,7 +748,7 @@ async def test_snapshots_survive_later_edits_to_the_address_and_the_product(
     await db_session.commit()
     after = await order_row(db_engine, placed["id"])
     assert after == before
-    assert (after.city, after.contact_phone_snapshot) == ("Beirut", "+96171123456")
+    assert (after.city, after.contact_phone_snapshot) == ("Beirut", phone)
     async with db_engine.connect() as conn:
         snapshot = (
             await conn.execute(

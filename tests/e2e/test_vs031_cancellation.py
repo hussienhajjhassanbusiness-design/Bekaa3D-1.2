@@ -31,7 +31,14 @@ from tests.integration.ordering.checkout_support import (
     checkout_body,
     shop_open,  # noqa: F401
 )
-from tests.integration.ordering.physical_support import physical, post, setting, stl
+from tests.integration.ordering.physical_support import (
+    physical,
+    post,
+    random_phone,
+    setting,
+    spaced,
+    stl,
+)
 from tests.integration.payments.refund_support import REFUNDS, act, ok, statuses
 from tests.integration.payments.verification_support import (
     WEBHOOK,
@@ -40,7 +47,6 @@ from tests.integration.payments.verification_support import (
 )
 
 pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("configured_app", "shop_open")]
-PHONE = "71 123 456"
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -49,7 +55,7 @@ async def _pickup(db_engine: AsyncEngine) -> AsyncIterator[None]:
         yield
 
 
-def _address(client: TestClient, phone: str = PHONE) -> str:
+def _address(client: TestClient, phone: str) -> str:
     response = client.post(
         "/api/v1/me/addresses",
         json={
@@ -98,7 +104,8 @@ async def test_srs_5_6_a_mixed_order_partly_refunded_by_cancelling_its_physical_
         email = await _new_customer(client, db_session)
         add_to_cart(client, lamp)
         add_to_cart(client, model)
-        body = checkout_body(fulfillment_method="delivery", address_id=_address(client))
+        address = _address(client, spaced(random_phone()))
+        body = checkout_body(fulfillment_method="delivery", address_id=address)
         placed = post(client, body)
         assert placed.status_code == 201, placed.text
         order, payment_id = placed.json()["order"], placed.json()["payment"]["id"]
@@ -135,13 +142,13 @@ async def test_srs_5_6_a_mixed_order_partly_refunded_by_cancelling_its_physical_
 async def test_a_refused_cash_delivery_is_cancelled_unrefunded_and_blocks_cash(
     db_engine: AsyncEngine, db_session: AsyncSession
 ) -> None:
-    lamp = await physical(db_session)
+    lamp, phone = await physical(db_session), spaced(random_phone())  # its own: A-03
     with client_for(main_app) as client:
         await _new_customer(client, db_session)
         add_to_cart(client, lamp)
         cash = checkout_body(payment_method="cash", accept_cash_terms=True)
         placed = post(
-            client, cash | {"fulfillment_method": "delivery", "address_id": _address(client)}
+            client, cash | {"fulfillment_method": "delivery", "address_id": _address(client, phone)}
         )
         assert placed.status_code == 201, placed.text
         order = placed.json()["order"]
@@ -159,10 +166,10 @@ async def test_a_refused_cash_delivery_is_cancelled_unrefunded_and_blocks_cash(
         await _new_customer(client, db_session)  # another account, the same phone
         add_to_cart(client, lamp)
         again = post(
-            client, cash | {"fulfillment_method": "delivery", "address_id": _address(client)}
+            client, cash | {"fulfillment_method": "delivery", "address_id": _address(client, phone)}
         )
         online = post(
-            client, checkout_body(fulfillment_method="delivery", address_id=_address(client))
+            client, checkout_body(fulfillment_method="delivery", address_id=_address(client, phone))
         )
     assert_problem(again, 422, "CASH_NOT_AVAILABLE")
     assert online.status_code == 201, online.text

@@ -14,7 +14,9 @@ from app.main import app as main_app
 from app.ordering.public import (
     NO_REFUNDS,
     InvalidLineTransitionError,
+    LineCancel,
     OrderItemStatus,
+    cancel_lines,
     lock_order_for_change,
     transition_physical_line,
 )
@@ -145,6 +147,30 @@ async def test_the_forward_writer_never_cancels_a_line(
                 reached_paid=True,
                 refunds=NO_REFUNDS,
                 note=None,
+            )
+    assert caught.value.reason == "not_a_legal_edge"
+    assert await states(db_engine, order.order_id) == ("in_progress", ["pending"])
+
+
+async def test_the_cancel_writer_refuses_a_line_not_in_the_state_decided_on(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """`cancel_lines` moves a line only from the state the cancel was decided on (A-04)."""
+    order = await seed_physical_order(db_session, payment_method="online", payment_status="paid")
+    admin = await create_user(db_session)
+    stale = LineCancel(order.line_ids[0], OrderItemStatus.IN_PRODUCTION, None)  # it is pending
+    async with async_sessionmaker(db_engine)() as session, session.begin():
+        locked = await lock_order_for_change(session, order.order_id)
+        assert locked is not None
+        with pytest.raises(InvalidLineTransitionError) as caught:
+            await cancel_lines(
+                session,
+                locked,
+                (stale,),
+                actor_user_id=admin.id,
+                at=locked.order.placed_at,
+                note=None,
+                by_customer=False,
             )
     assert caught.value.reason == "not_a_legal_edge"
     assert await states(db_engine, order.order_id) == ("in_progress", ["pending"])

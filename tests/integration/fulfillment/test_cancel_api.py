@@ -1,14 +1,17 @@
 """VS-031 over HTTP: the administrator's order cancel and the transition endpoint's cancel and
 return edges (FR-08, FR-09, FR-20; BR-144, BR-148, BR-149; SRS 20.4-20.5; ADR-043)."""
 
+import os
 import uuid
 from typing import Any
 
 import pytest
+import redis.asyncio as redis_asyncio
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.core.security import hash_phone
+from app.fulfillment.domain.limits import STL_DELIVERY_RATE_LIMIT
 from app.main import app as main_app
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
 from tests.integration.deep_support import (
@@ -23,6 +26,7 @@ from tests.integration.fulfillment.cancel_support import (
     admin_cancel,
     blocks_of,
     cancel_audits,
+    cancel_history,
     reasons_of,
     refunds_of,
 )
@@ -77,6 +81,37 @@ async def test_an_admin_cancel_of_a_paid_line_refunds_its_whole_balance(
         {"order_item_id": str(order.line_ids[0]), "from_status": state, "cancel_reason": None}
     ]
     assert audit.after_data["note"] == "Printer failure"
+    line = order.line_ids[0]
+    assert await cancel_history(db_engine, order.order_id) == {
+        (line, state, admin.id, "Printer failure")
+    }
+    shown = [
+        (h["order_item_id"], h["from_status"], h["actor_user_id"], h["reason"])
+        for h in response.json()["status_history"]
+        if h["to_status"] == "cancelled" and h["order_item_id"] is not None
+    ]
+    assert shown == [(str(line), state, str(admin.id), "Printer failure")]
+
+
+async def test_the_admin_cancel_shares_the_transition_rate_limit(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """ADR-043 d11: one per-administrator budget for transitions and cancels (A-05)."""
+    order = await seed_physical_order(
+        db_session, payment_method="online", payment_status="paid", line_states=["pending"] * 2
+    )
+    with client_for(main_app) as client:
+        admin, _, _ = await mfa_admin(client, db_session)
+        store = redis_asyncio.from_url(os.environ["REDIS_URL"])  # type: ignore[no-untyped-call]
+        key = f"ratelimit:admin_stl_delivery:{admin.id}"
+        await store.set(key, STL_DELIVERY_RATE_LIMIT - 1, ex=3600)
+        await store.aclose()
+        moved = move(client, order, "in_production", line=0)
+        refused = admin_cancel(client, order.order_id)
+    assert moved.status_code == 200, moved.text
+    assert_problem(refused, 429, "RATE_LIMITED")
+    assert sorted((await states(db_engine, order.order_id))[1]) == ["in_production", "pending"]
+    assert await refunds_of(db_engine, order.order_id) == []
 
 
 async def test_an_admin_cancel_leaves_stl_and_later_lines_alone(

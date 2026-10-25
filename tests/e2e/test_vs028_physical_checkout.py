@@ -131,7 +131,7 @@ async def test_a_new_customer_pays_a_mixed_delivery_order_online(
             json={
                 "label": "Home",
                 "recipient_name": "Rita Customer",
-                "phone": "71 123 456",
+                "phone": spaced(random_phone()),
                 "governorate": "beirut",
                 "city": "Beirut",
                 "landmark_notes": "Blue door",
