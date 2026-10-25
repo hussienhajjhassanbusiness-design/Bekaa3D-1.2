@@ -98,6 +98,20 @@ async def customer_cancelled_at(engine: AsyncEngine, order_id: uuid.UUID) -> Any
         )
 
 
+async def cancel_history(engine: AsyncEngine, order_id: uuid.UUID) -> set[tuple[Any, ...]]:
+    """Line rows of `order_status_history` that end in `cancelled` (FR-08)."""
+    async with engine.connect() as conn:
+        rows = await conn.execute(
+            text(
+                "SELECT order_item_id, from_status, actor_user_id, reason"
+                " FROM order_status_history WHERE order_id = :o"
+                " AND order_item_id IS NOT NULL AND to_status = 'cancelled'"
+            ),
+            {"o": order_id},
+        )
+        return {tuple(row) for row in rows}
+
+
 async def cancel_audits(engine: AsyncEngine, order_id: uuid.UUID) -> list[Any]:
     async with engine.connect() as conn:
         rows = await conn.execute(

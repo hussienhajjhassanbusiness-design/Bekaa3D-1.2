@@ -30,6 +30,7 @@ from tests.integration.ordering.physical_support import (
     post,
     random_phone,
     setting,
+    spaced,
     usd,
 )
 from tests.integration.payments.verification_support import (
@@ -131,7 +132,7 @@ async def test_a_delivery_order_paid_online_is_moved_to_delivered_and_completed(
             json={
                 "label": "Home",
                 "recipient_name": "Rita Customer",
-                "phone": "71 123 456",
+                "phone": spaced(random_phone()),
                 "governorate": "beirut",
                 "city": "Beirut",
                 "landmark_notes": "Blue door",
