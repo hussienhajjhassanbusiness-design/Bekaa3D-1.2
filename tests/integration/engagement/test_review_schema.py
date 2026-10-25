@@ -259,7 +259,7 @@ async def test_the_indexes_exist_with_their_predicates(db_engine: AsyncEngine) -
                 " 'ix_reviews_user_live', 'ix_order_items_badge_received')"
             )
         )
-        defs = dict(rows.all())
+        defs: dict[str, str] = {str(name): str(indexdef) for name, indexdef in rows.all()}
     assert set(defs) == {
         "uq_reviews_user_product_live",
         "ix_reviews_product_visible",
