@@ -26,6 +26,7 @@ ORDERS_REVISION = "03a4730dd046"
 CAPTURED_REVISION = "00ce1ce252a6"
 CASH_REVISION = "fcd589e89e59"
 REFUNDS_REVISION = "c01e53ab3e0f"
+REVIEWS_REVISION = "eeed201dcfd2"
 EXPECTED_ENUMS = {"user_role", "outbox_status", "setting_type", "notification_type"}
 
 
@@ -216,6 +217,31 @@ def test_full_downgrade_and_upgrade_round_trips() -> None:
         command.upgrade(config, "head")
         assert refund_tables <= asyncio.run(fetch(table_query))
         assert asyncio.run(fetch(refund_keys)) == all_keys
+
+        # VS-036 PR A: stepping back to its own parent (read from the chain, never pinned)
+        # drops reviews, its indexes and the order_items badge index; order_items stays.
+        reviews_parent = chain[REVIEWS_REVISION].down_revision
+        assert isinstance(reviews_parent, str)
+        review_indexes = (
+            "SELECT indexname FROM pg_indexes WHERE indexname IN ("
+            "'uq_reviews_user_product_live', 'ix_reviews_product_visible',"
+            " 'ix_reviews_user_live', 'ix_order_items_badge_received')"
+        )
+        all_review_indexes = {
+            "uq_reviews_user_product_live",
+            "ix_reviews_product_visible",
+            "ix_reviews_user_live",
+            "ix_order_items_badge_received",
+        }
+        assert "reviews" in asyncio.run(fetch(table_query))
+        assert asyncio.run(fetch(review_indexes)) == all_review_indexes
+        command.downgrade(config, reviews_parent)
+        assert "reviews" not in asyncio.run(fetch(table_query))
+        assert asyncio.run(fetch(review_indexes)) == set()
+        assert {"order_items", "products"} <= asyncio.run(fetch(table_query)), "parents untouched"
+        command.upgrade(config, "head")
+        assert "reviews" in asyncio.run(fetch(table_query))
+        assert asyncio.run(fetch(review_indexes)) == all_review_indexes
 
         command.downgrade(config, "base")
 
