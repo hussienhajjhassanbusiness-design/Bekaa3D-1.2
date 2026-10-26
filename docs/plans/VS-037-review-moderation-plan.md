@@ -1,7 +1,7 @@
 # VS-037 — Review Moderation: Implementation Plan
 
-**Status:** IN PROGRESS on `vs-037-moderation`. Owner answers (2026-10-27): Q1-Q7 accepted
-as recommended (the owner's instruction to implement this plan as written; see §10).
+**Status:** DONE on `vs-037-moderation` (not yet merged). Owner answers (2026-10-27): Q1-Q7
+accepted as recommended (see §10). Revision 2 below records what the build changed.
 **Date:** 2026-10-27
 **Planned against alembic head:** `eeed201dcfd2` (`reviews_and_badge_index`, VS-036).
 - Derived statically from `revision` / `down_revision` in `migrations/versions/`: one linear
@@ -20,6 +20,46 @@ no new number.
 
 **Format:** follows [`VS-036-reviews-plan.md`](VS-036-reviews-plan.md). Every `file:line`
 below is on `main` at `1882a3e`.
+
+---
+
+## Revision 2 (2026-10-27): as built
+
+**Measured (CP1, §4.2):** 100,000 live reviews (2,000 users x 50 products, 5% hidden), 20 runs
+each, on the test container. Unfiltered admin page: Parallel Seq Scan + top-N heapsort, 9-10 ms
+p50 and 12-13 ms p95 in SQL; 22-26 ms p50 and 25-36 ms p95 for the whole HTTP route. `user_id` and
+`product_id + hidden=false` use their indexes (under 1.5 ms p95). `hidden=true`, `product_id`,
+`rating` and `verified` filters are seq scans, 7-17 ms p95. Under the 50 ms trigger: **no
+migration**, head stays `eeed201dcfd2`.
+
+**SQL order of one hide (captured):** `SELECT reviews.product_id` (unlocked) → `SELECT … FROM
+products … FOR NO KEY UPDATE OF products` → `SELECT … FROM reviews WHERE id = $1 FOR UPDATE` →
+`UPDATE reviews SET is_hidden, hidden_at` → `SELECT sum(rating), count(*) … AND deleted_at IS NULL
+AND NOT is_hidden` → `UPDATE products SET average_rating, review_count` → `INSERT INTO audit_logs`
+(+ the repository's read-back). No `pg_advisory_xact_lock`.
+
+**Deviations from the plan:**
+1. §3.2: the hide/restore methods form a new port `ReviewModerationStore` (`product_id_of`,
+   `lock_for_moderation`, `set_hidden`, plus `visible_totals` through a new `ReviewTotals` base),
+   not additions to `ReviewStore`. That leaves VS-036's fakes untouched. `recompute_rating` now
+   types its store as `ReviewTotals` (type only).
+2. §3.2: `admin_page` and `live_by_id` are `SqlReviewStore` methods read directly by the router,
+   the same as VS-036's `public_page` / `own_page`; no port (no use case behind them).
+3. §3.3 / R5: `AdminContext` is imported from `custom_request_pipeline`, not moved.
+4. §6.3: the race gate is the **review row** held `FOR UPDATE` from outside, not the product
+   row. It is the one lock every racer reaches, including M6's refund hook, which never takes the
+   product.
+5. §2: 429 is documented on all four routes (the admin router's limit).
+6. §6.2 "same transaction" is proven by failure injection: the audit write raises, giving a 500,
+   with neither the flag nor the aggregate moved.
+
+**Mutation proofs (each reverted):**
+- Review row locked before the product: M1 (hide first) deadlocks, and 6 unit tests fail.
+- No state check: 6 tests fail, including M3. State checked on an unlocked read: M3 gives
+  `['hidden', 'hidden']`, and both M4 orders fail.
+- No recompute, or recompute before the toggle: the hide/restore aggregate test, M1 and M5 fail.
+- No `deleted_at` re-check: 4 tests fail (unit and integration), and M2 (delete first) gives
+  `['deleted', 'hidden']`.
 
 ---
 

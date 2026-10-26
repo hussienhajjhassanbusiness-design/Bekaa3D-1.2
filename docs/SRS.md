@@ -290,7 +290,7 @@ Every rule is numbered for traceability. `BR-` prefix.
 | BR-103 | WhatsApp-only products never show the badge, even if earlier platform purchases exist; the purchase data is kept. (Amended by ADR-044.) |
 | BR-104 | The badge is recomputed from current line facts whenever a line changes state (paid, received, refunded, returned, cancelled). |
 | BR-105 | Ratings are 1–5 integers.                                                                 |
-| BR-106 | The administrator may hide or restore any review.                                         |
+| BR-106 | The administrator may hide or restore any review. Hide and restore are audited with an optional reason; a review its author deleted cannot be moderated (VS-037). |
 | BR-107 | Reviews are rate-limited and filtered for links and profanity.                            |
 | BR-108 | Wishlist is available to verified users; the admin sees totals and most-wishlisted items. |
 | BR-109 | Product comments (separate from reviews) are not implemented in V1.                       |

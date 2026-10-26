@@ -11,7 +11,7 @@ by its ID, in the field order of [`../frontend-requests/BACKEND-RESPONSE-TEMPLAT
 ## Contents
 
 1. [Shared conventions](#1-shared-conventions) — errors, cookies, CSRF, the admin boundary, rate limits
-2. [Built and confirmed](#2-built-and-confirmed) — A1, A2, A3, B1, B2, B3, B4, B5, C1, C2, P1-1 to P1-7, P2-5, P2-6, P2-8, VS-036 (reviews)
+2. [Built and confirmed](#2-built-and-confirmed) — A1, A2, A3, B1, B2, B3, B4, B5, C1, C2, P1-1 to P1-7, P2-5, P2-6, P2-8, VS-036 (reviews), VS-037 (review moderation)
 3. [Removed by ADR-019 and ADR-024](#3-removed-by-adr-019-and-adr-024) — C4, C9, C10, P1-8, P1-9
 4. [Not built yet (provisional)](#4-not-built-yet-provisional) — C5, C6, C7, C8, C11, C12, P1-10 to P1-13, P2-2; also P2-1, P2-3, P2-4 and P2-7, which VS-033 has since built, C3, which VS-026 has since built, and C5, which VS-022 has since built
 5. [Test accounts and fixtures](#5-test-accounts-and-fixtures) — items 1 to 9
@@ -1598,7 +1598,7 @@ Set-Cookie: csrf_token=<redacted>; Max-Age=2592000; Path=/; SameSite=lax
 
 ### Domain / item: VS-036 — Reviews and the Verified Purchase badge
 
-**Status:** built (VS-036, [ADR-044](../adr/ADR-044-reviews-and-verified-purchase-badge.md)). Moderation (hide/restore, VS-037) is not built yet.
+**Status:** built (VS-036, [ADR-044](../adr/ADR-044-reviews-and-verified-purchase-badge.md)). Moderation (hide/restore) is [VS-037](#domain--item-vs-037--review-moderation-admin).
 
 **Confirmed endpoint:**
 - `GET /api/v1/products/{slug}/reviews` (public). The path takes the product **slug**, not its id.
@@ -1628,6 +1628,35 @@ Set-Cookie: csrf_token=<redacted>; Max-Age=2592000; Path=/; SameSite=lax
 - Sorting is fixed, newest first. Pagination is [C2](#domain--item-c2--cursor-pagination-response-shape).
 - `edited` is `true` once the author changed the review.
 - The profanity list is a first draft pending the product owner's review before go-live; expect it to change.
+
+### Domain / item: VS-037 — Review moderation (admin)
+
+**Status:** built (VS-037, [ADR-044](../adr/ADR-044-reviews-and-verified-purchase-badge.md) decisions 21-27).
+
+**Confirmed endpoint:**
+- `GET /api/v1/admin/reviews`
+- `GET /api/v1/admin/reviews/{review_id}`
+- `POST /api/v1/admin/reviews/{review_id}/hide`
+- `POST /api/v1/admin/reviews/{review_id}/restore`
+
+**Request schema:** see `openapi.json`. List query: `cursor`, `limit` (1-100, default 20), `hidden`, `rating` (1-5), `product_id`, `user_id`, `verified_purchase` (filters the **stored** evidence flag). Hide and restore take an optional `ReviewModerationRequest` (`reason?`: trimmed, at most 500 characters, no control characters; unknown fields are a 422). The body itself may be omitted.
+
+**Response schema:** `AdminReviewPage` of `AdminReviewRead`; detail, hide and restore answer `AdminReviewDetail` (the same fields): `id`, `product_id`, `product_slug` (`null` for a deleted product), `user_id`, `rating`, `body`, `is_verified_purchase` (stored evidence), `badge_shown` (what the storefront shows; always `false` on WhatsApp-only products), `is_hidden`, `hidden_at`, `created_at`, `updated_at`, `edited`. No author email or name. The reason is not echoed; it is in the audit log (`review.hidden` / `review.restored`).
+
+**Errors:**
+- `404 NOT_FOUND`: unknown review, or one the author deleted (a deleted review cannot be moderated and is not listed), or the caller is not an administrator.
+- `409 INVALID_STATE_TRANSITION`: hide of a hidden review or restore of a visible one; the body carries `is_hidden` with the current state. Refresh the row.
+- `422` for a bad query, a tampered cursor or a bad reason; `401`, `403 CSRF_INVALID`, `429 RATE_LIMITED`.
+
+**Auth/CSRF/MFA:** administrator with MFA completed (the admin boundary). Hide and restore need `X-CSRF-Token`; the reads do not.
+
+**Rate limits:** the admin router's 300 requests per minute per administrator.
+
+**Notes:**
+- Hide and restore update the product's `average_rating` / `review_count` in the same transaction: after a 200, the public list and the product card are already correct.
+- Sorting is fixed, newest first (`created_at`, then `id`). Hidden and visible reviews are both listed; use `hidden=true` for the moderation queue.
+- The author is not notified in V1. They see `is_hidden: true` in `/me/reviews`, may still edit the review (it stays hidden), and cannot post a second review of the same product.
+- `updated_at` and `edited` do not change on hide or restore; they are the author's edit time.
 
 ### Domain / item: P2-6 — Password reset
 
