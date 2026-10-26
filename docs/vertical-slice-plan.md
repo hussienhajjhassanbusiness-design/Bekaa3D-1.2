@@ -38,7 +38,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 | VS-029b | Receipt confirmation and problem report | VS-029, VS-033 | Done |
 | VS-034 | Bring Your Idea submission | VS-014, VS-033 | Done |
 | VS-035 | Bring Your Idea pipeline and funnel | VS-034 | Done |
-| VS-036 | Reviews and Verified Purchase badge | VS-015, VS-028, VS-030, VS-031 | Not started |
+| VS-036 | Reviews and Verified Purchase badge | VS-015, VS-028, VS-030, VS-031 | Done |
 | VS-037 | Review moderation | VS-036 | Not started |
 | VS-038 | Wishlist and wishlist analytics | VS-013 | Done |
 | VS-039 | Offer submission and inactivity expiry | VS-023, VS-007 | Done |
@@ -1046,7 +1046,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - Tests: `tests/unit/engagement/test_custom_request_pipeline.py`, `tests/unit/integrations/test_local_storage.py`; `tests/integration/engagement/test_custom_request_admin_api.py`, `test_custom_request_attachment_download.py`, `test_custom_request_funnel.py`; `tests/concurrency/test_custom_request_transition_race.py`; `tests/smoke/test_vs035_smoke.py`.
 
 ## VS-036 — Reviews and Verified Purchase badge
-**Status:** Not started
+**Status:** Done
 **Depends on:** VS-015, VS-028, VS-030, VS-031
 **Goal:** Any verified user reviews a product. The badge honestly reflects current purchase evidence, and product ratings stay correct.
 - **Model / migration:** `reviews` (rating CHECK 1–5; unique `(user_id, product_id)` among live rows).
@@ -1066,6 +1066,11 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 - **Done when:**
   - The badge is never stale after a payment or refund.
   - Aggregates always match the visible reviews.
+- **As built** ([plan](plans/VS-036-reviews-plan.md), [ADR-044](adr/ADR-044-reviews-and-verified-purchase-badge.md)):
+  - The hook sits in Ordering's eight line-status writers, not in the payment and refund use cases. A physical line earns the badge once received (`delivered` / `picked_up`), not at payment (Q2, BR-102 amended).
+  - A per-user advisory lock `R_user` serialises review creation with the hook; race C11 fails without it.
+  - WhatsApp-only products never show the badge; the stored value is kept and every read masks it (Q3).
+  - For VS-037: read the review's `product_id`, then `catalog.public.lock_product_for_reviews`, then `engagement.public.lock_review_for_moderation`, `set_review_hidden`, `recompute_product_rating`. For VS-044: `engagement.public.reviews_for_export`. For VS-045: nothing to blank (no author identity is exposed).
 
 ## VS-037 — Review moderation
 **Status:** Not started

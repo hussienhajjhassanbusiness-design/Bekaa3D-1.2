@@ -1,12 +1,12 @@
 # ADR-044: Reviews and the Verified Purchase badge - the badge is a projection of current line facts, recomputed in Ordering's line writers; ratings are exact aggregates under the product lock (VS-036)
 
-**Status:** Proposed (2026-10-25, VS-036 PR A). PR A builds the schema only; PR B builds the behaviour.
+**Status:** Accepted (2026-10-27, VS-036 PR B). Proposed 2026-10-25 with PR A (schema); PR B built the behaviour and recorded decisions 11-20 below.
 **Date:** 2026-10-25
 **Source basis:** [VS-036 slice](../vertical-slice-plan.md#vs-036--reviews-and-verified-purchase-badge); [plan](../plans/VS-036-reviews-plan.md) (Revision 1, owner answers Q1-Q10 of 2026-10-25); SRS §3.8 BR-100 to BR-105, BR-149, §12.1, §12.2, INV-17; database-design §12.1; [ADR-019](ADR-019-manual-stl-delivery.md) d5; [ADR-020](ADR-020-optimistic-versioning-for-admin-edits.md) d5; [ADR-042](ADR-042-refunds-voids-and-chargebacks.md); [ADR-043](ADR-043-cancellation-and-returns.md).
 **Amends:**
 - database-design §12.1: adds `hidden_at`, the named CHECKs and the indexes.
 - The [VS-030 plan](../plans/VS-030-refunds-settlement-plan.md) §3.7 hook list: the hook moves to the line writers, and fail/void/reissue get no hook.
-- BR-102 and SRS §12.1 wording: physical lines count once received (Q2). These SRS edits are held for PR B's docs commit.
+- SRS BR-102 to BR-104, §12.1 and INV-17 wording: physical lines count once received (Q2); WhatsApp-only products never show the badge (Q3). Applied in PR B's docs commit.
 
 **Applies first to:** migration `eeed201dcfd2` (`reviews`, `ix_order_items_badge_received`).
 
@@ -53,10 +53,45 @@ and reissue never change a line.
     per hour per IP. The profanity list is a reviewed code constant (Q5). Customer review
     writes are not audited (Q9).
 
+### Decisions recorded in PR B
+
+11. **Hook mechanics.** `_refresh_review_badges` in `ordering/public.py` runs in W1-W8 after the
+    status write and its history rows. It calls `engagement.public.refresh_review_badges`, which
+    takes `R_user`, locks the user's live reviews of the touched products `FOR UPDATE` by id, and
+    only then (if any exist) reads evidence and updates `is_verified_purchase` where it differs.
+    `updated_at` and the aggregates are never touched (D15). The `R_user` and reviews statements
+    are sent on every hooked write; a row is locked only when a review exists.
+12. **Uniform hook, no no-op guard** (owner, CP2). W2, W3, W7 and W8 cannot change a badge but
+    call the hook anyway, so one static rule covers every writer. Six lock-order tests now
+    expect `R_user` (rank 7) and `reviews` (rank 9) after payments on W1 and W8 paths.
+13. **Evidence query.** `SqlOrderStore.badge_product_ids` is a two-branch `UNION` with the
+    product type and statuses inlined as literals, so a generic plan still matches
+    `uq_order_items_stl_ownership` and `ix_order_items_badge_received`. Ordering publishes it
+    as `purchase_evidence(session)`; `engagement.public` never imports Ordering.
+14. **Visible-row predicate.** Reads filter `NOT is_hidden` (bare), never `is_hidden IS FALSE`,
+    which the planner does not match to `ix_reviews_product_visible` (found at CP2).
+15. **Timestamps.** Edit and soft delete stamp `clock_timestamp()`, which can never precede
+    `created_at` (`ck_reviews_updated_after_created`), unlike the transaction's `now()`.
+16. **Duplicates.** The create pre-checks under `R_user`; the INSERT uses `ON CONFLICT DO NOTHING`
+    on the live unique index as the backstop, so a race is a 409, never a 500.
+17. **Aggregates on every edit.** An edit recomputes in full even if only the body changed
+    (owner instruction); the values are unchanged in that case.
+18. **Public list.** `GET /products/{slug}/reviews` (not `{id}`), with the storefront's 404 rule.
+    On a WhatsApp-only product, `verified_purchase=true` returns an empty page and `false`
+    returns every row. Limits: 600/h per IP for the list, 10/h per user shared by POST, PATCH
+    and DELETE (`engagement/domain/review_limits.py`).
+19. **R_user is load-bearing, proven.** Race C11 stalls a create after its evidence read (a held
+    `users` row blocks its FK check) while a refund of the same line runs. With `R_user` the
+    refund's hook waits and the badge ends false; with `R_user` removed the test fails with the
+    badge left true on a refunded line.
+20. **Profanity list needs owner review before go-live.** `engagement/domain/profanity.py` is a
+    first draft (English, Arabic, Arabizi) matched as whole words after NFKC and casefold.
+
 ## Consequences
 
 - PR A adds the table, its four CHECKs, two FKs, three indexes and the order_items index. No
   application code reads or writes them until PR B.
 - VS-037 reuses `recompute_product_rating`. VS-044 reads `reviews_for_export`, which applies the
   mask. VS-045 has nothing to blank while no author identity is shown.
-- This ADR moves to Accepted when PR B lands, with any changes recorded here.
+- Accepted with PR B (decisions 11-20). Any later change to the badge states is one constant,
+  `ordering/domain/badge.py:BADGE_STATES`, plus its tests.

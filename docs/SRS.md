@@ -286,9 +286,9 @@ Every rule is numbered for traceability. `BR-` prefix.
 | ------ | ----------------------------------------------------------------------------------------- |
 | BR-100 | Any verified user may review any product; a purchase is not required.                     |
 | BR-101 | One review per user per product, editable but not stackable.                              |
-| BR-102 | Reviews backed by a real purchase display a Verified Purchase badge. A cash purchase counts only once its cash is recorded. |
-| BR-103 | WhatsApp-only products can never earn the badge, as no purchase record exists.            |
-| BR-104 | The badge is recomputed when a purchase is paid or refunded.                              |
+| BR-102 | Reviews backed by a real purchase display a Verified Purchase badge: an owned STL line (paid, not refunded), or a physical line that was received (`delivered` / `picked_up`) and not refunded, returned or cancelled. A cash purchase counts only once its cash is recorded at handover. (Amended by ADR-044.) |
+| BR-103 | WhatsApp-only products never show the badge, even if earlier platform purchases exist; the purchase data is kept. (Amended by ADR-044.) |
+| BR-104 | The badge is recomputed from current line facts whenever a line changes state (paid, received, refunded, returned, cancelled). |
 | BR-105 | Ratings are 1–5 integers.                                                                 |
 | BR-106 | The administrator may hide or restore any review.                                         |
 | BR-107 | Reviews are rate-limited and filtered for links and profanity.                            |
@@ -883,9 +883,9 @@ Any verified user may review any product without purchasing. This is a deliberat
 
 **Guardrails:** one review per user per product (editable), Verified Purchase badge where a real paid, unrefunded purchase exists, admin hide/restore, rate limiting, link and profanity filtering.
 
-The badge is **recomputed** when a purchase is paid or refunded — a cached flag written once would leave a refunded buyer displaying credibility they no longer hold. A cash purchase is paid when its cash is recorded at handover; an unpaid or refused cash line never earns the badge, even in an order whose other lines were paid (BR-149).
+The badge is **recomputed** from current line facts whenever a line changes state — a cached flag written once would leave a refunded buyer displaying credibility they no longer hold. A physical line counts once it is received (`delivered` / `picked_up`); a paid line still in production does not. A partial refund keeps the badge; a full refund, a return or a cancellation removes it. A cash purchase is paid when its cash is recorded at handover; an unpaid or refused cash line never earns the badge, even in an order whose other lines were paid (BR-149). (Amended by ADR-044.)
 
-WhatsApp-only products can never earn the badge, since no purchase record exists. This is a known and accepted bias.
+WhatsApp-only products never show the badge. A product switched to WhatsApp-only after online sales keeps its purchase data, but the badge is hidden on every read while it stays WhatsApp-only. This is a known and accepted bias. (Amended by ADR-044.)
 
 ### 12.2 Rating Aggregates
 
@@ -1149,7 +1149,7 @@ Numbered for traceability. `INV-` prefix.
 
 **Consistency**
 
-* INV-17 — Verified Purchase badges recompute when a purchase is paid or refunded.
+* INV-17 — Verified Purchase badges recompute from current line facts whenever a line changes state (ADR-044).
 * INV-18 — At most one paid, unrefunded STL line per (customer, product); a refunded buyer may re-purchase.
 * INV-19 — At most one live payment per order.
 * INV-20 — Order status is a projection, never assigned directly.

@@ -1,7 +1,8 @@
 # VS-036 — Reviews and Verified Purchase Badge: Implementation Plan
 
-**Status:** IN PROGRESS (PR B). PR A merged (#43; migration `eeed201dcfd2`, ADR-044
-Proposed). PR B (reviews code) in progress on `vs-036-reviews`. Revision 1: the owner answered
+**Status:** DONE. PR A merged (#43; migration `eeed201dcfd2`). PR B (reviews code) built on
+`vs-036-reviews`; ADR-044 Accepted (decisions 11-20 record what PR B changed). Profanity list
+pending owner review before go-live. Revision 1: the owner answered
 Q1-Q10 on 2026-10-25 (Q1, Q2, Q4-Q10 as recommended; Q3: never show the badge on
 WhatsApp-only products, keep the purchase data).
 **Date:** 2026-10-25
