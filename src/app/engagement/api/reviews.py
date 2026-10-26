@@ -1,9 +1,6 @@
 """Customer reviews (VS-036, api-endpoints.md 14.1). Writes need a verified email, CSRF
 and the shared write limit; the public list is per-IP limited. Badges are masked (D14)."""
 
-import base64
-import binascii
-from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -14,7 +11,7 @@ from app.api.dependencies import get_session
 from app.catalog.public import reviewable_products, visible_product
 from app.core.exceptions import ApiError
 from app.core.rate_limit import enforce_rate_limit, rate_limiter
-from app.engagement.api.queue_cursor import invalid_query, is_utc_representable
+from app.engagement.api.review_cursor import decode_review_cursor, encode_review_cursor
 from app.engagement.api.review_schemas import (
     MyReviewPage,
     MyReviewRead,
@@ -57,7 +54,6 @@ router = APIRouter(prefix="/reviews", tags=["reviews"])
 
 _DEFAULT_PAGE_SIZE = 20
 _MAX_PAGE_SIZE = 50
-_SEPARATOR = "|"
 
 _PUBLIC_LIMIT = rate_limiter(
     key_prefix="reviews_public",
@@ -76,25 +72,6 @@ _WRITE_RESPONSES: dict[int | str, dict[str, Any]] = {
 _NOT_FOUND: dict[int | str, dict[str, Any]] = {
     404: {"description": "No live review of yours with this id."}
 }
-
-
-def _encode_cursor(review: Review) -> str:
-    raw = f"{review.created_at.isoformat()}{_SEPARATOR}{review.id}"
-    return base64.urlsafe_b64encode(raw.encode("utf-8")).decode("ascii").rstrip("=")
-
-
-def _decode_cursor(raw: str | None) -> tuple[datetime, UUID] | None:
-    if raw is None:
-        return None
-    try:
-        decoded = base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4)).decode("utf-8")
-        created_raw, id_raw = decoded.split(_SEPARATOR)
-        created_at, review_id = datetime.fromisoformat(created_raw), UUID(id_raw)
-    except (ValueError, binascii.Error) as exc:
-        raise invalid_query("cursor", "cursor is not a valid pagination cursor") from exc
-    if not is_utc_representable(created_at):
-        raise invalid_query("cursor", "cursor is not a valid pagination cursor")
-    return created_at, review_id
 
 
 async def _write_rate_limit(
@@ -157,7 +134,7 @@ async def list_product_reviews(
 ) -> ReviewPage:
     """Visible reviews, newest first. A WhatsApp-only product never shows the badge (D14),
     so `verified_purchase=true` is empty there and `false` returns every row."""
-    after = _decode_cursor(cursor)
+    after = decode_review_cursor(cursor)
     product = await visible_product(session, slug)
     if product is None:
         raise not_found_error()
@@ -179,7 +156,7 @@ async def list_product_reviews(
             )
             for row in page
         ],
-        next_cursor=_encode_cursor(page[-1]) if len(rows) > limit else None,
+        next_cursor=encode_review_cursor(page[-1]) if len(rows) > limit else None,
     )
 
 
@@ -197,7 +174,7 @@ async def list_my_reviews(
 ) -> MyReviewPage:
     """Live reviews, hidden ones included with `is_hidden`, newest first."""
     rows = await SqlReviewStore(session).own_page(
-        user.id, after=_decode_cursor(cursor), limit=limit + 1
+        user.id, after=decode_review_cursor(cursor), limit=limit + 1
     )
     page = rows[:limit]
     products = await reviewable_products(session, [row.product_id for row in page])
@@ -208,7 +185,7 @@ async def list_my_reviews(
         shown = badge_shown(row.is_verified_purchase, mode)
         items.append(MyReviewRead.mine(row, product, shown=shown))
     return MyReviewPage(
-        items=items, next_cursor=_encode_cursor(page[-1]) if len(rows) > limit else None
+        items=items, next_cursor=encode_review_cursor(page[-1]) if len(rows) > limit else None
     )
 
 

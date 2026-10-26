@@ -40,6 +40,7 @@ from app.core.rate_limit import enforce_rate_limit
 from app.engagement.api.admin_analytics import admin_router as engagement_analytics_router
 from app.engagement.api.contact_messages import admin_router as contact_messages_router
 from app.engagement.api.custom_request_admin import admin_router as custom_requests_router
+from app.engagement.api.review_admin import admin_router as review_moderation_router
 from app.fulfillment.api.admin_orders import admin_router as admin_orders_router
 from app.fulfillment.api.item_transition import admin_router as item_transition_router
 from app.fulfillment.api.stl_deliveries import admin_router as stl_deliveries_router
@@ -113,6 +114,8 @@ router.include_router(contact_messages_router)
 router.include_router(custom_requests_router)
 # VS-038 wishlist totals and the VS-035 Bring Your Idea funnel.
 router.include_router(engagement_analytics_router)
+# VS-037. Review moderation: list, detail, hide, restore (api-endpoints.md 22).
+router.include_router(review_moderation_router)
 # VS-024. Payment reconcile and manual confirm; the manual hold release.
 router.include_router(admin_payments_router)
 router.include_router(admin_refunds_router)  # VS-030
