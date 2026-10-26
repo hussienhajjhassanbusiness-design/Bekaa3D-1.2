@@ -11,7 +11,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalog.application.ports import ProductType
-from app.engagement.public import refresh_review_badges
+from app.engagement.public import PurchaseEvidence, refresh_review_badges
 from app.ordering.domain.admin_orders import (
     AdminHistoryEntry,
     AdminOrder,
@@ -153,6 +153,7 @@ __all__ = [
     "order_lines",
     "orders_by_id",
     "payment_due",
+    "purchase_evidence",
     "recompute_order_status",
     "refund_lines",
     "release_candidates",
@@ -213,6 +214,11 @@ async def _refresh_review_badges(
             product_ids=product_ids,
             evidence=SqlOrderStore(session).badge_product_ids,
         )
+
+
+def purchase_evidence(session: AsyncSession) -> PurchaseEvidence:
+    """VS-036: of some products, those the user holds a badge-earning line for. No lock."""
+    return SqlOrderStore(session).badge_product_ids
 
 
 async def recompute_order_status(

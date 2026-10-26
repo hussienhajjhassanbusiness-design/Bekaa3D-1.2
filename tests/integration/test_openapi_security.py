@@ -135,3 +135,38 @@ def test_the_vs029_admin_routes_declare_session_csrf_and_the_boundary(
     assert {"401", "404"} <= set(operation["responses"])
     if method != "get":
         assert "403" in operation["responses"]
+
+
+# VS-036: the review routes. Writes need the cookie and CSRF; the public list needs neither.
+VS036_ROUTES = [
+    ("get", "/api/v1/me/reviews"),
+    ("post", "/api/v1/reviews"),
+    ("patch", "/api/v1/reviews/{review_id}"),
+    ("delete", "/api/v1/reviews/{review_id}"),
+]
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("configured_app")
+@pytest.mark.parametrize(("method", "path"), VS036_ROUTES)
+def test_the_vs036_review_routes_declare_session_and_csrf(method: str, path: str) -> None:
+    from app.main import app
+
+    with TestClient(app) as client:
+        operation = client.get(SCHEMA_PATH).json()["paths"][path][method]
+    scheme: dict[str, list[str]] = {"sessionCookie": []}
+    assert operation["security"] == [scheme if method == "get" else scheme | {"csrfToken": []}]
+    assert "401" in operation["responses"]
+    if method != "get":
+        assert {"403", "429"} <= set(operation["responses"])
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("configured_app")
+def test_the_public_review_list_needs_no_session() -> None:
+    from app.main import app
+
+    with TestClient(app) as client:
+        operation = client.get(SCHEMA_PATH).json()["paths"]["/api/v1/products/{slug}/reviews"]
+    assert "security" not in operation["get"]
+    assert "401" not in operation["get"]["responses"]
