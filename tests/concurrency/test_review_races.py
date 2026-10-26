@@ -384,3 +384,54 @@ async def test_c5_a_duplicate_create_is_one_201_and_one_409_never_a_500(
             loser = first if first.status_code == 409 else second
             assert loser.json()["code"] == "REVIEW_ALREADY_EXISTS"
             assert await stored_totals(db_engine, product.id) == (Decimal("5.00"), 1)
+
+
+# --- C11: without R_user, a create racing a refund leaves a badge that disagrees ---------
+
+
+async def _lock_waiters(engine: AsyncEngine) -> int:
+    async with engine.connect() as conn:
+        found = await conn.scalar(
+            text(
+                "SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock'"
+                " AND datname = current_database()"
+            )
+        )
+    return int(found or 0)
+
+
+async def _until(engine: AsyncEngine, waiting: int, done: asyncio.Task[str] | None) -> None:
+    """Until `waiting` backends wait on a lock, or `done` finished; else fail."""
+    deadline = asyncio.get_running_loop().time() + 10.0
+    while asyncio.get_running_loop().time() < deadline:
+        if (done is not None and done.done()) or await _lock_waiters(engine) >= waiting:
+            return
+        await asyncio.sleep(0.02)
+    raise AssertionError(f"fewer than {waiting} transactions ever waited on a lock")
+
+
+async def test_c11_the_stale_badge_window_r_user_closes(
+    world: World, db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """The create reads evidence (true), then a held `users` row stalls its INSERT (FK).
+    The refund then runs; its hook must wait for the create (R_user), or the badge stays
+    true on a refunded line. The real code passes; with R_user removed this fails."""
+    for _ in range(REPEATS):
+        order = await paid_online(db_session, stl=None)
+        line = order.physical[0]
+        product_id = await product_of_line(db_engine, line)
+        async with db_engine.connect() as held:
+            await held.execute(
+                text("SELECT id FROM users WHERE id = :u FOR UPDATE"), {"u": order.user_id}
+            )
+            create = asyncio.create_task(world.create(order.user_id, product_id, 5)())
+            await _until(db_engine, 1, None)
+            refund = asyncio.create_task(world.refund(order.order_id, line, 1000)())
+            await _until(db_engine, 2, refund)
+            await held.rollback()
+        results = await asyncio.wait_for(
+            asyncio.gather(create, refund), timeout=RACE_TIMEOUT_SECONDS
+        )
+        assert results[1] == "refunded" and results[0].startswith("created")
+        row = await _one_review(db_engine, order.user_id, product_id)
+        assert row.is_verified_purchase is False, "badge disagrees with a refunded line"

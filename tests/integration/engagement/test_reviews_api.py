@@ -353,3 +353,11 @@ async def test_the_eleventh_write_in_an_hour_is_429_and_anonymous_posts_spend_no
         refused = post_review(client, products[5].id)
     assert_problem(refused, 429, "RATE_LIMITED")
     assert "Retry-After" in refused.headers
+
+
+async def test_the_public_list_is_limited_at_600_per_ip_per_hour(db_session: AsyncSession) -> None:
+    product = await _product(db_session)
+    with client_for(main_app) as client:
+        response = client.get(public_path(product.slug))
+    assert response.status_code == 200
+    assert response.headers["RateLimit-Limit"] == "600"
