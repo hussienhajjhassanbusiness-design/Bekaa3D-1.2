@@ -464,7 +464,9 @@ async def test_the_release_tx_b_locks_orders_lines_then_payments(
         "INSERT notifications",
     ]
     tables = {s.split(" FROM ")[1].split()[0] for s in tx_b if s.endswith("FOR UPDATE")}
-    assert tables == {"orders", "order_items", "payments"}
+    # VS-036 (ADR-044, plan 8.1): release_unpaid_order's badge hook adds the buyer's reviews
+    # FOR UPDATE (rank 9, after R_user at 7), after payments (rank 4).
+    assert tables == {"orders", "order_items", "payments", "reviews"}
 
 
 async def test_an_event_that_arrives_during_the_question_stops_the_release(

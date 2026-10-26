@@ -88,7 +88,10 @@ async def test_apply_locks_orders_then_lines_then_payments_and_nothing_else(
         "orders",
         "order_items",
         "payments",
-        *(["offers"] if paid else []),
+        # VS-036 (ADR-044, plan 8.1): a paid STL runs mark_order_paid's badge hook, which takes
+        # R_user (rank 7) then the buyer's reviews FOR UPDATE (rank 9), after payments (rank 4)
+        # and before the ADR-037 offer lock and offers (rank 10).
+        *(["reviews", "offers"] if paid else []),
         *(["refunds"] if late else []),
     ]
     assert order[1].endswith("ORDER BY order_items.id FOR UPDATE")
@@ -106,7 +109,12 @@ def assert_acquisition_lock_between_payments_and_offers(statements: list[str]) -
     offer = next(
         i for i, s in enumerate(statements) if s.endswith("FOR UPDATE") and "FROM offers" in s
     )
-    assert len(at) == 1 and payment < at[0] < offer
+    review = next(
+        i for i, s in enumerate(statements) if s.endswith("FOR UPDATE") and "FROM reviews" in s
+    )
+    # VS-036 (ADR-044, plan 8.1): two advisory locks now. R_user (rank 7) before the reviews
+    # lock (rank 9); the ADR-037 acquisition lock (rank 10) after it and before offers.
+    assert len(at) == 2 and payment < at[0] < review < at[1] < offer
 
 
 async def test_receipt_and_tx_a_lock_nothing_and_the_event_is_processed_last(
@@ -132,7 +140,9 @@ async def test_receipt_and_tx_a_lock_nothing_and_the_event_is_processed_last(
         await verify_event(async_sessionmaker(db_engine), {"mock": mock}, event_id)
     order = locks(verification)
     print("VERIFY", *order, sep="\n  ")
-    assert tables(order) == ["orders", "order_items", "payments", "offers"]
+    # VS-036 (ADR-044, plan 8.1): the badge hook's reviews lock (rank 9) after payments (4)
+    # and R_user (7), before offers (10); the advisory checks are in the helper above.
+    assert tables(order) == ["orders", "order_items", "payments", "reviews", "offers"]
     assert_acquisition_lock_between_payments_and_offers(verification)
     first_lock = next(i for i, s in enumerate(verification) if "FOR UPDATE" in s)
     assert not any("FOR UPDATE" in s for s in verification[:first_lock]), "Tx A locks nothing"

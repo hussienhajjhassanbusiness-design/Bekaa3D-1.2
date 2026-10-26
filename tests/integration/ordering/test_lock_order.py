@@ -111,10 +111,16 @@ async def test_payment_apply_locks_orders_then_lines_by_id_then_payments(
             await mark_order_paid(session, locked, at=datetime.now(UTC))
     order = locks(statements)
     print("\nAPPLY", *order, sep="\n  ")
-    assert tables(order) == ["orders", "order_items", "payments"]
+    # VS-036 (ADR-044, plan 8.1): mark_order_paid's badge hook takes R_user (rank 7, advisory),
+    # then the buyer's live reviews FOR UPDATE (rank 9), both after payments (rank 4). Its only
+    # new locks; still no payments statement inside it.
+    assert tables(order) == ["orders", "order_items", "payments", "reviews"]
     assert "ORDER BY order_items.id FOR UPDATE" in order[1]
     marked = statements[before_mark:]
-    assert not any(_LOCK.search(s) for s in marked), "mark_order_paid takes no new lock"
+    marked_locks = [s for s in marked if _LOCK.search(s) or "pg_advisory_xact_lock" in s]
+    assert len(marked_locks) == 2, marked_locks
+    assert "pg_advisory_xact_lock" in marked_locks[0]
+    assert "FROM reviews" in marked_locks[1] and marked_locks[1].endswith("FOR UPDATE")
     assert not any("payments" in s for s in marked)
 
 
