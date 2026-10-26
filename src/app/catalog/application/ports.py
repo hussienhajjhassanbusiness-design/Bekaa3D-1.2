@@ -8,9 +8,11 @@ from uuid import UUID
 
 from app.catalog.domain.entities import Category
 from app.catalog.domain.enums import ProductType as ProductType  # re-exported (VS-038)
+from app.catalog.domain.enums import PurchaseMode as PurchaseMode  # re-exported (VS-036)
 from app.catalog.domain.product import Product as Product  # re-exported (VS-038)
 from app.catalog.domain.product import ProductDraft
 from app.catalog.domain.product_image import ProductImage as ProductImage  # re-exported
+from app.catalog.domain.reviewable import ReviewableProduct as ReviewableProduct  # VS-036
 from app.catalog.domain.storefront import CartProduct as CartProduct  # re-exported (VS-022)
 from app.catalog.domain.storefront import PurchaseRefusal as PurchaseRefusal  # re-exported
 from app.catalog.domain.storefront import purchase_refusal as purchase_refusal  # re-exported

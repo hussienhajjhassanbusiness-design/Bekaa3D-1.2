@@ -322,7 +322,10 @@ async def test_a_manual_release_locks_orders_lines_then_payments(
     assert statements[1].endswith("ORDER BY order_items.id FOR UPDATE")
     assert statements[2].endswith("ORDER BY payments.id FOR UPDATE")
     assert statements[3].startswith("SELECT count(*)") and "webhook_events" in statements[3]
-    assert len(locks) == 3, locks
+    # VS-036 (ADR-044, plan 8.1): release_unpaid_order's badge hook adds R_user (rank 7) and
+    # the buyer's reviews FOR UPDATE (rank 9), after payments (rank 4).
+    assert len(locks) == 4, locks
+    assert "FROM reviews" in locks[3]
 
 
 # --- Manual confirm ---------------------------------------------------------------------------
@@ -455,4 +458,6 @@ async def test_a_confirm_takes_the_same_locks_as_the_webhook(
     assert statements[0].startswith("SELECT payments.id") and "FOR UPDATE" not in statements[0]
     # The confirm's own locks, then apply_result's on the rows it already holds, then the
     # paid STL's live offers (ADR-037).
-    assert order == ["orders", "order_items", "payments"] * 2 + ["offers"]
+    # VS-036 (ADR-044, plan 8.1): mark_order_paid's badge hook locks the buyer's reviews
+    # (rank 9, after R_user at 7) between the payments (rank 4) and the offers (rank 10).
+    assert order == ["orders", "order_items", "payments"] * 2 + ["reviews", "offers"]

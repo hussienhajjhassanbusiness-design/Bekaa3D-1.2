@@ -11,7 +11,7 @@ by its ID, in the field order of [`../frontend-requests/BACKEND-RESPONSE-TEMPLAT
 ## Contents
 
 1. [Shared conventions](#1-shared-conventions) — errors, cookies, CSRF, the admin boundary, rate limits
-2. [Built and confirmed](#2-built-and-confirmed) — A1, A2, A3, B1, B2, B3, B4, B5, C1, C2, P1-1 to P1-7, P2-5, P2-6, P2-8
+2. [Built and confirmed](#2-built-and-confirmed) — A1, A2, A3, B1, B2, B3, B4, B5, C1, C2, P1-1 to P1-7, P2-5, P2-6, P2-8, VS-036 (reviews)
 3. [Removed by ADR-019 and ADR-024](#3-removed-by-adr-019-and-adr-024) — C4, C9, C10, P1-8, P1-9
 4. [Not built yet (provisional)](#4-not-built-yet-provisional) — C5, C6, C7, C8, C11, C12, P1-10 to P1-13, P2-2; also P2-1, P2-3, P2-4 and P2-7, which VS-033 has since built, C3, which VS-026 has since built, and C5, which VS-022 has since built
 5. [Test accounts and fixtures](#5-test-accounts-and-fixtures) — items 1 to 9
@@ -422,7 +422,7 @@ Never `FLUSHALL`: the same Redis holds MFA challenges and the job queue.
 - **One value per facet.** There is no multi-value filter. `category_id=a,b` is a `422`. A repeated parameter (`category_id=a&category_id=b`) is not an error but only the last value is used. Facets combine with AND.
 - STL products have no material or colour, so filtering by either returns physical products only.
 - A product is listed only when it is visible, not deleted, and its category is active. Unavailable products stay listed with `is_available: false`.
-- `average_rating` is `0.0` and `review_count` is `0` for everything until reviews are built (VS-036).
+- `average_rating` and `review_count` are live since VS-036: exact over visible reviews (hidden and deleted ones excluded), updated on every review create, edit and delete. See [Reviews](#domain--item-vs-036--reviews-and-the-verified-purchase-badge).
 - Reference lists for the filter panel: `GET /api/v1/categories` (`{items: [{id, name, slug}]}`), `GET /api/v1/materials` and `GET /api/v1/colours` (`{items: [{id, name}]}`). At most 100 rows each, no pagination.
 
 ### Domain / item: B3 — Product detail contract
@@ -1596,6 +1596,39 @@ Set-Cookie: csrf_token=<redacted>; Max-Age=2592000; Path=/; SameSite=lax
 - The `download` category name is historical. It now means "your STL file was sent".
 - There is no "mark all read" and no delete.
 
+### Domain / item: VS-036 — Reviews and the Verified Purchase badge
+
+**Status:** built (VS-036, [ADR-044](../adr/ADR-044-reviews-and-verified-purchase-badge.md)). Moderation (hide/restore, VS-037) is not built yet.
+
+**Confirmed endpoint:**
+- `GET /api/v1/products/{slug}/reviews` (public). The path takes the product **slug**, not its id.
+- `GET /api/v1/me/reviews`
+- `POST /api/v1/reviews`
+- `PATCH /api/v1/reviews/{review_id}`
+- `DELETE /api/v1/reviews/{review_id}`
+
+**Request schema:** see `openapi.json`: `ReviewCreate` (`product_id`, `rating` 1-5, optional `body`) and `ReviewUpdate` (`rating?`, `body?`; at least one; `body: null` clears the text). `body` is trimmed, at most 2000 characters; whitespace-only becomes `null`, so a rating-only review is fine. Unknown fields (`is_verified_purchase`, `is_hidden`, ...) are a 422. Public list query: `cursor`, `limit` (1-50, default 20), `rating` (1-5), `verified_purchase` (boolean). `/me/reviews`: `cursor`, `limit`.
+
+**Response schema:** `ReviewPage` of `PublicReviewRead` (`id`, `rating`, `body`, `is_verified_purchase`, `created_at`, `edited`). `MyReviewPage` / `MyReviewRead` add `product_id`, `product_slug` (`null` if the product was deleted) and `is_hidden`. There is **no author field**: render "Customer" or "Verified buyer"; an email is never exposed.
+
+**Errors:**
+- `404 NOT_FOUND`: public list or create for an unknown, deleted or non-public product; edit or delete of a review that is not yours, missing or already deleted (one body for all three).
+- `409 REVIEW_ALREADY_EXISTS`: you already have a live review of this product, hidden or not. Delete it to write a new one.
+- `422 REVIEW_CONTENT_REJECTED` with `reason` `"link"` or `"profanity"`; plain `422` for a bad rating, length or control character.
+- `401`, `403 EMAIL_VERIFICATION_REQUIRED`, `403 CSRF_INVALID`, `429 RATE_LIMITED`.
+
+**Auth/CSRF/MFA:** the public list needs nothing. `/me/reviews` needs a session (an unverified account may read). Writes need a verified account and `X-CSRF-Token`.
+
+**Rate limits:** public list 600/hour per IP. Writes 10/hour per user, one budget shared by POST, PATCH and DELETE.
+
+**Notes:**
+- **The badge is computed by the server and can change at any time.** It turns on when a purchase is owned (STL paid) or received (physical `delivered` / `picked_up`, cash after the handover), and off after a full refund, a return or a cancellation. A partial refund keeps it. Never cache it client-side.
+- **WhatsApp-only products never show the badge:** `is_verified_purchase` is always `false` there, and `verified_purchase=true` returns an empty page. If the product goes back to online sale, the badge reappears by itself.
+- **Hidden and soft-deleted rows:** the public list never shows them, and they do not count in `average_rating` / `review_count`. `/me/reviews` shows your hidden reviews with `is_hidden: true` (edit them as usual; they stay hidden), and never your deleted ones.
+- Sorting is fixed, newest first. Pagination is [C2](#domain--item-c2--cursor-pagination-response-shape).
+- `edited` is `true` once the author changed the review.
+- The profanity list is a first draft pending the product owner's review before go-live; expect it to change.
+
 ### Domain / item: P2-6 — Password reset
 
 **Status:** built.
@@ -1699,7 +1732,7 @@ Set-Cookie: csrf_token=<redacted>; Max-Age=2592000; Path=/; SameSite=lax
 **Notes:**
 - **Yes, the shape is universal today.** Every limit in the API goes through one function, so `Retry-After` is whole seconds everywhere, never an HTTP date. `ApiError.retryAfterSeconds` needs no per-route case.
 - The login lockout (10th failed attempt for one email and IP) is also `429 RATE_LIMITED` with `Retry-After: 900`.
-- Current limits per IP: register 5/hour, resend 5/hour, verify-email 20/hour, login 20/hour, refresh 60/hour, reset request 5/hour, reset confirm 20/hour, public reads 600/hour per route, suggestions 3,000/hour. Admin: 300/minute per administrator.
+- Current limits per IP: register 5/hour, resend 5/hour, verify-email 20/hour, login 20/hour, refresh 60/hour, reset request 5/hour, reset confirm 20/hour, public reads 600/hour per route (the public review list included), suggestions 3,000/hour. Review writes: 10/hour per user. Admin: 300/minute per administrator.
 - Contact form: 60 attempts/hour, then 5/hour per IP and per email. Bring Your Idea: 20 attempts/hour, then 5/hour per IP and per email ([P2-2](#domain--item-p2-2--bring-your-idea-submission)). Both use the same limiter and headers.
 - **Provisional:** offer routes are not built. They are planned to use the same limiter.
 - Until VS-020, a server-rendering frontend sends every visitor's request from one IP and all visitors share one budget. VS-020 adds a trusted forwarded-IP header.

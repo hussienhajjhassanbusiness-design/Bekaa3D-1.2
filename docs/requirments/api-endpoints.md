@@ -193,9 +193,10 @@ These codes are implementation additions needed to give the frontend determinist
 | 409 | `CATEGORY_IN_USE` | Category, material or colour cannot be archived while a live product uses it (VS-013) |
 | 409 | `SLUG_CONFLICT` | Live slug already exists |
 | 409 | `VERSION_CONFLICT` | The `version` sent is not the stored one; nothing was written. Body carries `current_version` (ADR-020) |
-| 409 | `REVIEW_ALREADY_EXISTS` | Active user/product review already exists |
+| 409 | `REVIEW_ALREADY_EXISTS` | A live review (hidden or not) of this product by this user already exists; a deleted one does not count (VS-036) |
 | 409 | `OFFER_NOT_YOUR_TURN` | Offer action attempted by wrong actor |
 | 409 | `OFFER_AMOUNT_CHANGED` | Accept named an `expected_amount_cents` that is not the offer's `current_amount`; nothing was written. Body carries `current_amount` (ADR-035 d9) |
+| 422 | `REVIEW_CONTENT_REJECTED` | Review body carries a link or a listed word; body carries `reason` = `link` or `profanity` (VS-036, ADR-044) |
 | 410 | `OFFER_EXPIRED` | Offer inactivity lifetime elapsed |
 | 410 | `RESOURCE_EXPIRED` | Single-use/time-limited resource expired |
 | 416 | `RANGE_NOT_SATISFIABLE` | Invalid byte range on an admin attachment download |
@@ -256,7 +257,7 @@ These are intentionally outside `/api/v1`.
 |---|---|---|---|---|---|---|
 | `GET /api/v1/products` | Public | query params | `200 ProductPage` | 422, 429 | Cursor; filters: `type`, `category_id`, `material_id`, `colour_id`, `price_min_cents`, `price_max_cents`, `min_rating`, `featured`, `q`; sorts: `price`, `-price`, `-average_rating`, `-created_at`, and `-relevance` with `q` (its default; ADR-023) | Only non-deleted, visible products in active categories; unavailable products remain visible |
 | `GET /api/v1/products/{slug}` | Public | — | `200 ProductDetail` | 404, 429 | — | Response includes relevant commerce capabilities (ADR-022) and SEO fields |
-| `GET /api/v1/products/{slug}/reviews` | Public | query params | `200 ReviewPage` | 404, 429 | Cursor; optional `rating`, `verified_purchase`; sort `-created_at` default | Hidden/deleted reviews excluded |
+| `GET /api/v1/products/{slug}/reviews` | Public | query params | `200 ReviewPage` | 404, 422, 429 | Cursor; `limit` 1-50 (default 20); optional `rating` 1-5, `verified_purchase`; sort fixed `-created_at, -id` | Hidden/deleted reviews excluded. **As built (VS-036, ADR-044):** 404 by the storefront rule (non-canonical slug, missing, deleted or not public); 600/hour per IP; no author identity in the payload; `is_verified_purchase` is always false on a WhatsApp-only product, where `verified_purchase=true` returns an empty page |
 | `GET /api/v1/search/suggestions` | Public | `q`, `limit` | `200 SearchSuggestionList` | 422, 429 | Hard limit; V1 max 10 | Trigram typo tolerance (VS-016, see `docs/storefront-catalogue.md`) |
 | `GET /api/v1/categories` | Public | — | `200 CategoryList` | 429 | Hard-limited reference list | Active categories only |
 | `GET /api/v1/materials` | Public | — | `200 MaterialList` | 429 | Hard-limited reference list | Active material values |
@@ -453,10 +454,10 @@ Removed by ADR-019: there is no STL library, entitlement or download endpoint, b
 
 | Method + Path | Auth / Authorization | Request | Success | Errors | Pagination | Side Effects / Notes |
 |---|---|---|---|---|---|---|
-| `GET /api/v1/me/reviews` | Authenticated | `cursor`, `limit` | `200 ReviewPage` | 401 | Cursor | Own reviews including moderation state |
-| `POST /api/v1/reviews` | Verified Customer | `ReviewCreate` | `201 ReviewRead` | 401, 403, 409 `REVIEW_ALREADY_EXISTS`, 422, 429 | — | Purchase not required; server computes Verified Purchase; updates product rating aggregate |
-| `PATCH /api/v1/reviews/{review_id}` | Verified Customer; owner | `ReviewUpdate` | `200 ReviewRead` | 401, 403, 404, 422, 429 | — | Revalidates content; recalculates rating aggregate |
-| `DELETE /api/v1/reviews/{review_id}` | Verified Customer; owner | — | `204` | 401, 403, 404 | — | Soft delete; recalculates aggregates |
+| `GET /api/v1/me/reviews` | Authenticated | `cursor`, `limit` | `200 MyReviewPage` | 401 | Cursor; `limit` 1-50 | Own reviews including moderation state. **As built (VS-036):** live rows only (soft-deleted ones never appear), hidden ones included with `is_hidden: true`; `product_slug` is null for a deleted product; the badge is masked on WhatsApp-only products; an unverified account may read |
+| `POST /api/v1/reviews` | Verified Customer | `ReviewCreate` | `201 MyReviewRead` | 401, 403, 404, 409 `REVIEW_ALREADY_EXISTS`, 422 (`REVIEW_CONTENT_REJECTED`), 429 | — | Purchase not required; server computes Verified Purchase; updates product rating aggregate. **As built (VS-036):** 404 for a missing, deleted or non-public product; rating-only reviews allowed; 10 review writes/hour per user shared with PATCH and DELETE |
+| `PATCH /api/v1/reviews/{review_id}` | Verified Customer; owner | `ReviewUpdate` | `200 MyReviewRead` | 401, 403, 404, 422, 429 | — | Revalidates content; recalculates rating aggregate. **As built (VS-036):** 404 for someone else's, missing or deleted review (same body); at least one field; `body: null` clears the text; a hidden review stays hidden; the badge is re-read from current facts |
+| `DELETE /api/v1/reviews/{review_id}` | Verified Customer; owner | — | `204` | 401, 403, 404, 429 | — | Soft delete; recalculates aggregates. **As built (VS-036):** a repeat is 404; the user may then post a new review of the product |
 
 ## 14.2 Wishlist
 
@@ -1002,9 +1003,15 @@ body?: str
 ### `ReviewUpdate`
 
 ```text
-rating?: int
-body?: str
+rating?: int  # 1..5
+body?: str | null  # null clears the text; at least one field is required
 ```
+
+As built (VS-036): `body` is trimmed (whitespace-only becomes null), at most 2000 characters,
+no control characters except line breaks. Unknown fields such as `is_verified_purchase` or
+`is_hidden` are refused with 422. Responses: `PublicReviewRead` (`id`, `rating`, `body`,
+`is_verified_purchase`, `created_at`, `edited`) and `MyReviewRead` (adds `product_id`,
+`product_slug`, `is_hidden`).
 
 ### `NotificationUpdate`
 

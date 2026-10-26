@@ -8,6 +8,8 @@ from app.catalog.api.search import public_router as search_router
 from app.catalog.api.storefront import public_router as storefront_router
 from app.engagement.api.contact_messages import public_router as contact_router
 from app.engagement.api.custom_requests import public_router as custom_request_router
+from app.engagement.api.reviews import public_router as public_reviews_router
+from app.engagement.api.reviews import router as reviews_router
 from app.negotiation.api.offers import submit_router as offer_submit_router
 from app.ordering.api.cart import router as cart_router
 from app.ordering.api.checkout import router as checkout_router
@@ -40,3 +42,7 @@ router.include_router(payment_webhooks_router)
 router.include_router(custom_request_router)
 # VS-039. Offer submission: POST /api/v1/offers (api-endpoints.md 13).
 router.include_router(offer_submit_router)
+# VS-036. Reviews: the public list under /products/{slug}/reviews, and the customer's
+# POST /reviews, PATCH and DELETE /reviews/{review_id} (api-endpoints.md 14.1).
+router.include_router(public_reviews_router)
+router.include_router(reviews_router)

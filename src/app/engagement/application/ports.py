@@ -1,12 +1,14 @@
 """Engagement's repository ports. A pure `Protocol`: the application layer
 depends on this, never on `app.engagement.infrastructure` (BUG-41)."""
 
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from decimal import Decimal
 from typing import Any, Protocol
 from uuid import UUID
 
+from app.catalog.application.ports import ReviewableProduct
 from app.engagement.domain.contact_message import ContactDetails, ContactMessage, ProblemReport
 from app.engagement.domain.custom_request import (
     CustomRequest,
@@ -21,6 +23,7 @@ from app.engagement.domain.enums import (
     CustomRequestStatus,
     NotificationType,
 )
+from app.engagement.domain.reviews import NewReview, Review
 
 
 class NotificationStore(Protocol):
@@ -154,3 +157,43 @@ class WishlistCounter(Protocol):
         application layer can call it without importing a session
         (VS-038 plan §3 refactor) - the adapter binds it to one."""
         ...
+
+
+# Ordering's evidence read: of `product_ids`, those this user holds an earning line for.
+PurchaseEvidence = Callable[[UUID, Sequence[UUID]], Awaitable[set[UUID]]]
+
+
+class ReviewStore(Protocol):
+    async def lock_user(self, user_id: UUID) -> None:
+        """`R_user`: the per-user transaction advisory lock (VS-036 plan 3.2b)."""
+        ...
+
+    async def live_for(self, user_id: UUID, product_id: UUID) -> Review | None: ...
+
+    async def own_product_id(self, review_id: UUID, user_id: UUID) -> UUID | None:
+        """Unlocked; `product_id` is immutable, so it is safe to lock the product by it."""
+        ...
+
+    async def get_own_for_update(self, review_id: UUID, user_id: UUID) -> Review | None: ...
+
+    async def insert(self, new: NewReview) -> Review:
+        """`ReviewAlreadyExistsError` if the live unique index already holds one."""
+        ...
+
+    async def update(
+        self, review_id: UUID, *, rating: int, body: str | None, verified: bool
+    ) -> Review: ...
+
+    async def soft_delete(self, review_id: UUID) -> None: ...
+
+    async def visible_totals(self, product_id: UUID) -> tuple[int, int]:
+        """(sum of ratings, count) over live, not hidden reviews."""
+        ...
+
+
+class ReviewableProducts(Protocol):
+    async def lock(self, product_id: UUID) -> ReviewableProduct | None:
+        """`FOR NO KEY UPDATE`: the aggregate writers' lock (plan 3.4)."""
+        ...
+
+    async def set_rating(self, product_id: UUID, average: Decimal, count: int) -> None: ...

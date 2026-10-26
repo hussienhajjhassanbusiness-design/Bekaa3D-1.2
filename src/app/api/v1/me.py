@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.engagement.api.notifications import router as engagement_notifications_router
+from app.engagement.api.reviews import me_router as engagement_reviews_router
 from app.engagement.api.wishlist import router as engagement_wishlist_router
 from app.identity.api.addresses import router as identity_addresses_router
 from app.identity.api.profile import router as identity_profile_router
@@ -17,6 +18,8 @@ router.include_router(identity_profile_router)
 router.include_router(engagement_notifications_router)
 router.include_router(identity_addresses_router)
 router.include_router(engagement_wishlist_router)
+# VS-036: GET /me/reviews, own reviews including moderation state.
+router.include_router(engagement_reviews_router)
 router.include_router(ordering_ownership_router)
 # VS-024: a new payment attempt for the caller's own unpaid order.
 router.include_router(ordering_payment_retry_router)
