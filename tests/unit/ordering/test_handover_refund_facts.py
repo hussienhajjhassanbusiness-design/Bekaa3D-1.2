@@ -1,9 +1,10 @@
 """U11: the cash handover recomputes with `NO_REFUNDS` (VS-030 plan 3.4). Its cash payment
 is inserted in the same transaction, so no refund can exist on the order yet."""
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import cast
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -56,6 +57,7 @@ def _locked() -> public.LockedOrder:
 
 async def test_the_handover_recomputes_with_no_refunds(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: list[OrderStatusInputs] = []
+    hooked: list[list[UUID]] = []
 
     async def recompute(
         _session: object, _locked: object, inputs: OrderStatusInputs, **_: object
@@ -63,14 +65,22 @@ async def test_the_handover_recomputes_with_no_refunds(monkeypatch: pytest.Monke
         seen.append(inputs)
         return OrderStatus.COMPLETED
 
+    async def refresh(_session: object, _locked: object, line_ids: Sequence[UUID]) -> None:
+        hooked.append(list(line_ids))
+
+    locked = _locked()
     monkeypatch.setattr(public, "SqlOrderStore", _Store)
     monkeypatch.setattr(public, "recompute_order_status", recompute)
+    # VS-036: the badge hook is the writer's new database collaborator; stubbed like the store.
+    monkeypatch.setattr(public, "_refresh_review_badges", refresh)
     await public.hand_over_cash_lines(
         cast(AsyncSession, object()),
-        _locked(),
+        locked,
         admin_id=uuid4(),
         at=AT,
         note=None,
     )
     assert len(seen) == 1
     assert seen[0].refunds is NO_REFUNDS and seen[0].payment_reached_paid
+    live, cancelled = locked.lines
+    assert hooked == [[live.id]] and cancelled.id not in hooked[0]

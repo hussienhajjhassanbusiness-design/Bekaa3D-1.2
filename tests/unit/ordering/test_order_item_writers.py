@@ -164,3 +164,67 @@ def test_receipt_timestamps_are_written_only_after_the_owned_order_lock() -> Non
         assert calls["_received"] < calls[stamp], caller
     locks = _call_lines(next(f for f in _functions(tree) if f.name == "_received"))
     assert locks["lock_owned_order"] < locks["lock_lines"]
+
+
+# VS-036 plan 3.2a, layer 1: the store methods that write `fulfillment_status`.
+STATE_WRITERS = {
+    ("ordering/infrastructure/orders.py", "set_line_status"),
+    ("ordering/infrastructure/orders.py", "set_line_delivered"),
+    ("ordering/infrastructure/orders.py", "move_line"),
+    ("ordering/infrastructure/orders.py", "cancel_order_lines"),
+}
+# The one exemption: new rows are `pending`, which never earns the badge.
+STATE_WRITER_EXEMPT = {("ordering/infrastructure/orders.py", "insert_lines")}
+# Layer 2: W1-W8, every caller of a state writer; each must call the badge hook after it.
+BADGE_HOOKED_CALLERS = {
+    ("ordering/public.py", "mark_order_paid"),  # W1
+    ("ordering/public.py", "cancel_lines"),  # W2
+    ("ordering/public.py", "mark_stl_line_delivered"),  # W3
+    ("ordering/public.py", "transition_physical_line"),  # W4
+    ("ordering/public.py", "hand_over_cash_lines"),  # W5
+    ("ordering/public.py", "refund_lines"),  # W6
+    ("ordering/public.py", "cancel_lines_for_chargeback"),  # W7
+    ("ordering/public.py", "release_unpaid_order"),  # W8
+}
+BADGE_HOOK = "_refresh_review_badges"
+
+
+def _writes_status(function: ast.AST) -> bool:
+    for node in ast.walk(function):
+        if isinstance(node, ast.keyword) and node.arg == "fulfillment_status":
+            return True
+        if isinstance(node, ast.Dict) and any(
+            isinstance(key, ast.Constant) and key.value == "fulfillment_status" for key in node.keys
+        ):
+            return True
+    return False
+
+
+def _status_writers() -> set[tuple[str, str]]:
+    found: set[tuple[str, str]] = set()
+    for module, name in _writers():
+        tree = ast.parse((SRC / module).read_text(encoding="utf-8"))
+        if any(f.name == name and _writes_status(f) for f in _functions(tree)):
+            found.add((module, name))
+    return found
+
+
+def test_every_writer_of_a_line_state_is_listed_for_the_badge() -> None:
+    assert _status_writers() == STATE_WRITERS | STATE_WRITER_EXEMPT, (
+        "A new writer of order_items.fulfillment_status: list it in STATE_WRITERS and hook "
+        "its callers (VS-036 plan 3.2a), or exempt it with the reason."
+    )
+
+
+def test_every_caller_of_a_state_writer_refreshes_the_badge_after_the_write() -> None:
+    callers = set().union(*(_callers(name) for _, name in STATE_WRITERS))
+    assert callers == BADGE_HOOKED_CALLERS, (
+        "A new caller of a line-state writer: it must call _refresh_review_badges after "
+        "the write (VS-036 plan 3.2a), then be listed here."
+    )
+    for module, caller in sorted(BADGE_HOOKED_CALLERS):
+        tree = ast.parse((SRC / module).read_text(encoding="utf-8"))
+        calls = _call_lines(next(f for f in _functions(tree) if f.name == caller))
+        writes = [calls[name] for _, name in STATE_WRITERS if name in calls]
+        assert BADGE_HOOK in calls, f"{caller} never calls {BADGE_HOOK} (VS-036 plan 3.2a)"
+        assert calls[BADGE_HOOK] > max(writes), f"{caller} calls {BADGE_HOOK} before its write"

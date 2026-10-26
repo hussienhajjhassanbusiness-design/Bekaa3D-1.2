@@ -11,6 +11,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalog.application.ports import ProductType
+from app.engagement.public import refresh_review_badges
 from app.ordering.domain.admin_orders import (
     AdminHistoryEntry,
     AdminOrder,
@@ -198,6 +199,22 @@ async def lock_order_for_change(session: AsyncSession, order_id: UUID) -> Locked
     return LockedOrder(order=order, lines=tuple(await store.lock_lines(order_id)))
 
 
+async def _refresh_review_badges(
+    session: AsyncSession, locked: LockedOrder, line_ids: Sequence[UUID]
+) -> None:
+    """VS-036 plan 3.2: every line-state writer calls this after its write and history, so
+    the badge follows current facts. `R_user` comes after the caller's order-chain locks."""
+    touched = set(line_ids)
+    product_ids = sorted({line.product_id for line in locked.lines if line.id in touched}, key=str)
+    if product_ids:
+        await refresh_review_badges(
+            session,
+            user_id=locked.order.user_id,
+            product_ids=product_ids,
+            evidence=SqlOrderStore(session).badge_product_ids,
+        )
+
+
 async def recompute_order_status(
     session: AsyncSession,
     locked: LockedOrder,
@@ -248,6 +265,7 @@ async def mark_order_paid(session: AsyncSession, locked: LockedOrder, *, at: dat
             for line in stl
         ]
     )
+    await _refresh_review_badges(session, locked, [line.id for line in stl])
     moved = {line.id for line in stl}
     states = tuple(
         LineState(
@@ -337,6 +355,7 @@ async def cancel_lines(
             for cancel in cancels
         ]
     )
+    await _refresh_review_badges(session, locked, [cancel.line_id for cancel in cancels])
 
 
 async def mark_stl_line_delivered(
@@ -372,6 +391,7 @@ async def mark_stl_line_delivered(
             )
         ]
     )
+    await _refresh_review_badges(session, locked, [line_id])
     states = tuple(
         LineState(OrderItemStatus.DELIVERED if item.id == line_id else item.fulfillment_status)
         for item in locked.lines
@@ -434,6 +454,7 @@ async def transition_physical_line(
             )
         ]
     )
+    await _refresh_review_badges(session, locked, [line_id])
     states = tuple(
         LineState(target if item.id == line_id else item.fulfillment_status)
         for item in locked.lines
@@ -498,6 +519,7 @@ async def hand_over_cash_lines(
             for line in live
         ]
     )
+    await _refresh_review_badges(session, locked, [line.id for line in live])
     ids = {line.id for line in live}
     after = tuple(
         LineState(done if line.id in ids else line.fulfillment_status) for line in locked.lines
@@ -570,6 +592,7 @@ async def refund_lines(
             for line in lines
         ]
     )
+    await _refresh_review_badges(session, locked, line_ids)
 
 
 async def cancel_lines_for_chargeback(
@@ -598,6 +621,7 @@ async def cancel_lines_for_chargeback(
             for line in lines
         ]
     )
+    await _refresh_review_badges(session, locked, line_ids)
 
 
 async def release_unpaid_order(
@@ -634,6 +658,7 @@ async def release_unpaid_order(
             for line_id in ids
         ]
     )
+    await _refresh_review_badges(session, locked, ids)
     states = tuple(
         LineState(OrderItemStatus.CANCELLED if line.id in ids else line.fulfillment_status)
         for line in locked.lines
