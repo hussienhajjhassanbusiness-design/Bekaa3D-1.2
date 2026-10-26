@@ -120,3 +120,35 @@ class InvalidQuoteError(EngagementDomainError):
     def __init__(self, reason: str) -> None:
         super().__init__(reason)
         self.reason = reason
+
+
+class ReviewAlreadyExistsError(EngagementDomainError):
+    """A live review (hidden or not) exists for this user and product (D8): 409."""
+
+    def __init__(self, product_id: object) -> None:
+        super().__init__(f"A live review of product {product_id!r} already exists.")
+        self.product_id = product_id
+
+
+class ReviewContentRejectedError(EngagementDomainError):
+    """The body carries a link or a listed word (D9): 422 `REVIEW_CONTENT_REJECTED`."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(f"Review content rejected: {reason}.")
+        self.reason = reason
+
+
+class ReviewNotFoundError(EngagementDomainError):
+    """Missing, someone else's or deleted: one 404, so ids cannot be probed."""
+
+    def __init__(self, review_id: object) -> None:
+        super().__init__(f"No live review {review_id!r} belongs to this user.")
+        self.review_id = review_id
+
+
+class ReviewProductUnavailableError(EngagementDomainError):
+    """The product is missing, deleted or not public: 404 on create."""
+
+    def __init__(self, product_id: object) -> None:
+        super().__init__(f"Product {product_id!r} cannot be reviewed.")
+        self.product_id = product_id

@@ -6,11 +6,12 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Select, func, insert, select, tuple_, update
+from sqlalchemy import Select, func, insert, literal_column, select, tuple_, union, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalog.application.ports import ProductType
+from app.ordering.domain.badge import BADGE_STATES
 from app.ordering.domain.cancellation import LineCancel
 from app.ordering.domain.enums import OrderItemStatus, OrderStatus, PaymentMethod
 from app.ordering.domain.exceptions import OrderNumberExhaustedError, ProductAlreadyOwnedError
@@ -168,6 +169,26 @@ class SqlOrderStore:
 
     async def owned_stl_product_ids(self, user_id: UUID, product_ids: Sequence[UUID]) -> set[UUID]:
         return await self._stl_product_ids(user_id, product_ids, OWNED_STATES)
+
+    async def badge_product_ids(self, user_id: UUID, product_ids: Sequence[UUID]) -> set[UUID]:
+        """VS-036 plan 4.1a: one branch per type, each spelling its partial index's predicate
+        (`uq_order_items_stl_ownership`, `ix_order_items_badge_received`). No lock."""
+        if not product_ids:
+            return set()
+        ids = list(product_ids)
+        # Inlined enum constants, not binds, so a generic plan still matches the indexes.
+        branches = [
+            select(_I.product_id).where(
+                _I.user_id == user_id,
+                _I.product_id.in_(ids),
+                _I.product_type == literal_column(f"'{product_type.value}'"),
+                _I.fulfillment_status.in_(
+                    [literal_column(f"'{state.value}'") for state in sorted(states)]
+                ),
+            )
+            for product_type, states in BADGE_STATES.items()
+        ]
+        return set((await self._session.scalars(union(*branches))).all())
 
     async def _live_stl_product_ids(self, user_id: UUID, product_ids: Sequence[UUID]) -> set[UUID]:
         return await self._stl_product_ids(user_id, product_ids, LIVE_STL_STATES)

@@ -2,9 +2,12 @@
 
 import re
 import unicodedata
+from dataclasses import dataclass
+from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
 from typing import Final
+from uuid import UUID
 
 from app.catalog.application.ports import PurchaseMode
 from app.engagement.domain.profanity import PROFANITY_WORDS
@@ -78,3 +81,35 @@ def rating_average(ratings_sum: int, count: int) -> Decimal:
 def badge_shown(stored: bool, purchase_mode: PurchaseMode | None) -> bool:
     """D14 (Q3): a WhatsApp-only product never shows the badge; the stored fact is kept."""
     return stored and purchase_mode is not PurchaseMode.WHATSAPP_ONLY
+
+
+# int4 namespace of the per-user two-int advisory lock `R_user` (plan 3.2b, D6): "REVW".
+REVIEW_LOCK_NS: Final = 0x52455657
+
+
+@dataclass(frozen=True)
+class Review:
+    id: UUID
+    user_id: UUID
+    product_id: UUID
+    rating: int
+    body: str | None
+    is_verified_purchase: bool
+    is_hidden: bool
+    hidden_at: datetime | None
+    deleted_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+    @property
+    def edited(self) -> bool:
+        return self.updated_at > self.created_at
+
+
+@dataclass(frozen=True)
+class NewReview:
+    user_id: UUID
+    product_id: UUID
+    rating: int
+    body: str | None
+    is_verified_purchase: bool
