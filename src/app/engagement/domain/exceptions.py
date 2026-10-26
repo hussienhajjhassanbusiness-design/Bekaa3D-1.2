@@ -152,3 +152,12 @@ class ReviewProductUnavailableError(EngagementDomainError):
     def __init__(self, product_id: object) -> None:
         super().__init__(f"Product {product_id!r} cannot be reviewed.")
         self.product_id = product_id
+
+
+class ReviewModerationConflictError(EngagementDomainError):
+    """Hide of a hidden review, or restore of a visible one (VS-037 D5): 409."""
+
+    def __init__(self, is_hidden: bool) -> None:
+        state = "hidden" if is_hidden else "not hidden"
+        super().__init__(f"The review is already {state}.")
+        self.is_hidden = is_hidden

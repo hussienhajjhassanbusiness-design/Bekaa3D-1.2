@@ -191,6 +191,26 @@ class ReviewStore(Protocol):
         ...
 
 
+class ReviewTotals(Protocol):
+    async def visible_totals(self, product_id: UUID) -> tuple[int, int]:
+        """(sum of ratings, count) over live, not hidden reviews."""
+        ...
+
+
+class ReviewModerationStore(ReviewTotals, Protocol):
+    """VS-037: the admin's hide / restore. Rows here include soft-deleted ones."""
+
+    async def product_id_of(self, review_id: UUID) -> UUID | None:
+        """Unlocked, any row; `product_id` is immutable, so the product lock can go first."""
+        ...
+
+    async def lock_for_moderation(self, review_id: UUID) -> Review | None:
+        """`FOR UPDATE`, after the product lock (VS-037 plan 8.1)."""
+        ...
+
+    async def set_hidden(self, review_id: UUID, *, hidden: bool, at: datetime) -> None: ...
+
+
 class ReviewableProducts(Protocol):
     async def lock(self, product_id: UUID) -> ReviewableProduct | None:
         """`FOR NO KEY UPDATE`: the aggregate writers' lock (plan 3.4)."""
