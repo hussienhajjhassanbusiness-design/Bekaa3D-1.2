@@ -1169,6 +1169,7 @@ batch_size_snapshot IS NULL
 (order_id)
 (fulfillment_status, order_id) WHERE product_type = 'physical'
 ix_order_items_stl_awaiting (created_at, id) WHERE product_type = 'stl' AND fulfillment_status = 'awaiting_delivery'   -- STL delivery queue (VS-023b)
+ix_order_items_badge_received (user_id, product_id) WHERE product_type = 'physical' AND fulfillment_status IN ('delivered', 'picked_up')   -- Verified Purchase evidence, physical branch (VS-036, ADR-044)
 ```
 
 As built (VS-030, migration `c01e53ab3e0f`; VS-041 audit Q-1): a line's customer is its order's customer.
@@ -1631,32 +1632,46 @@ UNIQUE(offer_id, sequence)
 
 ## 12.1 `reviews`
 
+As built (VS-036 PR A, migration `eeed201dcfd2`, [ADR-044](../adr/ADR-044-reviews-and-verified-purchase-badge.md)).
+
 | Column | Type | Null | Constraint |
 |---|---|---:|---|
 | `id` | UUID | No | PK |
-| `user_id` | UUID | No | FK → `users.id` |
-| `product_id` | UUID | No | FK → `products.id` |
-| `rating` | SMALLINT | No | CHECK 1..5 |
-| `body` | TEXT | Yes |  |
-| `is_verified_purchase` | BOOLEAN | No | maintained projection |
-| `is_hidden` | BOOLEAN | No | moderation state |
+| `user_id` | UUID | No | `fk_reviews_user_id` → `users.id` ON DELETE RESTRICT |
+| `product_id` | UUID | No | `fk_reviews_product_id` → `products.id` ON DELETE RESTRICT |
+| `rating` | SMALLINT | No | `ck_reviews_rating_range`: 1..5 |
+| `body` | TEXT | Yes | `ck_reviews_body_shape`: NULL, or not blank and at most 2000 characters |
+| `is_verified_purchase` | BOOLEAN | No | maintained projection, default false |
+| `is_hidden` | BOOLEAN | No | moderation state, default false |
+| `hidden_at` | TIMESTAMPTZ | Yes | when it was hidden; `ck_reviews_hidden_shape`: `is_hidden = (hidden_at IS NOT NULL)` |
 | `deleted_at` | TIMESTAMPTZ | Yes | user/admin soft delete |
 | `created_at` | TIMESTAMPTZ | No |  |
-| `updated_at` | TIMESTAMPTZ | No |  |
+| `updated_at` | TIMESTAMPTZ | No | `ck_reviews_updated_after_created`: `updated_at >= created_at` |
 
 ### Critical Constraint
 
 ```text
-UNIQUE(user_id, product_id)
-WHERE deleted_at IS NULL
+uq_reviews_user_product_live: UNIQUE(user_id, product_id)
+WHERE deleted_at IS NULL          -- a hidden review is live and blocks a second one
 ```
+
+### Index
+
+```text
+ix_reviews_product_visible (product_id, created_at DESC, id DESC) WHERE deleted_at IS NULL AND NOT is_hidden   -- public list, rating aggregate
+ix_reviews_user_live (user_id, created_at DESC, id DESC) WHERE deleted_at IS NULL                          -- GET /me/reviews
+```
+
+`user_id` is RESTRICT because reviews are history. Only verified users write them, and the
+unverified-account purge deletes only never-verified accounts, so it never meets one.
 
 ### Rules
 
 - verified user may review without purchase;
 - one review per user/product;
-- verified-purchase badge depends on a paid, unrefunded order line for the product;
+- verified-purchase badge depends on a paid, unrefunded order line for the product: an STL line in `awaiting_delivery` / `delivered`, or a physical line in `delivered` / `picked_up` (ADR-044);
 - badge is recomputed when a purchase is paid (online verification or cash handover) or refunded; an unpaid cash line never counts;
+- a WhatsApp-only product never shows the badge; the stored value is kept (ADR-044);
 - admin may hide/restore;
 - rating aggregate on product is recalculated on create/edit/delete/moderation.
 

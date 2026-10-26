@@ -5,11 +5,13 @@ from typing import Any
 from sqlalchemy import (
     CHAR,
     BigInteger,
+    Boolean,
     CheckConstraint,
     DateTime,
     Enum,
     ForeignKey,
     Index,
+    SmallInteger,
     Text,
     UniqueConstraint,
     func,
@@ -216,6 +218,74 @@ class WishlistItemModel(Base):
         Index(
             "ix_wishlist_items_product_live",
             "product_id",
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+    )
+
+
+class ReviewModel(Base):
+    """database-design.md 12.1 (VS-036, ADR-044). Soft delete; moderation is `is_hidden`
+    plus `hidden_at`, one fact under `ck_reviews_hidden_shape`."""
+
+    __tablename__ = "reviews"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    # RESTRICT: reviews are history; only verified users write them, so the
+    # unverified-account purge never meets one.
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="RESTRICT", name="fk_reviews_user_id"),
+        nullable=False,
+    )
+    product_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("products.id", ondelete="RESTRICT", name="fk_reviews_product_id"),
+        nullable=False,
+    )
+    rating: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    body: Mapped[str | None] = mapped_column(Text)
+    is_verified_purchase: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+    is_hidden: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    hidden_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        CheckConstraint("rating BETWEEN 1 AND 5", name="ck_reviews_rating_range"),
+        CheckConstraint(
+            "body IS NULL OR (btrim(body) <> '' AND char_length(body) <= 2000)",
+            name="ck_reviews_body_shape",
+        ),
+        CheckConstraint("is_hidden = (hidden_at IS NOT NULL)", name="ck_reviews_hidden_shape"),
+        CheckConstraint("updated_at >= created_at", name="ck_reviews_updated_after_created"),
+        Index(
+            "uq_reviews_user_product_live",
+            "user_id",
+            "product_id",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "ix_reviews_product_visible",
+            "product_id",
+            text("created_at DESC"),
+            text("id DESC"),
+            postgresql_where=text("deleted_at IS NULL AND NOT is_hidden"),
+        ),
+        Index(
+            "ix_reviews_user_live",
+            "user_id",
+            text("created_at DESC"),
+            text("id DESC"),
             postgresql_where=text("deleted_at IS NULL"),
         ),
     )

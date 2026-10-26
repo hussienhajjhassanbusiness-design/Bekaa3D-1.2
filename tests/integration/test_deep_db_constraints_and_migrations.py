@@ -326,6 +326,8 @@ RESTRICT_TO_USERS_ALLOWED = {
     ("refunds", "failed_by"),
     ("refunds", "voided_by"),
     ("chargebacks", "recorded_by"),
+    # VS-036: reviews are history; only verified users write one, so the purge never meets it.
+    ("reviews", "user_id"),
 }
 
 _FKS_TO_USERS = (

@@ -416,6 +416,15 @@ class OrderItemModel(Base):
                 "AND fulfillment_status IN ('pending', 'awaiting_delivery', 'delivered')"
             ),
         ),
+        # VS-036: the badge evidence's physical branch; the STL branch uses the index above.
+        Index(
+            "ix_order_items_badge_received",
+            "user_id",
+            "product_id",
+            postgresql_where=text(
+                "product_type = 'physical' AND fulfillment_status IN ('delivered', 'picked_up')"
+            ),
+        ),
     )
 
 
