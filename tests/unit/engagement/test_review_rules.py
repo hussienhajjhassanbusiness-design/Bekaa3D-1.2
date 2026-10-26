@@ -26,7 +26,7 @@ from app.engagement.domain.reviews import (
         "go to www.x",
         "buy at x.com today",
         "mail a@b.lb",
-        "x．com",  # a full-width dot, folded by NFKC
+        "x\N{FULLWIDTH FULL STOP}com",  # folded to "." by NFKC
         "ftp://files",
         "shop.lb",
     ],
@@ -43,7 +43,12 @@ def test_ordinary_text_is_not_a_link(body: str) -> None:
     assert content_refusal(body) is None
 
 
-@pytest.mark.parametrize("body", ["This is SHIT", "fuck.", "ｆｕｃｋ this", "يا شرموطة", "3ars"])
+FULLWIDTH_FUCK = "".join(chr(ord(c) + 0xFEE0) for c in "fuck")
+
+
+@pytest.mark.parametrize(
+    "body", ["This is SHIT", "fuck.", f"{FULLWIDTH_FUCK} this", "يا شرموطة", "3ars"]
+)
 def test_profanity_is_refused_as_a_whole_word_case_and_nfkc_folded(body: str) -> None:
     assert content_refusal(body) is ContentRefusal.PROFANITY
 
