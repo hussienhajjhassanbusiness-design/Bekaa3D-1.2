@@ -550,37 +550,61 @@ op.create_table(
     sa.Column("product_id", sa.UUID(), nullable=False),
     sa.Column("rating", sa.SmallInteger(), nullable=False),
     sa.Column("body", sa.Text(), nullable=True),
-    sa.Column("is_verified_purchase", sa.Boolean(), server_default=sa.text("false"), nullable=False),
+    sa.Column(
+        "is_verified_purchase", sa.Boolean(), server_default=sa.text("false"), nullable=False
+    ),
     sa.Column("is_hidden", sa.Boolean(), server_default=sa.text("false"), nullable=False),
     sa.Column("hidden_at", sa.DateTime(timezone=True), nullable=True),
     sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
-    sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-    sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+    sa.Column(
+        "created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False
+    ),
+    sa.Column(
+        "updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False
+    ),
     sa.PrimaryKeyConstraint("id"),
     # RESTRICT: reviews are history (entities "Deletion strategy"); only verified users write,
     # and the purge removes only unverified accounts, so it can never meet one.
     sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="RESTRICT"),
     sa.ForeignKeyConstraint(["product_id"], ["products.id"], ondelete="RESTRICT"),
     sa.CheckConstraint("rating BETWEEN 1 AND 5", name="ck_reviews_rating_range"),
-    sa.CheckConstraint("body IS NULL OR (btrim(body) <> '' AND char_length(body) <= 2000)",
-                       name="ck_reviews_body_shape"),
+    sa.CheckConstraint(
+        "body IS NULL OR (btrim(body) <> '' AND char_length(body) <= 2000)",
+        name="ck_reviews_body_shape",
+    ),
     sa.CheckConstraint("is_hidden = (hidden_at IS NOT NULL)", name="ck_reviews_hidden_shape"),
     sa.CheckConstraint("updated_at >= created_at", name="ck_reviews_updated_after_created"),
 )
-op.create_index("uq_reviews_user_product_live", "reviews", ["user_id", "product_id"],
-                unique=True, postgresql_where=sa.text("deleted_at IS NULL"))
+op.create_index(
+    "uq_reviews_user_product_live",
+    "reviews",
+    ["user_id", "product_id"],
+    unique=True,
+    postgresql_where=sa.text("deleted_at IS NULL"),
+)
 # Public list and the aggregate: visible rows of one product, newest first.
-op.create_index("ix_reviews_product_visible", "reviews",
-                ["product_id", sa.literal_column("created_at DESC"), sa.literal_column("id DESC")],
-                postgresql_where=sa.text("deleted_at IS NULL AND NOT is_hidden"))
+op.create_index(
+    "ix_reviews_product_visible",
+    "reviews",
+    ["product_id", sa.literal_column("created_at DESC"), sa.literal_column("id DESC")],
+    postgresql_where=sa.text("deleted_at IS NULL AND NOT is_hidden"),
+)
 # GET /me/reviews.
-op.create_index("ix_reviews_user_live", "reviews",
-                ["user_id", sa.literal_column("created_at DESC"), sa.literal_column("id DESC")],
-                postgresql_where=sa.text("deleted_at IS NULL"))
+op.create_index(
+    "ix_reviews_user_live",
+    "reviews",
+    ["user_id", sa.literal_column("created_at DESC"), sa.literal_column("id DESC")],
+    postgresql_where=sa.text("deleted_at IS NULL"),
+)
 # The badge evidence's physical branch (§4.1a); the STL branch uses uq_order_items_stl_ownership.
-op.create_index("ix_order_items_badge_received", "order_items", ["user_id", "product_id"],
-                postgresql_where=sa.text("product_type = 'physical' "
-                                         "AND fulfillment_status IN ('delivered', 'picked_up')"))
+op.create_index(
+    "ix_order_items_badge_received",
+    "order_items",
+    ["user_id", "product_id"],
+    postgresql_where=sa.text(
+        "product_type = 'physical' AND fulfillment_status IN ('delivered', 'picked_up')"
+    ),
+)
 ```
 
 - `downgrade()` drops `ix_order_items_badge_received`, then the three `reviews` indexes,
