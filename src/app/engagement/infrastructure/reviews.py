@@ -41,6 +41,8 @@ _COLUMNS = (
     _R.updated_at,
 )
 _LIVE = _R.deleted_at.is_(None)
+# Bare NOT, not IS FALSE, so the planner matches ix_reviews_product_visible.
+_VISIBLE = ~_R.is_hidden
 
 
 def _to_domain(row: Any) -> Review:
@@ -147,7 +149,7 @@ class SqlReviewStore:
 
     async def visible_totals(self, product_id: UUID) -> tuple[int, int]:
         stmt = select(func.coalesce(func.sum(_R.rating), 0).cast(Integer), func.count()).where(
-            _R.product_id == product_id, _LIVE, _R.is_hidden.is_(False)
+            _R.product_id == product_id, _LIVE, _VISIBLE
         )
         ratings_sum, count = (await self._session.execute(stmt)).one()
         return int(ratings_sum), int(count)
@@ -184,7 +186,7 @@ class SqlReviewStore:
         limit: int,
     ) -> list[Review]:
         """Visible rows only. `verified` filters the stored flag; the caller applies D14."""
-        stmt = select(*_COLUMNS).where(_R.product_id == product_id, _LIVE, _R.is_hidden.is_(False))
+        stmt = select(*_COLUMNS).where(_R.product_id == product_id, _LIVE, _VISIBLE)
         if rating is not None:
             stmt = stmt.where(_R.rating == rating)
         if verified is not None:
