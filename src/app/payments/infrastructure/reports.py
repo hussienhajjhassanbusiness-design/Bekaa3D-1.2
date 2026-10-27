@@ -7,8 +7,12 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import exists, func, select, tuple_
+from sqlalchemy import any_, exists, func, literal, select, tuple_
+from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import QueryableAttribute
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.ordering.public import order_ids_for_user
 from app.payments.domain.enums import PaymentStatus, RefundKind, RefundStatus
@@ -20,7 +24,7 @@ from app.payments.infrastructure.models import (
     RefundModel,
 )
 
-_CHUNK = 5_000
+_CHUNK = 20_000
 _REACHED_PAID = (PaymentStatus.PAID, PaymentStatus.PARTIALLY_REFUNDED, PaymentStatus.REFUNDED)
 _NOT_LATE = RefundModel.kind != RefundKind.LATE_CAPTURE
 # Plan 3.7: what revenue subtracts. Pending and settled only; never failed, voided or late.
@@ -39,6 +43,11 @@ _OBLIGATION = (RefundModel.status == RefundStatus.PENDING) | (
 def _chunks(ids: Sequence[UUID]) -> Iterator[list[UUID]]:
     for start in range(0, len(ids), _CHUNK):
         yield list(ids[start : start + _CHUNK])
+
+
+def _any(column: QueryableAttribute[UUID], ids: list[UUID]) -> ColumnElement[bool]:
+    """`column = ANY($1)`: one array parameter per chunk, not one bind per id (CP1 M7)."""
+    return column == any_(literal(ids, ARRAY(PG_UUID(as_uuid=True))))
 
 
 @dataclass(frozen=True)
@@ -82,7 +91,7 @@ async def chargeback_excess_cents(session: AsyncSession, payment_ids: Sequence[U
     total = 0
     for chunk in _chunks(payment_ids):
         query = select(func.coalesce(func.sum(ChargebackModel.excess_cents), 0)).where(
-            ChargebackModel.payment_id.in_(chunk)
+            _any(ChargebackModel.payment_id, chunk)
         )
         total += int((await session.execute(query)).scalar_one())
     return total
@@ -98,12 +107,12 @@ async def refunded_cents_by_line(
         refunded = (
             select(RefundItemModel.order_item_id, func.sum(RefundItemModel.amount_cents))
             .join(RefundModel, RefundModel.id == RefundItemModel.refund_id)
-            .where(RefundItemModel.order_item_id.in_(chunk), _REVENUE_COUNTED)
+            .where(_any(RefundItemModel.order_item_id, chunk), _REVENUE_COUNTED)
             .group_by(RefundItemModel.order_item_id)
         )
         charged = (
             select(ChargebackItemModel.order_item_id, func.sum(ChargebackItemModel.amount_cents))
-            .where(ChargebackItemModel.order_item_id.in_(chunk))
+            .where(_any(ChargebackItemModel.order_item_id, chunk))
             .group_by(ChargebackItemModel.order_item_id)
         )
         for query in (refunded, charged):
@@ -120,10 +129,10 @@ async def refund_covered_lines(session: AsyncSession, line_ids: Sequence[UUID]) 
         refunded = (
             select(RefundItemModel.order_item_id)
             .join(RefundModel, RefundModel.id == RefundItemModel.refund_id)
-            .where(RefundItemModel.order_item_id.in_(chunk), _COVERAGE_COUNTED)
+            .where(_any(RefundItemModel.order_item_id, chunk), _COVERAGE_COUNTED)
         )
         charged = select(ChargebackItemModel.order_item_id).where(
-            ChargebackItemModel.order_item_id.in_(chunk)
+            _any(ChargebackItemModel.order_item_id, chunk)
         )
         for query in (refunded, charged):
             covered.update((await session.execute(query)).scalars())
@@ -135,7 +144,7 @@ async def unsettled_refund_exists(session: AsyncSession, user_id: UUID) -> bool:
     (BR-126). Unlocked: VS-045 calls it again under its own user and order locks."""
     order_ids = await order_ids_for_user(session, user_id)
     for chunk in _chunks(order_ids):
-        query = select(exists().where(RefundModel.order_id.in_(chunk), _OBLIGATION))
+        query = select(exists().where(_any(RefundModel.order_id, chunk), _OBLIGATION))
         if (await session.execute(query)).scalar():
             return True
     return False

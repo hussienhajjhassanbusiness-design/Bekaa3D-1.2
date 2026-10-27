@@ -4,20 +4,29 @@ from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import any_, func, literal, select
+from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import QueryableAttribute
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.catalog.application.ports import ProductType
 from app.ordering.domain.enums import OrderItemStatus
 from app.ordering.infrastructure.models import OrderItemModel, OrderModel
 
-_CHUNK = 5_000
+_CHUNK = 20_000
 _I, _O = OrderItemModel, OrderModel
 
 
 def _chunks(ids: Sequence[UUID]) -> Iterator[list[UUID]]:
     for start in range(0, len(ids), _CHUNK):
         yield list(ids[start : start + _CHUNK])
+
+
+def _any(column: QueryableAttribute[UUID], ids: list[UUID]) -> ColumnElement[bool]:
+    """`column = ANY($1)`: one array parameter per chunk, not one bind per id (CP1 M7)."""
+    return column == any_(literal(ids, ARRAY(PG_UUID(as_uuid=True))))
 
 
 @dataclass(frozen=True)
@@ -54,7 +63,7 @@ async def report_lines(session: AsyncSession, order_ids: Sequence[UUID]) -> list
             _I.fulfillment_status,
             _I.quantity,
             _I.line_total_cents,
-        ).where(_I.order_id.in_(chunk))
+        ).where(_any(_I.order_id, chunk))
         for row in (await session.execute(query)).tuples():
             line_id, order_id, user_id, product_id, kind, name, status, quantity, total = row
             out.append(
@@ -79,7 +88,7 @@ async def report_orders(
     out: dict[UUID, ReportOrderRow] = {}
     for chunk in _chunks(order_ids):
         query = select(_O.id, _O.order_number, _O.payment_method, _O.user_id).where(
-            _O.id.in_(chunk)
+            _any(_O.id, chunk)
         )
         for order_id, number, method, user_id in (await session.execute(query)).tuples():
             out[order_id] = ReportOrderRow(number, str(method), user_id)
