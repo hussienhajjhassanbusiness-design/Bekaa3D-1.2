@@ -263,7 +263,9 @@ def bucket_start(day: date, group_by: GroupBy) -> date:
 
 - Lebanon moves its clocks at 00:00 local time. On the spring day, midnight does not exist;
   `zoneinfo` with `fold=0` resolves it to the transition instant, which is when that day
-  starts. Unit tests pin 2026-03-29 (23 h) and 2026-10-25 (25 h).
+  starts. Unit tests pin 2026-03-29 (23 h) and 2026-10-24 (25 h): Lebanon falls back at
+  Sunday 00:00 +03 to Saturday 23:00 +02, so the long day is the Saturday, and 2026-10-25 is
+  24 h, starting where 2026-10-24 ends (corrected 2026-10-27; the plan first said 10-25).
 - **No clamp** on `net_cents`. A negative line would be a money bug, and R16 asserts it never
   happens; hiding it would breach D10's spirit.
 - `summarise(facts, *, start, end, group_by, excess_cents) -> RevenueReport` is pure. It builds
@@ -605,7 +607,8 @@ audited (Q7): the precedent is the admin order queue, whose reads are not audite
     True.
   - [M] `report_window`:
     - 2026-10-01..2026-10-01 → `[2026-09-30T21:00Z, 2026-10-01T21:00Z)`;
-    - spring day 2026-03-29 is 23 h, and autumn day 2026-10-25 is 25 h;
+    - spring day 2026-03-29 is 23 h, autumn day 2026-10-24 (Saturday) is 25 h, and 2026-10-25
+      is 24 h starting where 10-24 ends;
     - 366 days pass and 367 fail on `to`;
     - `to < from` fails;
     - 2019-12-31 and 2101-01-01 fail on their field.
