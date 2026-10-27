@@ -3048,6 +3048,64 @@
         "title": "AdminUserUpdate",
         "type": "object"
       },
+      "AnalyticsOverview": {
+        "properties": {
+          "buyers": {
+            "title": "Buyers",
+            "type": "integer"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "from": {
+            "format": "date",
+            "title": "From",
+            "type": "string"
+          },
+          "net": {
+            "$ref": "#/components/schemas/StreamCentsRead"
+          },
+          "new_customers": {
+            "title": "New Customers",
+            "type": "integer"
+          },
+          "paid_orders": {
+            "title": "Paid Orders",
+            "type": "integer"
+          },
+          "pending_offers": {
+            "$ref": "#/components/schemas/PendingOfferCounts"
+          },
+          "stl_lines_awaiting_delivery": {
+            "title": "Stl Lines Awaiting Delivery",
+            "type": "integer"
+          },
+          "timezone": {
+            "title": "Timezone",
+            "type": "string"
+          },
+          "to": {
+            "format": "date",
+            "title": "To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "timezone",
+          "currency",
+          "net",
+          "paid_orders",
+          "buyers",
+          "new_customers",
+          "pending_offers",
+          "stl_lines_awaiting_delivery"
+        ],
+        "title": "AnalyticsOverview",
+        "type": "object"
+      },
       "AuditLogPage": {
         "description": "The standard cursor page (api-endpoints.md 2.1).",
         "properties": {
@@ -5394,6 +5452,68 @@
         "title": "CustomRequestTransition",
         "type": "object"
       },
+      "CustomerAnalytics": {
+        "properties": {
+          "buyers": {
+            "title": "Buyers",
+            "type": "integer"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "from": {
+            "format": "date",
+            "title": "From",
+            "type": "string"
+          },
+          "net_per_buyer_cents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Net Per Buyer Cents"
+          },
+          "new_customers": {
+            "title": "New Customers",
+            "type": "integer"
+          },
+          "registered_customers": {
+            "title": "Registered Customers",
+            "type": "integer"
+          },
+          "repeat_buyers": {
+            "title": "Repeat Buyers",
+            "type": "integer"
+          },
+          "timezone": {
+            "title": "Timezone",
+            "type": "string"
+          },
+          "to": {
+            "format": "date",
+            "title": "To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "timezone",
+          "currency",
+          "registered_customers",
+          "new_customers",
+          "buyers",
+          "repeat_buyers",
+          "net_per_buyer_cents"
+        ],
+        "title": "CustomerAnalytics",
+        "type": "object"
+      },
       "CustomerOrderCancelRequest": {
         "additionalProperties": false,
         "properties": {
@@ -5608,6 +5728,15 @@
           "south"
         ],
         "title": "Governorate",
+        "type": "string"
+      },
+      "GroupBy": {
+        "enum": [
+          "day",
+          "week",
+          "month"
+        ],
+        "title": "GroupBy",
         "type": "string"
       },
       "HTTPValidationError": {
@@ -7644,6 +7773,34 @@
         "title": "PaymentSummary",
         "type": "object"
       },
+      "PendingOfferCounts": {
+        "properties": {
+          "accepted": {
+            "title": "Accepted",
+            "type": "integer"
+          },
+          "awaiting_admin": {
+            "title": "Awaiting Admin",
+            "type": "integer"
+          },
+          "awaiting_customer": {
+            "title": "Awaiting Customer",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "awaiting_admin",
+          "awaiting_customer",
+          "accepted",
+          "total"
+        ],
+        "title": "PendingOfferCounts",
+        "type": "object"
+      },
       "PriceIn": {
         "additionalProperties": false,
         "properties": {
@@ -8389,6 +8546,93 @@
         "title": "ReadinessRead",
         "type": "object"
       },
+      "RecentPurchase": {
+        "properties": {
+          "gross": {
+            "$ref": "#/components/schemas/StreamCentsRead"
+          },
+          "net_cents": {
+            "title": "Net Cents",
+            "type": "integer"
+          },
+          "order_id": {
+            "format": "uuid",
+            "title": "Order Id",
+            "type": "string"
+          },
+          "order_number": {
+            "title": "Order Number",
+            "type": "string"
+          },
+          "paid_at": {
+            "format": "date-time",
+            "title": "Paid At",
+            "type": "string"
+          },
+          "paid_lines": {
+            "title": "Paid Lines",
+            "type": "integer"
+          },
+          "payment_method": {
+            "enum": [
+              "online",
+              "cash"
+            ],
+            "title": "Payment Method",
+            "type": "string"
+          },
+          "refunded_cents": {
+            "title": "Refunded Cents",
+            "type": "integer"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "order_id",
+          "order_number",
+          "user_id",
+          "paid_at",
+          "payment_method",
+          "gross",
+          "refunded_cents",
+          "net_cents",
+          "paid_lines"
+        ],
+        "title": "RecentPurchase",
+        "type": "object"
+      },
+      "RecentPurchasePage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RecentPurchase"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "RecentPurchasePage",
+        "type": "object"
+      },
       "ReconcileQueued": {
         "properties": {
           "payment": {
@@ -9083,6 +9327,105 @@
         "title": "RetryPaymentRead",
         "type": "object"
       },
+      "RevenueAnalytics": {
+        "properties": {
+          "buckets": {
+            "items": {
+              "$ref": "#/components/schemas/RevenueBucket"
+            },
+            "title": "Buckets",
+            "type": "array"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "from": {
+            "format": "date",
+            "title": "From",
+            "type": "string"
+          },
+          "group_by": {
+            "$ref": "#/components/schemas/GroupBy"
+          },
+          "timezone": {
+            "title": "Timezone",
+            "type": "string"
+          },
+          "to": {
+            "format": "date",
+            "title": "To",
+            "type": "string"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/RevenueFigures"
+          },
+          "unattributed_chargeback_excess_cents": {
+            "title": "Unattributed Chargeback Excess Cents",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "timezone",
+          "currency",
+          "group_by",
+          "totals",
+          "buckets",
+          "unattributed_chargeback_excess_cents"
+        ],
+        "title": "RevenueAnalytics",
+        "type": "object"
+      },
+      "RevenueBucket": {
+        "properties": {
+          "net": {
+            "$ref": "#/components/schemas/StreamCentsRead"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "net"
+        ],
+        "title": "RevenueBucket",
+        "type": "object"
+      },
+      "RevenueFigures": {
+        "properties": {
+          "gross": {
+            "$ref": "#/components/schemas/StreamCentsRead"
+          },
+          "net": {
+            "$ref": "#/components/schemas/StreamCentsRead"
+          },
+          "paid_lines": {
+            "title": "Paid Lines",
+            "type": "integer"
+          },
+          "paid_orders": {
+            "title": "Paid Orders",
+            "type": "integer"
+          },
+          "refunded": {
+            "$ref": "#/components/schemas/StreamCentsRead"
+          }
+        },
+        "required": [
+          "gross",
+          "refunded",
+          "net",
+          "paid_lines",
+          "paid_orders"
+        ],
+        "title": "RevenueFigures",
+        "type": "object"
+      },
       "ReviewCreate": {
         "additionalProperties": false,
         "properties": {
@@ -9585,6 +9928,188 @@
         "title": "StlOwnershipRead",
         "type": "object"
       },
+      "StlSalesAnalytics": {
+        "properties": {
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "from": {
+            "format": "date",
+            "title": "From",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/StlSalesItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "stl_lines_awaiting_delivery": {
+            "title": "Stl Lines Awaiting Delivery",
+            "type": "integer"
+          },
+          "timezone": {
+            "title": "Timezone",
+            "type": "string"
+          },
+          "to": {
+            "format": "date",
+            "title": "To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "timezone",
+          "currency",
+          "items",
+          "stl_lines_awaiting_delivery"
+        ],
+        "title": "StlSalesAnalytics",
+        "type": "object"
+      },
+      "StlSalesItem": {
+        "properties": {
+          "awaiting_delivery": {
+            "title": "Awaiting Delivery",
+            "type": "integer"
+          },
+          "lines": {
+            "title": "Lines",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "net_cents": {
+            "title": "Net Cents",
+            "type": "integer"
+          },
+          "product_id": {
+            "format": "uuid",
+            "title": "Product Id",
+            "type": "string"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slug"
+          },
+          "units": {
+            "title": "Units",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "product_id",
+          "name",
+          "slug",
+          "units",
+          "lines",
+          "net_cents",
+          "awaiting_delivery"
+        ],
+        "title": "StlSalesItem",
+        "type": "object"
+      },
+      "StreamCentsRead": {
+        "properties": {
+          "physical_cents": {
+            "title": "Physical Cents",
+            "type": "integer"
+          },
+          "stl_cents": {
+            "title": "Stl Cents",
+            "type": "integer"
+          },
+          "total_cents": {
+            "title": "Total Cents",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "physical_cents",
+          "stl_cents",
+          "total_cents"
+        ],
+        "title": "StreamCentsRead",
+        "type": "object"
+      },
+      "TopRatedProduct": {
+        "properties": {
+          "average_rating": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Average Rating",
+            "type": "string"
+          },
+          "is_visible": {
+            "title": "Is Visible",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "product_id": {
+            "format": "uuid",
+            "title": "Product Id",
+            "type": "string"
+          },
+          "review_count": {
+            "title": "Review Count",
+            "type": "integer"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "physical",
+              "stl"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_id",
+          "name",
+          "slug",
+          "type",
+          "average_rating",
+          "review_count",
+          "is_visible"
+        ],
+        "title": "TopRatedProduct",
+        "type": "object"
+      },
+      "TopRatedProductList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TopRatedProduct"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "TopRatedProductList",
+        "type": "object"
+      },
       "UserProfileRead": {
         "description": "The authenticated user's own account profile (F-024).\n\nV1 design assumption: api-endpoints.md 9.1 fixes the response *name* and\ndescribes its content as \"ID, email, verification/account state\" without\nlisting fields. Deliberately narrow - `updated_at` means nothing to a\ncustomer, and `anonymized_at`/`deleted_at`/`is_active` would always read\nthe same way here because such an account cannot authenticate at all.\nNothing derived from `password_hash` appears, at any remove.",
         "properties": {
@@ -9997,6 +10522,806 @@
           }
         ],
         "summary": "Bring Your Idea conversion funnel by submission date",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/analytics/customers": {
+      "get": {
+        "operationId": "customers_api_v1_admin_analytics_customers_get",
+        "parameters": [
+          {
+            "description": "Inclusive Beirut date; default 29 days before `to`.",
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive Beirut date; default 29 days before `to`.",
+              "title": "From"
+            }
+          },
+          {
+            "description": "Inclusive Beirut date; default today in Beirut.",
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive Beirut date; default today in Beirut.",
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerAnalytics"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`INVALID_DATE_RANGE`: `to` before `from`, over 366 days, or a year outside 2020-2100."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No session, or MFA not completed."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Caller is not an administrator."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "A parameter that cannot be parsed, or out of its bounds."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The admin or the analytics rate limit."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "A query failed or timed out; never a body of zeros."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Customer statistics (27.1 item 8)",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/analytics/overview": {
+      "get": {
+        "operationId": "overview_api_v1_admin_analytics_overview_get",
+        "parameters": [
+          {
+            "description": "Inclusive Beirut date; default 29 days before `to`.",
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive Beirut date; default 29 days before `to`.",
+              "title": "From"
+            }
+          },
+          {
+            "description": "Inclusive Beirut date; default today in Beirut.",
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive Beirut date; default today in Beirut.",
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyticsOverview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`INVALID_DATE_RANGE`: `to` before `from`, over 366 days, or a year outside 2020-2100."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No session, or MFA not completed."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Caller is not an administrator."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "A parameter that cannot be parsed, or out of its bounds."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The admin or the analytics rate limit."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "A query failed or timed out; never a body of zeros."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Net revenue, orders and customers in the range; pending offers now",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/analytics/recent-purchases": {
+      "get": {
+        "operationId": "recent_purchases_api_v1_admin_analytics_recent_purchases_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecentPurchasePage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No session, or MFA not completed."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Caller is not an administrator."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "A parameter that cannot be parsed, or out of its bounds."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The admin or the analytics rate limit."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "A query failed or timed out; never a body of zeros."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Paid payments, newest verification first (27.1 item 6)",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/analytics/revenue": {
+      "get": {
+        "operationId": "revenue_api_v1_admin_analytics_revenue_get",
+        "parameters": [
+          {
+            "description": "Inclusive Beirut date; default 29 days before `to`.",
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive Beirut date; default 29 days before `to`.",
+              "title": "From"
+            }
+          },
+          {
+            "description": "Inclusive Beirut date; default today in Beirut.",
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive Beirut date; default today in Beirut.",
+              "title": "To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "group_by",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/GroupBy",
+              "default": "day"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevenueAnalytics"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`INVALID_DATE_RANGE`: `to` before `from`, over 366 days, or a year outside 2020-2100."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No session, or MFA not completed."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Caller is not an administrator."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "A parameter that cannot be parsed, or out of its bounds."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The admin or the analytics rate limit."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "A query failed or timed out; never a body of zeros."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Revenue by stream, attributed per line (27.1)",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/analytics/stl-sales": {
+      "get": {
+        "operationId": "stl_sales_api_v1_admin_analytics_stl_sales_get",
+        "parameters": [
+          {
+            "description": "Inclusive Beirut date; default 29 days before `to`.",
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive Beirut date; default 29 days before `to`.",
+              "title": "From"
+            }
+          },
+          {
+            "description": "Inclusive Beirut date; default today in Beirut.",
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive Beirut date; default today in Beirut.",
+              "title": "To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StlSalesAnalytics"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`INVALID_DATE_RANGE`: `to` before `from`, over 366 days, or a year outside 2020-2100."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No session, or MFA not completed."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Caller is not an administrator."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "A parameter that cannot be parsed, or out of its bounds."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The admin or the analytics rate limit."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "A query failed or timed out; never a body of zeros."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Best-selling STLs from paid, unrefunded lines (27.1 item 7)",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/analytics/top-rated-products": {
+      "get": {
+        "operationId": "top_rated_products_api_v1_admin_analytics_top_rated_products_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_reviews",
+            "required": false,
+            "schema": {
+              "default": 3,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Min Reviews",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TopRatedProductList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No session, or MFA not completed."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Caller is not an administrator."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "A parameter that cannot be parsed, or out of its bounds."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The admin or the analytics rate limit."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "A query failed or timed out; never a body of zeros."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Top rated products by the maintained aggregates",
         "tags": [
           "admin",
           "admin"

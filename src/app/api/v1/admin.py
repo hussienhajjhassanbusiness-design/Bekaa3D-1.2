@@ -59,6 +59,7 @@ from app.payments.api.admin_payments import admin_router as admin_payments_route
 from app.payments.api.admin_refunds import admin_router as admin_refunds_router
 from app.platform.api.audit_logs import admin_router as audit_logs_router
 from app.platform.api.settings import admin_router as settings_router
+from app.reporting.api.admin_analytics import admin_router as business_analytics_router
 
 # SRS 22.4: the admin router has its own rate limit. Keyed per administrator,
 # not per IP: until the reverse proxy forwards client addresses (VS-020) every
@@ -114,6 +115,8 @@ router.include_router(contact_messages_router)
 router.include_router(custom_requests_router)
 # VS-038 wishlist totals and the VS-035 Bring Your Idea funnel.
 router.include_router(engagement_analytics_router)
+# VS-043. Revenue, purchases, customers, STL sales, top rated, overview (api-endpoints 27).
+router.include_router(business_analytics_router)
 # VS-037. Review moderation: list, detail, hide, restore (api-endpoints.md 22).
 router.include_router(review_moderation_router)
 # VS-024. Payment reconcile and manual confirm; the manual hold release.
