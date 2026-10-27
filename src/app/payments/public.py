@@ -51,6 +51,15 @@ from app.payments.infrastructure.refund_views import (
 )
 from app.payments.infrastructure.refunds import RefundRow, order_refund_facts
 from app.payments.infrastructure.release import release_order_by_admin, release_stale
+from app.payments.infrastructure.reports import (
+    PaidPaymentRow,
+    chargeback_excess_cents,
+    paid_payment_page,
+    paid_payments_between,
+    refund_covered_lines,
+    refunded_cents_by_line,
+    unsettled_refund_exists,
+)
 from app.payments.infrastructure.verification import (
     apply_provider_result,
     verify_event,
@@ -74,6 +83,7 @@ __all__ = [
     "OrderPaymentRow",
     "OrderTotalMismatchError",
     "Outcome",
+    "PaidPaymentRow",
     "PaymentConfigurationError",
     "PaymentProviderPort",
     "ProviderResult",
@@ -84,6 +94,7 @@ __all__ = [
     "admin_refunds",
     "alert_refund_integrity",
     "apply_provider_result",
+    "chargeback_excess_cents",
     "configured_payment_providers",
     "confirm_payment_manually",
     "create_cancellation_refund",
@@ -95,15 +106,20 @@ __all__ = [
     "order_payment_reader",
     "order_payment_rows",
     "order_refund_facts",
+    "paid_payment_page",
+    "paid_payments_between",
     "payment_attempts",
     "payment_in_flight",
     "payment_store",
     "reconcile_stuck",
     "record_provider_reference",
     "refund_balances",
+    "refund_covered_lines",
+    "refunded_cents_by_line",
     "release_order_by_admin",
     "release_stale",
     "start_online_payment",
+    "unsettled_refund_exists",
     "verify_event",
     "verify_payment",
     "verify_unprocessed",

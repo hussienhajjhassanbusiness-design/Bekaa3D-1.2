@@ -85,6 +85,14 @@ from app.ordering.infrastructure.carts import SqlCartStore
 from app.ordering.infrastructure.cash import SqlCashBlockStore
 from app.ordering.infrastructure.cash import lock_cash_phone as _lock_cash_phone
 from app.ordering.infrastructure.orders import SqlOrderStore
+from app.ordering.infrastructure.reports import (
+    ReportLineRow,
+    ReportOrderRow,
+    order_ids_for_user,
+    report_lines,
+    report_orders,
+    stl_awaiting_delivery_counts,
+)
 
 __all__ = [
     "DELIVERY_FEE_NOTE",
@@ -120,6 +128,8 @@ __all__ = [
     "PaymentMethod",
     "RefundFacts",
     "ReleaseRefusal",
+    "ReportLineRow",
+    "ReportOrderRow",
     "SqlCashBlockStore",
     "StlDeliveryRow",
     "TransitionRefusal",
@@ -150,6 +160,7 @@ __all__ = [
     "mark_order_paid",
     "mark_stl_line_delivered",
     "order_facts",
+    "order_ids_for_user",
     "order_lines",
     "orders_by_id",
     "payment_due",
@@ -158,9 +169,12 @@ __all__ = [
     "refund_lines",
     "release_candidates",
     "release_unpaid_order",
+    "report_lines",
+    "report_orders",
     "status_inputs_for",
     "step_newly_reached",
     "step_reached",
+    "stl_awaiting_delivery_counts",
     "stl_delivery_page",
     "stl_owned",
     "transition_physical_line",
