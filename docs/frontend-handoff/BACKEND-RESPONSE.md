@@ -1658,6 +1658,83 @@ Set-Cookie: csrf_token=<redacted>; Max-Age=2592000; Path=/; SameSite=lax
 - The author is not notified in V1. They see `is_hidden: true` in `/me/reviews`, may still edit the review (it stays hidden), and cannot post a second review of the same product.
 - `updated_at` and `edited` do not change on hide or restore; they are the author's edit time.
 
+### Domain / item: VS-043 — Business analytics (admin dashboard)
+
+**Status:** built (VS-043, [ADR-045](../adr/ADR-045-business-analytics.md)). Metric definitions: [api-endpoints §27.1](../requirments/api-endpoints.md#271-metric-definitions-vs-043-adr-045).
+
+**Confirmed endpoint:**
+- `GET /api/v1/admin/analytics/overview`
+- `GET /api/v1/admin/analytics/revenue`
+- `GET /api/v1/admin/analytics/recent-purchases`
+- `GET /api/v1/admin/analytics/customers`
+- `GET /api/v1/admin/analytics/stl-sales`
+- `GET /api/v1/admin/analytics/top-rated-products`
+- (unchanged: `/analytics/wishlist`, `/analytics/custom-requests/funnel`)
+
+**Request schema:** query only, see `openapi.json`.
+- `overview`, `revenue`, `customers`, `stl-sales`: `from`, `to` as **dates** (`YYYY-MM-DD`), Beirut calendar days, **both inclusive**. Defaults: `to` = today in Beirut, `from` = 29 days earlier. At most 366 days.
+- `revenue`: `group_by` = `day` (default), `week` (Monday start) or `month`.
+- `stl-sales`, `top-rated-products`, `recent-purchases`: `limit` 1-100, default 20. `top-rated-products`: `min_reviews` 1-1000, default 3. `recent-purchases`: `cursor` from the previous page.
+
+**Response schema:** `AnalyticsOverview`, `RevenueAnalytics`, `RecentPurchasePage`, `CustomerAnalytics`, `StlSalesAnalytics`, `TopRatedProductList`. Money is integer `*_cents` with one `currency: "USD"` per body; ranged bodies echo `from`, `to` and `timezone: "Asia/Beirut"`. Revenue figures come as `{physical_cents, stl_cents, total_cents}`. `buckets` lists every bucket in the range, an empty one as 0; the first bucket starts at `from` even mid-week or mid-month. No email, name, phone or address anywhere; customers are `user_id` only.
+
+**Errors:**
+- `400 INVALID_DATE_RANGE`: `to` before `from`, more than 366 days, or a year outside 2020-2100. `errors[0].loc` is `["query", "from"]` or `["query", "to"]`.
+- `422 VALIDATION_ERROR`: a date that cannot be parsed, an unknown `group_by`, a limit out of bounds, a tampered cursor.
+- `503 SERVICE_UNAVAILABLE`: a query failed or took over 5 s. **Show an error state, never zeros**: the API never answers a failed report with an empty body.
+- `401`, `404` (not an administrator), `429 RATE_LIMITED`.
+
+**Auth/CSRF/MFA:** administrator with MFA completed (the admin boundary). GET only, no CSRF header.
+
+**Rate limits:** 30 requests per minute per administrator across these six routes, on top of the admin router's 300. Load the dashboard's widgets once, not on every keystroke.
+
+**Example success JSON:** `GET /api/v1/admin/analytics/revenue?from=2026-10-01&to=2026-10-02`
+
+```json
+{
+  "from": "2026-10-01",
+  "to": "2026-10-02",
+  "timezone": "Asia/Beirut",
+  "currency": "USD",
+  "group_by": "day",
+  "totals": {
+    "gross": {"physical_cents": 1000, "stl_cents": 500, "total_cents": 1500},
+    "refunded": {"physical_cents": 250, "stl_cents": 0, "total_cents": 250},
+    "net": {"physical_cents": 750, "stl_cents": 500, "total_cents": 1250},
+    "paid_lines": 2,
+    "paid_orders": 1
+  },
+  "buckets": [
+    {"start": "2026-10-01", "net": {"physical_cents": 750, "stl_cents": 500, "total_cents": 1250}},
+    {"start": "2026-10-02", "net": {"physical_cents": 0, "stl_cents": 0, "total_cents": 0}}
+  ],
+  "unattributed_chargeback_excess_cents": 0
+}
+```
+
+**Example error JSON:**
+
+```json
+{
+  "type": "http://localhost:8000/problems/INVALID_DATE_RANGE",
+  "title": "Invalid date range",
+  "status": 400,
+  "detail": "the range may span at most 366 days",
+  "instance": "/api/v1/admin/analytics/revenue",
+  "code": "INVALID_DATE_RANGE",
+  "request_id": "req_...",
+  "errors": [{"loc": ["query", "to"], "msg": "the range may span at most 366 days", "type": "value_error"}]
+}
+```
+
+**Authoritative source/OpenAPI file:** [`openapi.json`](openapi.json); api-endpoints §27, §27.1 and §30 "Admin analytics".
+
+**Notes:**
+- **A past period can change.** A refund or chargeback counts against the day its order was paid (cash: the handover day), not the day it was recorded. Label the chart "by payment day".
+- Revenue never includes shipping (the courier collects it) or late-capture refunds. A chargeback's amount beyond the lines is `unattributed_chargeback_excess_cents`, shown apart.
+- `pending_offers` and `stl_lines_awaiting_delivery` in the overview are **now**, not for the range.
+- Top rated includes hidden products with `is_visible: false`; deleted products are never listed.
+
 ### Domain / item: P2-6 — Password reset
 
 **Status:** built.

@@ -122,7 +122,7 @@ The final review of PR #8 (money and SRS reviewers, 2026-10-10) found no Blocker
 - No `UNIQUE(provider, provider_payment_id)` on `payments`. If a provider reuses a transaction id across a retry, one capture could be applied to the retry and also late-captured on the old attempt. A genuine second capture on one attempt also collapses into one refund.
 
 **VS-043**
-- Revenue ("paid line amounts minus refunds") must exclude `late_capture` refunds. A line cancelled after a chargeback is not a paid line, yet its chargeback would still be subtracted, so it would be counted twice.
+- ~~Revenue ("paid line amounts minus refunds") must exclude `late_capture` refunds. A line cancelled after a chargeback is not a paid line, yet its chargeback would still be subtracted, so it would be counted twice.~~ **Resolved** by [ADR-045](ADR-045-business-analytics.md) d1-d2: `late_capture` refunds never count, and a chargeback-cancelled line stays a paid line that its chargeback nets to 0.
 
 **VS-045**
 - BR-126's "refunds unsettled" must mean the obligations queue (pending, or failed and not reissued) plus pending `late_capture` refunds. Read literally, a reissued failed refund stays `failed` forever and blocks deletion permanently, while an owed refund might not block it at all.
@@ -137,5 +137,5 @@ The final review of PR #8 (money and SRS reviewers, 2026-10-10) found no Blocker
   - mixed orders: both lines fully refunded and one refund then fails; status after a reissue restores coverage; re-buying a refunded STL while its refund is owed; a late capture beside a paid retry with partial refunds.
 - VS-031: a pickup mixed order (`ready_for_pickup → cancelled` with refund, plus an STL line).
 - VS-032: chargeback beside a pending refund and beside an owed refund; on a fully refunded payment; on a late-captured attempt; duplicate submission and the same key in parallel; a forward transition after a full chargeback; partial STL refund + physical delivered + chargeback of the rest.
-- VS-043: `late_capture` refunds excluded from revenue; a chargeback-cancelled line counted once.
+- ~~VS-043: `late_capture` refunds excluded from revenue; a chargeback-cancelled line counted once.~~ **Done** in VS-043 (R8, R9, R9b, R10, R16).
 - VS-045: deletion blocked by an owed refund and by a pending `late_capture` refund.

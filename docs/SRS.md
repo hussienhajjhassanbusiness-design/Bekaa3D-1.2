@@ -341,7 +341,7 @@ Every rule is numbered for traceability. `BR-` prefix.
 | BR-146 | The platform never charges, zones or refunds shipping. Checkout and emails say "delivery fee paid to the courier on delivery".               |
 | BR-147 | After delivery or pickup the customer may confirm receipt or report a problem. Both are optional; the order completes without them.          |
 | BR-148 | No physical work on an unpaid online order: every physical line transition requires a cash order or an online payment that reached paid (paid, partially refunded or refunded). The only exception is the system hold release cancelling an unpaid online order's pending lines. Unpaid online orders never appear in the fulfillment queue. |
-| BR-149 | A paid line is a line of an order whose payment reached paid, unless it was cancelled without a refund obligation. A cancelled line of a cash order was never paid: nothing is refundable on it, and it earns no revenue and no Verified Purchase badge. |
+| BR-149 | A paid line is a line of an order whose payment reached paid, unless it was cancelled without a refund obligation. A cancelled line of a cash order was never paid: nothing is refundable on it, and it earns no revenue and no Verified Purchase badge. A line cancelled by a chargeback is still a paid line; its chargeback nets it to 0 (ADR-045). |
 
 ---
 
@@ -983,7 +983,7 @@ These are settings rather than constants specifically so operational changes nev
 
 ### 15.5 Analytics
 
-**Revenue must be attributed per line item**, not per order — a mixed order would otherwise corrupt the STL revenue figure the business relies on. Revenue is paid line amounts minus refunds; there is no shipping revenue. Cash revenue counts from the moment the cash is recorded; an unpaid cash order, and a cancelled line of a paid cash order, is not revenue (BR-149).
+**Revenue must be attributed per line item**, not per order — a mixed order would otherwise corrupt the STL revenue figure the business relies on. Revenue is paid line amounts minus refunds; there is no shipping revenue. Cash revenue counts from the moment the cash is recorded; an unpaid cash order, and a cancelled line of a paid cash order, is not revenue (BR-149). Each line, with its refunds and chargebacks, belongs to the `Asia/Beirut` day its payment was verified (for cash, the handover), so a later refund lowers that day; a chargeback is subtracted once, and its excess is reported apart. Exact definitions: api-endpoints §27.1 (ADR-045).
 
 Reports: revenue by stream, recent purchases, customer statistics, top rated products, most wishlisted, best-selling STL, STL lines awaiting delivery, pending offers, Bring Your Idea funnel conversion.
 

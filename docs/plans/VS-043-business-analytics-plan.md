@@ -1,7 +1,7 @@
 # VS-043 — Business Analytics: Implementation Plan
 
-**Status:** IN PROGRESS on `vs-043-analytics`. Owner answers (2026-10-27): Q1-Q12 accepted as
-recommended (see §10).
+**Status:** DONE on `vs-043-analytics` (not yet merged). Owner answers (2026-10-27): Q1-Q12
+accepted as recommended (see §10). Revision 2 below records what the build changed.
 **Date:** 2026-10-27
 **Planned against alembic head:** `eeed201dcfd2` (`reviews_and_badge_index`, VS-036).
 - Derived statically from `revision` / `down_revision` across the 33 files in
@@ -19,6 +19,56 @@ branches. None mentions VS-043, analytics or export. The only untracked file is
 
 **Format:** follows [`VS-037-review-moderation-plan.md`](VS-037-review-moderation-plan.md).
 Every `file:line` below is on `main` at `131949a`.
+
+---
+
+## Revision 2 (2026-10-27): as built
+
+**Measured (CP1, §4.2):** 100,000 payments (90,000 reached paid, 30% cash; 173,334 lines, 10,000
+refund items, 1,000 chargeback items) on a throwaway `postgres:16`, `EXPLAIN (ANALYZE, BUFFERS)`
+20 runs each. Manual script, not a test.
+
+| Query | p50 ms | p95 ms | Plan |
+|---|---|---|---|
+| M1 paid, 30-day window | 11.0 | 11.8 | Seq Scan on payments |
+| M2 paid, 366-day window | 13.5 | 16.6 | Seq Scan on payments |
+| M3a recent page, first | 28.6 | 30.3 | Seq Scan + top-N sort |
+| M3b recent page, deep keyset | 25.8 | 27.4 | Seq Scan + top-N sort |
+| M4 lines of 5,000 orders | 20.5 | 22.3 | Seq Scan on order_items |
+| M5 refund items of 5,000 lines | 4.3 | 4.8 | HashAggregate |
+| M6 chargeback items of 5,000 lines | 0.3 | 0.3 | HashAggregate |
+| M7 revenue service, 366 days (30,085 paid orders, 50,142 lines) | 2,064 | 2,371 | in process, all ports |
+
+M1 and M3 are under the 50 ms trigger: **no migration**, the head stays `eeed201dcfd2`. A first
+run with `IN` lists of 5,000 binds measured M7 at 16.4 s p50 (M1 9.0, M3a 26.8 ms p95); the reads
+now bind one `uuid[]` per chunk. M7 is just over the §4.2 budget of 2 s p95: reported to the
+owner (ADR-045 Consequences and Revisit when).
+
+**Deviations from the plan:**
+1. §3.5: `report_session` starts with an explicit `SET TRANSACTION ISOLATION LEVEL REPEATABLE
+   READ, READ ONLY` (the plan's fallback, chosen up front) and maps SQLSTATE 57014 to 503 itself.
+   Both UNVERIFIED points are resolved by tests: R14 (a write fails with "read-only
+   transaction", directly and through a route) and a real 50 ms timeout answering 503.
+2. §3.2: chunks are 20,000 ids bound as one `uuid[]` (`= ANY`), not 5,000-bind `IN` lists (M7).
+3. §3.3: the six ports travel together as one `Sources` bundle; `OrderLines.labels` returns the
+   order number, payment method and `user_id` (recent purchases need the customer id).
+4. §3.1 / §6.1: the 25-hour Beirut day of autumn 2026 is Saturday 10-24, not Sunday 10-25 (the
+   plan was wrong; corrected in commit `36391a8`).
+5. §3.2: `unsettled_refund_exists` reads "live late_capture" as a pending one: a settled late
+   capture is not unsettled (`_OBLIGATION`, the `ix_refunds_obligations` predicate).
+6. `tzdata` 2026.5 in both locks; the dev lock had 2026.4 for win32 only (through faker).
+7. Tests: [N] R17 and the 31st-request 429 were skipped; the real-timeout test, planned [N],
+   was built to settle deviation 1. A customer-404 test was added (§6.3). `free_day` reserves the
+   whole span a test reads (a week test could see another scenario's payment).
+
+**Mutation proofs (each reverted with `git checkout`):**
+- `is_paid_line` = `not line.cancelled`: R9, R9b and the unit paid-line test fail.
+- Chargeback items dropped from `refunded_cents_by_line`: R9, R9b, R10 fail.
+- Failed refunds counted: R6, R9b and four R16 cases fail. Voided counted: R7, R10 and two R16
+  cases fail. `late_capture` counted: two R16 cases fail.
+- Dating by the UTC day: R3 and two unit tests fail. The window built in UTC: R3 and three
+  unit tests fail.
+- `READ ONLY` removed: both R14 tests fail. The 57014 mapping removed: the real-timeout test fails.
 
 ---
 
