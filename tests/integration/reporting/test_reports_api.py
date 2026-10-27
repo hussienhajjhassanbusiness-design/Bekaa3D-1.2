@@ -202,7 +202,7 @@ async def test_top_rated_drops_a_review_hidden_through_moderation(
 
 def _rating_of(client: TestClient, product: uuid.UUID) -> dict[str, Any]:
     found = body(report(client, "top-rated-products", min_reviews=2, limit=100))
-    rows = [i for i in found["items"] if i["product_id"] == str(product)]
+    rows: list[dict[str, Any]] = [i for i in found["items"] if i["product_id"] == str(product)]
     if rows:
         return rows[0]
     raise AssertionError("the product is not among the top 100; raise its rating")
