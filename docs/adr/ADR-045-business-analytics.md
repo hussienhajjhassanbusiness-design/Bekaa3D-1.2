@@ -6,6 +6,7 @@
 **Amends:**
 - ADR-024's open item for VS-043 (a line cancelled after a chargeback counted twice): resolved by decision 2.
 - SRS §15.5 and BR-149: the dating and the chargeback-cancelled line, applied in the VS-043 docs commit.
+- SRS §18.3: adds the Reporting context, which owns no tables (decision 4).
 - api-endpoints §27 (route rows), new §27.1 (metric definitions), §5.2 (`INVALID_DATE_RANGE`) and §30 (response schemas).
 
 **Applies first to:** no migration; the alembic head stays `eeed201dcfd2` (decision 8).

@@ -1077,6 +1077,7 @@ Dependencies point inward only. Domain has no framework or database imports.
 | Negotiation    | Offers, offer rounds                                                |
 | Engagement     | Reviews, wishlist, notifications, custom requests, contact messages |
 | Platform       | Settings, audit log, email outbox, idempotency records              |
+| Reporting      | No tables of its own (ADR-045); business analytics read every other context through its public port |
 
 Cross-context access goes through service interfaces. Direct joins into another context's tables are prohibited — that practice is what turns "Clean Architecture" into folder decoration.
 
