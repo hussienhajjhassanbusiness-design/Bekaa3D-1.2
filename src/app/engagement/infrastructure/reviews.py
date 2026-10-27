@@ -223,6 +223,43 @@ class SqlReviewStore:
             .execution_options(synchronize_session=False)
         )
 
+    async def product_id_of(self, review_id: UUID) -> UUID | None:
+        """VS-037: unlocked, any row (deleted included); re-checked under the row lock."""
+        return await self._session.scalar(select(_R.product_id).where(_R.id == review_id))
+
+    async def live_by_id(self, review_id: UUID) -> Review | None:
+        stmt = select(*_COLUMNS).where(_R.id == review_id, _LIVE)
+        row = (await self._session.execute(stmt)).one_or_none()
+        return None if row is None else _to_domain(row)
+
+    async def admin_page(
+        self,
+        *,
+        hidden: bool | None,
+        rating: int | None,
+        product_id: UUID | None,
+        user_id: UUID | None,
+        verified: bool | None,
+        after: tuple[datetime, UUID] | None,
+        limit: int,
+    ) -> list[Review]:
+        """VS-037: live rows, hidden ones included; `verified` filters the stored flag."""
+        stmt = select(*_COLUMNS).where(_LIVE)
+        if hidden is not None:
+            stmt = stmt.where(_R.is_hidden if hidden else _VISIBLE)
+        if rating is not None:
+            stmt = stmt.where(_R.rating == rating)
+        if product_id is not None:
+            stmt = stmt.where(_R.product_id == product_id)
+        if user_id is not None:
+            stmt = stmt.where(_R.user_id == user_id)
+        if verified is not None:
+            stmt = stmt.where(_R.is_verified_purchase.is_(verified))
+        if after is not None:
+            stmt = stmt.where(_before(after))
+        stmt = stmt.order_by(_R.created_at.desc(), _R.id.desc()).limit(limit)
+        return [_to_domain(row) for row in (await self._session.execute(stmt)).all()]
+
 
 class CatalogReviewableProducts:
     """`ReviewableProducts` over `app.catalog.public`, bound to the review's session."""

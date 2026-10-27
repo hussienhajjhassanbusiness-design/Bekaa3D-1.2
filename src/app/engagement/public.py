@@ -142,7 +142,8 @@ async def recompute_product_rating(session: AsyncSession, product_id: UUID) -> N
 
 
 async def lock_review_for_moderation(session: AsyncSession, review_id: UUID) -> ReviewRow | None:
-    """VS-037: FOR UPDATE, after the product lock (plan 8.1). The stored badge, unmasked."""
+    """FOR UPDATE, after the product lock (VS-036 plan 8.1). The stored badge, unmasked.
+    Deleted rows are returned too: the caller checks `deleted_at` (VS-037 d22)."""
     return await SqlReviewStore(session).lock_for_moderation(review_id)
 
 

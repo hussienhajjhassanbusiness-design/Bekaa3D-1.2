@@ -39,7 +39,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 | VS-034 | Bring Your Idea submission | VS-014, VS-033 | Done |
 | VS-035 | Bring Your Idea pipeline and funnel | VS-034 | Done |
 | VS-036 | Reviews and Verified Purchase badge | VS-015, VS-028, VS-030, VS-031 | Done |
-| VS-037 | Review moderation | VS-036 | Not started |
+| VS-037 | Review moderation | VS-036 | Done |
 | VS-038 | Wishlist and wishlist analytics | VS-013 | Done |
 | VS-039 | Offer submission and inactivity expiry | VS-023, VS-007 | Done |
 | VS-040 | Offer counter, accept, reject, withdraw | VS-039 | Done |
@@ -1073,7 +1073,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - For VS-037: read the review's `product_id`, then `catalog.public.lock_product_for_reviews`, then `engagement.public.lock_review_for_moderation`, `set_review_hidden`, `recompute_product_rating`. For VS-044: `engagement.public.reviews_for_export`. For VS-045: nothing to blank (no author identity is exposed).
 
 ## VS-037 — Review moderation
-**Status:** Not started
+**Status:** Done
 **Depends on:** VS-036
 **Goal:** The administrator hides and restores reviews without deleting history.
 - **Model / migration:** None.
@@ -1084,6 +1084,12 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - Hiding an already-hidden review gives 409.
   - The routes are admin-only.
 - **Done when:** A hide or restore updates public ratings in the same transaction.
+- **As built** ([plan](plans/VS-037-review-moderation-plan.md), [ADR-044](adr/ADR-044-reviews-and-verified-purchase-badge.md) d21-27):
+  - No migration; the head stays `eeed201dcfd2`. At 100k reviews the unfiltered admin page is about 13 ms p95 in SQL, so no `created_at` index (d26).
+  - Lock order: the product, then the review row, no `R_user`; the state check reads the locked row. A deleted review is 404 everywhere; a repeat is 409 `INVALID_STATE_TRANSITION` with `is_hidden`.
+  - Audit `review.hidden` / `review.restored` with state, `product_id` and the optional reason; never the text. No author notification in V1.
+  - The interface for VS-043, VS-044 and VS-045 is unchanged.
+  - Tests: `tests/unit/engagement/test_review_moderation.py`, `test_review_cursor.py`; `tests/integration/engagement/test_review_moderation_api.py`; `tests/concurrency/test_review_moderation_races.py` (M1-M6); `VS037_ROUTES` in `tests/integration/test_openapi_security.py`.
 
 ## VS-038 — Wishlist and wishlist analytics
 **Status:** Done

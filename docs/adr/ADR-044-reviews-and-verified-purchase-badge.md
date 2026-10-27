@@ -1,8 +1,8 @@
 # ADR-044: Reviews and the Verified Purchase badge - the badge is a projection of current line facts, recomputed in Ordering's line writers; ratings are exact aggregates under the product lock (VS-036)
 
-**Status:** Accepted (2026-10-27, VS-036 PR B). Proposed 2026-10-25 with PR A (schema); PR B built the behaviour and recorded decisions 11-20 below.
+**Status:** Accepted (2026-10-27, VS-036 PR B). Proposed 2026-10-25 with PR A (schema); PR B built the behaviour and recorded decisions 11-20 below. VS-037 (2026-10-27) recorded decisions 21-27, the moderation path.
 **Date:** 2026-10-25
-**Source basis:** [VS-036 slice](../vertical-slice-plan.md#vs-036--reviews-and-verified-purchase-badge); [plan](../plans/VS-036-reviews-plan.md) (Revision 1, owner answers Q1-Q10 of 2026-10-25); SRS §3.8 BR-100 to BR-105, BR-149, §12.1, §12.2, INV-17; database-design §12.1; [ADR-019](ADR-019-manual-stl-delivery.md) d5; [ADR-020](ADR-020-optimistic-versioning-for-admin-edits.md) d5; [ADR-042](ADR-042-refunds-voids-and-chargebacks.md); [ADR-043](ADR-043-cancellation-and-returns.md).
+**Source basis:** [VS-036 slice](../vertical-slice-plan.md#vs-036--reviews-and-verified-purchase-badge); [plan](../plans/VS-036-reviews-plan.md) (Revision 1, owner answers Q1-Q10 of 2026-10-25); SRS §3.8 BR-100 to BR-105, BR-149, §12.1, §12.2, INV-17; database-design §12.1; [ADR-019](ADR-019-manual-stl-delivery.md) d5; [ADR-020](ADR-020-optimistic-versioning-for-admin-edits.md) d5; [ADR-042](ADR-042-refunds-voids-and-chargebacks.md); [ADR-043](ADR-043-cancellation-and-returns.md); [VS-037 plan](../plans/VS-037-review-moderation-plan.md) (owner answers Q1-Q7 of 2026-10-27).
 **Amends:**
 - database-design §12.1: adds `hidden_at`, the named CHECKs and the indexes.
 - The [VS-030 plan](../plans/VS-030-refunds-settlement-plan.md) §3.7 hook list: the hook moves to the line writers, and fail/void/reissue get no hook.
@@ -87,11 +87,39 @@ and reissue never change a line.
 20. **Profanity list needs owner review before go-live.** `engagement/domain/profanity.py` is a
     first draft (English, Arabic, Arabizi) matched as whole words after NFKC and casefold.
 
+### Decisions recorded in VS-037 (review moderation)
+
+21. **Lock order: the product (`FOR NO KEY UPDATE`), then the review row (`FOR UPDATE`), no
+    `R_user`.** Hiding never touches the badge. The `product_id` is read unlocked first (it is
+    immutable). Ranks 8 → 9 only, so no cycle with create/edit/delete (7 → 8 → 9) or the badge
+    hook (7 → 9, never 8). Races M1-M6 run both commit orders; locking the row first deadlocks
+    M1.
+22. **A soft-deleted review is missing for moderation** (Q1). List, detail, hide and restore
+    answer the same 404 as an unknown id. `lock_review_for_moderation` returns deleted rows, so
+    `moderate_review` re-checks `deleted_at` after the row lock.
+23. **Repeat actions are 409 `INVALID_STATE_TRANSITION`** (Q7), with `is_hidden` in the body. The
+    check reads the locked row, never an earlier read. Nothing is written and nothing audited.
+24. **The reason is optional and audit-only** (Q2): trimmed, at most 500 characters, no control
+    characters. There is no column, no author notification and no appeal in V1.
+25. **Audit rows** `review.hidden` / `review.restored` (`entity_type = "review"`). `before_data`
+    and `after_data` hold `is_hidden`, `hidden_at`, `product_id` and (after) `reason`; never the
+    body, the author's id or email. They are written in the same transaction as the toggle and the
+    exact recompute (d7). List and detail reads are not audited (Q4: no PII shown).
+26. **No admin `created_at` index** (Q3). At 100,000 live reviews the unfiltered admin page is a
+    parallel seq scan plus a top-N heapsort: about 13 ms p95 in SQL and 36 ms p95 over HTTP,
+    below the 50 ms trigger. The user filter uses `ix_reviews_user_live`, and product plus
+    `hidden=false` uses `ix_reviews_product_visible`. No migration; the head stays
+    `eeed201dcfd2`.
+27. **The admin view shows the badge twice** (Q6): `is_verified_purchase` is the stored evidence,
+    and `badge_shown` is the D14 mask the storefront applies. `verified_purchase` filters the
+    stored flag. No author identity beyond `user_id`.
+
 ## Consequences
 
 - PR A adds the table, its four CHECKs, two FKs, three indexes and the order_items index. No
   application code reads or writes them until PR B.
-- VS-037 reuses `recompute_product_rating`. VS-044 reads `reviews_for_export`, which applies the
+- VS-037 reuses the exact recompute (inside Engagement, through its `ReviewModerationStore` port; the
+  `engagement.public` helpers are unchanged). VS-044 reads `reviews_for_export`, which applies the
   mask. VS-045 has nothing to blank while no author identity is shown.
 - Accepted with PR B (decisions 11-20). Any later change to the badge states is one constant,
   `ordering/domain/badge.py:BADGE_STATES`, plus its tests.

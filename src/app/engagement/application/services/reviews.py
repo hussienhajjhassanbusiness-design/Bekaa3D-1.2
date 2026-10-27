@@ -3,7 +3,12 @@ product (FOR NO KEY UPDATE), then the review row; never an order-chain lock (8.1
 
 from uuid import UUID
 
-from app.engagement.application.ports import PurchaseEvidence, ReviewableProducts, ReviewStore
+from app.engagement.application.ports import (
+    PurchaseEvidence,
+    ReviewableProducts,
+    ReviewStore,
+    ReviewTotals,
+)
 from app.engagement.domain.exceptions import (
     ReviewAlreadyExistsError,
     ReviewContentRejectedError,
@@ -33,7 +38,7 @@ def _checked(rating: int, body: str | None) -> str | None:
 
 
 async def recompute_rating(
-    store: ReviewStore, products: ReviewableProducts, product_id: UUID
+    store: ReviewTotals, products: ReviewableProducts, product_id: UUID
 ) -> None:
     """Exact AVG / COUNT over visible reviews (D7); the caller holds the product lock."""
     ratings_sum, count = await store.visible_totals(product_id)

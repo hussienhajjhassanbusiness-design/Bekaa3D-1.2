@@ -16,6 +16,9 @@ RATING_MIN: Final = 1
 RATING_MAX: Final = 5
 BODY_MAX: Final = 2000
 BODY_TOO_LONG_MESSAGE: Final = f"must be at most {BODY_MAX} characters"
+# VS-037 D6: the optional hide / restore reason, kept only in the audit row.
+MODERATION_REASON_MAX: Final = 500
+MODERATION_REASON_TOO_LONG_MESSAGE: Final = f"must be at most {MODERATION_REASON_MAX} characters"
 
 LINK_TLDS: Final = (
     "com",
@@ -57,6 +60,16 @@ def normalise_body(raw: str | None) -> str | None:
     if len(body) > BODY_MAX:
         raise ValueError(BODY_TOO_LONG_MESSAGE)
     return body or None
+
+
+def normalise_reason(raw: str | None) -> str | None:
+    """VS-037 D6: trimmed, None for empty / whitespace-only; ValueError over the max."""
+    if raw is None:
+        return None
+    reason = raw.strip()
+    if len(reason) > MODERATION_REASON_MAX:
+        raise ValueError(MODERATION_REASON_TOO_LONG_MESSAGE)
+    return reason or None
 
 
 def content_refusal(body: str | None) -> ContentRefusal | None:

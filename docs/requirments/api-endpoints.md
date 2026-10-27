@@ -630,10 +630,10 @@ A callback alone never authorizes these state changes.
 
 | Method + Path | Request | Success | Errors | Pagination / Filter / Sort | Side Effects / Notes |
 |---|---|---|---|---|---|
-| `GET /api/v1/admin/reviews` | query params | `200 AdminReviewPage` | 401/404 | Cursor; filters hidden/rating/product/user/verified; `-created_at` | Moderation queue/view |
-| `GET /api/v1/admin/reviews/{review_id}` | — | `200 AdminReviewDetail` | 401/404 | — | Includes moderation state |
-| `POST /api/v1/admin/reviews/{review_id}/hide` | `ReviewModerationRequest` | `200 AdminReviewDetail` | 401/404, 409 | — | Hides review; recalculates product aggregates; audit |
-| `POST /api/v1/admin/reviews/{review_id}/restore` | `ReviewModerationRequest` | `200 AdminReviewDetail` | 401/404, 409 | — | Restores review; recalculates aggregates; audit |
+| `GET /api/v1/admin/reviews` | query params | `200 AdminReviewPage` | 401/404 | Cursor; filters hidden/rating/product/user/verified; `-created_at` | Moderation queue/view. **As built (VS-037, ADR-044 d21-27):** live reviews only (deleted ones never listed), hidden and visible; `limit` 1-100 (default 20); keyset `-created_at, -id`; `verified_purchase` filters the stored evidence flag; 422 for a tampered cursor; no author email; reads not audited |
+| `GET /api/v1/admin/reviews/{review_id}` | — | `200 AdminReviewDetail` | 401/404 | — | Includes moderation state. **As built (VS-037):** 404 for a deleted review (same body as unknown); `is_verified_purchase` (stored) and `badge_shown` (D14 mask) |
+| `POST /api/v1/admin/reviews/{review_id}/hide` | `ReviewModerationRequest` | `200 AdminReviewDetail` | 401/404, 409 | — | Hides review; recalculates product aggregates; audit. **As built (VS-037):** admin + MFA + CSRF; 404 for a deleted review; 409 `INVALID_STATE_TRANSITION` with `is_hidden` when already hidden; product lock then review row, aggregates in the same transaction; audit `review.hidden` (state, `product_id`, `reason`; never the body); body optional |
+| `POST /api/v1/admin/reviews/{review_id}/restore` | `ReviewModerationRequest` | `200 AdminReviewDetail` | 401/404, 409 | — | Restores review; recalculates aggregates; audit. **As built (VS-037):** as hide; 409 `INVALID_STATE_TRANSITION` when not hidden; audit `review.restored`; a deleted review cannot be restored (404) |
 
 ---
 
@@ -1022,7 +1022,35 @@ read: bool
 ### `ReviewModerationRequest`
 
 ```text
-reason?: str
+reason?: str | null  # trimmed; whitespace-only becomes null; at most 500; no control characters
+```
+
+As built (VS-037): unknown fields are a 422, and the body may be omitted. The reason is kept
+only in the audit row and is not echoed.
+
+### `AdminReviewRead` / `AdminReviewDetail` (same fields)
+
+```text
+id: UUID
+product_id: UUID
+product_slug: str | null   # null when the product is deleted
+user_id: UUID              # no email, no name
+rating: int
+body: str | null
+is_verified_purchase: bool # stored evidence
+badge_shown: bool          # what the storefront shows (false on WhatsApp-only products)
+is_hidden: bool
+hidden_at: datetime | null
+created_at: datetime
+updated_at: datetime       # the author's edit time; moderation does not change it
+edited: bool
+```
+
+### `AdminReviewPage`
+
+```text
+items: list[AdminReviewRead]
+next_cursor: str | null
 ```
 
 ---
