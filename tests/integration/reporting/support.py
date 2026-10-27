@@ -17,8 +17,9 @@ BEIRUT = ZoneInfo("Asia/Beirut")
 _PAID = "status IN ('paid', 'partially_refunded', 'refunded')"
 
 
-async def free_day(engine: AsyncEngine) -> date:
-    """A 2021-2024 day whose neighbours too hold no paid payment (no Beirut edge spill)."""
+async def free_day(engine: AsyncEngine, span: int = 2) -> date:
+    """A 2021-2024 day such that it and the `span` days a test reads, with a day either side for
+    the Beirut edge, hold no paid payment."""
     rng = random.SystemRandom()
     async with engine.connect() as conn:
         for _ in range(50):
@@ -29,7 +30,7 @@ async def free_day(engine: AsyncEngine) -> date:
                     f"SELECT count(*) FROM payments WHERE {_PAID}"
                     " AND verified_at >= :lo AND verified_at < :hi"
                 ),
-                {"lo": lower, "hi": lower + timedelta(days=4)},
+                {"lo": lower, "hi": lower + timedelta(days=span + 2)},
             )
             if not used:
                 return day

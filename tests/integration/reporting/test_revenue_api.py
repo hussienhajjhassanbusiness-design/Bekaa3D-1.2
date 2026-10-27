@@ -328,7 +328,7 @@ async def test_r12_366_days_pass_unparseable_is_422_and_the_default_is_30_days(
 
 
 async def test_week_and_month_buckets(db_engine: AsyncEngine, db_session: AsyncSession) -> None:
-    day = await free_day(db_engine)
+    day = await free_day(db_engine, span=14)
     order = await paid_online(db_session, stl=None)
     await paid_at(db_engine, order.order_id, beirut_noon(day))
     with _admin_client() as client:
