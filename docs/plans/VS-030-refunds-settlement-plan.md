@@ -684,6 +684,8 @@ async def refunded_cents_by_line(session, line_ids) -> dict[UUID, int]   # VS-04
 async def unsettled_refund_exists(session, user_id: UUID) -> bool        # VS-045; pending, owed, live late_capture
 ```
 
+- **Built in VS-043** ([ADR-045](../adr/ADR-045-business-analytics.md)): `refunded_cents_by_line`, `unsettled_refund_exists` and `refund_covered_lines` (L1's coverage) in `app.payments.public`, unlocked and read-only. "Live late_capture" is a pending one: a settled late capture is not unsettled.
+
 - **VS-031 cancel** follows the ADR-024 d9 row (`docs/adr/ADR-024-…md:31`):
   1. `lock_order_for_change`;
   2. `refund_balances`;

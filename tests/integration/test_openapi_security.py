@@ -196,3 +196,27 @@ def test_the_vs037_moderation_routes_declare_session_csrf_and_the_boundary(
     assert {"401", "404", "429"} <= set(operation["responses"])
     if method != "get":
         assert {"403", "409", "422"} <= set(operation["responses"])
+
+
+# VS-043: business analytics. GET only, so the cookie and no CSRF; 503 instead of zeros.
+VS043_RANGED = ["overview", "revenue", "customers", "stl-sales"]
+VS043_ROUTES = [f"/api/v1/admin/analytics/{p}" for p in VS043_RANGED] + [
+    "/api/v1/admin/analytics/recent-purchases",
+    "/api/v1/admin/analytics/top-rated-products",
+]
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("configured_app")
+@pytest.mark.parametrize("path", VS043_ROUTES)
+def test_the_vs043_analytics_routes_declare_session_the_boundary_and_errors(path: str) -> None:
+    from app.main import app
+
+    with TestClient(app) as client:
+        operations = client.get(SCHEMA_PATH).json()["paths"][path]
+    assert set(operations) == {"get"}
+    operation = operations["get"]
+    assert operation["security"] == [{"sessionCookie": []}]
+    assert {"401", "404", "422", "429", "503"} <= set(operation["responses"])
+    if path.rsplit("/", 1)[1] in VS043_RANGED:
+        assert "400" in operation["responses"]

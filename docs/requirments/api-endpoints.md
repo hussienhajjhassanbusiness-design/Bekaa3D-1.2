@@ -197,6 +197,7 @@ These codes are implementation additions needed to give the frontend determinist
 | 409 | `OFFER_NOT_YOUR_TURN` | Offer action attempted by wrong actor |
 | 409 | `OFFER_AMOUNT_CHANGED` | Accept named an `expected_amount_cents` that is not the offer's `current_amount`; nothing was written. Body carries `current_amount` (ADR-035 d9) |
 | 422 | `REVIEW_CONTENT_REJECTED` | Review body carries a link or a listed word; body carries `reason` = `link` or `profanity` (VS-036, ADR-044) |
+| 400 | `INVALID_DATE_RANGE` | An analytics range whose `to` is before `from`, spans more than 366 days, or names a year outside 2020-2100; `errors[0].loc` names the field (VS-043, ADR-045) |
 | 410 | `OFFER_EXPIRED` | Offer inactivity lifetime elapsed |
 | 410 | `RESOURCE_EXPIRED` | Single-use/time-limited resource expired |
 | 416 | `RANGE_NOT_SATISFIABLE` | Invalid byte range on an admin attachment download |
@@ -688,16 +689,33 @@ All analytics are read-only, Admin + MFA, bounded by explicit date ranges/limits
 
 | Method + Path | Request / Query | Success | Errors | Notes |
 |---|---|---|---|---|
-| `GET /api/v1/admin/analytics/overview` | optional date range | `200 AnalyticsOverview` | 401/404, 400 | Pending offers count, high-level customer/order metrics |
-| `GET /api/v1/admin/analytics/revenue` | `from`, `to`, optional `group_by` | `200 RevenueAnalytics` | 401/404, 400 | Physical vs STL revenue by line |
-| `GET /api/v1/admin/analytics/recent-purchases` | cursor, limit | `200 RecentPurchasePage` | 401/404 | Bounded recent purchases |
-| `GET /api/v1/admin/analytics/customers` | date range | `200 CustomerAnalytics` | 401/404, 400 | Customer statistics |
+| `GET /api/v1/admin/analytics/overview` | Range: `from`, `to` (inclusive Beirut dates; default the last 30 days; at most 366) | `200 AnalyticsOverview` | 401/404, 400 `INVALID_DATE_RANGE`, 422, 429, 503 | Net revenue by stream, paid orders, buyers and new customers in the range; pending offers and STL lines awaiting delivery now (VS-043) |
+| `GET /api/v1/admin/analytics/revenue` | Range: `from`, `to` (inclusive Beirut dates; default the last 30 days; at most 366); `group_by` = `day` (default), `week`, `month` | `200 RevenueAnalytics` | 401/404, 400 `INVALID_DATE_RANGE`, 422, 429, 503 | Physical vs STL revenue by line, §27.1 (VS-043) |
+| `GET /api/v1/admin/analytics/recent-purchases` | `cursor`, `limit` (default 20, 1-100) | `200 RecentPurchasePage` | 401/404, 422, 429, 503 | Paid payments, newest verification first; a cash order appears at its handover (VS-043) |
+| `GET /api/v1/admin/analytics/customers` | Range: `from`, `to` (inclusive Beirut dates; default the last 30 days; at most 366) | `200 CustomerAnalytics` | 401/404, 400 `INVALID_DATE_RANGE`, 422, 429, 503 | Customer statistics, §27.1 (VS-043) |
 | `GET /api/v1/admin/analytics/wishlist` | date range/limit | `200 WishlistAnalytics` | 401/404, 400 | Wishlist totals + most-wishlisted |
-| `GET /api/v1/admin/analytics/stl-sales` | date range/limit | `200 StlSalesAnalytics` | 401/404, 400 | Best-selling STLs from paid, unrefunded lines; count of lines awaiting delivery |
-| `GET /api/v1/admin/analytics/top-rated-products` | limit | `200 TopRatedProductList` | 401/404 | Maintained rating aggregates |
-| `GET /api/v1/admin/analytics/custom-requests/funnel` | `from`, `to` (UTC offset; default the last 90 days; at most 366) | `200 CustomRequestFunnelAnalytics` | 401/404, 422 | Submission-date cohort `[from, to)`: submitted, contacted, quoted, won, lost, open and quoted/won totals in cents (VS-035, ADR-031) |
+| `GET /api/v1/admin/analytics/stl-sales` | Range: `from`, `to` (inclusive Beirut dates; default the last 30 days; at most 366); `limit` (default 20, 1-100) | `200 StlSalesAnalytics` | 401/404, 400 `INVALID_DATE_RANGE`, 422, 429, 503 | Best-selling STLs from paid, unrefunded lines; count of lines awaiting delivery (VS-043) |
+| `GET /api/v1/admin/analytics/top-rated-products` | `limit` (default 20, 1-100), `min_reviews` (default 3, 1-1000) | `200 TopRatedProductList` | 401/404, 422, 429, 503 | Maintained rating aggregates; deleted products excluded, hidden ones flagged (VS-043) |
+| `GET /api/v1/admin/analytics/custom-requests/funnel` | `from`, `to` (UTC offset; default the last 90 days; at most 366) | `200 CustomRequestFunnelAnalytics` | 401/404, 422 | Submission-date cohort `[from, to)`: submitted, contacted, quoted, won, lost, open and quoted/won totals in cents (VS-035, ADR-031). Follow-up: its range errors are 422, not the 400 `INVALID_DATE_RANGE` of the VS-043 routes |
 
 Exact analytics default ranges/export formats remain tunable design-time settings; the route shapes are stable.
+
+The VS-043 routes add a per-administrator limit of 30 requests per 60 s on top of the admin router's 300. Each request reads one read-only, repeatable-read snapshot with a 5 s statement timeout. A failed or timed-out query answers 503 `SERVICE_UNAVAILABLE` (or 500), never a body of zeros. Reads are not audited, and no response carries an email, name, phone, address or provider reference (ADR-045).
+
+## 27.1 Metric definitions (VS-043, ADR-045)
+
+Written before the code; the reports implement exactly these.
+
+1. **Range.** `from` and `to` are calendar dates in `Asia/Beirut`, both inclusive, so a day lasts 23 or 25 hours at a clock change. `to` defaults to today in Beirut and `from` to 29 days before `to`. A range whose `to` is before `from`, one spanning more than 366 days, or a year outside 2020-2100 answers `400 INVALID_DATE_RANGE`, naming the field in `errors[0].loc`. An unparseable date is `422 VALIDATION_ERROR`. A week starts on Monday, a month on day 1. Every bucket in the range is listed, an empty one as 0.
+2. **Paid payment.** A payment whose status reached paid (`paid`, `partially_refunded`, `refunded`); an order has at most one. Its day is the Beirut day of its `verified_at`; for cash that is the handover. An unpaid cash order has no payment and adds nothing.
+3. **Paid line (BR-149).** A line of an order with a paid payment, unless it is `cancelled` with nothing counting against it. Counting means an item in a refund that is pending, settled, or failed and not yet reissued (never `late_capture`), or a chargeback item. So a cash line refused before the handover is not a paid line, and a line cancelled by a chargeback **is** one: the chargeback's items net it to 0, so the chargeback is subtracted exactly once.
+4. **Revenue of a line.** gross = its order-time `line_total_cents` (no shipping, tax 0). refunded = its items in refunds of kind `admin` or `cancellation` with status `pending` or `settled`, plus its chargeback items. net = gross − refunded. A failed refund counts again only through its reissue; a voided refund and every `late_capture` refund never count. Each line belongs to its stream (`physical`, `stl`) and, with all its refunds and chargebacks, to its payment's day: a later refund lowers the day the money came in, so a past period can change.
+5. **Revenue report.** The sums of item 4 over the paid lines of the payments in the range, by stream, with `paid_lines` and distinct `paid_orders`. A chargeback's `excess_cents` is never put on a line; it is shown as `unattributed_chargeback_excess_cents` for those payments and is not subtracted.
+6. **Recent purchases.** Paid payments, newest `verified_at` first (keyset on `verified_at`, then payment id), each with its order's paid-line gross by stream, refunded and net.
+7. **Best-selling STLs.** Paid STL lines in the range whose status is still `awaiting_delivery` or `delivered` (a refunded or cancelled line is left out), by product: `units` (sum of quantity), `lines`, `net_cents`; ranked by units, then net, then product id. `awaiting_delivery` per product and `stl_lines_awaiting_delivery` overall are counts now.
+8. **Customers.** `registered_customers`: users with role `customer`, email verified, neither anonymised nor deleted, now. `new_customers`: the same, created in the range. `buyers`: distinct customers with a paid line in the range. `repeat_buyers`: buyers with at least two distinct paid orders in the range. `net_per_buyer_cents`: the range's net revenue divided by buyers, rounded down; null with no buyers.
+9. **Top rated.** Products not deleted with `review_count >= min_reviews`, by the maintained `average_rating` (over live, visible reviews), then `review_count`, then id. A hidden product is listed with `is_visible: false`.
+10. **Pending offers.** Live offers now, by status: `awaiting_admin`, `awaiting_customer`, `accepted`; `total` is their sum.
 
 ---
 
@@ -1483,6 +1501,33 @@ whatsapp_number
 ```
 
 Internal security/payment settings are never returned.
+
+## Admin analytics (VS-043)
+
+Money is integer cents with one `currency: "USD"` per body; every ranged body carries `from`, `to` and `timezone: "Asia/Beirut"`.
+
+```text
+StreamCents         { physical_cents, stl_cents, total_cents }
+RevenueFigures      { gross: StreamCents, refunded: StreamCents, net: StreamCents,
+                      paid_lines, paid_orders }
+RevenueBucket       { start: date, net: StreamCents }
+RevenueAnalytics    { from, to, timezone, group_by, currency, totals: RevenueFigures,
+                      buckets: list[RevenueBucket], unattributed_chargeback_excess_cents }
+PendingOfferCounts  { awaiting_admin, awaiting_customer, accepted, total }
+AnalyticsOverview   { from, to, timezone, currency, net: StreamCents, paid_orders, buyers,
+                      new_customers, pending_offers: PendingOfferCounts,
+                      stl_lines_awaiting_delivery }
+CustomerAnalytics   { from, to, timezone, currency, registered_customers, new_customers,
+                      buyers, repeat_buyers, net_per_buyer_cents | null }
+StlSalesItem        { product_id, name, slug | null, units, lines, net_cents, awaiting_delivery }
+StlSalesAnalytics   { from, to, timezone, currency, items: list[StlSalesItem],
+                      stl_lines_awaiting_delivery }
+TopRatedProduct     { product_id, name, slug, type, average_rating, review_count, is_visible }
+TopRatedProductList { items: list[TopRatedProduct] }
+RecentPurchase      { order_id, order_number, user_id, paid_at, payment_method,
+                      gross: StreamCents, refunded_cents, net_cents, paid_lines }
+RecentPurchasePage  { items: list[RecentPurchase], next_cursor | null }
+```
 
 ---
 

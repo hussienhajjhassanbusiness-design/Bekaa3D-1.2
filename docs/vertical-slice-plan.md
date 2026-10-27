@@ -45,7 +45,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 | VS-040 | Offer counter, accept, reject, withdraw | VS-039 | Done |
 | VS-041 | Accepted-offer checkout and auto-close | VS-040, VS-023, VS-024 | Done |
 | VS-042 | Download statistics rollup | — | Removed (ADR-019) |
-| VS-043 | Business analytics | VS-029, VS-030, VS-031, VS-036, VS-039 | Not started |
+| VS-043 | Business analytics | VS-029, VS-030, VS-031, VS-036, VS-039 | Done |
 | VS-044 | Customer data export | VS-023b, VS-025, VS-026, VS-036, VS-039 | Not started |
 | VS-045 | Account deletion by anonymisation | VS-026, VS-031, VS-036, VS-038, VS-039 | Not started |
 | VS-046 | Security data retention and IP-salt rotation | VS-004 | Done |
@@ -1177,7 +1177,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 **Was:** download statistics and the `downloads` partition rollup. Best-selling STLs come from paid lines (VS-043).
 
 ## VS-043 — Business analytics
-**Status:** Not started
+**Status:** Done (no migration; the head stays `eeed201dcfd2`). **As built:** [ADR-045](adr/ADR-045-business-analytics.md), [plan](plans/VS-043-business-analytics-plan.md), api-endpoints §27.1.
 **Depends on:** VS-029, VS-030, VS-031, VS-036, VS-039
 - **Notes from VS-031 ([ADR-043](adr/ADR-043-cancellation-and-returns.md)):** a cancel's refund is `kind = cancellation`, one per cancel request, its items each cancelled line's whole remaining balance; a customer's own has `approved_by` NULL. `orders.customer_cancelled_at` marks the customer's own cancels (never an administrator's); `orders.cancelled_at` stays the hold release's. A cancelled line of an unpaid cash order has no refund and no revenue (BR-149).
 - **Notes from VS-030 ([ADR-042](adr/ADR-042-refunds-voids-and-chargebacks.md), plan §3.7):** add `refunded_cents_by_line(session, line_ids)` to `app.payments.public`: pending and settled refund items plus chargeback items, never failed, voided or `late_capture` refunds. Revenue is the line total less that; a chargeback's excess is not attributed to lines.
@@ -1198,6 +1198,13 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - An out-of-range period gives 400.
   - A failing query returns an error, not zeros.
 - **Done when:** The backend's figures match the documented definitions on seeded data.
+- **As built** ([plan](plans/VS-043-business-analytics-plan.md), [ADR-045](adr/ADR-045-business-analytics.md)):
+  - A `reporting` context reads each context through a port; each context publishes unlocked reporting reads in `public.py`. No cross-context join.
+  - A cancelled line is unpaid only when nothing counts against it (L2's bare cancel), so a chargeback is subtracted once (R9, R9b, R10).
+  - One `REPEATABLE READ, READ ONLY` snapshot per request with a 5 s timeout; a timeout or database failure is 503, never zeros. 30/min per administrator; `400 INVALID_DATE_RANGE`.
+  - CP1 at 100k payments: 30-day window 11.8 ms p95, recent page 30.3 ms p95, no index. The 366-day report 2.37 s p95 (plan §4.2 budget 2 s).
+  - For VS-045: `app.payments.public.unsettled_refund_exists(session, user_id)` exists (BR-126: pending, owed, pending `late_capture`); call it again under VS-045's own locks.
+  - Tests: `tests/unit/reporting/`; `tests/integration/reporting/` (revenue R1-R12/R15, reports, R13 failure injection, R14 read-only, R16 parity); `VS043_ROUTES` in `tests/integration/test_openapi_security.py`.
 
 ## VS-044 — Customer data export
 **Status:** Not started

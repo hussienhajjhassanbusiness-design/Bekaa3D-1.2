@@ -19,6 +19,12 @@ from app.catalog.application.ports import CartProductReader, ProductStore
 from app.catalog.infrastructure.cart_product_reader import SqlCartProductReader
 from app.catalog.infrastructure.models import ProductModel
 from app.catalog.infrastructure.product_repository import ProductRepository
+from app.catalog.infrastructure.reports import (
+    ProductLabelRow,
+    RatedProductRow,
+    product_labels,
+    top_rated_products,
+)
 from app.catalog.infrastructure.review_aggregates import (
     lock_product_for_reviews,
     reviewable_products,
@@ -28,14 +34,18 @@ from app.catalog.infrastructure.review_aggregates import (
 
 __all__ = [
     "PriceRead",
+    "ProductLabelRow",
     "PublicImage",
+    "RatedProductRow",
     "adjust_wishlist_count",
     "cart_product_reader",
     "lock_product_for_reviews",
     "media_url",
+    "product_labels",
     "product_store",
     "reviewable_products",
     "set_review_aggregates",
+    "top_rated_products",
     "visible_product",
 ]
 

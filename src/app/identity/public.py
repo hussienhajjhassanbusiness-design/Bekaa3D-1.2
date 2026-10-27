@@ -24,17 +24,20 @@ from app.identity.api.dependencies import (
 from app.identity.application.token_claims import AccessTokenClaims
 from app.identity.domain.entities import User
 from app.identity.infrastructure.addresses import SqlAddressRepository
+from app.identity.infrastructure.reports import CustomerCountsRow, customer_counts
 from app.identity.infrastructure.repositories import UserRepository
 
 __all__ = [
     "AccessTokenClaims",
     "AdminBoundaryRoute",
     "CheckoutAddress",
+    "CustomerCountsRow",
     "User",
     "active_administrator_contacts",
     "active_administrator_ids",
     "current_user",
     "current_verified_user",
+    "customer_counts",
     "lock_checkout_address",
     "not_found_error",
     "require_admin",

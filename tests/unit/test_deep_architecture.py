@@ -25,6 +25,7 @@ CONTEXTS = (
     "ordering",
     "payments",
     "platform",
+    "reporting",
 )
 FRAMEWORKS = ("fastapi", "starlette", "sqlalchemy", "asyncpg", "redis", "arq", "httpx")
 
