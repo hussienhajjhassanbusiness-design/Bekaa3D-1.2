@@ -346,6 +346,10 @@ async def test_one_audit_row_with_counts_and_no_personal_data(
         ),
         pytest.param("online", "paid", ("returned",), "completed", id="returned_line"),
         pytest.param("online", "paid", ("delivered",), "completed", id="stl_awaiting_delivery"),
+        # BR-126 names the order's status too, not only its lines (audit A-05).
+        pytest.param(
+            "online", None, ("cancelled",), "pending_payment", id="open_status_terminal_lines"
+        ),
     ],
 )
 async def test_an_open_order_blocks_and_changes_nothing(
@@ -615,9 +619,12 @@ async def test_payments_refunds_and_lines_are_unchanged_column_by_column(
 async def test_an_admin_refund_on_an_anonymised_order_still_works(
     db_engine: AsyncEngine, db_session: AsyncSession
 ) -> None:
-    """A VS-031 return after deletion: the money path passes every relaxed CHECK."""
+    """A VS-031 return after deletion: the money path passes every relaxed CHECK, and the
+    customer notice it queues is stored as failed, never sendable (ADR-047 d4)."""
     c = await seed_customer(db_session)
     assert _delete_as(c.email).status_code == 204
+    outbox = "SELECT * FROM email_outbox WHERE user_id = :u"
+    before = {m.id for m in (await db_session.execute(text(outbox), {"u": c.user_id})).all()}
     line = await scalar(
         db_engine,
         "SELECT id FROM order_items WHERE order_id = :o AND product_type = 'physical'",
@@ -628,6 +635,15 @@ async def test_an_admin_refund_on_an_anonymised_order_still_works(
         ok(create(admin, c.orders[0], [(line, 300)]), 201)
     status = await scalar(db_engine, "SELECT status FROM orders WHERE id = :o", o=c.orders[0])
     assert status == "partially_refunded"
+    async with db_engine.connect() as conn:
+        mail = [
+            m for m in (await conn.execute(text(outbox), {"u": c.user_id})) if m.id not in before
+        ]
+    assert mail, "the refund queued no customer notice"
+    for m in mail:
+        assert m.recipient_email == f"deleted+{c.user_id}@invalid"
+        assert (m.status, m.last_error) == ("failed", "account_deleted")
+        assert set(m.payload.values()) == {REDACTED}
 
 
 async def test_an_administrator_can_still_list_and_read_an_anonymised_account(
