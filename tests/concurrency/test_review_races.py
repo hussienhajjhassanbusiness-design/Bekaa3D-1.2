@@ -17,6 +17,7 @@ from fastapi import FastAPI
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from app.catalog.domain.enums import ProductType
 from app.engagement.application.services.reviews import create_review, delete_review, edit_review
 from app.engagement.domain.reviews import REVIEW_LOCK_NS
 from app.engagement.infrastructure.reviews import CatalogReviewableProducts, SqlReviewStore
@@ -50,7 +51,13 @@ from tests.integration.engagement.review_support import (
 )
 from tests.integration.fulfillment.cancel_support import blocks_of, refunds_of
 from tests.integration.fulfillment.order_support import seed_physical_order
-from tests.integration.payments.refund_support import paid_online, statuses
+from tests.integration.payments.refund_support import (
+    attempt,
+    late_capture,
+    paid_online,
+    statuses,
+)
+from tests.integration.payments.support import seed_online_order
 
 pytestmark = [
     pytest.mark.integration,
@@ -303,6 +310,59 @@ async def test_c10b_review_create_vs_admin_cash_refusal(
         assert await stored_totals(db_engine, product_id) == await fresh_totals(
             db_engine, product_id
         )
+
+
+# --- C1: review create vs the STL payment that grants the badge ---------------------------
+
+
+@pytest.mark.parametrize("mode", ["pay_first", "create_first", "together"])
+async def test_c1_review_create_vs_the_stl_payment(
+    mode: str, world: World, db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    for _ in range(REPEATS):
+        product = await seed_product(db_session, await seed_refs(db_session), type=ProductType.STL)
+        user = await create_user(db_session)
+        order_id = await seed_online_order(db_session, user_id=user.id, stl_id=product.id)
+        payment = await attempt(db_session, order_id, status="pending")
+
+        async def pay(payment_id: uuid.UUID = payment) -> str:
+            await late_capture(db_engine, payment_id, 1000)
+            return "paid"
+
+        create = world.create(user.id, product.id, 5)
+        if mode == "together":
+            results = await together(pay, create)
+        else:
+            racers = (pay, create) if mode == "pay_first" else (create, pay)
+            results = await queued_on_user(db_engine, user.id, *racers)
+        assert sorted(r.split(":")[0] for r in results) == ["created", "paid"]
+        row = await _one_review(db_engine, user.id, product.id)
+        assert row.is_verified_purchase is True, "the badge equals the evidence after both"
+
+
+# --- C7: a refund vs an edit of the buyer's review (no deadlock, badge and rating hold) -----
+
+
+@pytest.mark.parametrize("mode", ["refund_first", "edit_first", "together"])
+async def test_c7_refund_vs_an_edit_of_the_same_users_review(
+    mode: str, world: World, db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    for _ in range(REPEATS):
+        order = await paid_online(db_session, stl=None)
+        line = order.physical[0]
+        product_id = await product_of_line(db_engine, line)
+        created = await world.create(order.user_id, product_id, 5)()
+        refund = world.refund(order.order_id, line, 1000)
+        edit = world.edit(order.user_id, uuid.UUID(created.split(":")[1]), 2)
+        if mode == "together":
+            results = await together(refund, edit)
+        else:
+            racers = (refund, edit) if mode == "refund_first" else (edit, refund)
+            results = await queued_on_user(db_engine, order.user_id, *racers)
+        assert sorted(results) == ["edited", "refunded"]
+        row = await _one_review(db_engine, order.user_id, product_id)
+        assert (row.rating, row.is_verified_purchase) == (2, False)
+        assert await stored_totals(db_engine, product_id) == (Decimal("2.00"), 1)
 
 
 # --- aggregates under concurrency -----------------------------------------------------------

@@ -1,5 +1,6 @@
 """VS-036 plan 6.2 (API, aggregates) and 6.4 (security) over HTTP on real Postgres."""
 
+import base64
 import uuid
 from decimal import Decimal
 from typing import Any
@@ -13,7 +14,14 @@ from app.catalog.infrastructure.models import ProductModel
 from app.identity.infrastructure.models import UserModel
 from app.main import app as main_app
 from tests.integration.catalog.storefront_support import seed_product, seed_refs
-from tests.integration.deep_support import assert_problem, client_for, create_user, csrf, login
+from tests.integration.deep_support import (
+    assert_problem,
+    client_for,
+    create_user,
+    csrf,
+    login,
+    mfa_admin,
+)
 from tests.integration.engagement.review_support import (
     MINE,
     REVIEWS,
@@ -29,6 +37,7 @@ from tests.integration.engagement.review_support import (
 )
 
 pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("configured_app")]
+ADMIN_REVIEWS = "/api/v1/admin/reviews"
 
 
 async def _signed_in(client: TestClient, db: AsyncSession, *, verified: bool = True) -> UserModel:
@@ -129,9 +138,13 @@ async def test_a_non_public_product_is_404_on_create_and_on_the_list(
         assert_problem(client.get(public_path(slug)), 404)
 
 
+ZERO_WIDTH_LINK = "visit cheap3d\N{ZERO WIDTH SPACE}.com today"
+
+
 @pytest.mark.parametrize(
     ("payload", "code", "reason"),
     [
+        ({"rating": 5, "body": ZERO_WIDTH_LINK}, "REVIEW_CONTENT_REJECTED", "link"),
         ({"rating": 0}, None, None),
         ({"rating": 6}, None, None),
         ({"rating": "5"}, None, None),
@@ -155,6 +168,28 @@ async def test_bad_content_is_422(
         assert response.json()["reason"] == reason
 
 
+@pytest.mark.parametrize(
+    ("body", "reason"),
+    [
+        ("see https://spam.example", "link"),
+        ("what a shit lamp", "profanity"),
+        (ZERO_WIDTH_LINK, "link"),
+    ],
+)
+async def test_an_edit_with_bad_content_is_422_and_keeps_the_text(
+    body: str, reason: str, db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    product = await _product(db_session)
+    with client_for(main_app) as client:
+        await _signed_in(client, db_session)
+        review = post_review(client, product.id, 4, "Solid print.").json()
+        response = patch_review(client, review["id"], body=body)
+    assert_problem(response, 422, "REVIEW_CONTENT_REJECTED")
+    assert response.json()["reason"] == reason
+    row = await review_row(db_engine, review["id"])
+    assert (row.body, row.updated_at) == ("Solid print.", row.created_at)
+
+
 # --- edit and delete ------------------------------------------------------------------------
 
 
@@ -168,17 +203,20 @@ async def test_edit_and_delete_keep_aggregates_exact_and_never_bump_the_product(
         mine = post_review(client, product.id, 5).json()
     with client_for(main_app) as client:
         await _signed_in(client, db_session)
-        other = post_review(client, product.id, 2).json()
+        other = post_review(client, product.id, 2, "Too rough.").json()
         await _assert_exact(db_engine, product.id)
         assert await stored_totals(db_engine, product.id) == (Decimal("3.50"), 2)
         edited = patch_review(client, other["id"], rating=4)
         assert edited.status_code == 200 and edited.json()["edited"] is True
+        assert edited.json()["body"] == "Too rough."
         assert await stored_totals(db_engine, product.id) == (Decimal("4.50"), 2)
-        body_only = patch_review(client, other["id"], body="Changed my mind.")
-        assert body_only.json()["rating"] == 4
+        body_only = patch_review(client, other["id"], body="  Changed my mind.  ")
+        assert (body_only.json()["rating"], body_only.json()["body"]) == (4, "Changed my mind.")
+        assert (await review_row(db_engine, other["id"])).body == "Changed my mind."
         assert await stored_totals(db_engine, product.id) == (Decimal("4.50"), 2)
         cleared = patch_review(client, other["id"], body=None)
         assert cleared.json()["body"] is None
+        assert (await review_row(db_engine, other["id"])).body is None
         assert delete_review(client, other["id"]).status_code == 204
         assert_problem(delete_review(client, other["id"]), 404)
         assert_problem(patch_review(client, other["id"], rating=3), 404)
@@ -353,6 +391,42 @@ async def test_the_eleventh_write_in_an_hour_is_429_and_anonymous_posts_spend_no
         refused = post_review(client, products[5].id)
     assert_problem(refused, 429, "RATE_LIMITED")
     assert "Retry-After" in refused.headers
+
+
+async def test_edits_spend_the_same_write_budget(db_session: AsyncSession) -> None:
+    product = await _product(db_session)
+    with client_for(main_app) as client:
+        await _signed_in(client, db_session)
+        review = post_review(client, product.id).json()
+        codes = [patch_review(client, review["id"], rating=1 + n % 5).status_code for n in range(9)]
+        refused = patch_review(client, review["id"], rating=3)
+    assert codes == [200] * 9
+    assert_problem(refused, 429, "RATE_LIMITED")
+
+
+def _cursor(moment: str) -> str:
+    raw = f"{moment}|{uuid.uuid4()}".encode()
+    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+
+@pytest.mark.parametrize("moment", ["0001-01-01T00:00:00+05:00", "2026-01-01T00:00:00"])
+@pytest.mark.parametrize("reader", ["public", "mine", "admin"])
+async def test_an_out_of_range_or_naive_cursor_is_422_on_every_review_list(
+    reader: str, moment: str, db_session: AsyncSession
+) -> None:
+    """BUG-36: asyncpg overflowed on these; the cursor guard must answer 422, not 500."""
+    product = await _product(db_session)
+    params = {"cursor": _cursor(moment)}
+    with client_for(main_app) as client:
+        if reader == "public":
+            response = client.get(public_path(product.slug), params=params)
+        elif reader == "mine":
+            await _signed_in(client, db_session)
+            response = client.get(MINE, params=params)
+        else:
+            await mfa_admin(client, db_session)
+            response = client.get(ADMIN_REVIEWS, params=params)
+    assert_problem(response, 422)
 
 
 async def test_the_public_list_is_limited_at_600_per_ip_per_hour(db_session: AsyncSession) -> None:
