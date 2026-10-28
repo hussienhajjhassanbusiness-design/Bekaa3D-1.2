@@ -1225,7 +1225,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - Six sets (owner decision Q1): a contact message only with the caller's `user_id`, as `subject`, `message` and `created_at`.
   - The reporting context composes one port per set; each context publishes an `*_for_export` read in `public.py`. Orders are the VS-025 projection without the action hints.
   - One `REPEATABLE READ, READ ONLY` snapshot with a 5 s timeout; the first set is read before the response starts, so a failure is a 503 with no audit row. Orders stream 50 at a time.
-  - `user.data_exported` is audited before the first byte; 3 a day per user, after the verified check.
+  - `user.data_exported` is audited before the first byte; 3 a day per user, after the CSRF check (required on this GET, d11) and the verified check.
   - For VS-045: anonymise the same contact messages (`user_id`), as ADR-041 says.
   - Tests: `tests/unit/reporting/test_data_export_schema.py` (field allowlist), `test_data_export_stream.py`; `tests/integration/reporting/test_data_export_api.py`, `test_data_export_session.py`; `tests/concurrency/test_data_export_snapshot.py`; `tests/smoke/test_vs044_smoke.py`; the VS-044 test in `tests/integration/test_openapi_security.py`.
 

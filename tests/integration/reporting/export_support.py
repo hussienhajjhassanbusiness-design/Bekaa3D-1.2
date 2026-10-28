@@ -15,7 +15,7 @@ from app.core.security import hash_phone
 from app.identity.domain.enums import UserRole
 from app.main import app as main_app
 from tests.integration.catalog.storefront_support import seed_product, seed_refs
-from tests.integration.deep_support import client_for, create_user, mfa_admin
+from tests.integration.deep_support import client_for, create_user, csrf, mfa_admin
 from tests.integration.fulfillment.delivery_support import line_of
 from tests.integration.fulfillment.order_support import seed_physical_order
 from tests.integration.negotiation.offer_support import seed_offer
@@ -180,6 +180,9 @@ async def refund_settle_and_void(
     return {reason, reference, note, void}
 
 
-def export(client: TestClient) -> httpx.Response:
-    response: httpx.Response = client.get(EXPORT)
+def export(client: TestClient, headers: dict[str, str] | None = None) -> httpx.Response:
+    """With this session's CSRF header unless `headers` replaces it (ADR-046 d11)."""
+    response: httpx.Response = client.get(
+        EXPORT, headers=csrf(client) if headers is None else headers
+    )
     return response

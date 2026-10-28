@@ -4,7 +4,7 @@
 **Date:** 2026-10-28
 **Source basis:** [VS-044 slice](../vertical-slice-plan.md#vs-044--customer-data-export); owner answers to plan questions Q1-Q9 of 2026-10-28 (Q1 changed by the owner, Q2-Q9 as recommended); SRS §14.5, BR-124, F-034; FR-03; api-endpoints §9.1; [ADR-041](ADR-041-receipt-confirmation-and-problem-report.md) (Consequences); [ADR-045](ADR-045-business-analytics.md) d4, d5; [ADR-033](ADR-033-customer-order-read-model.md); [ADR-019](ADR-019-manual-stl-delivery.md).
 **Confirms:** ADR-041's consequence "VS-044 (data export) … must include the contact messages that carry `user_id`" (decision 1).
-**Amends:** SRS §14.5 and FR-03 (five data sets become six), and api-endpoints §9.1 (the row and the `DataExportRead` schema).
+**Amends:** SRS §14.5 and FR-03 (five data sets become six), and api-endpoints §9.1 (the row and the `DataExportRead` schema). Makes this one GET an exception to the "GET never needs CSRF" convention (d11).
 **Applies first to:** `GET /api/v1/me/export`; no migration, the alembic head stays `eeed201dcfd2`.
 
 ## Context
@@ -21,8 +21,9 @@ SRS §14.5 and FR-03 listed five data sets (profile, addresses, orders with paym
 6. **The composition lives in the reporting context (Q6).** As in ADR-045 d4, one port per data set and adapters that call only each context's `public` module. New export reads: `identity.public.addresses_for_export`, `ordering.public.orders_for_export` (a page of orders with lines and history batched), `negotiation.public.offers_for_export`, `engagement.public.contact_messages_for_export`; `engagement.public.reviews_for_export` (VS-036, with the WhatsApp-only badge mask) and `payments.public.order_payment_reader` / `customer_refunds` are reused.
 7. **One snapshot, streamed (Q7).** Every port reads one `REPEATABLE READ, READ ONLY` transaction with ADR-045's 5 s statement timeout (`reporting.api.session.start_snapshot`). The handler reads the first data set before it returns, so a failed read is a clean `503 SERVICE_UNAVAILABLE` (or 500 for a bug) with no body. The body is then streamed: one chunk per page, the orders 50 at a time. A failure after the first byte cuts the body short, and the client sees invalid JSON.
 8. **Audited before the first byte (Q4).** `user.data_exported` (actor and entity the caller, `request_id`, `ip_hash`, `after_data {"format_version": 1}`, no counts or content) is written in the request's unit of work after the first read and committed before the response is sent. No row is written if the first read fails, and no data leaves if the audit write fails.
-9. **3 a day per user (Q5).** A fixed 24-hour window per user (`enforce_rate_limit`, key `data_export`), checked after `current_verified_user`, so anonymous and unverified callers spend none of it. An export that fails still counts. The `RateLimit-*` headers are copied onto the streamed response.
+9. **3 a day per user (Q5).** A fixed 24-hour window per user (`enforce_rate_limit`, key `data_export`), checked after the CSRF check (d11) and `current_verified_user`, so anonymous, unverified and forged callers spend none of it. An export that fails still counts. The `RateLimit-*` headers are copied onto the streamed response.
 10. **Any verified account (Q9).** No role check: an administrator gets their own export. Anonymous is 401; unverified is 403 `EMAIL_VERIFICATION_REQUIRED`; a disabled or anonymised account is 401.
+11. **CSRF on this GET (owner decision, closes the SRS review finding).** The session cookie is `SameSite=Lax`, so a cross-site link to the export would carry it and could spend a customer's three exports for the day. The route therefore runs the write routes' `require_csrf` before the rate limit: without this session's `X-CSRF-Token` header it is the same `403 CSRF_INVALID`, and nothing is counted or audited. The OpenAPI document lists `csrfToken` on this one GET (`_CSRF_READS` in `app/api/openapi.py`). A browser downloads it with `fetch` and the header, never with a plain link.
 
 ## Consequences
 
@@ -30,7 +31,8 @@ SRS §14.5 and FR-03 listed five data sets (profile, addresses, orders with paym
 + The data sets agree with each other: an order, its payment and its refunds come from the same snapshot.
 - A slow client holds a read-only connection for the length of the download; the 3-a-day limit bounds it.
 - A failure part-way through returns a truncated body under a `200`, and it still costs one of the three exports.
-- The session cookie is `SameSite=Lax`, so a cross-site link to this GET carries it: a hostile page can spend a customer's three exports for the day and write three audit rows. No data reaches that page (the file downloads on the customer's machine), and GET is outside the CSRF rule, so this is accepted (SRS review).
+- Closed, not accepted: a cross-site link could have spent a customer's three daily exports through the `SameSite=Lax` cookie (SRS review). d11 requires the CSRF header, so such a request is refused before the limit is counted.
+- The frontend cannot offer the export as a plain `<a href>`: it must `fetch` with the header and save the blob.
 - VS-045 must anonymise the same contact messages (by `user_id`).
 
 ## Alternatives rejected

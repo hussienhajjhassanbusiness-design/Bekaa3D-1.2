@@ -232,8 +232,9 @@ def test_the_vs044_export_declares_session_its_errors_and_the_body_schema() -> N
     operations = schema["paths"]["/api/v1/me/export"]
     assert set(operations) == {"get"}
     operation = operations["get"]
-    assert operation["security"] == [{"sessionCookie": []}]
+    assert operation["security"] == [{"sessionCookie": [], "csrfToken": []}]  # ADR-046 d11
     assert {"200", "401", "403", "429", "503"} <= set(operation["responses"])
+    assert "CSRF_INVALID" in operation["responses"]["403"]["description"]
     body = operation["responses"]["200"]["content"]["application/json"]["schema"]
     assert body == {"$ref": "#/components/schemas/DataExportRead"}
     fields = schema["components"]["schemas"]["DataExportRead"]["properties"]
