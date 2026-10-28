@@ -26,6 +26,9 @@ BACKFILL = "80e56abf0969"
 PARENT = "c01e53ab3e0f"
 LIVE_REASON = "late capture: attempt_not_live"
 MIGRATION = Path(__file__).resolve().parents[3] / "migrations" / "versions"
+# A malformed amount whose text cannot occur in a uuid, a revision id or a reason code
+# (uppercase, non-hex letters), so finding it in the skip report means the payload leaked.
+PAYLOAD_MARKER = "NOT-A-NUMBER-backfill-payload-marker"
 
 
 def _module() -> ModuleType:
@@ -41,7 +44,7 @@ def _module() -> ModuleType:
 CASES: dict[str, tuple[int | None, str | None, Any]] = {
     "a": (1100, "USD", None),
     "b": (None, None, {"captured_amount_cents": 900, "captured_currency": "USD"}),
-    "c": (None, None, {"captured_amount_cents": "abc"}),
+    "c": (None, None, {"captured_amount_cents": PAYLOAD_MARKER}),
     "d": (None, None, {"captured_amount_cents": -5}),
     "e": (None, None, "not an object"),
     "f": (None, None, None),
@@ -203,7 +206,7 @@ def test_i16_the_backfill_migration() -> None:
             assert {s["payment_id"]: s["reason"] for s in report["skipped"]} == {
                 str(ids[c]): "audit_malformed" for c in ("c", "d", "e", "j")
             }
-            assert "abc" not in str(report)  # ids and reason codes only, never the payload
+            assert PAYLOAD_MARKER not in str(report)  # ids and reason codes only, never the payload
 
             again = asyncio.run(_rerun(url, module))
             assert (again["created"], again["existing"], again["skipped"]) == (0, 7, 4)

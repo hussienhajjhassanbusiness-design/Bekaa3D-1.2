@@ -136,9 +136,11 @@ async def test_retry_against_retry_opens_one_attempt(
             )
         finally:
             await client.aclose()
-    print(f"\nRETRY vs RETRY: {first.status_code} / {second.status_code} {second.text[:80]}")
-    assert (first.status_code, second.status_code) == (201, 409)
-    assert second.json()["code"] == "PAYMENT_ALREADY_ACTIVE"
+    # Either racer may win: the stagger makes racer 1 likely, not certain, to lock first.
+    codes = sorted((first.status_code, second.status_code))
+    assert codes == [201, 409], (first.text, second.text)
+    loser = first if first.status_code == 409 else second
+    assert loser.json()["code"] == "PAYMENT_ALREADY_ACTIVE"
     assert await _statuses(db_engine, order.order_id) == ["failed", "pending"]
 
 
