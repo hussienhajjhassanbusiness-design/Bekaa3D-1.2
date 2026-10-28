@@ -46,7 +46,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 | VS-041 | Accepted-offer checkout and auto-close | VS-040, VS-023, VS-024 | Done |
 | VS-042 | Download statistics rollup | — | Removed (ADR-019) |
 | VS-043 | Business analytics | VS-029, VS-030, VS-031, VS-036, VS-039 | Done |
-| VS-044 | Customer data export | VS-023b, VS-025, VS-026, VS-036, VS-039 | Not started |
+| VS-044 | Customer data export | VS-023b, VS-025, VS-026, VS-036, VS-039 | Done |
 | VS-045 | Account deletion by anonymisation | VS-026, VS-031, VS-036, VS-038, VS-039 | Not started |
 | VS-046 | Security data retention and IP-salt rotation | VS-004 | Done |
 | **Final phase** | **Needs a server; built after everything above is finished and tested locally** | | |
@@ -1207,20 +1207,27 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - Tests: `tests/unit/reporting/`; `tests/integration/reporting/` (revenue R1-R12/R15, reports, R13 failure injection, R14 read-only, R16 parity); `VS043_ROUTES` in `tests/integration/test_openapi_security.py`.
 
 ## VS-044 — Customer data export
-**Status:** Not started
+**Status:** Done (no migration; the head stays `eeed201dcfd2`). **As built:** [ADR-046](adr/ADR-046-customer-data-export.md), api-endpoints §9.1 and §30 "Customer data export".
 **Depends on:** VS-023b, VS-025, VS-026, VS-036, VS-039
 **Goal:** A customer downloads their data as JSON.
 - **Model / migration:** None.
 - **Endpoints / jobs:** `GET /api/v1/me/export`.
 - **Logic:**
   - Each context exposes an export port returning customer-safe records.
-  - The export covers the profile, addresses, orders with payment method and STL delivery records, reviews and offers (the SRS list), including soft-deleted rows, marked as such.
+  - The export covers the profile, addresses, orders with payment method and STL delivery records, reviews, offers and the customer's contact messages (the SRS list, six sets since ADR-046), including soft-deleted rows, marked as such.
   - It is streamed, rate-limited (3 per day) and audited.
 - **Tests:**
   - Only the caller's data appears.
   - No hashes, secrets, internal notes or provider references are included.
   - An unverified user gets 403.
-- **Done when:** The export contains exactly the five SRS data sets for the caller.
+- **Done when:** The export contains exactly the SRS data sets for the caller (six since ADR-046; the slice was written with five).
+- **As built** ([ADR-046](adr/ADR-046-customer-data-export.md)):
+  - Six sets (owner decision Q1): a contact message only with the caller's `user_id`, as `subject`, `message` and `created_at`.
+  - The reporting context composes one port per set; each context publishes an `*_for_export` read in `public.py`. Orders are the VS-025 projection without the action hints.
+  - One `REPEATABLE READ, READ ONLY` snapshot with a 5 s timeout; the first set is read before the response starts, so a failure is a 503 with no audit row. Orders stream 50 at a time.
+  - `user.data_exported` is audited before the first byte; 3 a day per user, after the verified check.
+  - For VS-045: anonymise the same contact messages (`user_id`), as ADR-041 says.
+  - Tests: `tests/unit/reporting/test_data_export_schema.py` (field allowlist), `test_data_export_stream.py`; `tests/integration/reporting/test_data_export_api.py`, `test_data_export_session.py`; `tests/concurrency/test_data_export_snapshot.py`; `tests/smoke/test_vs044_smoke.py`; the VS-044 test in `tests/integration/test_openapi_security.py`.
 
 ## VS-045 — Account deletion by anonymisation
 **Status:** Not started

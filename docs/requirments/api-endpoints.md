@@ -338,7 +338,7 @@ There is no normal “disable MFA” endpoint in V1 because the SRS treats admin
 | Method + Path | Auth / Authorization | Request | Success | Errors | Pagination / Filter / Sort | Side Effects / Notes |
 |---|---|---|---|---|---|---|
 | `GET /api/v1/me` | Authenticated | — | `200 UserProfileRead` | 401 | — | Read allowed while unverified; no V1 mutable profile field exists, so there is no corresponding write endpoint |
-| `GET /api/v1/me/export` | Verified Customer | — | `200 DataExportRead` | 401, 403, 429 | — | JSON export includes profile, addresses, orders (with STL delivery records), reviews, offers |
+| `GET /api/v1/me/export` | Verified Customer | — | `200 DataExportRead` (streamed `attachment`, `Cache-Control: no-store`) | 401, 403, 429, 503 | — | The profile and six data sets: addresses, orders (payment method, payment, refunds, STL delivery records), reviews, offers with rounds, contact messages; soft-deleted addresses and reviews marked `deleted`. One read-only snapshot; 3 a day per user; audited `user.data_exported` before the first byte (ADR-046) |
 | `DELETE /api/v1/me` | Verified Customer; fresh-auth requirement | `AccountDeletionRequest` | `204` | 401, 403, 409 `ACCOUNT_DELETION_BLOCKED`, 429 | — | Anonymises; blocked by open orders/unsettled refunds; disables login |
 
 `ACCOUNT_DELETION_BLOCKED` is an additional stable V1 code.
@@ -1527,6 +1527,43 @@ TopRatedProductList { items: list[TopRatedProduct] }
 RecentPurchase      { order_id, order_number, user_id, paid_at, payment_method,
                       gross: StreamCents, refunded_cents, net_cents, paid_lines }
 RecentPurchasePage  { items: list[RecentPurchase], next_cursor | null }
+```
+
+## Customer data export (VS-044)
+
+Money is `Money { amount_cents, currency }`. Every field is listed; nothing else is exported (ADR-046 d2).
+
+```text
+DataExportRead        { format_version: 1, exported_at, profile: ExportProfile,
+                        addresses: list[ExportAddress], orders: list[ExportOrder],
+                        reviews: list[ExportReview], offers: list[ExportOffer],
+                        contact_messages: list[ExportContactMessage] }
+ExportProfile         { id, email, role, email_verified, email_verified_at, created_at }
+ExportAddress         { id, label, recipient_name, phone, governorate, city, area, street,
+                        landmark_notes, is_default, created_at, updated_at, deleted, deleted_at }
+ExportOrder           { id, order_number, source, status, payment_method, fulfillment_method,
+                        payment_due, amount_due | null, subtotal, tax, total,
+                        delivery_address: ExportDeliveryAddress | null, contact_phone,
+                        delivery_email | null (only with a paid STL line: where its files go),
+                        customer_note, estimated_dispatch_at, placed_at, completed_at,
+                        cancelled_at, lines: list[ExportOrderLine],
+                        payment: ExportPayment | null, refunds: list[ExportRefund],
+                        status_history: list[ExportStatusChange] }
+ExportOrderLine       { id, product_id, product_type, name, offer_id, unit_price, quantity,
+                        line_total, fulfillment_status, fulfilled_at, cancelled_at,
+                        receipt_confirmed_at, problem_reported_at }
+ExportDeliveryAddress { recipient_name, governorate, city, area, street, landmark_notes }
+ExportPayment         { provider, status, amount }
+ExportRefund          { kind, status: processing | refunded, amount, created_at }
+ExportStatusChange    { order_item_id | null, from_status, to_status, at }
+ExportReview          { id, product_id, product_name, rating, body, is_verified_purchase,
+                        is_hidden, created_at, updated_at, deleted, deleted_at }
+ExportOffer           { id, product_id, product_name, status, turn, initial_amount,
+                        current_amount, agreed_amount | null, responds_by, accepted_at,
+                        checkout_expires_at, cooldown_until, created_at, updated_at,
+                        rounds: list[ExportOfferRound] }
+ExportOfferRound      { sequence, actor, action, amount | null, message, created_at }
+ExportContactMessage  { subject, message, created_at }
 ```
 
 ---
