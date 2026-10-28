@@ -628,3 +628,18 @@ async def test_an_admin_refund_on_an_anonymised_order_still_works(
         ok(create(admin, c.orders[0], [(line, 300)]), 201)
     status = await scalar(db_engine, "SELECT status FROM orders WHERE id = :o", o=c.orders[0])
     assert status == "partially_refunded"
+
+
+async def test_an_administrator_can_still_list_and_read_an_anonymised_account(
+    db_session: AsyncSession,
+) -> None:
+    c = await seed_customer(db_session)
+    assert _delete_as(c.email).status_code == 204
+    with client_for(main_app) as admin:
+        await mfa_admin(admin, db_session)
+        detail = admin.get(f"/api/v1/admin/users/{c.user_id}")
+        listed = admin.get("/api/v1/admin/users", params={"search": f"deleted+{c.user_id}"})
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["email"] == f"deleted+{c.user_id}@invalid"
+    assert listed.status_code == 200, listed.text
+    assert [u["id"] for u in listed.json()["items"]] == [str(c.user_id)]
