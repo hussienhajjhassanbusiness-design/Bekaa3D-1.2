@@ -46,6 +46,7 @@ __all__ = [
     "anonymise_outbox",
     "audit_history",
     "current_ip_hash_salt",
+    "delete_idempotency_records",
     "idempotency_store",
     "ip_hash_salt_store",
     "request_hash",
@@ -87,3 +88,8 @@ async def anonymise_outbox(
 ) -> int:
     """VS-045: the account's outbox rows, for the deletion's transaction."""
     return await EmailOutboxRepository(session).anonymise_for_user(user_id, email=email, at=at)
+
+
+async def delete_idempotency_records(session: AsyncSession, user_id: UUID) -> int:
+    """VS-045: retention-managed rows (database-design.md), deleted with the account."""
+    return await SqlIdempotencyStore(session).delete_for_user(user_id)

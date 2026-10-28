@@ -10,9 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ordering.domain.enums import OrderStatus
 from app.ordering.domain.order_status import TERMINAL_LINE_STATES
 from app.ordering.infrastructure.carts import SqlCartStore
-from app.ordering.infrastructure.models import OrderItemModel, OrderModel
+from app.ordering.infrastructure.models import OrderItemModel, OrderModel, OrderStatusHistoryModel
 
-_O, _I = OrderModel, OrderItemModel
+_O, _I, _H = OrderModel, OrderItemModel, OrderStatusHistoryModel
 _OPEN_STATUSES = (OrderStatus.PENDING_PAYMENT, OrderStatus.IN_PROGRESS)
 
 
@@ -37,7 +37,7 @@ async def open_order_exists(session: AsyncSession, user_id: UUID) -> bool:
 
 async def erase_orders(session: AsyncSession, user_id: UUID, *, email: str, at: datetime) -> int:
     """Strips every order's personal fields (`ck_orders_anonymised_shape`) and empties the
-    cart. `governorate` and `admin_note` stay (ADR-047). Returns the orders changed."""
+    cart. `governorate`, `admin_note` and the phone hash stay (ADR-047 d2). Returns the count."""
     carts = SqlCartStore(session)
     cart = await carts.lock(user_id, create=True)
     await carts.clear(cart.id)
@@ -48,7 +48,6 @@ async def erase_orders(session: AsyncSession, user_id: UUID, *, email: str, at: 
             customer_email_snapshot=email,
             recipient_name=None,
             contact_phone_snapshot=None,
-            contact_phone_hash=None,
             city=None,
             area=None,
             street=None,
@@ -60,4 +59,20 @@ async def erase_orders(session: AsyncSession, user_id: UUID, *, email: str, at: 
         .returning(_O.id)
         .execution_options(synchronize_session=False)
     )
-    return len((await session.execute(stmt)).all())
+    erased = len((await session.execute(stmt)).all())
+    await _erase_customer_notes(session, user_id)
+    return erased
+
+
+async def _erase_customer_notes(session: AsyncSession, user_id: UUID) -> None:
+    """The customer's own cancel note; an administrator's history note stays (ADR-047 d4)."""
+    await session.execute(
+        update(_H)
+        .where(
+            _H.actor_user_id == user_id,
+            _H.reason.is_not(None),
+            _H.order_id.in_(select(_O.id).where(_O.user_id == user_id)),
+        )
+        .values(reason=None)
+        .execution_options(synchronize_session=False)
+    )

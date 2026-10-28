@@ -17,6 +17,9 @@ _ADDRESS = (
     "fulfillment_method IS DISTINCT FROM 'delivery' OR (recipient_name IS NOT NULL "
     "AND governorate IS NOT NULL AND city IS NOT NULL AND landmark_notes IS NOT NULL)"
 )
+# The phone hash outlives the phone, so ADR-038 d23's cash hold still matches it (ADR-047 d2).
+_PAIR = "(contact_phone_snapshot IS NULL) = (contact_phone_hash IS NULL)"
+_CLOSED = "anonymized_at IS NULL OR status NOT IN ('pending_payment', 'in_progress')"
 _ORDER_SHAPE = (
     "anonymized_at IS NULL OR (recipient_name IS NULL AND contact_phone_snapshot IS NULL "
     "AND city IS NULL AND area IS NULL AND street IS NULL AND landmark_notes IS NULL "
@@ -45,7 +48,9 @@ def upgrade() -> None:
     op.add_column("orders", sa.Column("anonymized_at", sa.DateTime(timezone=True), nullable=True))
     _replace("ck_orders_physical_has_phone", f"anonymized_at IS NOT NULL OR {_PHONE}")
     _replace("ck_orders_delivery_address", f"anonymized_at IS NOT NULL OR {_ADDRESS}")
+    _replace("ck_orders_phone_hash_pair", f"anonymized_at IS NOT NULL OR {_PAIR}")
     op.create_check_constraint("ck_orders_anonymised_shape", "orders", _ORDER_SHAPE)
+    op.create_check_constraint("ck_orders_anonymised_closed", "orders", _CLOSED)
 
     op.add_column(
         "addresses", sa.Column("anonymized_at", sa.DateTime(timezone=True), nullable=True)
@@ -66,7 +71,9 @@ def downgrade() -> None:
         op.alter_column("addresses", column, existing_type=sa.Text(), nullable=False)
     op.drop_column("addresses", "anonymized_at")
 
+    op.drop_constraint("ck_orders_anonymised_closed", "orders", type_="check")
     op.drop_constraint("ck_orders_anonymised_shape", "orders", type_="check")
+    _replace("ck_orders_phone_hash_pair", _PAIR)
     _replace("ck_orders_delivery_address", _ADDRESS)
     _replace("ck_orders_physical_has_phone", _PHONE)
     op.drop_column("orders", "anonymized_at")

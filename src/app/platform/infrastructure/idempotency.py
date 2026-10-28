@@ -27,6 +27,11 @@ class SqlIdempotencyStore:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    async def delete_for_user(self, user_id: UUID) -> int:
+        """VS-045: stored responses can hold an address; nobody can replay them now."""
+        stmt = delete(IdempotencyRecordModel).where(IdempotencyRecordModel.user_id == user_id)
+        return len((await self._session.execute(stmt.returning(IdempotencyRecordModel.id))).all())
+
     async def claim(
         self,
         *,

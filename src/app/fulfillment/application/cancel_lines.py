@@ -186,7 +186,7 @@ async def _audit(
             "refund_id": str(refund.refund_id) if refund else None,
             "refund_cents": refund.amount_cents if refund else None,
             "cash_block": blocked,
-            "note": ctx.note,
+            "has_note": ctx.note is not None,  # the text stays in the history only (ADR-047)
         },
         request_id=ctx.request_id,
         ip_hash=ctx.ip_hash,

@@ -20,6 +20,8 @@ from tests.integration.fulfillment.order_support import seed_physical_order
 from tests.integration.negotiation.offer_support import seed_offer
 
 ME = "/api/v1/me"
+ADMIN_REPLY = "Our best price is 900."
+ADMIN_REASON = "Courier could not find the door"
 
 
 @dataclass
@@ -76,9 +78,10 @@ async def seed_customer(db: AsyncSession, tag: str | None = None) -> Customer:
     c.pii |= {name, street, note}
     await _addresses(db, c, tag)
     await _wishlist_and_cart(db, c)
-    await _offers(db, c)
+    await _offers(db, c, tag)
     await _messages_and_mail(db, c, tag)
     await _tokens(db, c)
+    await _history_and_claims(db, c, tag)
     return c
 
 
@@ -124,11 +127,47 @@ async def _wishlist_and_cart(db: AsyncSession, c: Customer) -> None:
     )
 
 
-async def _offers(db: AsyncSession, c: Customer) -> None:
+async def _offers(db: AsyncSession, c: Customer, tag: str) -> None:
     refs = await seed_refs(db)
     for status in ("awaiting_admin", "accepted"):
         product = (await seed_product(db, refs)).id
         c.offers.append(await seed_offer(db, user_id=c.user_id, product_id=product, status=status))
+    for sequence, actor, words in ((2, "customer", f"Call me on {tag}"), (3, "admin", ADMIN_REPLY)):
+        await run(
+            db,
+            "INSERT INTO offer_rounds (offer_id, sequence, actor, action, message)"
+            " VALUES (:o, :s, CAST(:a AS offer_actor), 'countered', :m)",
+            o=c.offers[0],
+            s=sequence,
+            a=actor,
+            m=words,
+        )
+    c.pii.add(f"Call me on {tag}")
+
+
+async def _history_and_claims(db: AsyncSession, c: Customer, tag: str) -> None:
+    """The customer's cancel note, an admin's note, and a stored checkout response."""
+    admin = await create_user(db)
+    for actor, reason in ((c.user_id, f"Moving to Beirut {tag}"), (admin.id, ADMIN_REASON)):
+        await run(
+            db,
+            "INSERT INTO order_status_history (order_id, from_status, to_status, actor_user_id,"
+            " reason) VALUES (:o, 'pending', 'cancelled', :a, :r)",
+            o=c.orders[1],
+            a=actor,
+            r=reason,
+        )
+    await run(
+        db,
+        "INSERT INTO idempotency_records (scope, user_id, key, request_hash, state, status_code,"
+        " response_body, expires_at) VALUES ('checkout', :u, :k, :h, 'done', 201,"
+        " jsonb_build_object('street', CAST(:s AS text)), now() + interval '1 day')",
+        u=c.user_id,
+        k=uuid.uuid4().hex,
+        h="0" * 64,
+        s=f"Claim street {tag}",
+    )
+    c.pii |= {f"Moving to Beirut {tag}", f"Claim street {tag}"}
 
 
 async def _messages_and_mail(db: AsyncSession, c: Customer, tag: str) -> None:

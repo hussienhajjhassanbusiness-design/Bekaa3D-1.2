@@ -22,3 +22,8 @@ async def withdraw_live_offers(offers: OfferStore, user_id: UUID, *, now: dateti
         await offers.save_state(withdrawn)
         await offers.add_round(offer.id, round_, at=now)
     return len(live)
+
+
+async def blank_customer_messages(offers: OfferStore, user_id: UUID) -> int:
+    """What the customer wrote, on every offer, closed ones too (ADR-047 d4)."""
+    return await offers.blank_customer_messages(user_id)

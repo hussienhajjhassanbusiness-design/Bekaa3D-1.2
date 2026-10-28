@@ -6,7 +6,14 @@ from uuid import UUID
 from sqlalchemy import delete, select, text, tuple_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.platform.domain.entities import AuditLogEntry, EmailOutboxMessage, IpHashSalt, Setting
+from app.platform.domain.entities import (
+    REDACTED,
+    AuditLogEntry,
+    EmailOutboxMessage,
+    IpHashSalt,
+    Setting,
+    is_undeliverable,
+)
 from app.platform.domain.enums import OutboxStatus, SettingType
 from app.platform.infrastructure.models import (
     AuditLogModel,
@@ -51,6 +58,10 @@ class EmailOutboxRepository:
             template=template,
             payload=payload,
         )
+        if is_undeliverable(recipient_email):  # a later notice to a deleted account
+            model.status = OutboxStatus.FAILED
+            model.last_error = "account_deleted"
+            model.payload = dict.fromkeys(payload, REDACTED)
         self._session.add(model)
         await self._session.flush()
         await self._session.refresh(model)

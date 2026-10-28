@@ -20,7 +20,6 @@ ERASED = {
     "customer_email_snapshot",
     "recipient_name",
     "contact_phone_snapshot",
-    "contact_phone_hash",
     "city",
     "area",
     "street",

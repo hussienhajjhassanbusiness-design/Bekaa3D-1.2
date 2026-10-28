@@ -198,9 +198,11 @@ class ErasureCounts:
 
     orders: int
     offers_withdrawn: int
+    offer_messages: int
     wishlist_items: int
     contact_messages: int
     outbox_rows: int
+    idempotency_records: int
 
 
 class AccountErasure(Protocol):

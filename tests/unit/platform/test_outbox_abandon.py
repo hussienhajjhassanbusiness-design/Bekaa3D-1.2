@@ -3,7 +3,9 @@
 import uuid
 from datetime import UTC, datetime
 
-from app.platform.domain.entities import REDACTED, EmailOutboxMessage
+import pytest
+
+from app.platform.domain.entities import REDACTED, EmailOutboxMessage, is_undeliverable
 from app.platform.domain.enums import OutboxStatus
 
 AT = datetime(2026, 10, 28, tzinfo=UTC)
@@ -31,3 +33,16 @@ def test_abandon_fails_the_row_and_redacts_its_payload() -> None:
         None,
     )
     assert message.payload == {"order_number": REDACTED, "token": REDACTED}
+
+
+@pytest.mark.parametrize(
+    ("email", "expected"),
+    [
+        ("deleted+1@invalid", True),
+        ("x@mail.INVALID", True),
+        ("rana@example.com", False),
+        ("rana@invalid.example.com", False),
+    ],
+)
+def test_only_the_invalid_domain_is_undeliverable(email: str, expected: bool) -> None:
+    assert is_undeliverable(email) is expected

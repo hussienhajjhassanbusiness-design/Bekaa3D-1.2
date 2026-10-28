@@ -130,7 +130,7 @@ class _World:
 
     async def erase(self, user_id: uuid.UUID, *, email: str, at: datetime) -> ErasureCounts:
         self.calls.append("erase")
-        return ErasureCounts(2, 1, 3, 1, 4)
+        return ErasureCounts(2, 1, 5, 3, 1, 4, 6)
 
     async def anonymise_all(self, user_id: uuid.UUID, *, at: datetime) -> int:
         self.calls.append("anonymise_all")
@@ -188,9 +188,11 @@ async def test_success_locks_in_order_then_writes_everything_once() -> None:
     assert world.audit["after_data"] == {
         "orders": 2,
         "offers_withdrawn": 1,
+        "offer_messages": 5,
         "wishlist_items": 3,
         "contact_messages": 1,
         "outbox_rows": 4,
+        "idempotency_records": 6,
         "addresses": 2,
         "tokens_consumed": 2,
         "sessions_revoked": 2,

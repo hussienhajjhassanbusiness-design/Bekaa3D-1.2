@@ -85,6 +85,12 @@ class EmailOutboxMessage:
         self._redact_payload()
 
 
+def is_undeliverable(recipient_email: str) -> bool:
+    """RFC 6761 `.invalid`: an anonymised account's address (VS-045); never worth a send."""
+    domain = recipient_email.rpartition("@")[2].lower()
+    return domain == "invalid" or domain.endswith(".invalid")
+
+
 @dataclass
 class AuditLogEntry:
     id: UUID

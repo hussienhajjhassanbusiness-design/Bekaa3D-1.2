@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.catalog.public import cart_product_reader
 from app.negotiation.application.ports import PaymentInFlight
 from app.negotiation.application.services.erase_offers import (
+    blank_customer_messages,
     lock_live_offers,
     withdraw_live_offers,
 )
@@ -46,6 +47,7 @@ __all__ = [
     "PaymentInFlight",
     "SqlOfferCheckouts",
     "StlPurchase",
+    "blank_offer_messages_for_erasure",
     "expire_overdue_offers",
     "live_offer_counts",
     "lock_live_offers_for_erasure",
@@ -195,6 +197,10 @@ async def _each(
 async def lock_live_offers_for_erasure(session: AsyncSession, user_id: UUID) -> None:
     """VS-045: after the orders and cart locks, before the user row (ADR-047)."""
     await lock_live_offers(SqlOfferStore(session), user_id)
+
+
+async def blank_offer_messages_for_erasure(session: AsyncSession, user_id: UUID) -> int:
+    return await blank_customer_messages(SqlOfferStore(session), user_id)
 
 
 async def withdraw_offers_for_erasure(session: AsyncSession, user_id: UUID, *, at: datetime) -> int:

@@ -7,7 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.engagement.public import anonymise_contact_messages, erase_wishlist_items
 from app.identity.application.ports import ErasureCounts
-from app.negotiation.public import lock_live_offers_for_erasure, withdraw_offers_for_erasure
+from app.negotiation.public import (
+    blank_offer_messages_for_erasure,
+    lock_live_offers_for_erasure,
+    withdraw_offers_for_erasure,
+)
 from app.ordering.public import (
     erase_orders,
     lock_cart_for_erasure,
@@ -15,7 +19,7 @@ from app.ordering.public import (
     open_order_exists,
 )
 from app.payments.public import unsettled_refund_exists
-from app.platform.public import anonymise_outbox
+from app.platform.public import anonymise_outbox, delete_idempotency_records
 
 
 class SqlAccountErasure:
@@ -42,7 +46,9 @@ class SqlAccountErasure:
         return ErasureCounts(
             orders=await erase_orders(s, user_id, email=email, at=at),
             offers_withdrawn=await withdraw_offers_for_erasure(s, user_id, at=at),
+            offer_messages=await blank_offer_messages_for_erasure(s, user_id),
             wishlist_items=await erase_wishlist_items(s, user_id),
             contact_messages=await anonymise_contact_messages(s, user_id, email=email),
             outbox_rows=await anonymise_outbox(s, user_id, email=email, at=at),
+            idempotency_records=await delete_idempotency_records(s, user_id),
         )

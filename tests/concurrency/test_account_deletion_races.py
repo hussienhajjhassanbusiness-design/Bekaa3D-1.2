@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession
 
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
 from tests.integration.deep_support import PASSWORD, async_client, create_user, running_app
+from tests.integration.fulfillment.delivery_support import admin_client
 from tests.integration.fulfillment.order_support import seed_physical_order
 from tests.integration.identity.deletion_support import ME, one, scalar, wait_for_waiters
 from tests.integration.negotiation.offer_support import seed_offer, shop_open, stl  # noqa: F401
@@ -48,16 +49,23 @@ async def _held(engine: AsyncEngine, sql: str, **params: Any) -> AsyncIterator[A
 
 
 async def _queued(
-    engine: AsyncEngine, lock_sql: str, waiting_on: str, racers: list[Racer], **params: Any
+    engine: AsyncEngine,
+    lock_sql: str,
+    waiting_on: str | list[str],
+    racers: list[Racer],
+    **params: Any,
 ) -> list[httpx.Response]:
     """Each racer starts once the previous one waits on the held lock; Postgres then grants
-    the lock in queue order."""
+    the lock in queue order. A list names each racer's own waiting query."""
     async with _held(engine, lock_sql, **params) as held:
         tasks = []
         for n, racer in enumerate(racers, start=1):
             tasks.append(asyncio.create_task(racer()))
+            pattern, count = (
+                (waiting_on, n) if isinstance(waiting_on, str) else (waiting_on[n - 1], 1)
+            )
             try:
-                await wait_for_waiters(engine, waiting_on, n)
+                await wait_for_waiters(engine, pattern, count)
             except AssertionError as exc:
                 done = [t.result().text for t in tasks if t.done()]
                 raise AssertionError(f"{exc}; finished early: {done}") from None
@@ -181,7 +189,8 @@ async def test_deletion_racing_an_offer_checkout_never_deadlocks_or_orphans_an_o
     deleted, checkout = (first, second) if deletion_first else (second, first)
     if deletion_first:
         assert deleted.status_code == 204, deleted.text
-        assert checkout.status_code in (401, 409, 422), checkout.text
+        assert checkout.status_code == 409, checkout.text  # the withdrawn offer refuses it
+        assert checkout.json()["offer_status"] == "withdrawn"
         assert await _orders(db_engine, user.id) == 0
         status = await scalar(db_engine, "SELECT status FROM offers WHERE id = :o", o=offer)
         assert status == "withdrawn"
@@ -231,6 +240,8 @@ async def test_deletion_racing_a_problem_report_keeps_no_personal_data(
 
 
 _USER = "SELECT id FROM users WHERE id = :u FOR NO KEY UPDATE"  # the address-book lock
+_DELETION_WAIT = "%users.password_hash%FROM users%FOR NO KEY UPDATE%"  # lock_for_anonymisation
+_ADDRESS_WAIT = "%anonymized_at IS NULL FOR NO KEY UPDATE%"  # lock_address_book
 ADDRESS = {
     "label": "Home",
     "recipient_name": "Rana",
@@ -249,19 +260,61 @@ async def test_deletion_racing_an_address_create_leaves_no_live_address(
     client = await _client(app, user.email)
     create = _post(client, "/api/v1/me/addresses", ADDRESS)
     racers = [_delete(client), create] if deletion_first else [create, _delete(client)]
+    patterns = (
+        [_DELETION_WAIT, _ADDRESS_WAIT] if deletion_first else [_ADDRESS_WAIT, _DELETION_WAIT]
+    )
     try:
-        first, second = await _queued(
-            db_engine, _USER, "%FROM users%FOR NO KEY UPDATE%", racers, u=user.id
-        )
+        first, second = await _queued(db_engine, _USER, patterns, racers, u=user.id)
     finally:
         await client.aclose()
     deleted, created = (first, second) if deletion_first else (second, first)
     assert deleted.status_code == 204, deleted.text
-    assert created.status_code == (401 if deletion_first else 201), created.text
+    # The deletion already holds KEY SHARE on `users` (its cart INSERT), so Postgres may grant
+    # either waiter first: each outcome must leave no address with personal data.
     row = await one(
         db_engine,
         "SELECT count(*) AS n, count(*) FILTER (WHERE phone IS NOT NULL) AS with_phone"
         " FROM addresses WHERE user_id = :u",
         u=user.id,
     )
-    assert (row.n, row.with_phone) == ((0, 0) if deletion_first else (1, 0))
+    assert (created.status_code, row.n, row.with_phone) in {(401, 0, 0), (201, 1, 0)}, created.text
+
+
+@pytest.mark.parametrize("deletion_first", [True, False], ids=["deletion_first", "refund_first"])
+async def test_deletion_racing_an_admin_refund_blocks_or_lets_it_land(
+    app: FastAPI, db_engine: AsyncEngine, db_session: AsyncSession, deletion_first: bool
+) -> None:
+    """FR-03: a refund issued first blocks the deletion (BR-126); one issued after lands on
+    the anonymised order. Both lock the order first, so no deadlock."""
+    user = await create_user(db_session)
+    order = await seed_physical_order(
+        db_session,
+        user_id=user.id,
+        line_states=["delivered"],
+        order_status="completed",
+        payment_method="online",
+        payment_status="paid",
+        email=user.email,
+    )
+    client = await _client(app, user.email)
+    admin, _ = await admin_client(app, db_session)
+    body = {
+        "items": [{"order_item_id": str(order.line_ids[0]), "amount_cents": 300}],
+        "reason": "Goodwill",
+    }
+    refund = _post(admin, f"/api/v1/admin/orders/{order.order_id}/refunds", body, key=True)
+    racers = [_delete(client), refund] if deletion_first else [refund, _delete(client)]
+    try:
+        first, second = await _queued(
+            db_engine, _ORDER, "%FROM orders%FOR UPDATE%", racers, o=order.order_id
+        )
+    finally:
+        await client.aclose()
+        await admin.aclose()
+    deleted, refunded = (first, second) if deletion_first else (second, first)
+    assert refunded.status_code == 201, refunded.text
+    if deletion_first:
+        assert deleted.status_code == 204, deleted.text
+    else:
+        assert (deleted.status_code, deleted.json()["reason"]) == (409, "unsettled_refund")
+    assert await _anonymised(db_engine, user.id) is deletion_first

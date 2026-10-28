@@ -214,7 +214,12 @@ class OrderModel(Base):
             name="ck_orders_anonymised_shape",
         ),
         CheckConstraint(
-            "(contact_phone_snapshot IS NULL) = (contact_phone_hash IS NULL)",
+            "anonymized_at IS NULL OR status NOT IN ('pending_payment', 'in_progress')",
+            name="ck_orders_anonymised_closed",
+        ),
+        CheckConstraint(
+            "anonymized_at IS NOT NULL "
+            "OR (contact_phone_snapshot IS NULL) = (contact_phone_hash IS NULL)",
             name="ck_orders_phone_hash_pair",
         ),
         CheckConstraint(
