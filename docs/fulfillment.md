@@ -26,7 +26,7 @@ Any order, unpaid online ones included. Beyond the customer's view it carries `c
 
 ### `PATCH /api/v1/admin/orders/{order_id}`
 
-Body `{ "admin_note": "..." | null }` (≤ 5000 chars); blank or `null` clears it, any other field is `422`. Answers `AdminOrderDetail`. Audited as `order.admin_note_updated` with `has_note` only, never the text. No customer response ever has the note. 120 per administrator per hour.
+Body `{ "admin_note": "..." | null }` (≤ 5000 chars); blank or `null` clears it, any other field is `422`. Answers `AdminOrderDetail`. Audited as `order.admin_note_updated` with `has_note` only, never the text. No customer response ever has the note. 120 per administrator per hour. **Do not put customer contact details (name, phone, address, email) in the note:** account deletion strips them from the order but keeps the note as written (ADR-047 d2).
 
 ### `POST /api/v1/admin/orders/{order_id}/items/{item_id}/transition`
 

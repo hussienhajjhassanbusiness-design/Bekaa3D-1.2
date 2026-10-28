@@ -74,6 +74,14 @@ class MfaSetupRequest(BaseModel):
     current_password: PlainStr = Field(max_length=256)
 
 
+class AccountDeletionRequest(BaseModel):
+    """`DELETE /me`: the current password is the fresh-auth check (VS-045)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    current_password: PlainStr = Field(max_length=256)
+
+
 class MfaSetupConfirmRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -237,7 +245,7 @@ class AdminUserDetail(BaseModel):
     """
 
     id: UUID
-    email: EmailStr
+    email: str  # not EmailStr: an anonymised account's `@invalid` address fails it (VS-045)
     role: UserRole
     is_active: bool
     email_verified_at: datetime | None

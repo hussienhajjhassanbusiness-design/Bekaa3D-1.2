@@ -12,6 +12,7 @@ from app.ordering.application.ports import (
     CartStore,
     CashChecks,
     CheckoutAddresses,
+    CustomerAccounts,
     OrderNotices,
     OrderStore,
     PaymentAttemptRef,
@@ -41,6 +42,7 @@ from app.ordering.domain.enums import (
 from app.ordering.domain.exceptions import (
     CartEmptyError,
     CartPriceChangedError,
+    CustomerAccountClosedError,
     InvalidFulfillmentError,
     OnlinePaymentUnavailableError,
     OrdersPausedError,
@@ -85,6 +87,7 @@ async def place_order(
     orders: OrderStore,
     attempts: PaymentAttempts,
     addresses: CheckoutAddresses,
+    accounts: CustomerAccounts,
     cash: CashChecks,
     notices: OrderNotices,
     settings: SettingsSource,
@@ -104,6 +107,8 @@ async def place_order(
     if online and not configured:
         raise OnlinePaymentUnavailableError("No online payment provider is configured.")
     locked = await lock_cart_for_checkout(carts, user_id=customer.id)
+    if not await accounts.is_live(customer.id):  # deletion holds the cart lock (ADR-047)
+        raise CustomerAccountClosedError()
     if locked is None or not locked.lines:
         raise CartEmptyError()
     found = await products.get_many([line.product_id for line in locked.lines])

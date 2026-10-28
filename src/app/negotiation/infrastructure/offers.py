@@ -15,7 +15,12 @@ from app.negotiation.application.ports import (
     QueuedOffer,
     QueueKey,
 )
-from app.negotiation.domain.enums import AWAITING_STATUSES, LIVE_STATUSES, OfferStatus
+from app.negotiation.domain.enums import (
+    AWAITING_STATUSES,
+    LIVE_STATUSES,
+    OfferActor,
+    OfferStatus,
+)
 from app.negotiation.domain.exceptions import OfferAlreadyActiveError
 from app.negotiation.domain.offers import NewOffer, NewRound, Offer, OfferRound
 from app.negotiation.infrastructure.models import OfferModel, OfferRoundModel
@@ -261,6 +266,31 @@ class SqlOfferStore:
         await self._session.execute(
             select(func.pg_advisory_xact_lock(func.hashtextextended(key, 0)))
         )
+
+    async def blank_customer_messages(self, user_id: UUID) -> int:
+        """VS-045: what the customer wrote on any of their offers; amounts and order stay."""
+        stmt = (
+            update(_R)
+            .where(
+                _R.actor == OfferActor.CUSTOMER,
+                _R.message.is_not(None),
+                _R.offer_id.in_(select(_O.id).where(_O.user_id == user_id)),
+            )
+            .values(message=None)
+            .returning(_R.id)
+            .execution_options(synchronize_session=False)
+        )
+        return len((await self._session.execute(stmt)).all())
+
+    async def lock_live_for_user(self, user_id: UUID) -> list[Offer]:
+        """VS-045: every live offer of the user, by id."""
+        stmt = (
+            select(*_OFFER_COLUMNS)
+            .where(_O.user_id == user_id, _O.status.in_(LIVE_STATUSES))
+            .order_by(_O.id)
+            .with_for_update()
+        )
+        return [_offer(row) for row in (await self._session.execute(stmt)).all()]
 
     async def lock_live(self, user_id: UUID, product_id: UUID) -> list[Offer]:
         stmt = (

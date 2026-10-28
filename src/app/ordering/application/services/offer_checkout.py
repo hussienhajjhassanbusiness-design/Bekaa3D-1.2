@@ -15,6 +15,7 @@ from app.catalog.application.ports import (
 )
 from app.ordering.application.ports import (
     AcceptedOffer,
+    CustomerAccounts,
     OfferCheckouts,
     OrderStore,
     PaymentAttempts,
@@ -26,6 +27,7 @@ from app.ordering.domain.checkout_rules import DIGITAL_TERMS_VERSION, choose_pro
 from app.ordering.domain.enums import OrderItemStatus, OrderSource, PaymentMethod
 from app.ordering.domain.exceptions import (
     CheckoutLinesRefusedError,
+    CustomerAccountClosedError,
     LineRefusal,
     OfferChangedError,
     OnlinePaymentUnavailableError,
@@ -46,6 +48,7 @@ class OfferCheckoutCommand:
 async def place_offer_order(
     *,
     offers: OfferCheckouts,
+    accounts: CustomerAccounts,
     products: CartProductReader,
     orders: OrderStore,
     attempts: PaymentAttempts,
@@ -111,6 +114,8 @@ async def place_offer_order(
     # The decision: a closing window or a racing job refuses here and rolls it all back.
     if await offers.lock(offer.id, customer.id, clock=clock) != offer:
         raise OfferChangedError(str(offer.id))  # immutable once accepted (BR-085)
+    if not await accounts.is_live(customer.id):  # deletion withdraws under this lock
+        raise CustomerAccountClosedError()
     await orders.add_history(
         [StatusChange(order.id, None, status.value, actor_user_id=customer.id)]
     )

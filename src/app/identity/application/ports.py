@@ -8,6 +8,7 @@ structurally. The routers (composition) pass the concrete classes in.
 """
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 from uuid import UUID
@@ -53,6 +54,10 @@ class UserStore(Protocol):
 
     async def active_administrator_contacts(self) -> list[tuple[UUID, str]]: ...
 
+    async def can_authenticate(self, user_id: UUID) -> bool: ...
+
+    async def lock_for_anonymisation(self, user_id: UUID) -> User | None: ...
+
     async def get_by_id_for_update(self, user_id: UUID) -> User | None: ...
 
     async def add(self, *, email: str, password_hash: str) -> User: ...
@@ -60,6 +65,8 @@ class UserStore(Protocol):
     async def add_if_absent(self, *, email: str, password_hash: str) -> User | None: ...
 
     async def save(self, user: User) -> None: ...
+
+    async def save_anonymised(self, user: User) -> None: ...
 
     async def purge_never_verified_before(self, cutoff: datetime) -> int: ...
 
@@ -105,6 +112,8 @@ class VerificationTokenStore(Protocol):
     async def delete_expired_batch(self, *, cutoff: datetime, limit: int) -> int: ...
 
     async def save(self, token: VerificationToken) -> None: ...
+
+    async def consume_outstanding_for_user(self, *, user_id: UUID, at: datetime) -> int: ...
 
 
 class MfaCredentialStore(Protocol):
@@ -162,7 +171,7 @@ class PasswordResetTokenStore(Protocol):
 class AddressStore(Protocol):
     """Implemented by `app.identity.infrastructure.addresses.SqlAddressRepository`."""
 
-    async def lock_address_book(self, user_id: UUID) -> None: ...
+    async def lock_address_book(self, user_id: UUID) -> bool: ...
 
     async def list_live(self, user_id: UUID) -> list[Address]: ...
 
@@ -179,3 +188,35 @@ class AddressStore(Protocol):
     ) -> Address: ...
 
     async def soft_delete(self, address_id: UUID, *, user_id: UUID) -> None: ...
+
+    async def anonymise_all(self, user_id: UUID, *, at: datetime) -> int: ...
+
+
+@dataclass(frozen=True)
+class ErasureCounts:
+    """What the other contexts changed: counts only, the deletion's audit payload."""
+
+    orders: int
+    offers_withdrawn: int
+    offer_messages: int
+    wishlist_items: int
+    contact_messages: int
+    outbox_rows: int
+    idempotency_records: int
+
+
+class AccountErasure(Protocol):
+    """VS-045: the other contexts' share of an account deletion, in ADR-047's lock order.
+    Implemented by `app.identity.infrastructure.account_erasure.SqlAccountErasure`."""
+
+    async def lock_orders(self, user_id: UUID) -> None: ...
+
+    async def lock_cart(self, user_id: UUID) -> None: ...
+
+    async def lock_live_offers(self, user_id: UUID) -> None: ...
+
+    async def open_order_exists(self, user_id: UUID) -> bool: ...
+
+    async def unsettled_refund_exists(self, user_id: UUID) -> bool: ...
+
+    async def erase(self, user_id: UUID, *, email: str, at: datetime) -> ErasureCounts: ...

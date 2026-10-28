@@ -14,6 +14,20 @@ MUTABLE = {
     "admin_note",
     "customer_cancelled_at",  # VS-031: an event, not a snapshot
 }
+# VS-045 (ADR-047): the one module that rewrites snapshots, and only by stripping them.
+ERASURE_MODULE = "ordering/infrastructure/erasure.py"
+ERASED = {
+    "customer_email_snapshot",
+    "recipient_name",
+    "contact_phone_snapshot",
+    "city",
+    "area",
+    "street",
+    "landmark_notes",
+    "customer_note",
+    "anonymized_at",
+    "updated_at",
+}
 RAW_UPDATE = re.compile(
     r"\bUPDATE\s+orders\s+SET\s+(.*?)(?:\bWHERE\b|$)", re.IGNORECASE | re.DOTALL
 )
@@ -79,8 +93,10 @@ def _updated_columns() -> dict[str, set[str]]:
 def test_orm_updates_of_orders_write_only_the_mutable_columns() -> None:
     found = _updated_columns()
     assert found, "the scan found no writer of orders: it is broken"
+    assert found.get(ERASURE_MODULE) == ERASED, "the erasure writes exactly the erased set"
     for module, columns in found.items():
-        assert columns <= MUTABLE, f"{module} updates snapshot columns: {columns - MUTABLE}"
+        allowed = ERASED if module == ERASURE_MODULE else MUTABLE
+        assert columns <= allowed, f"{module} updates snapshot columns: {columns - allowed}"
 
 
 def test_raw_updates_of_orders_write_only_the_mutable_columns() -> None:

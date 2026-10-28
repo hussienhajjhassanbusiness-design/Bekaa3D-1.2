@@ -40,6 +40,7 @@ from app.ordering.domain.exceptions import (
     OrderingDomainError,
     PaymentAlreadyActiveError,
 )
+from app.ordering.infrastructure.checkout_addresses import SqlCustomerAccounts
 from app.ordering.infrastructure.orders import SqlOrderStore
 from app.payments.public import (
     ProviderUnavailableError,
@@ -168,6 +169,7 @@ async def checkout_offer(
             try:
                 placed = await place_offer_order(
                     offers=SqlOfferCheckouts(session),
+                    accounts=SqlCustomerAccounts(session),
                     products=await cart_product_reader(session),
                     orders=SqlOrderStore(session),
                     attempts=payment_attempts(session, providers),

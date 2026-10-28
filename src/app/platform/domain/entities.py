@@ -77,6 +77,19 @@ class EmailOutboxMessage:
             self.status = OutboxStatus.PENDING
             self.send_after = next_attempt_at
 
+    def abandon(self, reason: str, *, at: datetime) -> None:
+        """Never sent: the recipient no longer exists (VS-045). Terminal, so redacted."""
+        self.status = OutboxStatus.FAILED
+        self.last_error = reason
+        self.updated_at = at
+        self._redact_payload()
+
+
+def is_undeliverable(recipient_email: str) -> bool:
+    """RFC 6761 `.invalid`: an anonymised account's address (VS-045); never worth a send."""
+    domain = recipient_email.rpartition("@")[2].lower()
+    return domain == "invalid" or domain.endswith(".invalid")
+
 
 @dataclass
 class AuditLogEntry:

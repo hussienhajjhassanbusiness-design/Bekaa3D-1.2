@@ -80,7 +80,7 @@ async def test_an_admin_cancel_of_a_paid_line_refunds_its_whole_balance(
     assert audit.after_data["lines"] == [
         {"order_item_id": str(order.line_ids[0]), "from_status": state, "cancel_reason": None}
     ]
-    assert audit.after_data["note"] == "Printer failure"
+    assert audit.after_data["has_note"] is True and "note" not in audit.after_data
     line = order.line_ids[0]
     assert await cancel_history(db_engine, order.order_id) == {
         (line, state, admin.id, "Printer failure")

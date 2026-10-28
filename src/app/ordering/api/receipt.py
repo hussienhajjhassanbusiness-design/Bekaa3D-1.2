@@ -15,11 +15,22 @@ from app.core.exceptions import ApiError
 from app.core.rate_limit import enforce_rate_limit
 from app.core.security import hash_ip
 from app.engagement.public import PROBLEM_REPORT_MESSAGE_MAX
-from app.identity.public import User, current_verified_user, not_found_error, require_csrf
+from app.identity.public import (
+    User,
+    current_verified_user,
+    not_found_error,
+    require_csrf,
+    unauthenticated_error,
+)
 from app.ordering.api.order_schemas import OrderDetailRead
 from app.ordering.api.orders import order_detail_read
 from app.ordering.application.services.receipt import confirm_receipt, report_problem
-from app.ordering.domain.exceptions import NoDeliveredLineError, ReceiptOrderNotFoundError
+from app.ordering.domain.exceptions import (
+    CustomerAccountClosedError,
+    NoDeliveredLineError,
+    ReceiptOrderNotFoundError,
+)
+from app.ordering.infrastructure.checkout_addresses import SqlCustomerAccounts
 from app.ordering.infrastructure.orders import SqlOrderStore
 from app.ordering.infrastructure.problem_reports import EngagementProblemReportInbox
 from app.platform.public import SqlAuditWriter
@@ -143,6 +154,7 @@ async def report_my_problem(
         await report_problem(
             SqlOrderStore(session),
             EngagementProblemReportInbox(session),
+            SqlCustomerAccounts(session),
             SqlAuditWriter(session),
             user_id=user.id,
             email=user.email,
@@ -156,4 +168,6 @@ async def report_my_problem(
         raise not_found_error() from exc
     except NoDeliveredLineError as exc:
         raise _no_delivered_line() from exc
+    except CustomerAccountClosedError as exc:
+        raise unauthenticated_error() from exc
     return await order_detail_read(session, user_id=user.id, order_id=order_id)

@@ -38,3 +38,12 @@ async def remove_from_wishlist(
     if changed:
         await counter.adjust(product_id, -1)
     return changed
+
+
+async def erase_wishlist(store: WishlistStore, counter: WishlistCounter, *, user_id: UUID) -> int:
+    """VS-045: every counter moves down once, products in id order so two deletions never
+    deadlock on them."""
+    product_ids = sorted(await store.remove_all(user_id), key=lambda p: p.bytes)
+    for product_id in product_ids:
+        await counter.adjust(product_id, -1)
+    return len(product_ids)

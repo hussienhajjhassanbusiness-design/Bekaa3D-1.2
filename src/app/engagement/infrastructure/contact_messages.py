@@ -7,7 +7,13 @@ from sqlalchemy import DateTime, func, literal, select, tuple_, update
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.engagement.domain.contact_message import ContactDetails, ContactMessage, ProblemReport
+from app.engagement.domain.contact_message import (
+    ANONYMISED_MESSAGE,
+    ANONYMISED_NAME,
+    ContactDetails,
+    ContactMessage,
+    ProblemReport,
+)
 from app.engagement.domain.enums import ContactMessageStatus
 from app.engagement.infrastructure.models import ContactMessageModel
 
@@ -25,6 +31,24 @@ _COLUMNS = (
     _M.user_id,
     _M.order_id,
 )
+
+
+async def anonymise_contact_messages(session: AsyncSession, user_id: UUID, *, email: str) -> int:
+    """VS-045: the account's messages keep subject, order link, status and times (ADR-047)."""
+    stmt = (
+        update(_M)
+        .where(_M.user_id == user_id)
+        .values(
+            name=ANONYMISED_NAME,
+            email=email,
+            phone=None,
+            message=ANONYMISED_MESSAGE,
+            updated_at=func.now(),
+        )
+        .returning(_M.id)
+        .execution_options(synchronize_session=False)
+    )
+    return len((await session.execute(stmt)).all())
 
 
 def _to_domain(row: Any) -> ContactMessage:

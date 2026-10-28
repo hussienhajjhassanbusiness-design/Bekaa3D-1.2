@@ -85,6 +85,12 @@ from app.ordering.infrastructure.carts import SqlCartStore
 from app.ordering.infrastructure.cash import SqlCashBlockStore
 from app.ordering.infrastructure.cash import lock_cash_phone as _lock_cash_phone
 from app.ordering.infrastructure.data_export import ExportOrderRow, orders_for_export
+from app.ordering.infrastructure.erasure import (
+    erase_orders,
+    lock_cart_for_erasure,
+    lock_orders_for_erasure,
+    open_order_exists,
+)
 from app.ordering.infrastructure.orders import SqlOrderStore
 from app.ordering.infrastructure.reports import (
     ReportLineRow,
@@ -150,17 +156,21 @@ __all__ = [
     "check_cash_handover",
     "customer_cancels",
     "derive_order_status",
+    "erase_orders",
     "hand_over_cash_lines",
     "hold_deadline",
     "line_cancel",
     "line_context",
     "lock_cart_for_cash_block",
+    "lock_cart_for_erasure",
     "lock_cash_phone",
     "lock_order_for_change",
+    "lock_orders_for_erasure",
     "manual_release_available_at",
     "manual_release_refusal",
     "mark_order_paid",
     "mark_stl_line_delivered",
+    "open_order_exists",
     "order_facts",
     "order_ids_for_user",
     "order_lines",

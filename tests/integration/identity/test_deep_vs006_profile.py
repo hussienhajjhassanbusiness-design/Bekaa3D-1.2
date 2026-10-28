@@ -103,7 +103,7 @@ async def test_query_parameters_cannot_select_someone_else(db_session: AsyncSess
 
 @pytest.mark.integration
 @pytest.mark.usefixtures("configured_app")
-@pytest.mark.parametrize("method", ["PUT", "PATCH", "POST", "DELETE"])
+@pytest.mark.parametrize("method", ["PUT", "PATCH", "POST"])
 async def test_the_profile_has_no_write_path_whatever_the_body(
     method: str, db_session: AsyncSession
 ) -> None:
@@ -118,3 +118,23 @@ async def test_the_profile_has_no_write_path_whatever_the_body(
     db_session.expire_all()
     row = await db_session.get(UserModel, uid)
     assert row is not None and row.role is UserRole.CUSTOMER
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("configured_app")
+async def test_delete_takes_only_the_current_password(db_session: AsyncSession) -> None:
+    """VS-045 added `DELETE /me`; a hijack body is a 422 and changes nothing."""
+    user = await create_user(db_session)
+    uid = user.id
+    with client_for(main_app) as client:
+        login(client, user.email)
+        response = client.request(
+            "DELETE",
+            ME,
+            json={"role": "admin", "email": "hijack@example.com"},
+            headers=csrf(client),
+        )
+    assert_problem(response, 422, "VALIDATION_ERROR")
+    db_session.expire_all()
+    row = await db_session.get(UserModel, uid)
+    assert row is not None and row.role is UserRole.CUSTOMER and row.anonymized_at is None

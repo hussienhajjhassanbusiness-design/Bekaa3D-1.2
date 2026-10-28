@@ -87,7 +87,7 @@ async def test_a_paid_physical_order_is_cancelled_and_refunded_in_full(
     [audit] = await cancel_audits(db_engine, order.order_id)
     assert audit.actor_user_id == buyer.id
     assert (audit.after_data["by"], audit.after_data["refund_cents"]) == ("customer", 2000)
-    assert audit.after_data["note"] == "Changed my mind"
+    assert audit.after_data["has_note"] is True and "note" not in audit.after_data
     assert await cancel_history(db_engine, order.order_id) == {
         (line, "pending", buyer.id, "Changed my mind") for line in order.line_ids
     }

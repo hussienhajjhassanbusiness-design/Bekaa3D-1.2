@@ -29,6 +29,22 @@
         "title": "AcceptedPriceIn",
         "type": "object"
       },
+      "AccountDeletionRequest": {
+        "additionalProperties": false,
+        "description": "`DELETE /me`: the current password is the fresh-auth check (VS-045).",
+        "properties": {
+          "current_password": {
+            "maxLength": 256,
+            "title": "Current Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "current_password"
+        ],
+        "title": "AccountDeletionRequest",
+        "type": "object"
+      },
       "AddressCreate": {
         "additionalProperties": false,
         "description": "api-endpoints.md 29.3; `landmark_notes` is required (SRS 14.4, VS-026 Q1).",
@@ -2964,7 +2980,6 @@
             "type": "string"
           },
           "email": {
-            "format": "email",
             "title": "Email",
             "type": "string"
           },
@@ -24533,6 +24548,115 @@
       }
     },
     "/api/v1/me": {
+      "delete": {
+        "description": "All or nothing in the request's transaction (BR-125, BR-126, ADR-047); the cookies go.",
+        "operationId": "delete_my_account_api_v1_me_delete",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountDeletionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "MALFORMED_REQUEST: the body is not valid JSON."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "AUTH_REQUIRED, or INVALID_CREDENTIALS: wrong current password."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "CSRF_INVALID, or EMAIL_VERIFICATION_REQUIRED."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "ACCOUNT_DELETION_BLOCKED; `reason` is open_order, unsettled_refund or administrator."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "RATE_LIMITED: five attempts an hour per user."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the database or Redis is unreachable; retry later."
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Delete the caller's account by anonymising it",
+        "tags": [
+          "account"
+        ]
+      },
       "get": {
         "description": "Ownership needs no check here: the subject is taken from the signed\naccess token, so there is no identifier a caller could substitute for\nsomeone else's. V1 exposes no mutable profile field, so there is\ndeliberately no counterpart write endpoint (api-endpoints.md 9.1).",
         "operationId": "read_profile_api_v1_me_get",

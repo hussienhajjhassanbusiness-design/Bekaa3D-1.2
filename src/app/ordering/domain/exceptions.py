@@ -9,6 +9,10 @@ class OrderingDomainError(Exception):
     """Base for ordering-context domain errors; routers map them to stable codes."""
 
 
+class CustomerAccountClosedError(OrderingDomainError):
+    """401 AUTH_REQUIRED: the account was deleted while this checkout waited (VS-045)."""
+
+
 class ProductNotPurchasableError(OrderingDomainError):
     """The product cannot go in a cart now (422 PRODUCT_NOT_PURCHASABLE)."""
 

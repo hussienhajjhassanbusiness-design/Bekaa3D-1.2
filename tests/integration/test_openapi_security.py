@@ -242,3 +242,22 @@ def test_the_vs044_export_declares_session_its_errors_and_the_body_schema() -> N
         "format_version", "exported_at", "profile", "addresses", "orders", "reviews", "offers",
         "contact_messages",
     }  # fmt: skip
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("configured_app")
+def test_the_vs045_deletion_declares_session_csrf_its_errors_and_the_body() -> None:
+    from app.main import app
+
+    with TestClient(app) as client:
+        schema = client.get(SCHEMA_PATH).json()
+    operations = schema["paths"]["/api/v1/me"]
+    assert set(operations) == {"get", "delete"}
+    operation = operations["delete"]
+    assert operation["security"] == [{"sessionCookie": [], "csrfToken": []}]
+    assert {"204", "401", "403", "409", "429"} <= set(operation["responses"])
+    assert "ACCOUNT_DELETION_BLOCKED" in operation["responses"]["409"]["description"]
+    body = operation["requestBody"]["content"]["application/json"]["schema"]
+    assert body == {"$ref": "#/components/schemas/AccountDeletionRequest"}
+    fields = schema["components"]["schemas"]["AccountDeletionRequest"]["properties"]
+    assert set(fields) == {"current_password"}

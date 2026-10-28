@@ -289,15 +289,17 @@ class AddressModel(Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     label: Mapped[str] = mapped_column(Text, nullable=False)
-    recipient_name: Mapped[str] = mapped_column(Text, nullable=False)
-    phone: Mapped[str] = mapped_column(Text, nullable=False)
+    # Nullable only once anonymised (VS-045): `ck_addresses_required_unless_anonymised`.
+    recipient_name: Mapped[str | None] = mapped_column(Text)
+    phone: Mapped[str | None] = mapped_column(Text)
     governorate: Mapped[str] = mapped_column(Text, nullable=False)
-    city: Mapped[str] = mapped_column(Text, nullable=False)
+    city: Mapped[str | None] = mapped_column(Text)
     area: Mapped[str | None] = mapped_column(Text)
     street: Mapped[str | None] = mapped_column(Text)
-    landmark_notes: Mapped[str] = mapped_column(Text, nullable=False)
+    landmark_notes: Mapped[str | None] = mapped_column(Text)
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    anonymized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -324,4 +326,15 @@ class AddressModel(Base):
         _required_text("landmark_notes", LANDMARK_NOTES_MAX),
         _optional_text("area", AREA_MAX),
         _optional_text("street", STREET_MAX),
+        CheckConstraint(
+            "anonymized_at IS NOT NULL OR (recipient_name IS NOT NULL AND phone IS NOT NULL "
+            "AND city IS NOT NULL AND landmark_notes IS NOT NULL)",
+            name="ck_addresses_required_unless_anonymised",
+        ),
+        CheckConstraint(
+            "anonymized_at IS NULL OR (deleted_at IS NOT NULL AND recipient_name IS NULL "
+            "AND phone IS NULL AND city IS NULL AND area IS NULL AND street IS NULL "
+            "AND landmark_notes IS NULL)",
+            name="ck_addresses_anonymised_shape",
+        ),
     )

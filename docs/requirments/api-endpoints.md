@@ -339,7 +339,7 @@ There is no normal “disable MFA” endpoint in V1 because the SRS treats admin
 |---|---|---|---|---|---|---|
 | `GET /api/v1/me` | Authenticated | — | `200 UserProfileRead` | 401 | — | Read allowed while unverified; no V1 mutable profile field exists, so there is no corresponding write endpoint |
 | `GET /api/v1/me/export` | Verified Customer; CSRF header required (ADR-046 d11) | — | `200 DataExportRead` (streamed `attachment`, `Cache-Control: no-store`) | 401, 403 `CSRF_INVALID` / `EMAIL_VERIFICATION_REQUIRED`, 429, 503 | — | The profile and six data sets: addresses, orders (payment method, payment, refunds, STL delivery records), reviews, offers with rounds, contact messages; soft-deleted addresses and reviews marked `deleted`. One read-only snapshot; 3 a day per user; audited `user.data_exported` before the first byte (ADR-046) |
-| `DELETE /api/v1/me` | Verified Customer; fresh-auth requirement | `AccountDeletionRequest` | `204` | 401, 403, 409 `ACCOUNT_DELETION_BLOCKED`, 429 | — | Anonymises; blocked by open orders/unsettled refunds; disables login |
+| `DELETE /api/v1/me` | Verified Customer; CSRF; the current password is the fresh-auth check | `AccountDeletionRequest` | `204`, auth cookies cleared | 401 `AUTH_REQUIRED` / `INVALID_CREDENTIALS`, 403 `CSRF_INVALID` / `EMAIL_VERIFICATION_REQUIRED`, 409 `ACCOUNT_DELETION_BLOCKED` (`reason`: `open_order`, `unsettled_refund`, `administrator`), 429 (5 an hour per user) | — | One transaction: the email becomes `deleted+<id>@invalid`, login and sessions end, orders and addresses lose every personal field, the wishlist is soft-deleted, live offers withdrawn, contact messages and outbox rows anonymised; orders, payments, refunds and STL delivery records kept; audited `user.anonymized` with counts only (ADR-047) |
 
 `ACCOUNT_DELETION_BLOCKED` is an additional stable V1 code.
 
@@ -780,11 +780,10 @@ new_password: str
 ### `AccountDeletionRequest`
 
 ```text
-current_password: str
-confirmation: literal confirmation value
+current_password: str   # at most 256; any other field is 422
 ```
 
-Fresh authentication may also be enforced by session age.
+The password is the fresh-auth check; there is no `confirmation` field (ADR-047 d1).
 
 ---
 

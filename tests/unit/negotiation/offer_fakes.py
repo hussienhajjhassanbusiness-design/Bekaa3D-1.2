@@ -118,6 +118,13 @@ class FakeStore:
     async def lock_acquisition(self, user_id: UUID, product_id: UUID) -> None:
         self.acquisition_locks.append((user_id, product_id))
 
+    async def blank_customer_messages(self, user_id: UUID) -> int:
+        raise NotImplementedError
+
+    async def lock_live_for_user(self, user_id: UUID) -> list[Offer]:
+        live = (o for o in self.offers.values() if o.status in LIVE_STATUSES)
+        return sorted((o for o in live if o.user_id == user_id), key=lambda o: o.id)
+
     async def lock_live(self, user_id: UUID, product_id: UUID) -> list[Offer]:
         live = (o for o in self.offers.values() if o.status in LIVE_STATUSES)
         return sorted(

@@ -13,7 +13,7 @@ from app.identity.domain.address import (
     becomes_default,
     check_capacity,
 )
-from app.identity.domain.exceptions import AddressNotFoundError
+from app.identity.domain.exceptions import AccountDisabledError, AddressNotFoundError
 
 
 class _AddressCommand:
@@ -32,7 +32,8 @@ class CreateAddress(_AddressCommand):
     async def execute(
         self, *, user_id: UUID, details: AddressDetails, make_default: bool
     ) -> Address:
-        await self._addresses.lock_address_book(user_id)
+        if not await self._addresses.lock_address_book(user_id):  # deleted meanwhile (VS-045)
+            raise AccountDisabledError(user_id)
         live_count = await self._addresses.count_live(user_id)
         check_capacity(live_count)
         is_default = becomes_default(requested=make_default, live_count=live_count)

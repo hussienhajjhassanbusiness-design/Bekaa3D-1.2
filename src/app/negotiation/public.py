@@ -11,6 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.catalog.public import cart_product_reader
 from app.negotiation.application.ports import PaymentInFlight
+from app.negotiation.application.services.erase_offers import (
+    blank_customer_messages,
+    lock_live_offers,
+    withdraw_live_offers,
+)
 from app.negotiation.application.services.expire_offers import (
     expire_checkout_offer,
     expire_offer,
@@ -42,10 +47,13 @@ __all__ = [
     "PaymentInFlight",
     "SqlOfferCheckouts",
     "StlPurchase",
+    "blank_offer_messages_for_erasure",
     "expire_overdue_offers",
     "live_offer_counts",
+    "lock_live_offers_for_erasure",
     "offers_for_export",
     "settle_offers_on_stl_purchase",
+    "withdraw_offers_for_erasure",
 ]
 
 logger = structlog.get_logger()
@@ -184,3 +192,16 @@ async def _each(
         except Exception:
             await logger.aexception("expire_offers_step_failed", offer_id=str(offer_id))
     return done
+
+
+async def lock_live_offers_for_erasure(session: AsyncSession, user_id: UUID) -> None:
+    """VS-045: after the orders and cart locks, before the user row (ADR-047)."""
+    await lock_live_offers(SqlOfferStore(session), user_id)
+
+
+async def blank_offer_messages_for_erasure(session: AsyncSession, user_id: UUID) -> int:
+    return await blank_customer_messages(SqlOfferStore(session), user_id)
+
+
+async def withdraw_offers_for_erasure(session: AsyncSession, user_id: UUID, *, at: datetime) -> int:
+    return await withdraw_live_offers(SqlOfferStore(session), user_id, now=at)

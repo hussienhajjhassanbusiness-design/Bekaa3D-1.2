@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -67,11 +68,15 @@ class SqlAddressRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def lock_address_book(self, user_id: UUID) -> None:
-        """NO KEY UPDATE on the owner's row: serialises this user's address writes, while
-        the KEY SHARE an address INSERT's foreign key takes stays compatible."""
-        stmt = select(UserModel.id).where(UserModel.id == user_id).with_for_update(key_share=True)
-        await self._session.execute(stmt)
+    async def lock_address_book(self, user_id: UUID) -> bool:
+        """NO KEY UPDATE on the owner's row (KEY SHARE stays compatible). False once the owner
+        is anonymised: after a wait, Postgres re-checks the WHERE on the committed row."""
+        stmt = (
+            select(UserModel.id)
+            .where(UserModel.id == user_id, UserModel.anonymized_at.is_(None))
+            .with_for_update(key_share=True)
+        )
+        return await self._session.scalar(stmt) is not None
 
     async def list_live(self, user_id: UUID) -> list[Address]:
         """Default first, then newest; bounded by the cap, so not paginated."""
@@ -134,6 +139,28 @@ class SqlAddressRepository:
             .execution_options(synchronize_session=False)
         )
         return _to_domain((await self._session.execute(stmt)).one())
+
+    async def anonymise_all(self, user_id: UUID, *, at: datetime) -> int:
+        """VS-045: every row, deleted ones too, loses its personal fields and is deleted."""
+        stmt = (
+            update(_A)
+            .where(_A.user_id == user_id, _A.anonymized_at.is_(None))
+            .values(
+                recipient_name=None,
+                phone=None,
+                city=None,
+                area=None,
+                street=None,
+                landmark_notes=None,
+                is_default=False,
+                deleted_at=func.coalesce(_A.deleted_at, at),
+                anonymized_at=at,
+                updated_at=at,
+            )
+            .returning(_A.id)
+            .execution_options(synchronize_session=False)
+        )
+        return len((await self._session.execute(stmt)).all())
 
     async def soft_delete(self, address_id: UUID, *, user_id: UUID) -> None:
         stmt = (
