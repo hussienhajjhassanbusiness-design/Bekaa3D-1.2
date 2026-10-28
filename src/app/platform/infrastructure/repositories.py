@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import delete, select, text, tuple_
+from sqlalchemy import delete, select, text, tuple_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.platform.domain.entities import AuditLogEntry, EmailOutboxMessage, IpHashSalt, Setting
@@ -85,6 +85,25 @@ class EmailOutboxRepository:
         model.last_error = message.last_error
         model.sent_at = message.sent_at
         await self._session.flush()
+
+    async def anonymise_for_user(self, user_id: UUID, *, email: str, at: datetime) -> int:
+        """VS-045: pending rows are abandoned, not sent, then every row gets the new address.
+        Waits on a row a worker holds: one already being sent cannot be recalled."""
+        pending = select(EmailOutboxModel).where(
+            EmailOutboxModel.user_id == user_id, EmailOutboxModel.status == OutboxStatus.PENDING
+        )
+        for model in (await self._session.scalars(pending.with_for_update())).all():
+            message = _outbox_to_domain(model)
+            message.abandon("account_deleted", at=at)
+            await self.save(message)
+        stmt = (
+            update(EmailOutboxModel)
+            .where(EmailOutboxModel.user_id == user_id)
+            .values(recipient_email=email)
+            .returning(EmailOutboxModel.id)
+            .execution_options(synchronize_session=False)
+        )
+        return len((await self._session.execute(stmt)).all())
 
 
 def _audit_to_domain(model: AuditLogModel) -> AuditLogEntry:

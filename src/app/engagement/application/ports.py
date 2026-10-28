@@ -143,6 +143,10 @@ class WishlistStore(Protocol):
         """True if an active row was soft-deleted; False if there was none."""
         ...
 
+    async def remove_all(self, user_id: UUID) -> list[UUID]:
+        """Soft-deletes every active row of the user; the product ids they were for."""
+        ...
+
     async def list_page(
         self, *, user_id: UUID, after: tuple[datetime, UUID] | None, limit: int
     ) -> list[WishlistItem]: ...

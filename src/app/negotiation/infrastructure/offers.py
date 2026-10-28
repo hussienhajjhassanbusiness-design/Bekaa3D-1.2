@@ -262,6 +262,16 @@ class SqlOfferStore:
             select(func.pg_advisory_xact_lock(func.hashtextextended(key, 0)))
         )
 
+    async def lock_live_for_user(self, user_id: UUID) -> list[Offer]:
+        """VS-045: every live offer of the user, by id."""
+        stmt = (
+            select(*_OFFER_COLUMNS)
+            .where(_O.user_id == user_id, _O.status.in_(LIVE_STATUSES))
+            .order_by(_O.id)
+            .with_for_update()
+        )
+        return [_offer(row) for row in (await self._session.execute(stmt)).all()]
+
     async def lock_live(self, user_id: UUID, product_id: UUID) -> list[Offer]:
         stmt = (
             select(*_OFFER_COLUMNS)

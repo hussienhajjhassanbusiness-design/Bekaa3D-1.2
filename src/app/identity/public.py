@@ -19,6 +19,7 @@ from app.identity.api.dependencies import (
     not_found_error,
     require_admin,
     require_csrf,
+    unauthenticated_error,
     verified_user_short_read,
 )
 from app.identity.application.token_claims import AccessTokenClaims
@@ -35,6 +36,7 @@ __all__ = [
     "CheckoutAddress",
     "CustomerCountsRow",
     "User",
+    "account_is_live",
     "active_administrator_contacts",
     "active_administrator_ids",
     "addresses_for_export",
@@ -45,9 +47,15 @@ __all__ = [
     "not_found_error",
     "require_admin",
     "require_csrf",
+    "unauthenticated_error",
     "user_emails",
     "verified_user_short_read",
 ]
+
+
+async def account_is_live(session: AsyncSession, user_id: UUID) -> bool:
+    """False once deactivated or anonymised; checkout reads it after its lock (ADR-047)."""
+    return await UserRepository(session).can_authenticate(user_id)
 
 
 async def active_administrator_ids(session: AsyncSession) -> list[UUID]:

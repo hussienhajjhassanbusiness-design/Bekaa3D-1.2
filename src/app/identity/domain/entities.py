@@ -5,6 +5,7 @@ from uuid import UUID
 
 from app.identity.domain.enums import MfaMethod, UserRole
 from app.identity.domain.exceptions import (
+    AccountAlreadyAnonymisedError,
     AlreadyVerifiedError,
     InvalidPasswordResetTokenError,
     InvalidRecoveryCodeError,
@@ -97,6 +98,16 @@ class User:
         self.is_active = is_active
         self.updated_at = at
         return True
+
+    def anonymise(self, *, email: str, password_hash: str, at: datetime) -> None:
+        """VS-045: terminal. The hash is of a discarded secret, so no password matches it."""
+        if self.anonymized_at is not None:
+            raise AccountAlreadyAnonymisedError(self.id)
+        self.email = email
+        self.password_hash = password_hash
+        self.is_active = False
+        self.anonymized_at = at
+        self.invalidate_credentials(at)
 
 
 @dataclass

@@ -14,6 +14,9 @@ EMAIL_MAX = 254
 PHONE_MAX = 32
 SUBJECT_MAX = 200
 MESSAGE_MAX = 5000
+# VS-045 (ADR-047): what an anonymised account's messages keep in place of what they said.
+ANONYMISED_NAME = "Deleted customer"
+ANONYMISED_MESSAGE = "[deleted]"
 
 _ORDER = list(ContactMessageStatus)
 # Free-form but phone-shaped: an optional +, digits and common separators, 6+ digits.

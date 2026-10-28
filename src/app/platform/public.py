@@ -6,6 +6,7 @@ and from nowhere else in Platform (enforced by
 adapters; callers type against the ports.
 """
 
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +26,7 @@ from app.platform.infrastructure.audit_writer import SqlAuditWriter, SqlOutboxWr
 from app.platform.infrastructure.idempotency import SqlIdempotencyStore
 from app.platform.infrastructure.repositories import (
     AuditLogRepository,
+    EmailOutboxRepository,
     SettingRepository,
     SqlIpHashSaltStore,
 )
@@ -41,6 +43,7 @@ __all__ = [
     "SettingsReader",
     "SqlAuditWriter",
     "SqlOutboxWriter",
+    "anonymise_outbox",
     "audit_history",
     "current_ip_hash_salt",
     "idempotency_store",
@@ -77,3 +80,10 @@ async def audit_history(
     return await AuditLogRepository(session).list_page(
         limit=limit, entity_type=entity_type, entity_id=entity_id
     )
+
+
+async def anonymise_outbox(
+    session: AsyncSession, user_id: UUID, *, email: str, at: datetime
+) -> int:
+    """VS-045: the account's outbox rows, for the deletion's transaction."""
+    return await EmailOutboxRepository(session).anonymise_for_user(user_id, email=email, at=at)

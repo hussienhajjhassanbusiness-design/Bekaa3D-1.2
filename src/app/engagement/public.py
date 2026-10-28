@@ -21,6 +21,7 @@ from app.engagement.application.commands.submit_problem_report import SubmitProb
 from app.engagement.application.ports import PurchaseEvidence
 from app.engagement.application.services.notification_writer import write_notification
 from app.engagement.application.services.reviews import recompute_rating
+from app.engagement.application.services.wishlist import erase_wishlist
 from app.engagement.domain.contact_message import MESSAGE_MAX, ProblemReport
 from app.engagement.domain.entities import Notification
 from app.engagement.domain.enums import NotificationType
@@ -29,11 +30,13 @@ from app.engagement.infrastructure.administrators import IdentityAdministratorDi
 from app.engagement.infrastructure.contact_messages import (
     ExportContactMessageRow,
     SqlContactMessageRepository,
+    anonymise_contact_messages,
     contact_messages_for_export,
 )
 from app.engagement.infrastructure.custom_requests import SqlCustomRequestRepository
 from app.engagement.infrastructure.repositories import NotificationRepository
 from app.engagement.infrastructure.reviews import CatalogReviewableProducts, SqlReviewStore
+from app.engagement.infrastructure.wishlist import SqlWishlistCounter, SqlWishlistRepository
 from app.integrations.storage.ports import StoragePort
 
 __all__ = [
@@ -43,8 +46,10 @@ __all__ = [
     "ProblemReport",
     "PurchaseEvidence",
     "ReviewRow",
+    "anonymise_contact_messages",
     "contact_messages_for_export",
     "create_notification",
+    "erase_wishlist_items",
     "lock_review_for_moderation",
     "purge_expired_attachments_batch",
     "recompute_product_rating",
@@ -174,3 +179,10 @@ async def reviews_for_export(session: AsyncSession, user_id: UUID) -> list[Revie
         )
         for row in rows
     ]
+
+
+async def erase_wishlist_items(session: AsyncSession, user_id: UUID) -> int:
+    """VS-045: soft-deletes the user's wishlist and moves each product's counter down."""
+    return await erase_wishlist(
+        SqlWishlistRepository(session), SqlWishlistCounter(session), user_id=user_id
+    )

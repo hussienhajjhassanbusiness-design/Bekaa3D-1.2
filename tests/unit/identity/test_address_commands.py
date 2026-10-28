@@ -13,7 +13,11 @@ from app.identity.application.commands.address_book import (
 )
 from app.identity.application.ports import AddressStore
 from app.identity.domain.address import MAX_LIVE_ADDRESSES, Address, AddressDetails
-from app.identity.domain.exceptions import AddressLimitReachedError, AddressNotFoundError
+from app.identity.domain.exceptions import (
+    AccountDisabledError,
+    AddressLimitReachedError,
+    AddressNotFoundError,
+)
 
 DETAILS = AddressDetails.of(
     label="Home",
@@ -35,6 +39,7 @@ class FakeAddresses:
         self.rows: dict[UUID, Address] = {}
         self.calls: list[str] = []
         self.locked: set[UUID] = set()
+        self.anonymised: set[UUID] = set()
 
     def _live(self, user_id: UUID) -> list[Address]:
         return [a for a in self.rows.values() if a.user_id == user_id and a.deleted_at is None]
@@ -43,9 +48,10 @@ class FakeAddresses:
         self.calls.append(name)
         assert user_id in self.locked, f"{name} before lock_address_book"
 
-    async def lock_address_book(self, user_id: UUID) -> None:
+    async def lock_address_book(self, user_id: UUID) -> bool:
         self.calls.append("lock")
         self.locked.add(user_id)
+        return user_id not in self.anonymised
 
     async def list_live(self, user_id: UUID) -> list[Address]:
         return self._live(user_id)
@@ -83,6 +89,9 @@ class FakeAddresses:
         assert address.user_id == user_id and address.deleted_at is None
         self._guard("soft_delete", user_id)
         self.rows[address_id] = replace(address, is_default=False, deleted_at=NOW)
+
+    async def anonymise_all(self, user_id: UUID, *, at: datetime) -> int:
+        raise NotImplementedError
 
     def defaults(self, user_id: UUID) -> list[UUID]:
         return [a.id for a in self._live(user_id) if a.is_default]
@@ -134,6 +143,15 @@ async def test_create_refused_at_the_cap() -> None:
     with pytest.raises(AddressLimitReachedError):
         await _create(store, user)
     assert len(store.rows) == MAX_LIVE_ADDRESSES
+
+
+async def test_create_for_an_account_deleted_while_waiting_is_refused() -> None:
+    """VS-045: the lock read sees the anonymised owner, so no new personal row is stored."""
+    store, user = _store(), uuid4()
+    store.anonymised.add(user)
+    with pytest.raises(AccountDisabledError):
+        await _create(store, user)
+    assert store.rows == {} and store.calls == ["lock"]
 
 
 async def test_deleted_addresses_do_not_count_toward_the_cap() -> None:

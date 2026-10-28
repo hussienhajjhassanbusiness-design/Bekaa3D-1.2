@@ -11,7 +11,11 @@ import pytest
 
 from app.catalog.domain.enums import ProductType
 from app.catalog.domain.product import Product, ProductAttributes, ProductDraft
-from app.engagement.application.services.wishlist import add_to_wishlist, remove_from_wishlist
+from app.engagement.application.services.wishlist import (
+    add_to_wishlist,
+    erase_wishlist,
+    remove_from_wishlist,
+)
 from app.engagement.domain.entities import WishlistItem
 from app.engagement.domain.exceptions import WishlistProductUnavailableError
 
@@ -70,6 +74,7 @@ class _FakeWishlistStore:
     remove_result: bool = True
     add_calls: list[tuple[UUID, UUID]] = field(default_factory=list)
     remove_calls: list[tuple[UUID, UUID]] = field(default_factory=list)
+    removed_products: list[UUID] = field(default_factory=list)
 
     async def add(self, *, user_id: UUID, product_id: UUID) -> bool:
         self.add_calls.append((user_id, product_id))
@@ -78,6 +83,9 @@ class _FakeWishlistStore:
     async def remove(self, *, user_id: UUID, product_id: UUID) -> bool:
         self.remove_calls.append((user_id, product_id))
         return self.remove_result
+
+    async def remove_all(self, user_id: UUID) -> list[UUID]:
+        return list(self.removed_products)
 
     async def list_page(
         self, *, user_id: UUID, after: tuple[datetime, UUID] | None, limit: int
@@ -183,4 +191,20 @@ async def test_add_of_an_unknown_product_is_rejected() -> None:
             store, _FakeProductStore(None), counter, user_id=uuid4(), product_id=product_id
         )
     assert store.add_calls == []
+    assert counter.calls == []
+
+
+async def test_erase_moves_each_counter_down_once_in_product_id_order() -> None:
+    """VS-045: a fixed order, so two deletions sharing products never deadlock."""
+    ids = [uuid4() for _ in range(5)]
+    store = _FakeWishlistStore(removed_products=ids)
+    counter = _FakeWishlistCounter()
+
+    assert await erase_wishlist(store, counter, user_id=uuid4()) == 5
+    assert counter.calls == [(i, -1) for i in sorted(ids, key=lambda u: u.bytes)]
+
+
+async def test_erase_of_an_empty_wishlist_moves_nothing() -> None:
+    counter = _FakeWishlistCounter()
+    assert await erase_wishlist(_FakeWishlistStore(), counter, user_id=uuid4()) == 0
     assert counter.calls == []

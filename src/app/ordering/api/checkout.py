@@ -36,6 +36,7 @@ from app.ordering.domain.exceptions import (
     CashNotAvailableError,
     CheckoutLinesRefusedError,
     ConsentRequiredError,
+    CustomerAccountClosedError,
     InvalidFulfillmentError,
     OnlinePaymentUnavailableError,
     OrderingDomainError,
@@ -45,7 +46,10 @@ from app.ordering.domain.exceptions import (
 )
 from app.ordering.infrastructure.carts import SqlCartStore
 from app.ordering.infrastructure.cash import SqlCashChecks
-from app.ordering.infrastructure.checkout_addresses import SqlCheckoutAddresses
+from app.ordering.infrastructure.checkout_addresses import (
+    SqlCheckoutAddresses,
+    SqlCustomerAccounts,
+)
 from app.ordering.infrastructure.notices import SqlOrderNotices
 from app.ordering.infrastructure.orders import SqlOrderStore
 from app.payments.public import (
@@ -130,6 +134,13 @@ _CONSENT_MESSAGES = {
 
 def translate_checkout_error(exc: OrderingDomainError) -> ApiError:
     unprocessable = status.HTTP_422_UNPROCESSABLE_ENTITY
+    if isinstance(exc, CustomerAccountClosedError):
+        return ApiError(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            code="AUTH_REQUIRED",
+            title="Authentication required",
+            detail="A valid session is required for this request.",
+        )
     if isinstance(exc, CartEmptyError):
         return ApiError(
             status_code=status.HTTP_409_CONFLICT,
@@ -245,6 +256,7 @@ def translate_checkout_error(exc: OrderingDomainError) -> ApiError:
 
 
 CHECKOUT_ERRORS = (
+    CustomerAccountClosedError,
     CartEmptyError,
     CartPriceChangedError,
     ProductAlreadyOwnedError,
@@ -324,6 +336,7 @@ async def checkout(
                     orders=SqlOrderStore(session),
                     attempts=payment_attempts(session, providers),
                     addresses=SqlCheckoutAddresses(session),
+                    accounts=SqlCustomerAccounts(session),
                     cash=SqlCashChecks(session),
                     notices=SqlOrderNotices(session),
                     settings=settings_reader(session),

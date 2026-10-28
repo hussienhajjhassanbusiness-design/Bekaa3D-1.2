@@ -103,14 +103,67 @@ async def test_the_database_refuses_an_invalid_field(
             await _insert(conn, user_id, **{field: value})
 
 
-@pytest.mark.parametrize(
-    "field", ["label", "recipient_name", "phone", "governorate", "city", "landmark_notes"]
-)
+@pytest.mark.parametrize("field", ["label", "governorate"])
 async def test_required_fields_are_not_null(db_engine: AsyncEngine, field: str) -> None:
     user_id = await _user(db_engine)
     async with db_engine.connect() as conn:
         with pytest.raises(IntegrityError, match="not-null"):
             await _insert(conn, user_id, **{field: None})
+
+
+@pytest.mark.parametrize("field", ["recipient_name", "phone", "city", "landmark_notes"])
+async def test_personal_fields_are_required_until_anonymised(
+    db_engine: AsyncEngine, field: str
+) -> None:
+    user_id = await _user(db_engine)
+    async with db_engine.connect() as conn:
+        with pytest.raises(IntegrityError, match="ck_addresses_required_unless_anonymised"):
+            await _insert(conn, user_id, **{field: None})
+
+
+_SCRUB = (
+    "recipient_name = NULL, phone = NULL, city = NULL, area = NULL, street = NULL,"
+    " landmark_notes = NULL"
+)
+
+
+@pytest.mark.parametrize(
+    "assignments",
+    [
+        pytest.param("anonymized_at = now(), deleted_at = now()", id="keeps_personal_fields"),
+        pytest.param(f"anonymized_at = now(), {_SCRUB}", id="not_deleted"),
+        pytest.param(
+            "anonymized_at = now(), deleted_at = now(), "
+            + _SCRUB.replace("street = NULL", "street = 'x'"),
+            id="keeps_the_street",
+        ),
+    ],
+)
+async def test_an_anonymised_address_must_be_deleted_and_hold_no_personal_field(
+    db_engine: AsyncEngine, assignments: str
+) -> None:
+    """VS-045: ck_addresses_anonymised_shape, so a bug cannot keep a phone on such a row."""
+    user_id = await _user(db_engine)
+    async with db_engine.connect() as conn:
+        address = await _insert(conn, user_id)
+        with pytest.raises(IntegrityError, match="ck_addresses_anonymised_shape"):
+            await conn.execute(
+                text(f"UPDATE addresses SET {assignments} WHERE id = :a"), {"a": address}
+            )
+
+
+async def test_a_fully_scrubbed_deleted_address_is_accepted(db_engine: AsyncEngine) -> None:
+    user_id = await _user(db_engine)
+    async with db_engine.connect() as conn:
+        address = await _insert(conn, user_id)
+        await conn.execute(
+            text(
+                f"UPDATE addresses SET anonymized_at = now(), deleted_at = now(), {_SCRUB}"
+                " WHERE id = :a"
+            ),
+            {"a": address},
+        )
+        await conn.rollback()
 
 
 async def test_addresses_never_block_the_unverified_purge(db_engine: AsyncEngine) -> None:

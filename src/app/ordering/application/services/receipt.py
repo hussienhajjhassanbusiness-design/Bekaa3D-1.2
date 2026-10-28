@@ -5,8 +5,8 @@ from collections.abc import Callable
 from datetime import datetime
 from uuid import UUID
 
-from app.ordering.application.ports import ProblemReportInbox, ReceiptOrders
-from app.ordering.domain.exceptions import ReceiptOrderNotFoundError
+from app.ordering.application.ports import CustomerAccounts, ProblemReportInbox, ReceiptOrders
+from app.ordering.domain.exceptions import CustomerAccountClosedError, ReceiptOrderNotFoundError
 from app.ordering.domain.orders import Order
 from app.ordering.domain.receipt import received_line_ids
 from app.platform.application.ports import AuditWriter
@@ -44,6 +44,7 @@ async def confirm_receipt(
 async def report_problem(
     orders: ReceiptOrders,
     inbox: ProblemReportInbox,
+    accounts: CustomerAccounts,
     audit: AuditWriter,
     *,
     user_id: UUID,
@@ -57,6 +58,8 @@ async def report_problem(
     """Every report is a new contact message; the line timestamp keeps the first one.
     The audit row names the message, never its body (ADR-041 d2)."""
     order, line_ids = await _received(orders, user_id, order_id)
+    if not await accounts.is_live(user_id):  # deletion holds this orders lock (ADR-047)
+        raise CustomerAccountClosedError()
     message_id = await inbox.submit(
         user_id=user_id,
         order_id=order_id,

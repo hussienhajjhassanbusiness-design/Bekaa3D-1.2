@@ -16,6 +16,7 @@ from app.identity.api.dependencies import (
     current_verified_user,
     not_found_error,
     require_csrf,
+    unauthenticated_error,
 )
 from app.identity.application.commands.address_book import (
     CreateAddress,
@@ -26,6 +27,7 @@ from app.identity.application.commands.address_book import (
 from app.identity.domain.address import AddressDetails
 from app.identity.domain.entities import User
 from app.identity.domain.exceptions import (
+    AccountDisabledError,
     AddressLimitReachedError,
     AddressNotFoundError,
     InvalidAddressError,
@@ -89,6 +91,8 @@ async def create_address(
         )
     except InvalidAddressError as exc:
         raise _invalid(exc) from exc
+    except AccountDisabledError as exc:
+        raise unauthenticated_error() from exc
     except AddressLimitReachedError as exc:
         raise ApiError(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

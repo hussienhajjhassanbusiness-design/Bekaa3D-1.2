@@ -75,6 +75,16 @@ class SqlWishlistRepository:
         row = (await self._session.execute(stmt)).first()
         return row is not None
 
+    async def remove_all(self, user_id: UUID) -> list[UUID]:
+        stmt = (
+            update(_M)
+            .where(_M.user_id == user_id, _M.deleted_at.is_(None))
+            .values(deleted_at=func.now(), updated_at=func.now())
+            .returning(_M.product_id)
+            .execution_options(synchronize_session=False)
+        )
+        return list((await self._session.scalars(stmt)).all())
+
     async def list_page(
         self, *, user_id: UUID, after: tuple[datetime, UUID] | None, limit: int
     ) -> list[WishlistItem]:

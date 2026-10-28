@@ -160,6 +160,14 @@ class CheckoutAddressSnapshot:
     landmark_notes: str
 
 
+class CustomerAccounts(Protocol):
+    """Implemented over `app.identity.public.account_is_live` (VS-045)."""
+
+    async def is_live(self, user_id: UUID) -> bool:
+        """Read after the cart or offer lock: an account deleted meanwhile reads False."""
+        ...
+
+
 class CheckoutAddresses(Protocol):
     """Implemented over `app.identity.public.lock_checkout_address`."""
 

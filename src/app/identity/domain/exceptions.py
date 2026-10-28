@@ -231,3 +231,17 @@ class AddressLimitReachedError(IdentityDomainError):
     def __init__(self, limit: int) -> None:
         super().__init__(f"At most {limit} saved addresses are allowed.")
         self.limit = limit
+
+
+class AccountAlreadyAnonymisedError(IdentityDomainError):
+    def __init__(self, user_id: UUID) -> None:
+        super().__init__(f"User {user_id} is already anonymised.")
+        self.user_id = user_id
+
+
+class AccountDeletionBlockedError(IdentityDomainError):
+    """BR-126 or an administrator; `reason` is a `DeletionBlock` value, the API's `reason`."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(f"Account deletion blocked: {reason}.")
+        self.reason = reason

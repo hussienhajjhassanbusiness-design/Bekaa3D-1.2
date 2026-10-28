@@ -322,6 +322,28 @@ class UserRepository:
         stmt = select(UserModel.id, UserModel.email).where(UserModel.id.in_(user_ids))
         return {row.id: str(row.email) for row in (await self._session.execute(stmt)).all()}
 
+    async def lock_for_anonymisation(self, user_id: UUID) -> User | None:
+        """FOR NO KEY UPDATE (ADR-047): the email index is partial, so it is no key column, and
+        an order or report INSERT's KEY SHARE on this row never waits on the deletion."""
+        stmt = (
+            select(UserModel)
+            .where(UserModel.id == user_id)
+            .with_for_update(key_share=True)
+            .execution_options(populate_existing=True)
+        )
+        model = await self._session.scalar(stmt)
+        return _user_to_domain(model) if model else None
+
+    async def can_authenticate(self, user_id: UUID) -> bool:
+        """One fresh read of the three columns `User.can_authenticate` checks (VS-045)."""
+        stmt = select(UserModel.id).where(
+            UserModel.id == user_id,
+            UserModel.is_active.is_(True),
+            UserModel.anonymized_at.is_(None),
+            UserModel.deleted_at.is_(None),
+        )
+        return await self._session.scalar(stmt) is not None
+
     async def get_by_id_for_update(self, user_id: UUID) -> User | None:
         """Read one user and hold a row lock on them until the transaction ends.
 
@@ -385,6 +407,15 @@ class UserRepository:
         model.anonymized_at = user.anonymized_at
         model.deleted_at = user.deleted_at
         model.auth_epoch = user.auth_epoch
+        await self._session.flush()
+
+    async def save_anonymised(self, user: User) -> None:
+        """VS-045: `save` plus the email, which only anonymisation ever rewrites."""
+        await self.save(user)
+        model = await self._session.get(UserModel, user.id)
+        if model is None:
+            raise ValueError(f"User {user.id} not found")
+        model.email = user.email
         await self._session.flush()
 
     async def purge_never_verified_before(self, cutoff: datetime) -> int:
@@ -597,6 +628,18 @@ class VerificationTokenRepository:
             raise ValueError(f"VerificationToken {token.id} not found")
         model.used_at = token.used_at
         await self._session.flush()
+
+    async def consume_outstanding_for_user(self, *, user_id: UUID, at: datetime) -> int:
+        """VS-045: an emailed link must not outlive the account."""
+        stmt = (
+            update(VerificationTokenModel)
+            .where(
+                VerificationTokenModel.user_id == user_id, VerificationTokenModel.used_at.is_(None)
+            )
+            .values(used_at=at)
+            .returning(VerificationTokenModel.id)
+        )
+        return len((await self._session.scalars(stmt)).all())
 
 
 class MfaCredentialRepository:

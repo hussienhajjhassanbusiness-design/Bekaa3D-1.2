@@ -48,11 +48,12 @@ class _SyncedRepository(SqlAddressRepository):
         self._before_lock = before_lock
         self._after_lock = after_lock
 
-    async def lock_address_book(self, user_id: uuid.UUID) -> None:
+    async def lock_address_book(self, user_id: uuid.UUID) -> bool:
         await meet_or_fail(self._before_lock)
-        await super().lock_address_book(user_id)
+        live = await super().lock_address_book(user_id)
         with suppress(TimeoutError, asyncio.BrokenBarrierError):
             await asyncio.wait_for(self._after_lock.wait(), _AFTER_LOCK_TIMEOUT_SECONDS)
+        return live
 
 
 async def _seed(engine: AsyncEngine, count: int, *, default_first: bool) -> tuple[Any, list[Any]]:

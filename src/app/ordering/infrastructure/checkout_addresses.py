@@ -4,8 +4,16 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.identity.public import lock_checkout_address
+from app.identity.public import account_is_live, lock_checkout_address
 from app.ordering.application.ports import CheckoutAddressSnapshot
+
+
+class SqlCustomerAccounts:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def is_live(self, user_id: UUID) -> bool:
+        return await account_is_live(self._session, user_id)
 
 
 class SqlCheckoutAddresses:

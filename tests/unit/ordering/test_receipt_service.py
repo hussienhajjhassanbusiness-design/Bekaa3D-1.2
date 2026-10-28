@@ -12,7 +12,11 @@ from app.catalog.application.ports import ProductType
 from app.ordering.application.services.receipt import confirm_receipt, report_problem
 from app.ordering.domain.enums import OrderItemStatus as S
 from app.ordering.domain.enums import OrderSource, OrderStatus, PaymentMethod
-from app.ordering.domain.exceptions import NoDeliveredLineError, ReceiptOrderNotFoundError
+from app.ordering.domain.exceptions import (
+    CustomerAccountClosedError,
+    NoDeliveredLineError,
+    ReceiptOrderNotFoundError,
+)
 from app.ordering.domain.orders import Order, OrderLine
 
 AT = datetime(2026, 10, 23, 12, tzinfo=UTC)
@@ -99,6 +103,14 @@ class FakeInbox:
 
 
 @dataclass
+class FakeAccounts:
+    live: bool = True
+
+    async def is_live(self, user_id: uuid.UUID) -> bool:
+        return self.live
+
+
+@dataclass
 class FakeAudit:
     rows: list[dict[str, Any]] = field(default_factory=list)
 
@@ -118,11 +130,18 @@ async def _confirm(orders: FakeOrders, audit: FakeAudit, **over: Any) -> list[uu
     )
 
 
-async def _report(orders: FakeOrders, inbox: FakeInbox, audit: FakeAudit, **over: Any) -> uuid.UUID:
+async def _report(
+    orders: FakeOrders,
+    inbox: FakeInbox,
+    audit: FakeAudit,
+    accounts: FakeAccounts | None = None,
+    **over: Any,
+) -> uuid.UUID:
     args: dict[str, Any] = {"user_id": USER, "order_id": orders.order.id} | over
     return await report_problem(
         orders,
         inbox,
+        accounts or FakeAccounts(),
         audit,
         email="rana@example.com",
         message="Cracked.",
@@ -192,3 +211,11 @@ async def test_a_second_report_is_queued_and_audited_but_stamps_nothing() -> Non
     await _report(orders, inbox, audit)
     assert len(inbox.calls) == 2
     assert [r["after_data"]["line_ids"] for r in audit.rows] == [[str(orders.lines[0].id)], []]
+
+
+async def test_a_report_for_an_account_deleted_meanwhile_writes_nothing() -> None:
+    """VS-045: deletion held the orders lock, so the read after it sees the account gone."""
+    orders, inbox, audit = _orders(S.DELIVERED), FakeInbox(), FakeAudit()
+    with pytest.raises(CustomerAccountClosedError):
+        await _report(orders, inbox, audit, FakeAccounts(live=False))
+    assert inbox.calls == [] and audit.rows == []

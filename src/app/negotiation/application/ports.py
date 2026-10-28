@@ -106,6 +106,10 @@ class OfferStore(Protocol):
         """Live offers for (user, product), `FOR UPDATE` in id order (at most one)."""
         ...
 
+    async def lock_live_for_user(self, user_id: UUID) -> list[Offer]:
+        """Every live offer of the user, `FOR UPDATE` in id order (VS-045)."""
+        ...
+
 
 class PaymentInFlight(Protocol):
     async def in_flight(self, offer_id: UUID) -> bool:

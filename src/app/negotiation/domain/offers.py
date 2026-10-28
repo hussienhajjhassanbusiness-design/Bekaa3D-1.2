@@ -331,6 +331,18 @@ def withdraw(
     return withdrawn, round_
 
 
+def withdraw_for_erasure(
+    offer: Offer, *, next_sequence: int, now: datetime
+) -> tuple[Offer, NewRound]:
+    """VS-045 (ADR-047): account deletion withdraws any live offer, an accepted one too."""
+    if offer.status not in LIVE_STATUSES:
+        raise OfferInvalidTransitionError(offer.status)
+    withdrawn = replace(
+        offer, status=OfferStatus.WITHDRAWN, turn=None, remind_at=None, updated_at=now
+    )
+    return withdrawn, NewRound(next_sequence, OfferActor.SYSTEM, OfferAction.WITHDRAWN)
+
+
 def is_checkout_over(offer: Offer, now: datetime) -> bool:
     """BR-086: the window has closed once `now >= checkout_expires_at`."""
     return (
