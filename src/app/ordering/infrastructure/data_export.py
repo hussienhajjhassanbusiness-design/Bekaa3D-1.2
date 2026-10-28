@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalog.application.ports import ProductType
 from app.ordering.domain.customer_view import customer_history, customer_lines
+from app.ordering.domain.enums import OrderItemStatus
 from app.ordering.domain.orders import CustomerOrder, CustomerOrderLine, HistoryEntry
 from app.ordering.infrastructure.models import OrderItemModel, OrderModel, OrderStatusHistoryModel
 from app.ordering.infrastructure.order_history import _LINE_COLUMNS, _ORDER_COLUMNS, _order
@@ -21,7 +22,7 @@ _O, _I, _H = OrderModel, OrderItemModel, OrderStatusHistoryModel
 @dataclass(frozen=True)
 class ExportOrderRow:
     order: CustomerOrder
-    delivery_email: str | None  # where the STL files were emailed; None without an STL line
+    delivery_email: str | None  # where the STL files go; None until an STL line is paid
     lines: list[CustomerOrderLine]
     history: list[HistoryEntry]
 
@@ -42,16 +43,24 @@ async def orders_for_export(
     found = []
     for row in rows:
         own = lines[row.id]
-        has_stl = any(line.product_type is ProductType.STL for line in own)
+        emailed = any(_emailed(line) for line in own)
         found.append(
             ExportOrderRow(
                 order=_order(row),
-                delivery_email=row.customer_email_snapshot if has_stl else None,
+                delivery_email=row.customer_email_snapshot if emailed else None,
                 lines=customer_lines(own),
                 history=customer_history(history[row.id]),
             )
         )
     return found
+
+
+def _emailed(line: CustomerOrderLine) -> bool:
+    """A paid STL line (ADR-019): awaiting the email, emailed, or emailed then refunded."""
+    paid = (OrderItemStatus.AWAITING_DELIVERY, OrderItemStatus.DELIVERED)
+    return line.product_type is ProductType.STL and (
+        line.fulfillment_status in paid or line.fulfilled_at is not None
+    )
 
 
 async def _lines(

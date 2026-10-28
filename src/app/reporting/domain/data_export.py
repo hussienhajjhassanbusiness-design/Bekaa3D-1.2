@@ -115,7 +115,7 @@ class ExportOrder:
     total: Money
     delivery_address: ExportDeliveryAddress | None
     contact_phone: str | None
-    delivery_email: str | None  # where the STL files were emailed
+    delivery_email: str | None  # where the paid STL files are emailed
     customer_note: str | None
     estimated_dispatch_at: datetime | None
     placed_at: datetime

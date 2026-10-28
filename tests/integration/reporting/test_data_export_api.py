@@ -2,6 +2,8 @@
 caller's rows, no internal value, soft-deleted rows marked, 3 a day, audited (ADR-046)."""
 
 import json
+import uuid
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -10,10 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.main import app as main_app
 from app.reporting.api.export_schemas import DataExportRead
+from app.reporting.application.data_export import ORDER_PAGE_SIZE
 from app.reporting.domain.data_export import SECTIONS
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
 from tests.integration.catalog.storefront_support import seed_product, seed_refs
 from tests.integration.deep_support import assert_problem, client_for, create_user, login
+from tests.integration.fulfillment.order_support import seed_physical_order
 from tests.integration.reporting.export_support import (
     EXPORT,
     export,
@@ -241,3 +245,79 @@ async def test_the_response_is_a_no_store_attachment(db_session: AsyncSession) -
     disposition = response.headers["content-disposition"]
     assert disposition.startswith('attachment; filename="bekaa3d-data-export-')
     assert json.loads(response.text)["orders"] == []
+
+
+async def test_an_in_production_line_reads_pending_and_its_step_is_hidden(
+    db_session: AsyncSession,
+) -> None:
+    user = await create_user(db_session)
+    order = await seed_physical_order(
+        db_session,
+        user_id=user.id,
+        payment_method="online",
+        payment_status="paid",
+        line_states=("in_production",),
+    )
+    await db_session.execute(
+        text(
+            "INSERT INTO order_status_history (order_id, order_item_id, from_status, to_status)"
+            " VALUES (:o, :i, 'pending', 'in_production')"
+        ),
+        {"o": order.order_id, "i": order.line_ids[0]},
+    )
+    await db_session.commit()
+    doc, raw = _export_as(user.email)
+    (exported,) = doc["orders"]
+    assert [line["fulfillment_status"] for line in exported["lines"]] == ["pending"]
+    assert exported["status_history"] == [] and "in_production" not in raw
+
+
+async def test_each_order_matches_its_order_page(db_session: AsyncSession) -> None:
+    """The export is the VS-025 projection: every field both show is equal (ADR-046 d3)."""
+    s = await seed_customer(db_session, "parity")
+    await refund_settle_and_void(db_session, s.paid_order, s.physical_line, "parity")
+    cash = await seed_physical_order(
+        db_session, user_id=s.user_id, line_states=("pending", "cancelled")
+    )
+    unpaid = await seed_physical_order(
+        db_session,
+        user_id=s.user_id,
+        payment_method="online",
+        payment_status="expired",
+        order_status="cancelled",
+        line_states=("cancelled",),
+        stl_line="cancelled",
+        email=s.email,
+    )
+    with client_for(main_app) as client:
+        login(client, s.email)
+        doc = export(client).json()
+        pages = {o["id"]: client.get(f"/api/v1/me/orders/{o['id']}").json() for o in doc["orders"]}
+    for exported in doc["orders"]:
+        page = pages[exported["id"]]
+        shared = (set(exported) & set(page)) - {"lines"}
+        assert shared >= {"payment_due", "amount_due", "payment", "refunds", "status_history"}
+        assert {k: exported[k] for k in shared} == {k: page[k] for k in shared}, exported["id"]
+        for mine, shown in zip(exported["lines"], page["lines"], strict=True):
+            common = set(mine) & set(shown)
+            assert {k: mine[k] for k in common} == {k: shown[k] for k in common}
+    by_id = {o["id"]: o for o in doc["orders"]}
+    assert by_id[str(cash.order_id)]["amount_due"] == {"amount_cents": 1000, "currency": "USD"}
+    assert by_id[str(cash.order_id)]["total"]["amount_cents"] == 2000
+    assert by_id[str(unpaid.order_id)]["delivery_email"] is None  # nothing was ever emailed
+    assert by_id[str(s.paid_order)]["delivery_email"] == s.email
+
+
+async def test_more_than_a_page_of_orders_exports_each_once_in_order(
+    db_session: AsyncSession,
+) -> None:
+    user = await create_user(db_session)
+    start = datetime(2026, 1, 1, tzinfo=UTC)
+    seeded = []
+    for n in range(ORDER_PAGE_SIZE + 2):
+        moment = start + timedelta(minutes=min(n, ORDER_PAGE_SIZE - 1))  # 49 and 50 tie
+        order = await seed_physical_order(db_session, user_id=user.id, placed_at=moment)
+        seeded.append((moment, str(order.order_id)))
+    doc, _ = _export_as(user.email)
+    exported = [o["id"] for o in doc["orders"]]
+    assert exported == [oid for _, oid in sorted(seeded, key=lambda m: (m[0], uuid.UUID(m[1])))]
