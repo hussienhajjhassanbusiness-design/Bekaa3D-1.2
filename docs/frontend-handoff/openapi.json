@@ -25187,7 +25187,7 @@
                 }
               }
             },
-            "description": "EMAIL_VERIFICATION_REQUIRED."
+            "description": "CSRF_INVALID, or EMAIL_VERIFICATION_REQUIRED."
           },
           "422": {
             "content": {
@@ -25232,6 +25232,7 @@
         },
         "security": [
           {
+            "csrfToken": [],
             "sessionCookie": []
           }
         ],

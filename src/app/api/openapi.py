@@ -127,17 +127,17 @@ def _error_statuses(
 
 
 _SAFE_METHODS = frozenset({"get", "head", "options"})
+# Reads that still check CSRF, as `require_csrf` on the route does (ADR-046 d11).
+_CSRF_READS = frozenset({"/api/v1/me/export"})
 
 
 def _requirements(path: str, method: str) -> list[dict[str, list[str]]] | None:
-    """What a caller must present for one operation, or None if it is public.
-
-    CSRF is required only for cookie-authenticated unsafe methods, which is
-    exactly the rule `require_csrf` enforces - a `GET` never carries the header,
-    so claiming it does would send integrators chasing a token they don't need."""
+    """What a caller must present for one operation, or None if it is public. CSRF is
+    listed where `require_csrf` runs: unsafe methods, and the reads in `_CSRF_READS`;
+    claiming it elsewhere would send integrators chasing a token they don't need."""
     if path in _UNAUTHENTICATED_PATHS:
         return None
-    if method in _SAFE_METHODS:
+    if method in _SAFE_METHODS and path not in _CSRF_READS:
         return [{"sessionCookie": []}]
     return [{"sessionCookie": [], "csrfToken": []}]
 

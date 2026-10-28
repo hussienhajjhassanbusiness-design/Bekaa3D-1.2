@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.api.dependencies import client_ip, get_session
 from app.core.rate_limit import enforce_rate_limit
 from app.core.security import hash_ip
-from app.identity.public import User, current_verified_user
+from app.identity.public import User, current_verified_user, require_csrf
 from app.platform.public import SqlAuditWriter
 from app.reporting.api.export_schemas import DataExportRead
 from app.reporting.api.session import query_canceled, report_unavailable, start_snapshot
@@ -113,7 +113,8 @@ def _profile(user: User) -> ExportProfile:
 @router.get(
     "/export",
     response_class=StreamingResponse,
-    dependencies=[Depends(_export_rate_limit)],
+    # CSRF on a GET (ADR-046 d11): a cross-site link would otherwise spend the day's three.
+    dependencies=[Depends(require_csrf), Depends(_export_rate_limit)],
     summary="Download all of the caller's own data as one JSON document",
     responses={
         200: {
@@ -121,7 +122,7 @@ def _profile(user: User) -> ExportProfile:
             "description": "Streamed; soft-deleted addresses and reviews carry `deleted: true`.",
         },
         401: {"description": "No valid session cookie was presented."},
-        403: {"description": "EMAIL_VERIFICATION_REQUIRED."},
+        403: {"description": "CSRF_INVALID, or EMAIL_VERIFICATION_REQUIRED."},
         429: {"description": "RATE_LIMITED: three exports a day per user."},
         503: {"description": "SERVICE_UNAVAILABLE: the snapshot's first read timed out."},
     },

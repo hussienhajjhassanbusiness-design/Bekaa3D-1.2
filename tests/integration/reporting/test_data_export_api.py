@@ -321,3 +321,25 @@ async def test_more_than_a_page_of_orders_exports_each_once_in_order(
     doc, _ = _export_as(user.email)
     exported = [o["id"] for o in doc["orders"]]
     assert exported == [oid for _, oid in sorted(seeded, key=lambda m: (m[0], uuid.UUID(m[1])))]
+
+
+async def test_without_the_csrf_header_it_is_the_write_routes_403_and_spends_no_budget(
+    db_session: AsyncSession,
+) -> None:
+    """ADR-046 d11: a cross-site link carries the Lax cookie but never the header."""
+    user = await create_user(db_session)
+    with client_for(main_app) as client:
+        login(client, user.email)
+        write = client.post(f"/api/v1/me/orders/{uuid.uuid4()}/confirm-receipt")
+        refused = [export(client, headers=h) for h in ({}, {"X-CSRF-Token": "forged"}, {}, {})]
+        allowed = [export(client) for _ in range(3)]
+        over = export(client)
+    assert_problem(write, 403, "CSRF_INVALID")
+    for response in refused:
+        assert_problem(response, 403, "CSRF_INVALID")
+        same = {k: response.json()[k] for k in ("type", "title", "status", "detail", "code")}
+        assert same == {k: write.json()[k] for k in same}
+        assert "profile" not in response.text
+    assert [r.status_code for r in allowed] == [200, 200, 200]  # four refusals spent nothing
+    assert [r.headers["RateLimit-Remaining"] for r in allowed] == ["2", "1", "0"]
+    assert_problem(over, 429, "RATE_LIMITED")

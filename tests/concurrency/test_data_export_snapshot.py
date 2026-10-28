@@ -14,7 +14,7 @@ from app.reporting.infrastructure.export_adapters import SqlExportOrders
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
 from tests.concurrency.barrier import SYNC_TIMEOUT_SECONDS, meet_or_fail
 from tests.integration.catalog.storefront_support import seed_product, seed_refs
-from tests.integration.deep_support import PASSWORD, async_client, create_user, running_app
+from tests.integration.deep_support import PASSWORD, async_client, create_user, csrf, running_app
 from tests.integration.reporting.export_support import EXPORT
 
 pytestmark = [pytest.mark.integration, pytest.mark.concurrency]
@@ -59,10 +59,11 @@ async def test_rows_committed_after_the_first_read_are_not_exported(
             "/api/v1/auth/login", json={"email": user.email, "password": PASSWORD}
         )
         assert login.status_code == 200, login.text
-        response, _ = await asyncio.gather(client.get(EXPORT), writer())
+        headers = csrf(client)
+        response, _ = await asyncio.gather(client.get(EXPORT, headers=headers), writer())
         assert response.status_code == 200, response.text
         during = response.json()
         monkeypatch.setattr(SqlExportOrders, "page", original)
-        after = (await client.get(EXPORT)).json()
+        after = (await client.get(EXPORT, headers=headers)).json()
     assert (during["reviews"], during["contact_messages"]) == ([], [])
     assert (len(after["reviews"]), len(after["contact_messages"])) == (1, 1)
