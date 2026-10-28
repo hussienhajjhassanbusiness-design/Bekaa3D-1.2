@@ -44,6 +44,10 @@ _LINK = re.compile(
     rf"|\b[a-z0-9-]+\.(?:{'|'.join(LINK_TLDS)})\b"
 )
 _WORD = re.compile(r"\w+")
+# Unicode default-ignorable characters outside category Cf, which `_visible` drops as well.
+_IGNORABLE = re.compile(
+    "[\u034f\u115f\u1160\u17b4\u17b5\u180b-\u180f\u3164\ufe00-\ufe0f\uffa0\U000e0100-\U000e01ef]"
+)
 _CENTS: Final = Decimal("0.01")
 
 
@@ -72,11 +76,17 @@ def normalise_reason(raw: str | None) -> str | None:
     return reason or None
 
 
+def _visible(text: str) -> str:
+    """Without zero-width, joiner and bidi characters, which could hide a link or a word."""
+    return _IGNORABLE.sub("", "".join(c for c in text if unicodedata.category(c) != "Cf"))
+
+
 def content_refusal(body: str | None) -> ContentRefusal | None:
-    """Links first, then profanity as whole words, both after NFKC and casefold."""
+    """Links first, then profanity as whole words, on the visible text after NFKC and
+    casefold."""
     if body is None:
         return None
-    folded = unicodedata.normalize("NFKC", body).casefold()
+    folded = unicodedata.normalize("NFKC", _visible(body)).casefold()
     if _LINK.search(folded):
         return ContentRefusal.LINK
     if any(word in PROFANITY_WORDS for word in _WORD.findall(folded)):

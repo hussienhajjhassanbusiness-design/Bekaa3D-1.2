@@ -58,6 +58,29 @@ def test_a_listed_word_inside_a_clean_word_is_not_refused(body: str) -> None:
     assert content_refusal(body) is None
 
 
+@pytest.mark.parametrize(
+    ("body", "refusal"),
+    [
+        ("visit cheap3d\u200b.com today", ContentRefusal.LINK),  # zero-width space
+        ("cheap3d.\ufeffcom", ContentRefusal.LINK),  # BOM / zero-width no-break space
+        ("www\u2060.x", ContentRefusal.LINK),  # word joiner
+        ("http\u200d://x", ContentRefusal.LINK),  # zero-width joiner
+        ("cheap3d\u00ad.com", ContentRefusal.LINK),  # soft hyphen
+        ("cheap3d\u3164.com", ContentRefusal.LINK),  # Hangul filler, not category Cf
+        ("what a sh\u200bit lamp", ContentRefusal.PROFANITY),
+        ("f\u200cu\u200dck", ContentRefusal.PROFANITY),
+    ],
+)
+def test_invisible_characters_cannot_hide_a_link_or_a_word(
+    body: str, refusal: ContentRefusal
+) -> None:
+    assert content_refusal(body) is refusal
+
+
+def test_text_with_ordinary_joiners_is_still_accepted() -> None:
+    assert content_refusal("Great print \U0001f469\u200d\U0001f4bb, 10/10") is None
+
+
 def test_the_list_is_stored_folded() -> None:
     assert all(word == word.casefold() for word in PROFANITY_WORDS)
 
