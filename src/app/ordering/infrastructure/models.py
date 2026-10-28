@@ -166,6 +166,7 @@ class OrderModel(Base):
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # VS-031 (595b7e6e2792): set only by the customer's own cancel (ADR-038 d23).
     customer_cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    anonymized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -187,7 +188,8 @@ class OrderModel(Base):
         ),
         CheckConstraint("currency = 'USD'", name="ck_orders_currency_usd"),
         CheckConstraint(
-            "fulfillment_method IS NULL OR contact_phone_snapshot IS NOT NULL",
+            "anonymized_at IS NOT NULL OR fulfillment_method IS NULL "
+            "OR contact_phone_snapshot IS NOT NULL",
             name="ck_orders_physical_has_phone",
         ),
         CheckConstraint(
@@ -199,9 +201,17 @@ class OrderModel(Base):
             name="ck_orders_cash_terms",
         ),
         CheckConstraint(
-            "fulfillment_method IS DISTINCT FROM 'delivery' OR (recipient_name IS NOT NULL "
-            "AND governorate IS NOT NULL AND city IS NOT NULL AND landmark_notes IS NOT NULL)",
+            "anonymized_at IS NOT NULL OR fulfillment_method IS DISTINCT FROM 'delivery' OR "
+            "(recipient_name IS NOT NULL AND governorate IS NOT NULL AND city IS NOT NULL "
+            "AND landmark_notes IS NOT NULL)",
             name="ck_orders_delivery_address",
+        ),
+        # VS-045 (0b349a492461): an anonymised order keeps no personal field (ADR-047).
+        CheckConstraint(
+            "anonymized_at IS NULL OR (recipient_name IS NULL AND contact_phone_snapshot IS NULL "
+            "AND city IS NULL AND area IS NULL AND street IS NULL AND landmark_notes IS NULL "
+            "AND customer_note IS NULL)",
+            name="ck_orders_anonymised_shape",
         ),
         CheckConstraint(
             "(contact_phone_snapshot IS NULL) = (contact_phone_hash IS NULL)",
