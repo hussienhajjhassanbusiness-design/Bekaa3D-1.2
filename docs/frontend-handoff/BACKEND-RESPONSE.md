@@ -62,6 +62,7 @@ Set-Cookie: csrf_token=<redacted>; Max-Age=2592000; Path=/; SameSite=lax
 - `access_token` and `refresh_token` are `HttpOnly`. `csrf_token` is readable by JavaScript on purpose.
 - Every cookie-authenticated `POST`, `PUT`, `PATCH` or `DELETE` must send header **`X-CSRF-Token`** with the current `csrf_token` cookie value. `GET` never needs it. Missing or wrong: `403 CSRF_INVALID`.
 - **Exception: `GET /api/v1/me/export` (the customer data export) also needs `X-CSRF-Token`.** Download it with `fetch` (send the header, read the body as a blob, save it under the `Content-Disposition` filename), never with a plain link, `<a href>` or `window.location`: those cannot send the header and get `403 CSRF_INVALID`. Three exports a day per user; the refused ones do not count (ADR-046 d11).
+- `DELETE /api/v1/me` deletes the account: body `{"current_password": "..."}`, `204` with the auth cookies cleared, so treat the user as signed out. `401 INVALID_CREDENTIALS` is a wrong password, not an expired session. `409 ACCOUNT_DELETION_BLOCKED` carries `reason` `open_order` or `unsettled_refund` (finish or cancel the order, or wait for the refund). Five attempts an hour (ADR-047).
 - `POST /api/v1/auth/refresh` rotates all three cookies, so re-read `csrf_token` after a refresh.
 - Cookies are `Secure` in every environment except `ENVIRONMENT=development`. Over plain `http` outside development the browser drops them.
 - The API has **no CORS support**. The browser must call it same-origin through your proxy.

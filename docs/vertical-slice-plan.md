@@ -47,7 +47,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 | VS-042 | Download statistics rollup | — | Removed (ADR-019) |
 | VS-043 | Business analytics | VS-029, VS-030, VS-031, VS-036, VS-039 | Done |
 | VS-044 | Customer data export | VS-023b, VS-025, VS-026, VS-036, VS-039 | Done |
-| VS-045 | Account deletion by anonymisation | VS-026, VS-031, VS-036, VS-038, VS-039 | Not started |
+| VS-045 | Account deletion by anonymisation | VS-026, VS-031, VS-036, VS-038, VS-039 | Done |
 | VS-046 | Security data retention and IP-salt rotation | VS-004 | Done |
 | **Final phase** | **Needs a server; built after everything above is finished and tested locally** | | |
 | VS-020 | Staging environment and deploy pipeline | VS-015 | Not started |
@@ -1230,7 +1230,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - Tests: `tests/unit/reporting/test_data_export_schema.py` (field allowlist), `test_data_export_stream.py`; `tests/integration/reporting/test_data_export_api.py`, `test_data_export_session.py`; `tests/concurrency/test_data_export_snapshot.py`; `tests/smoke/test_vs044_smoke.py`; the VS-044 test in `tests/integration/test_openapi_security.py`.
 
 ## VS-045 — Account deletion by anonymisation
-**Status:** Not started
+**Status:** Done (migration `0b349a492461`; the head moves from `eeed201dcfd2`). **As built:** [ADR-047](adr/ADR-047-account-deletion-by-anonymisation.md), api-endpoints §9.1.
 **Depends on:** VS-026, VS-031, VS-036, VS-038, VS-039
 - **Notes from VS-030 ([ADR-042](adr/ADR-042-refunds-voids-and-chargebacks.md), plan §3.7):** an "unsettled refund" (BR-126) is a pending one, an owed one (failed, not reissued, not voided) or a live `late_capture` one. Add `unsettled_refund_exists(session, user_id)` to `app.payments.public`; `ix_refunds_obligations` serves it.
 **Goal:** A customer deletes their account. Personal data is stripped and login disabled, while financial and STL delivery records survive anonymised.
@@ -1254,6 +1254,13 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 - **Done when:**
   - Deletion is all-or-nothing.
   - The email can be registered again.
+- **As built** ([ADR-047](adr/ADR-047-account-deletion-by-anonymisation.md)):
+  - A migration after all (owner decision): `orders.anonymized_at` and `addresses.anonymized_at`. Each comes with CHECKs that let only an anonymised row lack its phone and address, and require it to hold no personal field. Order snapshots and addresses are scrubbed; governorate, address label, `admin_note` and the order's phone hash (the cash hold, owner decision) stay; an anonymised order must be closed (d2, d3).
+  - Contact messages with the `user_id`: name "Deleted customer", the anonymised email, no phone, message `[deleted]` (owner change). Pending outbox rows are abandoned; every outbox row gets the anonymised address, and a later notice to it is stored as failed. Customer offer-round messages and cancel notes are nulled, a cancel is audited with `has_note`, and idempotency records are deleted (owner decision on review findings).
+  - Lock order: orders, then the cart (created if missing, then emptied), then live offers, then `users` `FOR NO KEY UPDATE` (`FOR UPDATE` deadlocked against offer checkout), then BR-126 (d6). Administrators are refused with `reason: administrator`; 5 attempts an hour.
+  - Cart checkout, offer checkout, problem reports and address create re-check the account after their lock: a request queued behind a deletion is `401 AUTH_REQUIRED` and stores nothing (d7).
+  - Accepted (owner decision): chargeback evidence and a late capture after an admin release can arrive once the contact details are gone.
+  - Tests: `tests/unit/identity/test_anonymisation.py`, `tests/unit/negotiation/test_offer_erasure.py`, `tests/unit/platform/test_outbox_abandon.py`; `tests/integration/identity/test_account_deletion.py` (a scan of every table for the customer's personal values, BR-126 cases, failure injection at four points); `tests/integration/ordering/test_order_anonymised_checks.py` and `tests/integration/identity/test_addresses_db.py` (the CHECKs); `tests/concurrency/test_account_deletion_races.py` (checkout, offer checkout, problem report, address create and admin refund, each in both orders); `tests/smoke/test_vs045_smoke.py`.
 
 ## VS-046 — Security data retention and IP-salt rotation
 **Status:** Done

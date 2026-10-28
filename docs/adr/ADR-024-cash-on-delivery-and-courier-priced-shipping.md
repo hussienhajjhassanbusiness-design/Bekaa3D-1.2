@@ -125,7 +125,7 @@ The final review of PR #8 (money and SRS reviewers, 2026-10-10) found no Blocker
 - ~~Revenue ("paid line amounts minus refunds") must exclude `late_capture` refunds. A line cancelled after a chargeback is not a paid line, yet its chargeback would still be subtracted, so it would be counted twice.~~ **Resolved** by [ADR-045](ADR-045-business-analytics.md) d1-d2: `late_capture` refunds never count, and a chargeback-cancelled line stays a paid line that its chargeback nets to 0.
 
 **VS-045**
-- BR-126's "refunds unsettled" must mean the obligations queue (pending, or failed and not reissued) plus pending `late_capture` refunds. Read literally, a reissued failed refund stays `failed` forever and blocks deletion permanently, while an owed refund might not block it at all.
+- ~~BR-126's "refunds unsettled" must mean the obligations queue (pending, or failed and not reissued) plus pending `late_capture` refunds. Read literally, a reissued failed refund stays `failed` forever and blocks deletion permanently, while an owed refund might not block it at all.~~ **Resolved** by [ADR-047](ADR-047-account-deletion-by-anonymisation.md) d8.
 
 **Tests to add** (money paths the final review found untested)
 - VS-024: manual confirm racing webhook verification; manual confirm or reconcile with a `cash` payment id gives 409; release for a no-status-API provider with no webhook; release for an order whose only attempt is a mismatched-amount late capture.
@@ -138,4 +138,4 @@ The final review of PR #8 (money and SRS reviewers, 2026-10-10) found no Blocker
 - VS-031: a pickup mixed order (`ready_for_pickup → cancelled` with refund, plus an STL line).
 - VS-032: chargeback beside a pending refund and beside an owed refund; on a fully refunded payment; on a late-captured attempt; duplicate submission and the same key in parallel; a forward transition after a full chargeback; partial STL refund + physical delivered + chargeback of the rest.
 - ~~VS-043: `late_capture` refunds excluded from revenue; a chargeback-cancelled line counted once.~~ **Done** in VS-043 (R8, R9, R9b, R10, R16).
-- VS-045: deletion blocked by an owed refund and by a pending `late_capture` refund.
+- ~~VS-045: deletion blocked by an owed refund and by a pending `late_capture` refund.~~ **Done** in VS-045 (`test_an_unsettled_refund_blocks_and_changes_nothing`, `test_a_reissued_failed_refund_does_not_block`).
