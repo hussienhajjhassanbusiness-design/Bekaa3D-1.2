@@ -33,18 +33,25 @@ def report_unavailable() -> ApiError:
     )
 
 
-async def report_session(request: Request) -> AsyncGenerator[AsyncSession]:
+def query_canceled(exc: DBAPIError) -> bool:
+    return _sqlstate(exc) == QUERY_CANCELED
+
+
+async def start_snapshot(session: AsyncSession) -> None:
     """`SET TRANSACTION` is the first statement, so it holds whatever the driver's BEGIN said.
-    Nothing commits: closing the session rolls the snapshot back. A timeout answers 503."""
+    Nothing commits: closing the session rolls the snapshot back."""
+    await session.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"))
+    await session.execute(text(f"SET LOCAL statement_timeout = {REPORT_TIMEOUT_MS}"))
+
+
+async def report_session(request: Request) -> AsyncGenerator[AsyncSession]:
+    """The snapshot as a dependency; a timeout answers 503."""
     session_factory = request.app.state.db_session_factory
     async with session_factory() as session:
         try:
-            await session.execute(
-                text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
-            )
-            await session.execute(text(f"SET LOCAL statement_timeout = {REPORT_TIMEOUT_MS}"))
+            await start_snapshot(session)
             yield session
         except DBAPIError as exc:
-            if _sqlstate(exc) == QUERY_CANCELED:
+            if query_canceled(exc):
                 raise report_unavailable() from exc
             raise

@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -126,3 +127,22 @@ class SqlContactMessageRepository:
             )
         stmt = stmt.order_by(_M.status, _M.created_at, _M.id).limit(limit)
         return [_to_domain(row) for row in (await self._session.execute(stmt)).all()]
+
+
+@dataclass(frozen=True)
+class ExportContactMessageRow:
+    subject: str | None
+    message: str
+    created_at: datetime
+
+
+async def contact_messages_for_export(
+    session: AsyncSession, user_id: UUID
+) -> list[ExportContactMessageRow]:
+    """VS-044 / ADR-046: only what the customer wrote; never status, contact details or ids."""
+    stmt = (
+        select(_M.subject, _M.message, _M.created_at)
+        .where(_M.user_id == user_id)
+        .order_by(_M.created_at, _M.id)
+    )
+    return [ExportContactMessageRow(*row) for row in (await session.execute(stmt)).tuples()]

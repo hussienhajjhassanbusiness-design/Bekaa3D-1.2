@@ -141,7 +141,7 @@ Then:
 
 The profile view returns the customer's account information (ID, email, verification/account state)
 Multiple delivery addresses may be saved
-A JSON export contains the customer’s profile, addresses, orders (with payment method and STL delivery records), reviews, and offers
+A JSON export contains the customer’s profile, addresses, orders (with payment method and STL delivery records), reviews, offers, and the contact messages they sent while signed in (subject, message and date only; ADR-046)
 Account deletion anonymizes personal data while retaining required financial and delivery records
 Login is disabled after anonymization
 

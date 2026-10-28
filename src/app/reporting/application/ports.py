@@ -7,6 +7,13 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
+from app.reporting.domain.data_export import (
+    ExportAddress,
+    ExportContactMessage,
+    ExportOffer,
+    ExportOrder,
+    ExportReview,
+)
 from app.reporting.domain.metrics import (
     CustomerCounts,
     OrderLabel,
@@ -70,3 +77,36 @@ class Sources:
     offers: OfferCounts
     products: ProductCatalog
     customers: Customers
+
+
+class ExportAddresses(Protocol):
+    async def all(self, user_id: UUID) -> list[ExportAddress]: ...
+
+
+class ExportOrders(Protocol):
+    async def page(
+        self, user_id: UUID, *, after: tuple[datetime, UUID] | None, limit: int
+    ) -> list[ExportOrder]: ...
+
+
+class ExportReviews(Protocol):
+    async def all(self, user_id: UUID) -> list[ExportReview]: ...
+
+
+class ExportOffers(Protocol):
+    async def all(self, user_id: UUID) -> list[ExportOffer]: ...
+
+
+class ExportContactMessages(Protocol):
+    async def all(self, user_id: UUID) -> list[ExportContactMessage]: ...
+
+
+@dataclass(frozen=True)
+class ExportSources:
+    """VS-044: one port per data set, all on one read-only snapshot (ADR-046)."""
+
+    addresses: ExportAddresses
+    orders: ExportOrders
+    reviews: ExportReviews
+    offers: ExportOffers
+    contact_messages: ExportContactMessages

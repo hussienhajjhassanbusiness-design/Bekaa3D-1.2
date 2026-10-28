@@ -955,7 +955,7 @@ Multiple saved addresses with a default. Fields: label, recipient name, Lebanese
 
 ### 14.5 Data Rights
 
-**Export:** JSON containing profile, addresses, orders (with payment method and STL delivery records), reviews, and offers.
+**Export:** JSON containing profile, addresses, orders (with payment method and STL delivery records), reviews, offers, and the contact messages the customer sent while signed in (what they wrote only; ADR-046).
 
 **Deletion:** implemented as anonymisation. Login is disabled and personal data stripped, but financial and delivery records are retained in anonymised form — required for accounting and referential integrity. Deletion is blocked while orders are open or refunds unsettled, since fulfilling an order requires the name and address.
 
@@ -1077,7 +1077,7 @@ Dependencies point inward only. Domain has no framework or database imports.
 | Negotiation    | Offers, offer rounds                                                |
 | Engagement     | Reviews, wishlist, notifications, custom requests, contact messages |
 | Platform       | Settings, audit log, email outbox, idempotency records              |
-| Reporting      | No tables of its own (ADR-045); business analytics read every other context through its public port |
+| Reporting      | No tables of its own (ADR-045); business analytics and the customer data export (ADR-046) read every other context through its public port |
 
 Cross-context access goes through service interfaces. Direct joins into another context's tables are prohibited — that practice is what turns "Clean Architecture" into folder decoration.
 

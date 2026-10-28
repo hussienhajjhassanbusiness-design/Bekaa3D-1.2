@@ -28,6 +28,7 @@ from app.negotiation.domain.exceptions import (
 )
 from app.negotiation.domain.offers import Offer
 from app.negotiation.infrastructure.adapters import EngagementOfferNotifier, PlatformOfferMailer
+from app.negotiation.infrastructure.data_export import ExportOfferRow, offers_for_export
 from app.negotiation.infrastructure.offers import SqlOfferStore
 from app.negotiation.infrastructure.reports import live_offer_counts
 from app.ordering.application.ports import AcceptedOffer
@@ -37,11 +38,13 @@ from app.ordering.public import OfferNotCheckoutableError as OfferNotCheckoutabl
 from app.platform.public import SqlAuditWriter
 
 __all__ = [
+    "ExportOfferRow",
     "PaymentInFlight",
     "SqlOfferCheckouts",
     "StlPurchase",
     "expire_overdue_offers",
     "live_offer_counts",
+    "offers_for_export",
     "settle_offers_on_stl_purchase",
 ]
 

@@ -22,6 +22,7 @@ from app.identity.api.dependencies import (
     verified_user_short_read,
 )
 from app.identity.application.token_claims import AccessTokenClaims
+from app.identity.domain.address import Address
 from app.identity.domain.entities import User
 from app.identity.infrastructure.addresses import SqlAddressRepository
 from app.identity.infrastructure.reports import CustomerCountsRow, customer_counts
@@ -29,12 +30,14 @@ from app.identity.infrastructure.repositories import UserRepository
 
 __all__ = [
     "AccessTokenClaims",
+    "Address",
     "AdminBoundaryRoute",
     "CheckoutAddress",
     "CustomerCountsRow",
     "User",
     "active_administrator_contacts",
     "active_administrator_ids",
+    "addresses_for_export",
     "current_user",
     "current_verified_user",
     "customer_counts",
@@ -61,6 +64,11 @@ async def active_administrator_contacts(session: AsyncSession) -> list[tuple[UUI
 async def user_emails(session: AsyncSession, user_ids: list[UUID]) -> dict[UUID, str]:
     """Account emails by id, read in the caller's transaction (VS-039 admin offer queue)."""
     return await UserRepository(session).emails_by_id(user_ids)
+
+
+async def addresses_for_export(session: AsyncSession, user_id: UUID) -> list[Address]:
+    """VS-044: every address of the user, deleted ones included (`deleted_at` set)."""
+    return await SqlAddressRepository(session).list_all_for_user(user_id)
 
 
 @dataclass(frozen=True)

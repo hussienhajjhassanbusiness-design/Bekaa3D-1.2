@@ -51,6 +51,7 @@ Only expensive-to-reverse decisions belong here. Folder names and small refactor
 - [ADR-043: Cancellation and returns - every cancel of a paid line refunds its whole remaining balance, one use case for the customer, the administrator and the transition endpoint (VS-031)](ADR-043-cancellation-and-returns.md)
 - [ADR-044: Reviews and the Verified Purchase badge - the badge is a projection of current line facts, recomputed in Ordering's line writers; ratings are exact aggregates under the product lock (VS-036, VS-037) - Accepted](ADR-044-reviews-and-verified-purchase-badge.md)
 - [ADR-045: Business analytics - per-line revenue from one read-only snapshot, a chargeback counted once, Beirut days, a reporting context that joins no other context (VS-043) - Accepted](ADR-045-business-analytics.md)
+- [ADR-046: Customer data export - six data sets from one read-only snapshot, composed in the reporting context, streamed, 3 a day, audited before the first byte (VS-044) - Accepted](ADR-046-customer-data-export.md)
 
 ## Governance
 

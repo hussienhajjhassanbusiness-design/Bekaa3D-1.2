@@ -84,6 +84,7 @@ from app.ordering.infrastructure.admin_orders import SqlAdminOrders
 from app.ordering.infrastructure.carts import SqlCartStore
 from app.ordering.infrastructure.cash import SqlCashBlockStore
 from app.ordering.infrastructure.cash import lock_cash_phone as _lock_cash_phone
+from app.ordering.infrastructure.data_export import ExportOrderRow, orders_for_export
 from app.ordering.infrastructure.orders import SqlOrderStore
 from app.ordering.infrastructure.reports import (
     ReportLineRow,
@@ -104,6 +105,7 @@ __all__ = [
     "CancelReason",
     "CashAmountMismatchError",
     "CashBlock",
+    "ExportOrderRow",
     "FulfillmentMethod",
     "HandoverRefusal",
     "HandoverRefusedError",
@@ -163,6 +165,7 @@ __all__ = [
     "order_ids_for_user",
     "order_lines",
     "orders_by_id",
+    "orders_for_export",
     "payment_due",
     "purchase_evidence",
     "recompute_order_status",

@@ -220,3 +220,24 @@ def test_the_vs043_analytics_routes_declare_session_the_boundary_and_errors(path
     assert {"401", "404", "422", "429", "503"} <= set(operation["responses"])
     if path.rsplit("/", 1)[1] in VS043_RANGED:
         assert "400" in operation["responses"]
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("configured_app")
+def test_the_vs044_export_declares_session_its_errors_and_the_body_schema() -> None:
+    from app.main import app
+
+    with TestClient(app) as client:
+        schema = client.get(SCHEMA_PATH).json()
+    operations = schema["paths"]["/api/v1/me/export"]
+    assert set(operations) == {"get"}
+    operation = operations["get"]
+    assert operation["security"] == [{"sessionCookie": []}]
+    assert {"200", "401", "403", "429", "503"} <= set(operation["responses"])
+    body = operation["responses"]["200"]["content"]["application/json"]["schema"]
+    assert body == {"$ref": "#/components/schemas/DataExportRead"}
+    fields = schema["components"]["schemas"]["DataExportRead"]["properties"]
+    assert set(fields) == {
+        "format_version", "exported_at", "profile", "addresses", "orders", "reviews", "offers",
+        "contact_messages",
+    }  # fmt: skip

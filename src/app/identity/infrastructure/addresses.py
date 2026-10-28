@@ -82,6 +82,11 @@ class SqlAddressRepository:
         )
         return [_to_domain(row) for row in (await self._session.execute(stmt)).all()]
 
+    async def list_all_for_user(self, user_id: UUID) -> list[Address]:
+        """VS-044: deleted ones included, oldest first."""
+        stmt = select(*_COLUMNS).where(_A.user_id == user_id).order_by(_A.created_at, _A.id)
+        return [_to_domain(row) for row in (await self._session.execute(stmt)).all()]
+
     async def get_live(self, *, address_id: UUID, user_id: UUID) -> Address | None:
         stmt = select(*_COLUMNS).where(_A.id == address_id, _A.user_id == user_id, _LIVE)
         row = (await self._session.execute(stmt)).first()
