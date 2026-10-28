@@ -470,9 +470,9 @@ async def test_search_folds_case_including_accents_but_not_diacritics(
             "same case": count(f"MiXeD-{token}"),
             "lowered": count(f"mixed-{token}"),
             "uppered": count(f"MIXED-{token}"),
-            "accent lower": count("été"),
-            "accent upper": count("ÉTÉ"),
-            "diacritic stripped": count("ete"),
+            "accent lower": count(f"{token}-été"),
+            "accent upper": count(f"{token}-ÉTÉ"),
+            "diacritic stripped": count(f"{token}-ete"),  # anonymised emails contain "ete"
         }
 
     assert matches["same case"] == 1
