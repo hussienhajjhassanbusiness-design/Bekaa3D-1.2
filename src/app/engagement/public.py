@@ -26,7 +26,11 @@ from app.engagement.domain.entities import Notification
 from app.engagement.domain.enums import NotificationType
 from app.engagement.domain.reviews import Review, badge_shown
 from app.engagement.infrastructure.administrators import IdentityAdministratorDirectory
-from app.engagement.infrastructure.contact_messages import SqlContactMessageRepository
+from app.engagement.infrastructure.contact_messages import (
+    ExportContactMessageRow,
+    SqlContactMessageRepository,
+    contact_messages_for_export,
+)
 from app.engagement.infrastructure.custom_requests import SqlCustomRequestRepository
 from app.engagement.infrastructure.repositories import NotificationRepository
 from app.engagement.infrastructure.reviews import CatalogReviewableProducts, SqlReviewStore
@@ -34,10 +38,12 @@ from app.integrations.storage.ports import StoragePort
 
 __all__ = [
     "PROBLEM_REPORT_MESSAGE_MAX",
+    "ExportContactMessageRow",
     "NotificationType",
     "ProblemReport",
     "PurchaseEvidence",
     "ReviewRow",
+    "contact_messages_for_export",
     "create_notification",
     "lock_review_for_moderation",
     "purge_expired_attachments_batch",

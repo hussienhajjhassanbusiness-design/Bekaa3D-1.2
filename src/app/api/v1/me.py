@@ -12,6 +12,7 @@ from app.ordering.api.orders import router as ordering_orders_router
 from app.ordering.api.ownership import router as ordering_ownership_router
 from app.ordering.api.payment_retry import router as ordering_payment_retry_router
 from app.ordering.api.receipt import router as ordering_receipt_router
+from app.reporting.api.data_export import router as reporting_data_export_router
 
 router = APIRouter()
 router.include_router(identity_profile_router)
@@ -30,3 +31,5 @@ router.include_router(ordering_cancel_router)
 router.include_router(negotiation_offers_router)
 # VS-041: offer checkout lives with Ordering, which owns orders and checkout (ADR-037).
 router.include_router(ordering_offer_checkout_router)
+# VS-044: GET /me/export, the caller's own data as one streamed JSON document (ADR-046).
+router.include_router(reporting_data_export_router)
