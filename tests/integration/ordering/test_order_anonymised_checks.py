@@ -1,5 +1,6 @@
-"""VS-045 (0b349a492461, ADR-047): only an anonymised order may lack its phone and address, an
-anonymised one holds no personal field and is closed. The database refuses the bad row itself."""
+"""VS-045 (0b349a492461, 73c7f206e9f9; ADR-047): only an anonymised order may lack its phone and
+address; an anonymised one holds no personal field, only its account's anonymised email, and is
+closed. The database refuses the bad row itself."""
 
 import pytest
 from sqlalchemy import text
@@ -11,10 +12,12 @@ from tests.integration.fulfillment.order_support import seed_physical_order
 
 pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("configured_app")]
 
-_SCRUB = (
+_FIELDS = (
     "recipient_name = NULL, contact_phone_snapshot = NULL,"
     " city = NULL, area = NULL, street = NULL, landmark_notes = NULL, customer_note = NULL"
 )
+_EMAIL = "customer_email_snapshot = 'deleted+' || user_id::text || '@invalid'"
+_SCRUB = f"{_FIELDS}, {_EMAIL}"
 
 
 async def _try(engine: AsyncEngine, sql: str, order_id: object) -> None:
@@ -43,6 +46,15 @@ async def _try(engine: AsyncEngine, sql: str, order_id: object) -> None:
             + _SCRUB.replace("customer_note = NULL", "customer_note = 'hi'"),
             "ck_orders_anonymised_shape",
             id="keeps_the_note",
+        ),
+        pytest.param(
+            f"anonymized_at = now(), {_FIELDS}", "ck_orders_anonymised_shape", id="keeps_the_email"
+        ),
+        pytest.param(
+            f"anonymized_at = now(), {_FIELDS},"
+            " customer_email_snapshot = 'deleted+' || gen_random_uuid()::text || '@invalid'",
+            "ck_orders_anonymised_shape",
+            id="another_accounts_email",
         ),
     ],
 )

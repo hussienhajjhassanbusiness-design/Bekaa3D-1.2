@@ -206,11 +206,12 @@ class OrderModel(Base):
             "AND landmark_notes IS NOT NULL)",
             name="ck_orders_delivery_address",
         ),
-        # VS-045 (0b349a492461): an anonymised order keeps no personal field (ADR-047).
+        # VS-045 (0b349a492461, 73c7f206e9f9): an anonymised order keeps no personal field.
         CheckConstraint(
             "anonymized_at IS NULL OR (recipient_name IS NULL AND contact_phone_snapshot IS NULL "
             "AND city IS NULL AND area IS NULL AND street IS NULL AND landmark_notes IS NULL "
-            "AND customer_note IS NULL)",
+            "AND customer_note IS NULL "
+            "AND customer_email_snapshot = 'deleted+' || user_id::text || '@invalid')",
             name="ck_orders_anonymised_shape",
         ),
         CheckConstraint(

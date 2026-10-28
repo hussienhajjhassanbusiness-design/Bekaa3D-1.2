@@ -254,15 +254,15 @@ async def traces(engine: AsyncEngine, needles: set[str]) -> dict[str, list[str]]
     return found
 
 
-async def wait_for_waiters(engine: AsyncEngine, pattern: str, count: int) -> None:
-    """Block until `count` backends wait on a lock while running a query like `pattern`."""
+async def wait_for_waiters(engine: AsyncEngine, count: int) -> None:
+    """Block until `count` backends of this database wait on a lock, whatever their SQL, so a
+    changed lock query still queues and the race fails on its outcome (VS-045 audit A-06)."""
     deadline = asyncio.get_running_loop().time() + 10.0
     while asyncio.get_running_loop().time() < deadline:
         waiting = await scalar(
             engine,
             "SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock'"
-            " AND datname = current_database() AND query ILIKE :p",
-            p=pattern,
+            " AND datname = current_database()",
         )
         if waiting is not None and waiting >= count:
             return
@@ -276,4 +276,4 @@ async def wait_for_waiters(engine: AsyncEngine, pattern: str, count: int) -> Non
                 )
             )
         ).all()
-    raise AssertionError(f"fewer than {count} requests ever waited on {pattern}: {waiting}")
+    raise AssertionError(f"fewer than {count} requests ever waited on a lock: {waiting}")

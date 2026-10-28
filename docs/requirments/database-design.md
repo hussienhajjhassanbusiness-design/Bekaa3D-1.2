@@ -509,15 +509,16 @@ Because `CITEXT` is used, the implementation may use a direct unique partial ind
 | `id` | UUID | No | PK |
 | `user_id` | UUID | No | FK → `users.id` |
 | `label` | TEXT | No | 1-50 characters |
-| `recipient_name` | TEXT | No | 1-100 characters |
-| `phone` | TEXT | No | Lebanese number in E.164 (`^\+961[0-9]{7,8}$`); the courier's contact |
+| `recipient_name` | TEXT | Yes¹ | 1-100 characters |
+| `phone` | TEXT | Yes¹ | Lebanese number in E.164 (`^\+961[0-9]{7,8}$`); the courier's contact |
 | `governorate` | TEXT | No | One of the nine governorate slugs (CHECK) |
-| `city` | TEXT | No |  |
+| `city` | TEXT | Yes¹ |  |
 | `area` | TEXT | Yes |  |
 | `street` | TEXT | Yes |  |
-| `landmark_notes` | TEXT | No | Required: SRS 14.4 (ADR-027); 1-500 characters |
+| `landmark_notes` | TEXT | Yes¹ | Required: SRS 14.4 (ADR-027); 1-500 characters |
 | `is_default` | BOOLEAN | No | Default `FALSE` |
 | `deleted_at` | TIMESTAMPTZ | Yes |  |
+| `anonymized_at` | TIMESTAMPTZ | Yes | set by account deletion (VS-045, ADR-047 d3) |
 | `created_at` | TIMESTAMPTZ | No |  |
 | `updated_at` | TIMESTAMPTZ | No |  |
 
@@ -531,6 +532,16 @@ WHERE is_default = TRUE AND deleted_at IS NULL
 ```
 
 A deleted address is never default: `CHECK (NOT (is_default AND deleted_at IS NOT NULL))`. Text columns carry length and non-blank checks. Every write first locks the owner's `users` row `FOR NO KEY UPDATE` (ADR-027).
+
+¹ As built (VS-045, migration `0b349a492461`, ADR-047 d3): the four columns are nullable in the database, and required on every row that is not anonymised. An anonymised row keeps only `label` and `governorate`:
+
+```text
+ck_addresses_required_unless_anonymised:
+  anonymized_at IS NOT NULL OR (recipient_name, phone, city, landmark_notes IS NOT NULL)
+ck_addresses_anonymised_shape:
+  anonymized_at IS NULL OR (deleted_at IS NOT NULL AND recipient_name, phone, city, area,
+                            street, landmark_notes IS NULL)
+```
 
 ### FK Delete
 
@@ -964,7 +975,7 @@ but determining whether the referenced product is STL is cross-table. VS-022 the
 | `id` | UUID | No | PK |
 | `order_number` | TEXT | No | UNIQUE |
 | `user_id` | UUID | No | FK → `users.id` |
-| `customer_email_snapshot` | CITEXT | No | verified account email at checkout; STL files are emailed here (ADR-019) |
+| `customer_email_snapshot` | CITEXT | No | verified account email at checkout; STL files are emailed here (ADR-019); account deletion rewrites it to `deleted+<user_id>@invalid` (VS-045) |
 | `source` | `order_source` | No |  |
 | `status` | `order_status` | No | derived projection |
 | `fulfillment_method` | `fulfillment_method` | Yes | NULL for digital-only |
@@ -991,6 +1002,7 @@ but determining whether the referenced product is STL is cross-table. VS-022 the
 | `placed_at` | TIMESTAMPTZ | No |  |
 | `completed_at` | TIMESTAMPTZ | Yes |  |
 | `cancelled_at` | TIMESTAMPTZ | Yes | set only by the hold release (VS-024); a cancelled paid or cash order leaves it NULL (ADR-043 d7) |
+| `anonymized_at` | TIMESTAMPTZ | Yes | VS-045 (`0b349a492461`): set by account deletion; see the anonymisation constraints below (ADR-047 d2) |
 | `customer_cancelled_at` | TIMESTAMPTZ | Yes | VS-031 (`595b7e6e2792`): set only by the customer's own cancel; a cash order so cancelled counts toward `cash_max_open_orders` for 24 hours (ADR-038 d23), through `ix_orders_cash_self_cancel_user (user_id, customer_cancelled_at)` and `ix_orders_cash_self_cancel_phone (contact_phone_hash, customer_cancelled_at)`, both `WHERE payment_method = 'cash' AND customer_cancelled_at IS NOT NULL` |
 | `created_at` | TIMESTAMPTZ | No |  |
 | `updated_at` | TIMESTAMPTZ | No |  |
@@ -1038,6 +1050,18 @@ As built (VS-028 PR A, migration `fcd589e89e59`), the two spellings cash matchin
 ```text
 ck_orders_contact_phone_e164: contact_phone_snapshot IS NULL OR contact_phone_snapshot ~ '^\+961[0-9]{7,8}$'
 ck_orders_phone_hash_format:  contact_phone_hash IS NULL OR contact_phone_hash ~ '^[0-9a-f]{64}$'
+```
+
+As built (VS-045, migrations `0b349a492461` and `73c7f206e9f9`; ADR-047 d2): `ck_orders_physical_has_phone`, `ck_orders_delivery_address` and `ck_orders_phone_hash_pair` each hold only while `anonymized_at IS NULL`. An anonymised order keeps `governorate`, `admin_note` and `contact_phone_hash` (the cash hold, ADR-038 d23), holds no other personal field, and is closed:
+
+```text
+ck_orders_physical_has_phone:  anonymized_at IS NOT NULL OR <the rule above>
+ck_orders_delivery_address:    anonymized_at IS NOT NULL OR <the rule above>
+ck_orders_phone_hash_pair:     anonymized_at IS NOT NULL OR <the rule above>
+ck_orders_anonymised_shape:    anonymized_at IS NULL OR (recipient_name, contact_phone_snapshot,
+                               city, area, street, landmark_notes, customer_note IS NULL
+                               AND customer_email_snapshot = 'deleted+' || user_id || '@invalid')
+ck_orders_anonymised_closed:   anonymized_at IS NULL OR status NOT IN ('pending_payment', 'in_progress')
 ```
 
 The fact that an order actually contains physical/digital lines is cross-row and must be validated transactionally; a `cash` order having only physical lines is enforced by the database through the copied `order_items.payment_method` (§8.4).
