@@ -100,6 +100,13 @@ def _post(client: httpx.AsyncClient, path: str, body: dict[str, Any], key: bool 
     return call
 
 
+def _refused(response: httpx.Response, status: int, **fields: str) -> None:
+    """Status first, so a wrong outcome (a 201 or 204) fails with its body, not a KeyError."""
+    assert response.status_code == status, response.text
+    body = response.json()
+    assert {k: body.get(k) for k in fields} == fields, body
+
+
 async def _anonymised(engine: AsyncEngine, user_id: uuid.UUID) -> bool:
     found = await scalar(engine, "SELECT anonymized_at FROM users WHERE id = :u", u=user_id)
     return found is not None
@@ -136,7 +143,7 @@ async def test_deletion_first_leaves_a_waiting_cart_checkout_no_account(
     finally:
         await client.aclose()
     assert deleted.status_code == 204, deleted.text
-    assert (checkout.status_code, checkout.json()["code"]) == (401, "AUTH_REQUIRED")
+    _refused(checkout, 401, code="AUTH_REQUIRED")
     assert await _orders(db_engine, user.id) == 0 and await _anonymised(db_engine, user.id)
 
 
@@ -154,7 +161,7 @@ async def test_checkout_first_makes_a_waiting_deletion_see_the_open_order(
     finally:
         await client.aclose()
     assert checkout.status_code == 201, checkout.text
-    assert (deleted.status_code, deleted.json()["reason"]) == (409, "open_order")
+    _refused(deleted, 409, reason="open_order")
     assert await _orders(db_engine, user.id) == 1 and not await _anonymised(db_engine, user.id)
 
 
@@ -193,7 +200,7 @@ async def test_deletion_racing_an_offer_checkout_never_deadlocks_or_orphans_an_o
         assert status == "withdrawn"
     else:
         assert checkout.status_code == 201, checkout.text
-        assert (deleted.status_code, deleted.json()["reason"]) == (409, "open_order")
+        _refused(deleted, 409, reason="open_order")
         assert not await _anonymised(db_engine, user.id)
 
 
@@ -304,7 +311,7 @@ async def test_deletion_racing_an_admin_refund_blocks_or_lets_it_land(
     if deletion_first:
         assert deleted.status_code == 204, deleted.text
     else:
-        assert (deleted.status_code, deleted.json()["reason"]) == (409, "unsettled_refund")
+        _refused(deleted, 409, reason="unsettled_refund")
     assert await _anonymised(db_engine, user.id) is deletion_first
 
 
@@ -329,11 +336,11 @@ async def test_deletion_racing_a_cash_checkout_never_orphans_an_order(
     deleted, checkout = (first, second) if deletion_first else (second, first)
     if deletion_first:
         assert deleted.status_code == 204, deleted.text
-        assert (checkout.status_code, checkout.json()["code"]) == (401, "AUTH_REQUIRED")
+        _refused(checkout, 401, code="AUTH_REQUIRED")
         assert await _orders(db_engine, user.id) == 0 and await _anonymised(db_engine, user.id)
     else:
         assert checkout.status_code == 201, checkout.text
-        assert (deleted.status_code, deleted.json()["reason"]) == (409, "open_order")
+        _refused(deleted, 409, reason="open_order")
         assert await _orders(db_engine, user.id) == 1 and not await _anonymised(db_engine, user.id)
 
 
@@ -388,5 +395,5 @@ async def test_an_offer_checkout_refuses_an_account_closed_while_it_waited(
         response = await asyncio.wait_for(checkout, timeout=RACE_TIMEOUT_SECONDS)
     finally:
         await client.aclose()
-    assert (response.status_code, response.json()["code"]) == (401, "AUTH_REQUIRED"), response.text
+    _refused(response, 401, code="AUTH_REQUIRED")
     assert await _orders(db_engine, user.id) == 0
