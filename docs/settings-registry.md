@@ -26,7 +26,7 @@ rather than inferred from the specification. Changing one is a migration if you
 want the new value to apply to a fresh deployment, or a `PATCH` if you want it
 to apply now.
 
-## The seventeen settings
+## The sixteen settings
 
 | Key | Type | Unit | Default | Range | Public |
 |---|---|---|---|---|:-:|
