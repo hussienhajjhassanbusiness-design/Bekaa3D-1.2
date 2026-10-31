@@ -1,0 +1,46 @@
+# ADR-049: Manual payment - online orders are paid as arranged by the administrator with the customer, and confirmed by hand; no gateway, no crypto (VS-050)
+
+**Status:** Accepted (2026-10-31, VS-050).
+**Date:** 2026-10-31
+**Source basis:** Owner decisions of 2026-10-31: production takes manual payments only; the administrator arranges payment with the customer directly (WhatsApp or phone) and confirms it through VS-024's manual confirm; the website handles no payment details. Owner approval of the [VS-050 plan](../plans/VS-050-manual-payment-plan.md)'s recommendations Q1-Q7. SRS BR-039, BR-052-BR-058, BR-148, §7.3, §7.4, §9.1-§9.4, §15.3, §15.4, §30.1, §30.4; [ADR-012](ADR-012-payment-provider-abstraction.md); [ADR-032](ADR-032-checkout-idempotency-and-payment-verification.md) d15, d23, d24; [ADR-036](ADR-036-payment-recovery.md) d1, d2, d5-d8; [ADR-037](ADR-037-accepted-offer-checkout.md) d7, d8.
+**Resolves:** SRS §30.4 for V1.
+**Amends:** BR-039 and ADR-036 d1 for the manual provider (decision 6); ADR-036 d6 (decision 5, optional reference) and d8 (decision 7, release at any time); ADR-032 d15 (decision 3); BR-052, BR-054, §7.3, §7.4 and §9.1 (decisions 1, 2, 5, 8).
+**Applies first to:** `payment_provider` enum; the settings registry; `POST /api/v1/checkout`, `POST /api/v1/me/offers/{offer_id}/checkout`, `POST /api/v1/me/orders/{order_id}/payments`, `GET /api/v1/me/orders/{order_id}`, `POST /api/v1/admin/payments/{payment_id}/confirm`, `POST /api/v1/admin/payments/{payment_id}/record-capture`, `GET /api/v1/admin/payments`, `POST /api/v1/admin/orders/{order_id}/release`; the `release_stale_checkouts` and `reconcile_payments` jobs. Migration `941b40d285ce`.
+
+## Context
+
+Production ran on `PAYMENT_PROVIDER=none` (ADR-036 d16), so an online order answered 503 and an STL could not be bought at all. The owner wants no gateway: the administrator contacts each customer, agrees how the money is sent (a Whish transfer, OMT, or whatever suits them), and confirms the payment once it has arrived. VS-024 already built the trusted half: a provider without a status API is never trusted, and its attempts are confirmed by an administrator through `apply_result`, the same decision table and lock order as a webhook, with a differing amount refused. What was missing was a provider production may run, a hold long enough for a conversation, a phone to call, and a way for the administrator to see what is waiting.
+
+## Decision
+
+1. **One provider value, `manual`, is the V1 online provider** (§30.4). It is served by `ManualPaymentProvider`: no outbound call and no status query, so reconciliation never asks it and every attempt needs manual confirmation (ADR-036 d5, d6). Checkout, retry, offer checkout, confirm, record-capture, late capture, refunds and chargebacks run unchanged. `capability()` recognises `manual` by its name, configured or not, so a later `PAYMENT_PROVIDER` change cannot strand its orders. A future API provider (VS-032) still needs no change outside its adapter.
+2. **Checkout creates the order awaiting payment and nothing else.** `create_payment` returns no reference and no redirect (`CreatedPayment.provider_payment_id` became optional, and Tx2 then stores nothing). The order is `pending_payment`, its attempt `pending`. The payment read on checkout, offer checkout and retry carries `next_step: "await_admin_contact"` and `hold_expires_at`; `GET /me/orders/{id}` carries the same `next_step` while the attempt is live. The website shows no payee, account or instructions.
+3. **The manual provider receives no webhooks.** The webhook route answers 404 for an adapter with `accepts_webhooks = False`, as for an unconfigured provider, and stores nothing. ADR-032 d15 ("every adapter must sign its webhooks") applies to adapters that accept webhooks.
+4. **`PAYMENT_PROVIDER=manual` boots in every environment**, production included. The mock stays refused in production (ADR-032 d23). The setting stays a single value; a list of providers is left to VS-032.
+5. **The reference is optional for `manual` only** (confirm, and record-capture, Q4). Omitted or blank, nothing is stored; given, it is trimmed, its case kept, stored as `provider_payment_id` and unique per provider through `uq_payments_provider_reference` (nulls are distinct, so omitted references never collide). It is the transfer's own reference; notes go in the mandatory `reason` (Q5). Another provider without one is `422 PAYMENT_REFERENCE_REQUIRED`. Two confirms typing one reference serialise on a transaction-level advisory lock on `(provider, reference)`, taken after the payment's lock, so the second is refused with `409 PAYMENT_REFERENCE_MISMATCH` instead of tripping the index. The amount rule is unchanged: a differing amount or currency is `422 PAYMENT_AMOUNT_MISMATCH`, and record-capture records it as a late capture with its refund obligation.
+6. **A longer hold, released automatically.** Setting `manual_payment_hold_period`: default 7 days, range 1 hour to 30 days (Q6). The hold deadline (ADR-036 d2) and the retry bound use the hold of the latest attempt's provider; `checkout_hold_period` governs every other provider. At the deadline `release_stale_checkouts` answers the attempt itself (`expired`, through `apply_result`) and releases the order through `release_unpaid_order`, with the `order_checkout_expired` notice and audit reason `manual_hold_expired`. This restores BR-039's automatic cancellation for a provider with no one else to ask. The release re-checks under the order, line and payment locks, so a confirm that commits first wins.
+7. **The administrator may release a `manual` order at any time** (Q3), with the mandatory reason: ADR-036 d8's 24 h grace waits for a provider answer that never comes.
+8. **A phone to call** (Q1). An online order on `manual` always carries a contact phone: delivery and pickup already have one; an STL-only cart checkout and an offer checkout must send `contact_phone` (`422 CONTACT_PHONE_REQUIRED`), stored as `contact_phone_snapshot` with its hash. Any other provider still refuses one there (SRS 7.4).
+9. **Who is told** (Q2). The customer gets an `order.awaiting_payment` notification and an `order_awaiting_payment` email in the order's own transaction, never with the phone. Every administrator gets one `manual_payment_due` alert per attempt, raised last in Tx2 of checkout, offer checkout and retry.
+10. **Money that arrives after a release** is confirmed against the expired attempt, which records a late capture and its refund obligation (SRS §9.2, unchanged).
+11. **The administrator's work list:** `GET /api/v1/admin/payments?awaiting_confirmation=true` lists live `manual` attempts, oldest first (`ix_payments_awaiting_manual`), with the order number and `hold_expires_at`. It carries no customer contact: the phone and email are on `GET /api/v1/admin/orders/{order_id}`, which already shows any order. Unpaid online orders still never enter the fulfillment queue (BR-148).
+12. **Reconciliation skips `manual`** without an alert: it was announced at placement and has nothing to ask.
+13. **The dispatch estimate still counts from placement** (§8.6, Q7), although production waits for the confirmation.
+
+## Consequences
+
+- Production can take online orders, STL and offer checkouts included, as soon as a server exists (VS-020). Emails (the customer's notice, the administrators' alerts) need VS-021's sender; until then they are in-app only.
+- Every online order costs the administrator a conversation and a manual confirm. No STL is sent and no physical work starts before it (BR-057, BR-148).
+- An unpaid STL line holds the customer's ownership index for up to the hold, so the same customer cannot check out the same STL again meanwhile (409 `PRODUCT_ALREADY_OWNED`) unless the administrator releases the order.
+- An accepted offer whose order is awaiting payment stays accepted until the attempt ends (ADR-037 d7), up to the hold. A failed attempt on an offer order can only be retried inside the offer's checkout window (ADR-037 d8).
+- `release_order_by_admin` reads both holds from the settings itself; callers no longer pass a hold.
+- SRS §30.1's provider questions no longer block V1; they apply only if an API provider is added later (VS-032, deferred).
+
+## Alternatives rejected
+
+- **Separate Whish and OMT providers with payee settings, instructions and a customer transfer report** (this ADR's first draft): the owner keeps payment details off the website and arranges payment directly.
+- **Storing a reference at checkout:** confirm requires a typed reference to equal the stored one, so the real transfer reference could never be recorded.
+- **Keeping ADR-036 d1 for the manual provider** (never auto-release): every abandoned checkout would wait for an administrator, and its STL ownership would be held until then.
+- **Normalising references (upper-casing):** a reference is copied as the administrator sees it; whether a channel's references are case-sensitive is unknown.
+- **Catching the unique-index violation instead of the reference lock:** the loser's transaction would be aborted mid-apply; the lock makes the refusal an ordinary 409 before anything is written.
+- **Contact details in the admin payment list:** the order detail already shows them; the list stays free of customer data, as it was (ADR-036).

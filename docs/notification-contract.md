@@ -50,6 +50,8 @@ Rules enforced by `app.engagement.domain.payload`:
 | `order.problem_reported` | `order` | every active administrator, in the report's transaction (a failure fails the report, ADR-041) | `order_id`, `order_number`, `contact_message_id`, `title`; never the message, email or phone | VS-029b |
 | `payment.confirmed` | `payment` | the customer | `order_id`, `order_number` | VS-023 |
 | `order.placed` | `order` | the customer, for a cash order | `order_id`, `order_number` | VS-028 |
+| `order.awaiting_payment` | `order` | the customer, for an order on the `manual` provider: the administrator will make contact to arrange payment (ADR-049) | `order_id`, `order_number`, `total_cents`, `currency`; never the phone | VS-050 |
+| `payment.alert.manual_payment_due` | `payment` | every active, verified administrator, once per `manual` attempt ([`payment-recovery.md`](payment-recovery.md)) | `kind`, `payment_id`, `order_id`, `order_number`, `provider` | VS-050 |
 | `offer.submitted` | `offer` | every active administrator | `offer_id`, `product_id`, `product_name`, `amount_cents`, `currency` | VS-039 |
 | `offer.expired` | `offer` | the customer | `offer_id`, `product_id` | VS-039 |
 | `offer.countered` | `offer` | the customer (admin counter) or every active administrator (customer counter) | `offer_id`, `product_id`, `product_name`, `amount_cents`, `currency`, `responds_by` | VS-040 |
@@ -66,6 +68,7 @@ Emails with them (outbox templates; no phone, hash or address ever appears in a 
 - `order_payment_confirmed` (VS-023): `order_id`, `order_number`, `total_cents`, `currency`; VS-028 adds `fulfillment_method`, `estimated_dispatch_at` and `delivery_fee_note` (delivery only).
 - `order_cancelled` (VS-031): the `order.cancelled` payload above; a paid cancel also sends VS-030's `order_refund_issued`.
 - `order_cash_placed` (VS-028): `order_id`, `order_number`, `amount_due_cents`, `currency`, `fulfillment_method`, `estimated_dispatch_at`, `delivery_fee_note` (delivery only), `pickup`.
+- `order_awaiting_payment` (VS-050): `order_id`, `order_number`, `total_cents`, `currency`: the order is placed and the administrator will contact the customer to arrange payment.
 
 ### On `event`
 

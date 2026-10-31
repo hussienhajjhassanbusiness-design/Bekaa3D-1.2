@@ -2,7 +2,7 @@
 
 Retry, reconciliation, the checkout hold release and manual confirmation, as built. Decisions: [ADR-036](adr/ADR-036-payment-recovery.md). Plan: [VS-024](plans/VS-024-payment-recovery-plan.md). Checkout and verification themselves: [`checkout.md`](checkout.md).
 
-**The one rule:** an unpaid order is released automatically **only** when the provider explicitly answers `failed` or `expired` for its latest attempt. Nothing else (no answer, a timeout, `unknown`, `pending`, `processing`, an unprocessed webhook event, a provider without a status API) ever cancels an order. Those wait for the provider, for reconciliation, or for an administrator.
+**The one rule:** an unpaid order is released automatically **only** when the provider explicitly answers `failed` or `expired` for its latest attempt. Nothing else (no answer, a timeout, `unknown`, `pending`, `processing`, an unprocessed webhook event, a provider without a status API) ever cancels an order. Those wait for the provider, for reconciliation, or for an administrator. **The `manual` provider** (VS-050, [ADR-049](adr/ADR-049-manual-payment.md)) has no one to ask: at its own deadline the job answers `expired` itself and releases the order (see [Manual payment](#manual-payment-vs-050)).
 
 ## Routes
 
@@ -20,7 +20,7 @@ Schemas are in [`frontend-handoff/openapi.json`](frontend-handoff/openapi.json).
 
 ## Retry
 
-- Allowed only before `placed_at + checkout_hold_period` (30 min by default), on an unpaid online order whose lines are all `pending`; `409 INVALID_STATE_TRANSITION` with `reason` `cash_order`, `order_cancelled`, `order_not_payable` or `checkout_hold_expired` otherwise. An offer order (VS-041) also needs its offer still `accepted` and inside its checkout window, else `reason: offer_checkout_expired` ([ADR-037](adr/ADR-037-accepted-offer-checkout.md)).
+- Allowed only before `placed_at` plus the previous attempt's hold (`checkout_hold_period`, 30 min by default, or `manual_payment_hold_period` for `manual`), on an unpaid online order whose lines are all `pending`; `409 INVALID_STATE_TRANSITION` with `reason` `cash_order`, `order_cancelled`, `order_not_payable` or `checkout_hold_expired` otherwise. An offer order (VS-041) also needs its offer still `accepted` and inside its checkout window, else `reason: offer_checkout_expired` ([ADR-037](adr/ADR-037-accepted-offer-checkout.md)).
 - The new attempt charges the order's own total; the body cannot name an amount. `payment_provider` defaults to the previous attempt's, while still configured.
 - A live attempt is `409 PAYMENT_ALREADY_ACTIVE` with `payment_id`, `payment_status` and `redirect_url` (null while `processing`). `payment_status`, not `status`: a problem body's `status` is the HTTP status.
 - One `Idempotency-Key` is one retry of one order by one user (scope `payment_retry:{order_id}`). The `201` and the `502 PAYMENT_PROVIDER_UNAVAILABLE` are replayed for the same key.
@@ -29,7 +29,7 @@ Schemas are in [`frontend-handoff/openapi.json`](frontend-handoff/openapi.json).
 
 ## The hold deadline
 
-`hold_deadline = max(placed_at, latest attempt's initiated_at) + checkout_hold_period`. A retry restarts it, so a retry made a second before the hold ends gets a full hold of its own (at most just under two holds after placement).
+`hold_deadline = max(placed_at, latest attempt's initiated_at) + hold`, where `hold` is `manual_payment_hold_period` (7 days by default) when the latest attempt is `manual`, else `checkout_hold_period`. A retry restarts it, so a retry made a second before the hold ends gets a full hold of its own (at most just under two holds after placement).
 
 ## Jobs
 
@@ -46,7 +46,7 @@ Both page by keyset (50 a page), never lock what they select, ask one provider a
 
 For a provider **without** a status API (or one no longer configured) only; a status provider answers `409 MANUAL_CONFIRMATION_NOT_ALLOWED` (use reconcile).
 
-- Body: `provider_reference`, `verified_amount_cents`, `verified_currency` (`USD`), `reason` (10-1000 characters).
+- Body: `provider_reference`, `verified_amount_cents`, `verified_currency` (`USD`), `reason` (10-1000 characters). `provider_reference` is optional for `manual` only (`422 PAYMENT_REFERENCE_REQUIRED` otherwise); it is trimmed and keeps its case. Put notes in `reason`: a given reference is unique per provider.
 - An amount or currency that differs from the attempt is `422 PAYMENT_AMOUNT_MISMATCH` with `expected_amount_cents`. **Nothing is written and nothing becomes a late capture.** A customer who paid a different amount is refunded in the provider's dashboard, and the order released by hand.
 - Otherwise it goes through the webhook's own apply path: a live attempt on an uncancelled order is paid; an attempt no longer live, or a cancelled order, records a late capture. A stored reference that differs, or a reference another payment owns, is `409 PAYMENT_REFERENCE_MISMATCH`.
 - The payment's unprocessed events are closed; the audit row `payment.manual_confirmation` keeps the typed amount, reference and reason. A double submit is `NOOP`.
@@ -55,7 +55,7 @@ For a provider **without** a status API (or one no longer configured) only; a st
 
 `POST /api/v1/admin/orders/{order_id}/release`, body `reason` (10-1000 characters) and `events_reviewed`.
 
-- Available from the hold deadline **plus 24 hours**, for every provider; `409 INVALID_STATE_TRANSITION` with `reason: grace_not_elapsed` and `release_available_at` before that. Early only when the latest attempt has no provider reference and the provider answered `unknown` (the checkout crash window).
+- For `manual`, available **at any time** (VS-050 Q3). For every other provider, from the hold deadline **plus 24 hours**; `409 INVALID_STATE_TRANSITION` with `reason: grace_not_elapsed` and `release_available_at` before that. Early only when the latest attempt has no provider reference and the provider answered `unknown` (the checkout crash window).
 - With unprocessed events it needs `events_reviewed: true` (`409 … unprocessed_events` with `count` otherwise); the events are then dismissed (`processing_error = dismissed_by_admin`) and listed in the audit row.
 - It expires the live attempt, then releases as the job does, with the administrator as the actor on every row. It never calls the provider.
 
@@ -69,7 +69,7 @@ Every active, verified administrator receives each alert as an in-app `payment.a
 
 | Kind | Repeats |
 |---|---|
-| `late_capture`, `manual_confirmation_due`, `release_due`, `reference_unknown` | once per payment |
+| `late_capture`, `manual_confirmation_due`, `manual_payment_due`, `release_due`, `reference_unknown` | once per payment |
 | `stuck`, `event_unverified`, `provider_unavailable`, `provider_not_configured` | once a day per payment |
 | `provider_unreachable` | once an hour per provider |
 
@@ -83,6 +83,18 @@ Every active, verified administrator receives each alert as an in-app `payment.a
 
 **Provider unreachable** (`provider_unreachable`): nothing is written or released while it is down; reconciliation and the release resume on their own.
 
+## Manual payment (VS-050)
+
+`PAYMENT_PROVIDER=manual` is V1's production provider ([ADR-049](adr/ADR-049-manual-payment.md)). The website shows no payment details; the administrator arranges each payment with the customer by WhatsApp or phone.
+
+1. **Checkout** (cart, offer or retry) creates the order `pending_payment` with a `pending` attempt and no reference. The response's payment has `next_step: await_admin_contact` and `hold_expires_at`. An STL-only or offer order must give `contact_phone` (`422 CONTACT_PHONE_REQUIRED`); delivery and pickup already carry one. The customer gets `order.awaiting_payment` and an `order_awaiting_payment` email; every administrator gets one `manual_payment_due` alert.
+2. **Work list:** `GET /api/v1/admin/payments?awaiting_confirmation=true`, oldest first, with each order's `hold_expires_at`. The customer's phone and email are on `GET /api/v1/admin/orders/{order_id}`.
+3. **Paid as arranged:** confirm with the exact total, the transfer's reference if there is one, and a `reason`. STL lines enter `awaiting_delivery`; physical lines may start production.
+4. **A different amount** (short, over, or not USD): confirm refuses it; record-capture records it as a late capture with its refund obligation, the attempt fails, and the customer may retry within the hold.
+5. **Never paid:** the job releases the order at `hold_expires_at`; the administrator may release it earlier, with a reason. Money that arrives after a release is confirmed against the expired attempt: a late capture and its refund.
+
+Reconciliation skips `manual`, and its webhook route answers 404.
+
 ## Go-live
 
-Production stays on `PAYMENT_PROVIDER=none` until VS-032 adds a real adapter. The alerts above satisfy ADR-032 decision 24's alert clause only if someone reads them; the gate's main clause (VS-024 and VS-030 merged) still stands.
+Production runs `PAYMENT_PROVIDER=manual` once a server exists (VS-020); alert and customer emails need VS-021. VS-032 (an API provider) is deferred. ADR-032 decision 24's main clause (VS-024 and VS-030 merged) is met; its alert clause holds only if someone reads the alerts.
