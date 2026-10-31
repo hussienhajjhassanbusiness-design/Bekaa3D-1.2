@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from app.catalog.application.ports import ProductType
 from app.catalog.public import PriceRead, media_url
 from app.ordering.application.services.order_history import OrderDetailView, OrderSummaryView
+from app.ordering.domain.customer_view import PaymentNextStep, payment_next_step
 from app.ordering.domain.enums import (
     FulfillmentMethod,
     OrderItemStatus,
@@ -120,6 +121,10 @@ class OrderPaymentRead(BaseModel):
     status: str
     provider: str
     amount: PriceRead
+    next_step: PaymentNextStep | None = Field(
+        description="While the attempt is live: `await_admin_contact` for `manual` (the "
+        "administrator contacts the customer to arrange payment); null otherwise."
+    )
 
 
 class StatusHistoryRead(BaseModel):
@@ -211,6 +216,9 @@ class OrderDetailRead(BaseModel):
                 status=paid.status,
                 provider=paid.provider,
                 amount=_price(paid.amount_cents, paid.currency),
+                next_step=payment_next_step(
+                    provider=paid.provider, status=paid.status, redirect_url=None
+                ),
             )
             if paid is not None
             else None,

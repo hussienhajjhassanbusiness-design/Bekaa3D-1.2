@@ -17,17 +17,25 @@ from app.ordering.application.ports import (
     AcceptedOffer,
     CustomerAccounts,
     OfferCheckouts,
+    OrderNotices,
     OrderStore,
     PaymentAttempts,
     SettingsSource,
 )
 from app.ordering.application.services.checkout import CheckoutCustomer, OnlinePlacedOrder
+from app.ordering.application.services.holds import read_holds
 from app.ordering.application.services.retry import already_active
-from app.ordering.domain.checkout_rules import DIGITAL_TERMS_VERSION, choose_provider
+from app.ordering.domain.checkout_rules import (
+    DIGITAL_TERMS_VERSION,
+    choose_provider,
+    chooses_manual,
+)
 from app.ordering.domain.enums import OrderItemStatus, OrderSource, PaymentMethod
 from app.ordering.domain.exceptions import (
     CheckoutLinesRefusedError,
+    ContactPhoneRequiredError,
     CustomerAccountClosedError,
+    InvalidFulfillmentError,
     LineRefusal,
     OfferChangedError,
     OnlinePaymentUnavailableError,
@@ -36,6 +44,7 @@ from app.ordering.domain.exceptions import (
 from app.ordering.domain.order_number import new_order_number
 from app.ordering.domain.order_status import OrderStatusInputs, derive_order_status
 from app.ordering.domain.orders import NewOrder, NewOrderLine, StatusChange
+from app.ordering.domain.payment_recovery import MANUAL_PROVIDER, hold_deadline
 from app.platform.application.ports import AuditWriter
 
 
@@ -43,6 +52,7 @@ from app.platform.application.ports import AuditWriter
 class OfferCheckoutCommand:
     offer_id: UUID
     payment_provider: str | None
+    contact_phone: str | None = None  # E.164; required for `manual` only (VS-050 Q1)
 
 
 async def place_offer_order(
@@ -54,8 +64,10 @@ async def place_offer_order(
     attempts: PaymentAttempts,
     settings: SettingsSource,
     audit: AuditWriter,
+    notices: OrderNotices,
     customer: CheckoutCustomer,
     command: OfferCheckoutCommand,
+    hash_phone: Callable[[str], str],
     now: datetime,
     clock: Callable[[], datetime],
     number: Callable[[], str] | None = None,
@@ -67,6 +79,7 @@ async def place_offer_order(
     configured = attempts.configured_providers()
     if not configured:
         raise OnlinePaymentUnavailableError("No online payment provider is configured.")
+    phone = _phone_to_call(command, configured)
     product = _purchasable(
         offer, (await products.get_many([offer.product_id])).get(offer.product_id)
     )
@@ -97,6 +110,8 @@ async def place_offer_order(
             digital_terms_accepted_at=now,
             digital_terms_version=DIGITAL_TERMS_VERSION,
             placed_at=now,
+            contact_phone_snapshot=phone,
+            contact_phone_hash=hash_phone(phone) if phone is not None else None,
         ),
         number or new_order_number,
     )
@@ -132,7 +147,21 @@ async def place_offer_order(
             "offer_id": str(offer.id),
         },
     )
-    return OnlinePlacedOrder(order=order, lines=tuple(lines), payment=payment, dropped=())
+    if provider == MANUAL_PROVIDER:
+        await notices.awaiting_admin_contact(order)
+    hold = (await read_holds(settings)).for_provider(provider)
+    return OnlinePlacedOrder(order, tuple(lines), payment, (), hold_deadline(now, now, hold))
+
+
+def _phone_to_call(command: OfferCheckoutCommand, configured: frozenset[str]) -> str | None:
+    """VS-050 Q1: a `manual` offer order takes the phone the administrator calls; any
+    other provider takes none, as an STL-only cart order (SRS 7.4)."""
+    manual = chooses_manual(command.payment_provider, configured)
+    if manual and command.contact_phone is None:
+        raise ContactPhoneRequiredError("Give the phone the administrator will call.")
+    if not manual and command.contact_phone is not None:
+        raise InvalidFulfillmentError("An offer order has no fulfillment.")
+    return command.contact_phone
 
 
 def _purchasable(offer: AcceptedOffer, product: CartProduct | None) -> CartProduct:

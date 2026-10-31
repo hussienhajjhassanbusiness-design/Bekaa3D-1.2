@@ -148,6 +148,7 @@ async def seed_attempt(
     state: str | None = None,
     amount_cents: int | None = None,
     reference: bool = True,
+    provider: str = "mock",
 ) -> uuid.UUID:
     """One attempt; with `mock`, the mock knows it (pending, or `state` when given)."""
     payment_id = uuid.uuid4()
@@ -163,7 +164,7 @@ async def seed_attempt(
     row: dict[str, Any] = {
         "id": payment_id,
         "order_id": order.order_id,
-        "provider": "mock",
+        "provider": provider,
         "order_payment_method": "online",
         "status": status,
         "amount_cents": amount,

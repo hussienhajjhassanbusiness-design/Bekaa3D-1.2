@@ -1,5 +1,6 @@
 """Table T2: what `release_stale_checkouts` does with one order past its hold (VS-024 plan
-3.1, D5). Pure. Only an explicit provider `failed` or `expired` ever releases."""
+3.1, D5). Pure. Only an explicit `failed` or `expired` ever releases: the provider's, or
+for `manual` the platform's own `expired` at the hold's end (ADR-049)."""
 
 from dataclasses import dataclass
 from enum import StrEnum
@@ -14,6 +15,8 @@ class Capability(StrEnum):
     STATUS_QUERY = "status_query"
     NO_STATUS_QUERY = "no_status_query"
     NOT_CONFIGURED = "not_configured"
+    # ADR-049: no one to ask; the platform itself answers `expired` at the hold's end.
+    MANUAL = "manual"
 
 
 class Unavailable(StrEnum):
@@ -45,10 +48,10 @@ def must_skip_unasked(
 ) -> ReleaseVerdict | None:
     """The rows decided without asking the provider; None means "ask it"."""
     if unprocessed_events > 0:
-        if capability is Capability.NO_STATUS_QUERY:
+        if capability in (Capability.NO_STATUS_QUERY, Capability.MANUAL):
             return ReleaseVerdict(ReleaseKind.SKIP, AlertKind.MANUAL_CONFIRMATION_DUE)
         return ReleaseVerdict(ReleaseKind.SKIP, AlertKind.EVENT_UNVERIFIED)
-    if capability is not Capability.STATUS_QUERY:
+    if capability not in (Capability.STATUS_QUERY, Capability.MANUAL):
         return ReleaseVerdict(ReleaseKind.SKIP, AlertKind.RELEASE_DUE if grace_passed else None)
     return None
 

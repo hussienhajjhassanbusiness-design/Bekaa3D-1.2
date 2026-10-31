@@ -40,7 +40,7 @@ async def test_create_answers_pending_by_merchant_reference_alone(
 ) -> None:
     payment_id = uuid.uuid4()
     created = await mock.create_payment(CreatePayment(payment_id, "B3D-ABCD1234", 1500, "USD", ""))
-    assert created.provider_payment_id.startswith("mock_")
+    assert (created.provider_payment_id or "").startswith("mock_")
     assert created.redirect_url == "http://shop.test/checkout/return?order=B3D-ABCD1234"
     status = await mock.query_status(PaymentRef(payment_id, None))
     assert status.result == ProviderResult("pending", None, None)

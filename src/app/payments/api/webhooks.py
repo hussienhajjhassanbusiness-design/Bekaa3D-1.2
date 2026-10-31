@@ -1,6 +1,6 @@
-"""`POST /api/v1/webhooks/payments/{provider}` (VS-023 plan 2.2; SRS 9.2). No cookies, no
-CSRF. Checks run in order: configured provider (404), 64 KiB body (400), signature, then
-the bucket that matches it, then storage. The request never changes a payment."""
+"""`POST /api/v1/webhooks/payments/{provider}` (VS-023 plan 2.2; SRS 9.2), no cookies or
+CSRF. Checks in order: a configured provider taking webhooks (404, never `manual`), 64 KiB
+body (400), signature, its bucket, storage. The request never changes a payment."""
 
 import json
 from datetime import UTC, datetime
@@ -38,7 +38,10 @@ WINDOW_SECONDS = WEBHOOK_WINDOW_SECONDS
 _RESPONSES: dict[int | str, dict[str, Any]] = {
     400: {"description": "VALIDATION_ERROR: body over 64 KiB, or a signed body unreadable."},
     401: {"description": "WEBHOOK_SIGNATURE_INVALID: not stored."},
-    404: {"description": "The provider is not configured here (never `cash`)."},
+    404: {
+        "description": "The provider is not configured here or takes no webhooks "
+        "(never `cash` or `manual`)."
+    },
     429: {"description": "RATE_LIMITED: per IP for bad signatures, per provider otherwise."},
 }
 
@@ -102,7 +105,7 @@ async def receive_payment_webhook(
 ) -> WebhookAck:
     providers = request.app.state.payment_providers
     adapter = providers.get(provider)
-    if adapter is None:
+    if adapter is None or not getattr(adapter, "accepts_webhooks", True):
         raise ApiError(
             status_code=status.HTTP_404_NOT_FOUND,
             code="NOT_FOUND",

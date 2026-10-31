@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from app.catalog.application.ports import ProductType
-from app.ordering.domain.checkout_rules import choose_provider
+from app.ordering.domain.checkout_rules import choose_provider, chooses_manual
 from app.ordering.domain.enums import (
     OrderItemStatus,
     OrderSource,
@@ -18,6 +18,7 @@ from app.ordering.domain.enums import (
 from app.ordering.domain.exceptions import PaymentMethodNotAllowedError
 from app.ordering.domain.orders import Order, OrderLine
 from app.ordering.domain.payment_recovery import (
+    Holds,
     ReleaseRefusal,
     RetryRefusal,
     can_retry_payment,
@@ -183,3 +184,49 @@ def test_choose_provider_refusals(
     with pytest.raises(PaymentMethodNotAllowedError) as caught:
         choose_provider(requested, frozenset(configured), previous)
     assert caught.value.reason == reason
+
+
+# --- VS-050 (ADR-049): the manual provider -----------------------------------------------
+
+MANUAL_HOLD = timedelta(days=7)
+
+
+@pytest.mark.parametrize(
+    ("provider", "hold"), [("manual", MANUAL_HOLD), ("mock", HOLD), ("cash", HOLD), (None, HOLD)]
+)
+def test_the_hold_is_chosen_by_the_attempt_provider(provider: str | None, hold: timedelta) -> None:
+    holds = Holds(online=HOLD, manual=MANUAL_HOLD)
+    assert holds.for_provider(provider) == hold
+    assert holds.shortest == HOLD
+    assert Holds(online=MANUAL_HOLD, manual=HOLD).shortest == HOLD
+
+
+def test_a_manual_order_may_retry_until_its_own_hold_ends() -> None:
+    deadline = PLACED + MANUAL_HOLD
+    allowed = retry_refusal(ORDER, [LINE], now=deadline - timedelta(seconds=1), hold=MANUAL_HOLD)
+    assert allowed is None
+    ended = retry_refusal(ORDER, [LINE], now=deadline, hold=MANUAL_HOLD)
+    assert ended is RetryRefusal.CHECKOUT_HOLD_EXPIRED
+
+
+def test_a_manual_order_may_be_released_by_hand_from_placement() -> None:
+    """VS-050 Q3: the administrator, who arranges the payment, may release at any time."""
+    deadline = PLACED + MANUAL_HOLD
+    for early in (False, True):
+        opens = manual_release_available_at(deadline, GRACE, early=early, manual_from=PLACED)
+        assert opens == PLACED
+
+
+@pytest.mark.parametrize(
+    ("requested", "configured", "manual"),
+    [
+        ("manual", {"manual", "mock"}, True),
+        (None, {"manual"}, True),
+        (None, {"manual", "mock"}, False),  # provider_required comes later
+        ("mock", {"manual", "mock"}, False),
+        (None, {"mock"}, False),
+        ("manual", {"mock"}, True),  # provider_not_configured comes later
+    ],
+)
+def test_chooses_manual(requested: str | None, configured: set[str], manual: bool) -> None:
+    assert chooses_manual(requested, frozenset(configured)) is manual

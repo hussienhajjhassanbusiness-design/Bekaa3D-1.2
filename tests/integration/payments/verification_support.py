@@ -74,6 +74,7 @@ async def pending_payment(
         },
     )
     await db.commit()
+    assert created.provider_payment_id is not None  # the mock always names one
     return Seeded(user.id, order_id, payment_id, created.provider_payment_id, user.email)
 
 

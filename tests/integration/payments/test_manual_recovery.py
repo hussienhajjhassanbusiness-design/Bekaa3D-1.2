@@ -72,7 +72,6 @@ async def _release(
             admin_id=admin_id,
             reason=REASON,
             events_reviewed=kw.pop("events_reviewed", False),
-            hold=HOLD,
             now=now,
             **kw,
         )

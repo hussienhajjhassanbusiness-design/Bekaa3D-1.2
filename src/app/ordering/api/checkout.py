@@ -36,6 +36,7 @@ from app.ordering.domain.exceptions import (
     CashNotAvailableError,
     CheckoutLinesRefusedError,
     ConsentRequiredError,
+    ContactPhoneRequiredError,
     CustomerAccountClosedError,
     InvalidFulfillmentError,
     NoCommonPaymentMethodError,
@@ -45,6 +46,7 @@ from app.ordering.domain.exceptions import (
     PaymentMethodNotAllowedError,
     ProductAlreadyOwnedError,
 )
+from app.ordering.domain.payment_recovery import MANUAL_PROVIDER
 from app.ordering.infrastructure.carts import SqlCartStore
 from app.ordering.infrastructure.cash import SqlCashChecks
 from app.ordering.infrastructure.checkout_addresses import (
@@ -58,6 +60,7 @@ from app.payments.public import (
     CHECKOUT_RATE_WINDOW_SECONDS,
     CreatePayment,
     ProviderUnavailableError,
+    announce_manual_payment,
     fail_attempt,
     payment_attempts,
     payment_store,
@@ -101,7 +104,8 @@ _RESPONSES: dict[int | str, dict[str, Any]] = {
     422: {
         "description": "PRODUCT_NOT_PURCHASABLE or QUANTITY_EXCEEDS_LIMIT (with `lines`), "
         "NO_COMMON_PAYMENT_METHOD (with `lines` and each one's `accepted_payment_methods`), "
-        "INVALID_FULFILLMENT, PAYMENT_METHOD_NOT_ALLOWED (with `reason`; `cash_not_accepted` "
+        "INVALID_FULFILLMENT, CONTACT_PHONE_REQUIRED (a `manual` STL-only order without "
+        "`contact_phone`), PAYMENT_METHOD_NOT_ALLOWED (with `reason`; `cash_not_accepted` "
         "and `online_not_accepted` add `product_ids`) or CASH_PAYMENT_LIMIT_REACHED (with "
         "`reason`), CASH_NOT_AVAILABLE (no reason: a block or an open cash order on the "
         "account or the phone, never saying which), or VALIDATION_ERROR."
@@ -197,6 +201,13 @@ def translate_checkout_error(exc: OrderingDomainError) -> ApiError:
             detail="Some lines cannot be bought right now.",
             extensions={"lines": lines},
         )
+    if isinstance(exc, ContactPhoneRequiredError):
+        return ApiError(
+            status_code=unprocessable,
+            code="CONTACT_PHONE_REQUIRED",
+            title="Contact phone required",
+            detail="Give the phone number the administrator will call to arrange payment.",
+        )
     if isinstance(exc, InvalidFulfillmentError):
         return ApiError(
             status_code=unprocessable,
@@ -278,6 +289,7 @@ CHECKOUT_ERRORS = (
     CartPriceChangedError,
     ProductAlreadyOwnedError,
     CheckoutLinesRefusedError,
+    ContactPhoneRequiredError,
     InvalidFulfillmentError,
     NoCommonPaymentMethodError,
     PaymentMethodNotAllowedError,
@@ -374,7 +386,9 @@ async def checkout(
                 )
                 return JSONResponse(read, status_code=status.HTTP_201_CREATED)
 
-        online = OnlinePlacedOrder(placed.order, placed.lines, placed.payment, placed.dropped)
+        online = OnlinePlacedOrder(
+            placed.order, placed.lines, placed.payment, placed.dropped, placed.hold_expires_at
+        )
         try:
             created = await start_online_payment(
                 providers[online.payment.provider], create_payment_request(online)
@@ -404,7 +418,19 @@ async def checkout(
                 at=datetime.now(UTC),
             )
             await claims.complete(claim.record_id, status_code=status.HTTP_201_CREATED, body=read)
+            await announce_if_manual(session, online)
     return JSONResponse(read, status_code=status.HTTP_201_CREATED)
+
+
+async def announce_if_manual(session: AsyncSession, placed: OnlinePlacedOrder) -> None:
+    """The administrators' `manual_payment_due` alert, last in Tx2 (VS-050 Q2)."""
+    if placed.payment.provider == MANUAL_PROVIDER:
+        await announce_manual_payment(
+            session,
+            payment_id=placed.payment.id,
+            order_id=placed.order.id,
+            order_number=placed.order.order_number,
+        )
 
 
 def create_payment_request(placed: OnlinePlacedOrder) -> CreatePayment:

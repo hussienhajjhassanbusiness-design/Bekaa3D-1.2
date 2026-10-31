@@ -8,7 +8,11 @@ from uuid import UUID
 
 from app.catalog.application.ports import ProductType
 from app.ordering.domain.enums import FulfillmentMethod, PaymentMethod
-from app.ordering.domain.exceptions import InvalidFulfillmentError, PaymentMethodNotAllowedError
+from app.ordering.domain.exceptions import (
+    ContactPhoneRequiredError,
+    InvalidFulfillmentError,
+    PaymentMethodNotAllowedError,
+)
 from app.ordering.domain.orders import NewOrderLine
 
 DELIVERY_FEE_NOTE = "The delivery fee is paid to the courier on delivery."
@@ -28,13 +32,19 @@ def resolve_fulfillment(
     method: FulfillmentMethod | None,
     address_id: UUID | None,
     contact_phone: str | None,
+    phone_to_call: bool,
 ) -> Fulfillment:
-    """SRS 7.4 over the kept lines; cash needs every one of them physical (ADR-024 d2)."""
+    """SRS 7.4 over the kept lines; cash needs every one of them physical (ADR-024 d2).
+    `phone_to_call`: a `manual` STL-only order takes the phone the administrator calls."""
     physical = any(t is ProductType.PHYSICAL for t in product_types)
     if not physical:
-        if method is not None or address_id is not None or contact_phone is not None:
+        if method is not None or address_id is not None:
             raise InvalidFulfillmentError("An STL-only order has no fulfillment.")
-        fulfillment = Fulfillment(None, None, None)
+        if contact_phone is not None and not phone_to_call:
+            raise InvalidFulfillmentError("An STL-only order has no fulfillment.")
+        if contact_phone is None and phone_to_call:
+            raise ContactPhoneRequiredError("Give the phone the administrator will call.")
+        fulfillment = Fulfillment(None, None, contact_phone)
     elif method is FulfillmentMethod.DELIVERY:
         if address_id is None or contact_phone is not None:
             raise InvalidFulfillmentError("Delivery takes an address and no contact phone.")

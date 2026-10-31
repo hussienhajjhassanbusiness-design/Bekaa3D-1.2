@@ -14,6 +14,7 @@ from app.core.phone import InvalidPhoneNumberError, normalise_lebanese_phone
 from app.ordering.application.services.checkout import PlacedOrder
 from app.ordering.domain.cash import amount_due_cents
 from app.ordering.domain.checkout_rules import AcceptedPrice, CheckoutCommand
+from app.ordering.domain.customer_view import PaymentNextStep, payment_next_step
 from app.ordering.domain.enums import (
     FulfillmentMethod,
     OrderItemStatus,
@@ -25,6 +26,16 @@ from app.ordering.domain.fulfillment import DELIVERY_FEE_NOTE
 
 MAX_ACCEPTED_PRICES = 50
 IDEMPOTENCY_KEY_PATTERN = r"^[A-Za-z0-9._:-]{8,255}$"
+
+
+def lebanese_phone(value: str | None) -> str | None:
+    """Two spellings of one number are one request body (VS-028 plan D10)."""
+    if value is None:
+        return None
+    try:
+        return normalise_lebanese_phone(value)
+    except InvalidPhoneNumberError:
+        raise ValueError("Enter a valid Lebanese phone number.") from None
 
 
 class AcceptedPriceIn(BaseModel):
@@ -56,13 +67,7 @@ class CheckoutRequest(BaseModel):
     @field_validator("contact_phone")
     @classmethod
     def _normalise_phone(cls, value: str | None) -> str | None:
-        """Two spellings of one number are one request body (VS-028 plan D10)."""
-        if value is None:
-            return None
-        try:
-            return normalise_lebanese_phone(value)
-        except InvalidPhoneNumberError:
-            raise ValueError("Enter a valid Lebanese phone number.") from None
+        return lebanese_phone(value)
 
     def command(self) -> CheckoutCommand:
         return CheckoutCommand(
@@ -127,6 +132,13 @@ class CheckoutPaymentRead(BaseModel):
     status: str
     provider: str
     redirect_url: str | None = Field(description="The provider's payment page; null if none.")
+    next_step: PaymentNextStep | None = Field(
+        description="`redirect` to `redirect_url`, or `await_admin_contact` for `manual`: the "
+        "administrator contacts the customer to arrange payment (ADR-049)."
+    )
+    hold_expires_at: datetime | None = Field(
+        description="When the order is released if still unpaid."
+    )
 
 
 class DroppedLineRead(BaseModel):
@@ -197,6 +209,12 @@ class CheckoutRead(BaseModel):
                 status=placed.payment.status,
                 provider=placed.payment.provider,
                 redirect_url=redirect_url,
+                next_step=payment_next_step(
+                    provider=placed.payment.provider,
+                    status=placed.payment.status,
+                    redirect_url=redirect_url,
+                ),
+                hold_expires_at=placed.hold_expires_at,
             )
             if placed.payment is not None
             else None,

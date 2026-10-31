@@ -2,7 +2,7 @@
 an unpaid order the job cannot release. After the 24 h grace, with a reason, and with
 `events_reviewed` when unprocessed events exist. The provider is never called."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
@@ -28,11 +28,8 @@ from app.payments.public import (
     limits,
     release_order_by_admin,
 )
-from app.platform.public import settings_reader
 
 admin_router = APIRouter(prefix="/orders", tags=["admin"], route_class=AdminBoundaryRoute)
-
-HOLD_SETTING = "checkout_hold_period"
 
 
 class OrderReleaseRequest(BaseModel):
@@ -93,7 +90,6 @@ async def release_order(
     claims: AccessTokenClaims = Depends(require_admin),
     session: AsyncSession = Depends(get_session),
 ) -> OrderReleaseRead:
-    hold = await settings_reader(session).get_duration_seconds(HOLD_SETTING)
     ip = client_ip(request)
     try:
         released = await release_order_by_admin(
@@ -102,7 +98,6 @@ async def release_order(
             admin_id=claims.user_id,
             reason=body.reason,
             events_reviewed=body.events_reviewed,
-            hold=timedelta(seconds=hold),
             now=datetime.now(UTC),
             request_id=getattr(request.state, "request_id", None),
             ip_hash=hash_ip(ip) if ip else None,

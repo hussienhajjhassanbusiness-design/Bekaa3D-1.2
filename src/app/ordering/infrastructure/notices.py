@@ -12,6 +12,7 @@ from app.ordering.domain.orders import Order, OrderLine
 from app.platform.public import SqlOutboxWriter
 
 CASH_PLACED_TEMPLATE = "order_cash_placed"
+AWAITING_PAYMENT_TEMPLATE = "order_awaiting_payment"
 
 
 class SqlOrderNotices:
@@ -48,4 +49,26 @@ class SqlOrderNotices:
                 "order_id": str(order.id),
                 "order_number": order.order_number,
             },
+        )
+
+    async def awaiting_admin_contact(self, order: Order) -> None:
+        """ADR-049: placed, and the administrator will contact the customer to arrange
+        payment. Neither payload carries the phone."""
+        payload = {
+            "order_id": str(order.id),
+            "order_number": order.order_number,
+            "total_cents": order.total_cents,
+            "currency": order.currency,
+        }
+        await SqlOutboxWriter(self._session).add(
+            user_id=order.user_id,
+            recipient_email=order.customer_email_snapshot,
+            template=AWAITING_PAYMENT_TEMPLATE,
+            payload=payload,
+        )
+        await create_notification(
+            self._session,
+            user_id=order.user_id,
+            notification_type=NotificationType.ORDER,
+            payload={"event": "order.awaiting_payment"} | payload,
         )

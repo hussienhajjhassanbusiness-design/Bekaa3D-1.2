@@ -8,16 +8,18 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, Response, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.api.text import PlainStr
 from app.catalog.public import cart_product_reader
 from app.core.exceptions import ApiError
+from app.core.security import hash_phone
 from app.identity.public import User, not_found_error, verified_user_short_read
 from app.negotiation.public import SqlOfferCheckouts
 from app.ordering.api.checkout import (
     CHECKOUT_ERRORS,
     IdempotencyKey,
+    announce_if_manual,
     checkout_rate_limit,
     create_payment_request,
     in_progress_error,
@@ -25,7 +27,7 @@ from app.ordering.api.checkout import (
     provider_failed,
     translate_checkout_error,
 )
-from app.ordering.api.checkout_schemas import CheckoutRead
+from app.ordering.api.checkout_schemas import CheckoutRead, lebanese_phone
 from app.ordering.api.idempotent import replay, stored
 from app.ordering.api.problems import payment_already_active_error
 from app.ordering.application.services.checkout import CheckoutCustomer
@@ -41,6 +43,7 @@ from app.ordering.domain.exceptions import (
     PaymentAlreadyActiveError,
 )
 from app.ordering.infrastructure.checkout_addresses import SqlCustomerAccounts
+from app.ordering.infrastructure.notices import SqlOrderNotices
 from app.ordering.infrastructure.orders import SqlOrderStore
 from app.payments.public import (
     ProviderUnavailableError,
@@ -75,7 +78,8 @@ _RESPONSES: dict[int | str, dict[str, Any]] = {
     410: {"description": "OFFER_CHECKOUT_EXPIRED: the checkout window has closed."},
     422: {
         "description": "PRODUCT_NOT_PURCHASABLE (with `lines`), PAYMENT_METHOD_NOT_ALLOWED "
-        "(with `reason`), or VALIDATION_ERROR."
+        "(with `reason`), CONTACT_PHONE_REQUIRED (`manual` without `contact_phone`), "
+        "INVALID_FULFILLMENT (`contact_phone` for another provider), or VALIDATION_ERROR."
     },
     429: {"description": "RATE_LIMITED: shares cart checkout's hourly limit."},
     502: {
@@ -94,6 +98,16 @@ class OfferCheckoutRequest(BaseModel):
     accept_terms: Literal[True]
     accept_digital_final_sale: Literal[True]
     payment_provider: Annotated[PlainStr, Field(min_length=1, max_length=32)] | None = None
+    contact_phone: Annotated[PlainStr, Field(max_length=32)] | None = Field(
+        default=None,
+        description="Lebanese; required when the provider is `manual` (the administrator "
+        "calls it to arrange payment), refused otherwise (VS-050 Q1).",
+    )
+
+    @field_validator("contact_phone")
+    @classmethod
+    def _normalise_phone(cls, value: str | None) -> str | None:
+        return lebanese_phone(value)
 
 
 def _translate(exc: OrderingDomainError) -> ApiError:
@@ -175,8 +189,12 @@ async def checkout_offer(
                     attempts=payment_attempts(session, providers),
                     settings=settings_reader(session),
                     audit=SqlAuditWriter(session),
+                    notices=SqlOrderNotices(session),
                     customer=CheckoutCustomer(id=user.id, email=user.email),
-                    command=OfferCheckoutCommand(offer_id, body.payment_provider),
+                    command=OfferCheckoutCommand(
+                        offer_id, body.payment_provider, body.contact_phone
+                    ),
+                    hash_phone=hash_phone,
                     now=now,
                     clock=lambda: datetime.now(UTC),
                 )
@@ -213,4 +231,5 @@ async def checkout_offer(
                 at=datetime.now(UTC),
             )
             await claims.complete(claim.record_id, status_code=status.HTTP_201_CREATED, body=read)
+            await announce_if_manual(session, placed)
     return JSONResponse(read, status_code=status.HTTP_201_CREATED)

@@ -23,6 +23,7 @@ from app.ordering.domain.exceptions import (
     ProductNotPurchasableError,
 )
 from app.ordering.domain.orders import NewOrderLine
+from app.ordering.domain.payment_recovery import MANUAL_PROVIDER
 
 OVER_CAP = "over_cap"
 # Plan addition (Q18, ADR-032): a constant until a settings value exists.
@@ -158,6 +159,13 @@ def require_cash_terms(command: CheckoutCommand) -> None:
     """Cash needs the customer's acceptance of the cash terms (SRS 7.3 step 9)."""
     if command.payment_method is PaymentMethod.CASH and not command.accept_cash_terms:
         raise ConsentRequiredError("accept_cash_terms is required for cash.", "accept_cash_terms")
+
+
+def chooses_manual(requested: str | None, configured: frozenset[str]) -> bool:
+    """Whether checkout will pick `manual`, before `choose_provider` and its refusals run."""
+    if requested is not None:
+        return requested == MANUAL_PROVIDER
+    return configured == {MANUAL_PROVIDER}
 
 
 def choose_provider(

@@ -29,7 +29,9 @@ class CreatePayment:
 
 @dataclass(frozen=True)
 class CreatedPayment:
-    provider_payment_id: str
+    """`manual` returns neither: the reference is typed at confirm (ADR-049)."""
+
+    provider_payment_id: str | None
     redirect_url: str | None
 
 

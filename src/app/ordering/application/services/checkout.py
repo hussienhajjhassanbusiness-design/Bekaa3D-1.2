@@ -20,11 +20,13 @@ from app.ordering.application.ports import (
     SettingsSource,
 )
 from app.ordering.application.services.cart import clear_cart, lock_cart_for_checkout
+from app.ordering.application.services.holds import read_holds
 from app.ordering.domain.cash import cash_limits, cash_precheck
 from app.ordering.domain.checkout_rules import (
     DIGITAL_TERMS_VERSION,
     CheckoutCommand,
     choose_provider,
+    chooses_manual,
     collect_refusals,
     price_changes,
     price_lines,
@@ -57,6 +59,7 @@ from app.ordering.domain.order_number import new_order_number
 from app.ordering.domain.order_status import LineState, OrderStatusInputs, derive_order_status
 from app.ordering.domain.orders import NewOrder, Order, OrderLine, StatusChange
 from app.ordering.domain.payment_methods import LineMethods, require_accepted
+from app.ordering.domain.payment_recovery import MANUAL_PROVIDER, hold_deadline
 from app.platform.application.ports import AuditWriter
 
 
@@ -72,6 +75,7 @@ class PlacedOrder:
     lines: tuple[OrderLine, ...]
     payment: PaymentAttemptRef | None
     dropped: tuple[UUID, ...]
+    hold_expires_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -135,6 +139,7 @@ async def place_order(
         method=command.fulfillment_method,
         address_id=command.address_id,
         contact_phone=command.contact_phone,
+        phone_to_call=online and chooses_manual(command.payment_provider, configured),
     )
     if fulfillment.method is FulfillmentMethod.PICKUP and not await settings.get_text(
         "pickup_address"
@@ -218,7 +223,7 @@ async def place_order(
         number or new_order_number,
     )
     lines = await orders.insert_lines(order, new_lines, status=OrderItemStatus.PENDING)
-    payment = None
+    payment, hold_expires_at = None, None
     if provider is not None:
         payment = await attempts.open_attempt(
             order_id=order.id,
@@ -227,6 +232,8 @@ async def place_order(
             provider=provider,
             at=now,
         )
+        hold = (await read_holds(settings)).for_provider(provider)
+        hold_expires_at = hold_deadline(now, now, hold)
     await orders.add_history(
         [StatusChange(order.id, None, status.value, actor_user_id=customer.id)]
     )
@@ -246,5 +253,7 @@ async def place_order(
     )
     if not online:
         await notices.cash_order_placed(order, lines)
+    if provider == MANUAL_PROVIDER:
+        await notices.awaiting_admin_contact(order)
     await clear_cart(carts, locked)
-    return PlacedOrder(order=order, lines=tuple(lines), payment=payment, dropped=dropped)
+    return PlacedOrder(order, tuple(lines), payment, dropped, hold_expires_at)

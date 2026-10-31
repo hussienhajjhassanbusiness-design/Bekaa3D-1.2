@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.payments.application.ports import PaymentProviderPort, PaymentRef, ProviderStatus
 from app.payments.application.services.apply import Source, apply_result
+from app.payments.domain.enums import PaymentProvider
 from app.payments.domain.exceptions import ProviderUnavailableError
 from app.payments.domain.limits import PROVIDER_TIMEOUT_SECONDS, VERIFY_BATCH_SIZE
 from app.payments.domain.outcome import Outcome, ProviderResult
@@ -61,7 +62,10 @@ async def apply_provider_result(
 
 
 def capability(providers: Providers, provider: str) -> Capability:
-    """What the payment's adapter can tell us (T2, `confirm_refusal`)."""
+    """What the payment's adapter can tell us (T2, `confirm_refusal`). `manual` is known by
+    its name, configured or not: no adapter could ever answer for it (ADR-049)."""
+    if provider == PaymentProvider.MANUAL:
+        return Capability.MANUAL
     adapter = providers.get(provider)
     if adapter is None:
         return Capability.NOT_CONFIGURED

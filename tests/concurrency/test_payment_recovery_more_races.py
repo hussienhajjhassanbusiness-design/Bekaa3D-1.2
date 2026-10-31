@@ -441,7 +441,6 @@ async def test_manual_release_against_a_paid_answer(
                     admin_id=admin.id,
                     reason="dashboard shows no payment; customer unreachable",
                     events_reviewed=False,
-                    hold=HOLD,
                     now=at + HOLD + GRACE,
                 )
         except ManualReleaseRefusedError as exc:

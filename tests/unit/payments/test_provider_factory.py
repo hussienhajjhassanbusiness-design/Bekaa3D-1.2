@@ -11,6 +11,7 @@ from app.payments.infrastructure.providers.factory import (
     DEFAULT_MOCK_SECRET,
     configured_payment_providers,
 )
+from app.payments.infrastructure.providers.manual import ManualPaymentProvider
 from app.payments.infrastructure.providers.mock import MockPaymentProvider
 
 
@@ -47,6 +48,16 @@ def test_mock_never_boots_outside_its_allowlist(environment: str) -> None:
 def test_cash_and_unknown_names_refuse(name: str) -> None:
     with pytest.raises(PaymentConfigurationError, match="no online adapter"):
         configured_payment_providers(_settings(name, "development"))
+
+
+@pytest.mark.parametrize("environment", ["production", "staging", "development", "test"])
+def test_manual_boots_in_every_environment(environment: str) -> None:
+    """ADR-049 d4: V1's online provider; it holds no secret and calls nothing."""
+    providers = configured_payment_providers(_settings(" Manual ", environment))
+    assert list(providers) == ["manual"]
+    adapter = providers["manual"]
+    assert isinstance(adapter, ManualPaymentProvider)
+    assert (adapter.supports_status_query, adapter.accepts_webhooks) == (False, False)
 
 
 @pytest.mark.parametrize("environment", ["production", "staging", "development"])

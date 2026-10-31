@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Select, and_, exists, func, select, tuple_
+from sqlalchemy import Select, and_, exists, func, or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.payments.domain.enums import PaymentProvider, PaymentStatus
@@ -25,6 +25,7 @@ class PaymentFilters:
     late_captured: bool | None = None
     initiated_after: datetime | None = None
     initiated_before: datetime | None = None
+    awaiting_confirmation: bool = False  # live `manual` attempts (ADR-049 d8)
 
 
 @dataclass(frozen=True)
@@ -64,13 +65,18 @@ _unprocessed = (
     .correlate(_P)
     .scalar_subquery()
 )
-_awaiting_manual = exists(
-    select(_E.id).where(
-        _E.payment_id == _P.id,
-        _E.processed_at.is_(None),
-        _E.processing_error == MANUAL_CONFIRMATION_REQUIRED,
-    )
-).correlate(_P)
+# A `manual` attempt is pending until its confirm: `ix_payments_awaiting_manual`.
+_MANUAL_PENDING = and_(_P.provider == PaymentProvider.MANUAL, _P.status == PaymentStatus.PENDING)
+_awaiting_manual = or_(
+    _MANUAL_PENDING,
+    exists(
+        select(_E.id).where(
+            _E.payment_id == _P.id,
+            _E.processed_at.is_(None),
+            _E.processing_error == MANUAL_CONFIRMATION_REQUIRED,
+        )
+    ).correlate(_P),
+)
 _COLUMNS = (
     _P.id,
     _P.order_id,
@@ -110,6 +116,8 @@ def payment_page_query(
         conditions.append(_P.initiated_at >= filters.initiated_after)
     if filters.initiated_before is not None:
         conditions.append(_P.initiated_at < filters.initiated_before)
+    if filters.awaiting_confirmation:
+        conditions.append(_MANUAL_PENDING)
     if after is not None:
         conditions.append(tuple_(_P.initiated_at, _P.id) > after)
     return (

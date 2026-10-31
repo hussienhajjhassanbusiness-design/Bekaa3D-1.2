@@ -33,6 +33,7 @@ def test_every_alert_kind_has_a_decided_window() -> None:
     assert {kind for kind in AlertKind if repeat_window(kind) is None} == {
         AlertKind.LATE_CAPTURE,
         AlertKind.MANUAL_CONFIRMATION_DUE,
+        AlertKind.MANUAL_PAYMENT_DUE,
         AlertKind.RELEASE_DUE,
         AlertKind.REFERENCE_UNKNOWN,
     }
