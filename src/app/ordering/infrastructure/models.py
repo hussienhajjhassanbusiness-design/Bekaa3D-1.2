@@ -20,7 +20,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import CITEXT, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.catalog.application.ports import ProductType
+from app.catalog.application.ports import AcceptedPaymentMethods, ProductType
 from app.core.database import Base
 from app.ordering.domain.enums import (
     CancelReason,
@@ -311,6 +311,9 @@ class OrderItemModel(Base):
     cancel_reason: Mapped[CancelReason | None] = mapped_column(
         _pg_enum(CancelReason, "cancel_reason")
     )
+    accepted_payment_methods_snapshot: Mapped[AcceptedPaymentMethods | None] = mapped_column(
+        _pg_enum(AcceptedPaymentMethods, "accepted_payment_methods")
+    )
     receipt_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     problem_reported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
@@ -380,6 +383,18 @@ class OrderItemModel(Base):
         CheckConstraint(
             "payment_method <> 'cash' OR product_type = 'physical'",
             name="ck_order_items_cash_is_physical",
+        ),
+        # VS-049 / ADR-048 (INV-25): the order's method is one the product accepted.
+        CheckConstraint(
+            "(product_type = 'physical') = (accepted_payment_methods_snapshot IS NOT NULL)",
+            name="ck_order_items_accepted_methods_by_type",
+        ),
+        CheckConstraint(
+            "accepted_payment_methods_snapshot IS NULL "
+            "OR accepted_payment_methods_snapshot = 'online_or_cash' "
+            "OR (accepted_payment_methods_snapshot = 'cash' AND payment_method = 'cash') "
+            "OR (accepted_payment_methods_snapshot = 'online' AND payment_method = 'online')",
+            name="ck_order_items_method_accepted",
         ),
         CheckConstraint(
             "cancel_reason IS NULL OR fulfillment_status = 'cancelled'",

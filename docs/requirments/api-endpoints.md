@@ -207,7 +207,8 @@ These codes are implementation additions needed to give the frontend determinist
 | 422 | `CHARGEBACK_ITEMS_FORBIDDEN` | A late-captured attempt paid no line, so its chargeback names none (VS-030) |
 | 422 | `CHARGEBACK_ALLOCATION_INVALID` | An item exceeds its line's balance, or the items do not total exactly the charge left after the absorbed refunds (or, if that is larger, the payment's remaining balance); body carries `available` with `chargeable_cents`, the total to name (VS-030) |
 | 422 | `INVALID_FULFILLMENT` | Address, contact phone or method does not match cart contents |
-| 422 | `PAYMENT_METHOD_NOT_ALLOWED` | Cash chosen for an order with an STL line or a zero total, or while cash is switched off; or an unconfigured online provider chosen (ADR-024) |
+| 422 | `PAYMENT_METHOD_NOT_ALLOWED` | Cash chosen for an order with an STL line or a zero total, or while cash is switched off; or an unconfigured online provider chosen (ADR-024); or a method some line's product does not accept (`cash_not_accepted` / `online_not_accepted` with `product_ids`, ADR-048) |
+| 422 | `NO_COMMON_PAYMENT_METHOD` | The cart's lines share no accepted payment method; `lines[]` carries each `product_id` with its `accepted_payment_methods`, and the customer orders them separately (ADR-048) |
 | 422 | `CASH_PAYMENT_LIMIT_REACHED` | The recomputed total exceeds the cash maximum (`reason: order_total`, ADR-024) |
 | 422 | `CASH_NOT_AVAILABLE` | The customer or the contact phone is blocked from cash, or already has the maximum open unpaid cash orders; one body for every case, with no `reason` (ADR-038) |
 | 422 | `CASH_AMOUNT_MISMATCH` | Cash entered at handover differs from the amount due (ADR-024) |
@@ -375,7 +376,7 @@ Removed by ADR-024. The courier prices and collects the delivery fee; there is n
 
 | Method + Path | Auth / Authorization | Request | Success | Errors | Side Effects / Notes |
 |---|---|---|---|---|---|
-| `POST /api/v1/checkout` | Verified Customer | `CheckoutRequest` + required `Idempotency-Key` | `201 CheckoutRead` | 401, 403, 409 `CART_EMPTY` / `CART_PRICE_CHANGED` / `PRODUCT_ALREADY_OWNED` / `IDEMPOTENCY_KEY_CONFLICT` / `IDEMPOTENCY_REQUEST_IN_PROGRESS`, 422 `INVALID_FULFILLMENT` / `PRODUCT_NOT_PURCHASABLE` / `QUANTITY_EXCEEDS_LIMIT` / `PAYMENT_METHOD_NOT_ALLOWED` / `CASH_PAYMENT_LIMIT_REACHED` / `CASH_NOT_AVAILABLE` / `VALIDATION_ERROR`, 429, 502 `PAYMENT_PROVIDER_UNAVAILABLE`, 503 `ORDERS_PAUSED` / `ONLINE_PAYMENT_UNAVAILABLE` | **As built (VS-023 online; VS-028 physical and cash, ADR-032, ADR-038):** online is two transactions around the provider call; cash is one transaction with no payment row and no provider call (`payment: null`), and works with `PAYMENT_PROVIDER=none`; the live price is charged; `dropped_lines` names STLs bought since they were added, on both paths; a replay carries `Idempotent-Replayed: true`, is a pure read and counts against the 30/hour limit; `PAYMENT_ALREADY_ACTIVE` is VS-024's retry code and cannot occur here. Full contract: [`docs/checkout.md`](../checkout.md). Target behaviour: single transaction validates cart, recomputes amounts, then validates the payment method against the recomputed total, snapshots order/lines/address/contact phone/payment method/terms, clears cart. Online: creates a pending payment with the chosen provider and returns provider redirect information. Cash: creates no payment and returns the order with `payment_due` |
+| `POST /api/v1/checkout` | Verified Customer | `CheckoutRequest` + required `Idempotency-Key` | `201 CheckoutRead` | 401, 403, 409 `CART_EMPTY` / `CART_PRICE_CHANGED` / `PRODUCT_ALREADY_OWNED` / `IDEMPOTENCY_KEY_CONFLICT` / `IDEMPOTENCY_REQUEST_IN_PROGRESS`, 422 `INVALID_FULFILLMENT` / `PRODUCT_NOT_PURCHASABLE` / `QUANTITY_EXCEEDS_LIMIT` / `NO_COMMON_PAYMENT_METHOD` / `PAYMENT_METHOD_NOT_ALLOWED` / `CASH_PAYMENT_LIMIT_REACHED` / `CASH_NOT_AVAILABLE` / `VALIDATION_ERROR`, 429, 502 `PAYMENT_PROVIDER_UNAVAILABLE`, 503 `ORDERS_PAUSED` / `ONLINE_PAYMENT_UNAVAILABLE` | **As built (VS-023 online; VS-028 physical and cash, ADR-032, ADR-038):** online is two transactions around the provider call; cash is one transaction with no payment row and no provider call (`payment: null`), and works with `PAYMENT_PROVIDER=none`; the live price is charged; `dropped_lines` names STLs bought since they were added, on both paths; a replay carries `Idempotent-Replayed: true`, is a pure read and counts against the 30/hour limit; `PAYMENT_ALREADY_ACTIVE` is VS-024's retry code and cannot occur here. Full contract: [`docs/checkout.md`](../checkout.md). Target behaviour: single transaction validates cart, recomputes amounts, then validates the payment method against the recomputed total, snapshots order/lines/address/contact phone/payment method/terms, clears cart. Online: creates a pending payment with the chosen provider and returns provider redirect information. Cash: creates no payment and returns the order with `payment_due` |
 
 ### Price-Change Confirmation Contract
 
@@ -902,6 +903,7 @@ As built in VS-028 ([ADR-038](../adr/ADR-038-physical-checkout-and-cash-eligibil
 - `contact_phone` sent with delivery → `INVALID_FULFILLMENT`; an invalid number → `VALIDATION_ERROR` at `body.contact_phone`, never echoing the input;
 - an unknown, another customer's or a deleted `address_id` → one `INVALID_FULFILLMENT`; pickup while `pickup_address` is unset → `INVALID_FULFILLMENT`;
 - `payment_provider` sent with cash → `PAYMENT_METHOD_NOT_ALLOWED` (`provider_not_applicable`);
+- kept lines sharing no accepted payment method → `NO_COMMON_PAYMENT_METHOD`; a method some line's product does not accept → `PAYMENT_METHOD_NOT_ALLOWED` (`cash_requires_physical` with an STL line, else `cash_not_accepted` / `online_not_accepted` with `product_ids`); both come after `CART_EMPTY` and before `INVALID_FULFILLMENT` and `CART_PRICE_CHANGED` (VS-049, [ADR-048](../adr/ADR-048-accepted-payment-methods-per-product.md));
 - a missing `accept_cash_terms` for cash → `VALIDATION_ERROR` at `body.accept_cash_terms`;
 - a block or the open-order limit → one `CASH_NOT_AVAILABLE` with no `reason`, whether the account or the phone matched; the total cap (`CASH_PAYMENT_LIMIT_REACHED`, `order_total`) is checked first, before the phone (ADR-038 d19-d20).
 
@@ -1122,6 +1124,7 @@ is_available?: bool
 
 # physical only
 purchase_mode?
+accepted_payment_methods?   # online | cash | online_or_cash; create defaults online_or_cash (ADR-048)
 material_id?
 colour_id?
 dimensions?
@@ -1342,6 +1345,7 @@ category summary
 physical facet summaries when applicable
 is_available
 purchase_mode when physical
+accepted_payment_methods when physical (online | cash | online_or_cash; ADR-048)
 average_rating
 review_count
 is_featured
@@ -1384,6 +1388,7 @@ each item:
 derived:
   contains_physical
   contains_digital
+  payment_methods      # online / cash that every line's product accepts (STL: online); [] = order separately (ADR-048)
 updated_at
 ```
 

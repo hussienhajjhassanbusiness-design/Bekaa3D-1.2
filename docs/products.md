@@ -8,12 +8,12 @@ aggregates' writers (reviews VS-036, wishlist VS-038) build on it.
 ## The table
 
 `products` follows `database-design.md` §6.4, plus one addition: `version`
-(ADR-020). Migration `fc18b48a1780`.
+(ADR-020). Migration `fc18b48a1780`; `accepted_payment_methods` by `089f97a72014` (VS-049).
 
 | Group | Columns |
 | --- | --- |
 | Common | `id`, `type` (`product_type`: `physical`/`stl`), `category_id`, `name`, `description`, `slug`, `seo_title`, `seo_description`, `og_image_url`, `price_cents` + `currency`, `is_visible` (default false), `is_featured` (default false), `is_available` (default true) |
-| Physical only | `purchase_mode` (`online_only`/`whatsapp_only`/`both`), `material_id`, `colour_id`, `dimensions`, `production_lead_time_days`, `batch_size`, `max_quantity_per_line`, `weight_grams` |
+| Physical only | `purchase_mode` (`online_only`/`whatsapp_only`/`both`), `accepted_payment_methods` (`online`/`cash`/`online_or_cash`; create defaults `online_or_cash`, VS-049, [ADR-048](adr/ADR-048-accepted-payment-methods-per-product.md)), `material_id`, `colour_id`, `dimensions`, `production_lead_time_days`, `batch_size`, `max_quantity_per_line`, `weight_grams` |
 | Server-maintained | `search_vector` (generated), `average_rating`, `review_count`, `wishlist_count`, `version` |
 | Lifecycle | `deleted_at`, `created_at`, `updated_at` |
 
@@ -26,7 +26,7 @@ proves each one through raw SQL.
 
 | Constraint | Rule |
 | --- | --- |
-| `ck_products_type_integrity` | physical ⇒ `purchase_mode`, `production_lead_time_days`, `batch_size`, `max_quantity_per_line` NOT NULL; STL ⇒ all eight physical-only columns NULL (SRS §6.2) |
+| `ck_products_type_integrity` | physical ⇒ `purchase_mode`, `accepted_payment_methods`, `production_lead_time_days`, `batch_size`, `max_quantity_per_line` NOT NULL; STL ⇒ all nine physical-only columns NULL (SRS §6.2; migration `089f97a72014`) |
 | `ck_products_price_non_negative`, `ck_products_currency_usd` | integer cents ≥ 0, currency `USD` (ADR-008) |
 | `ck_products_name_not_blank` | BR-017 / INV-12 |
 | `ck_products_slug_format` | `^[a-z0-9]+(-[a-z0-9]+)*$`, the same rule as category slugs, so no case-variant index is needed |

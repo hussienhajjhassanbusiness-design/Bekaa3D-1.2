@@ -112,7 +112,8 @@ async def test_one_cart_per_user(db_session: AsyncSession, db_engine: AsyncEngin
 
 # A valid STL row: every physical-only field cleared, so only the composite FK can refuse.
 _TO_VALID_STL = (
-    "UPDATE products SET type = 'stl', purchase_mode = NULL, material_id = NULL, "
+    "UPDATE products SET type = 'stl', purchase_mode = NULL, accepted_payment_methods = NULL, "
+    "material_id = NULL, "
     "colour_id = NULL, dimensions = NULL, production_lead_time_days = NULL, "
     "batch_size = NULL, max_quantity_per_line = NULL, weight_grams = NULL WHERE id = :p"
 )

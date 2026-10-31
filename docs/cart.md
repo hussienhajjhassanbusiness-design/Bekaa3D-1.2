@@ -34,7 +34,7 @@ The verified customer's one persistent cart, mixing physical and STL products. D
 
 ## `CartRead`
 
-`{id, items[], contains_physical, contains_digital, updated_at}`. Items are in the order they were first added. Each line:
+`{id, items[], contains_physical, contains_digital, payment_methods, updated_at}`. Items are in the order they were first added. `payment_methods` lists `online` / `cash` that every line's product accepts (an STL accepts online only; VS-049, [ADR-048](adr/ADR-048-accepted-payment-methods-per-product.md)); `[]` means the lines share no method, and an empty cart shows both. It reads products only: not the customer's cash eligibility, and not STL ownership, so an STL the customer already owns still counts here although checkout drops it (and may then allow cash). Each line:
 
 | Field | Meaning |
 |---|---|

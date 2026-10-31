@@ -35,7 +35,7 @@ async def _seed_mismatch(url: str) -> tuple[uuid.UUID, uuid.UUID, str, str]:
     """(order id, line id, the buyer's and the stranger's emails); one line re-owned."""
     engine = create_async_engine(url)
     async with async_sessionmaker(engine, expire_on_commit=False)() as db:
-        order = await seed_physical_order(db, line_states=["pending", "pending"])
+        order = await seed_physical_order(db, line_states=["pending", "pending"], before_vs049=True)
         buyer = await db.scalar(text("SELECT email FROM users WHERE id = :u"), {"u": order.user_id})
         stranger = await create_user(db)
         await db.execute(

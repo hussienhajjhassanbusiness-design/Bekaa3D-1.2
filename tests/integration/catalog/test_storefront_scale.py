@@ -46,7 +46,7 @@ INSERT INTO products (
     type, category_id, name, description, slug, price_cents, is_visible, is_featured,
     average_rating,
     review_count, created_at, purchase_mode, material_id, colour_id,
-    production_lead_time_days, batch_size, max_quantity_per_line)
+    production_lead_time_days, batch_size, max_quantity_per_line, accepted_payment_methods)
 SELECT
     CASE WHEN g % 2 = 0 THEN 'physical' ELSE 'stl' END::product_type,
     (CAST(:cats AS uuid[]))[1 + (g / 2) % 5],
@@ -66,7 +66,8 @@ SELECT
     CASE WHEN g % 2 = 0 THEN (CAST(:cols AS uuid[]))[1 + (g / 30) % 3] END,
     CASE WHEN g % 2 = 0 THEN 3 END,
     CASE WHEN g % 2 = 0 THEN 1 END,
-    CASE WHEN g % 2 = 0 THEN 10 END
+    CASE WHEN g % 2 = 0 THEN 10 END,
+    CASE WHEN g % 2 = 0 THEN 'online_or_cash'::accepted_payment_methods END
 FROM generate_series(1, :count) AS g
 """
 

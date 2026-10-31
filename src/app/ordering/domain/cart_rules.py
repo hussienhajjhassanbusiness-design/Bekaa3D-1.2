@@ -11,11 +11,13 @@ from app.catalog.application.ports import (
     purchase_refusal,
 )
 from app.ordering.domain.entities import MAX_CART_LINES, CartLine
+from app.ordering.domain.enums import PaymentMethod
 from app.ordering.domain.exceptions import (
     CartLineLimitReachedError,
     ProductNotPurchasableError,
     QuantityExceedsLimitError,
 )
+from app.ordering.domain.payment_methods import ALL_METHODS, accepted_methods
 
 
 def cap_for(product: CartProduct) -> int:
@@ -84,6 +86,7 @@ class CartLineView:
     max_quantity: int | None
     over_cap: bool
     refusal: PurchaseRefusal | None
+    payment_methods: frozenset[PaymentMethod] = ALL_METHODS  # what the product accepts
 
     @property
     def purchasable(self) -> bool:
@@ -111,4 +114,5 @@ def view_line(line: CartLine, product: CartProduct | None) -> CartLineView:
         max_quantity=cap if listed and product.type is ProductType.PHYSICAL else None,
         over_cap=cap is not None and line.quantity > cap,
         refusal=refusal,
+        payment_methods=accepted_methods(product.type, product.accepted_payment_methods),
     )

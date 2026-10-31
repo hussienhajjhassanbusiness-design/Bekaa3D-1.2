@@ -40,14 +40,14 @@ The last command prints the seed accounts' credentials **once**. Keep them in a 
 | A3 | Test accounts and fixtures | Built (seed); file email adapter not built | — |
 | B1 | Public settings | Built | VS-007 |
 | B2 | Catalogue public list | Built | VS-015, VS-016 |
-| B3 | Product detail | Built | VS-015 |
+| B3 | Product detail | Built (incl. `accepted_payment_methods`) | VS-015, VS-049 |
 | B4 | Image URL format | Built; `/media` not served locally until VS-020 | VS-014 |
 | B5 | Search suggestions | Built | VS-016 |
 | C1 | Validation-error shape | Built | VS-001 |
 | C2 | Cursor pagination | Built | VS-008 onward |
 | C3 | Address book | Built | VS-026 |
 | C4 | Shipping zones | **Removed (ADR-024)** | — |
-| C5 | Cart | Built (incl. `over_cap`, `purchasable`) | VS-022 |
+| C5 | Cart | Built (incl. `over_cap`, `purchasable`, `payment_methods`) | VS-022, VS-049 |
 | C6 | Checkout | Not built | VS-023, VS-028 |
 | C7 | Payment verification | Not built; parts undecided | VS-023 to VS-025 |
 | C8 | Order status and actions | Not built; admin `available_actions` decided (ADR-025) | VS-023, VS-025, VS-029 |
@@ -60,7 +60,7 @@ The last command prints the seed accounts' credentials **once**. Keep them in a 
 | P1-3 | Admin settings | Built | VS-007 |
 | P1-4 | Admin customers | Built | VS-009 |
 | P1-5 | Admin reference data | Built | VS-010 |
-| P1-6 | Admin product CRUD | Built | VS-013 |
+| P1-6 | Admin product CRUD | Built (incl. `accepted_payment_methods`) | VS-013, VS-049 |
 | P1-7 | Admin image upload | Built | VS-014 |
 | P1-8 | Admin STL asset upload | **Removed (ADR-019)** | — |
 | P1-9 | Admin entitlement grant | **Removed (ADR-019)** | — |

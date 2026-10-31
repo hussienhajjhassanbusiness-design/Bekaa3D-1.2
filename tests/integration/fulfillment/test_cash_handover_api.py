@@ -163,6 +163,26 @@ async def test_a_line_not_yet_ready_is_a_409_and_changes_nothing(
     assert await effects(db_engine, order.order_id) == (0, 0, 0, 0, 0)
 
 
+async def test_a_product_that_stopped_accepting_cash_never_blocks_the_handover(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """VS-049 (ADR-048 d6): the line keeps its snapshot; the product is not re-read."""
+    order = await seed_physical_order(db_session, line_states=["shipped"])
+    await db_session.execute(
+        text(
+            "UPDATE products SET accepted_payment_methods = 'online' WHERE id ="
+            " (SELECT product_id FROM order_items WHERE id = :i)"
+        ),
+        {"i": order.line_ids[0]},
+    )
+    await db_session.commit()
+    with client_for(main_app) as client:
+        await mfa_admin(client, db_session)
+        response = hand_over(client, order, 1000)
+    assert response.status_code == 200, response.text
+    assert await states(db_engine, order.order_id) == ("completed", ["delivered"])
+
+
 async def test_a_second_handover_is_a_409_and_records_nothing_more(
     db_engine: AsyncEngine, db_session: AsyncSession
 ) -> None:

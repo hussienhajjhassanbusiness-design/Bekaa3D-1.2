@@ -8,7 +8,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.catalog.domain.enums import ProductType, PurchaseMode
+from app.catalog.domain.enums import AcceptedPaymentMethods, ProductType, PurchaseMode
 from app.catalog.infrastructure.models import (
     CategoryModel,
     ColourModel,
@@ -51,6 +51,7 @@ async def seed_product(db: AsyncSession, refs: Refs, **over: Any) -> ProductMode
     if physical:
         values |= {
             "purchase_mode": PurchaseMode.ONLINE_ONLY,
+            "accepted_payment_methods": AcceptedPaymentMethods.ONLINE_OR_CASH,
             "material_id": refs.materials[0].id,
             "colour_id": refs.colours[0].id,
             "production_lead_time_days": 3,

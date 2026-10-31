@@ -38,6 +38,8 @@ The SRS 7.4 matrix runs on the **kept** lines (after owned STLs are dropped), so
 | Physical, pickup | `pickup` | absent | required | allowed |
 | Mixed | `delivery` or `pickup` as above | | | refused (`cash_requires_physical`) |
 
+**Accepted payment methods (VS-049, [ADR-048](adr/ADR-048-accepted-payment-methods-per-product.md)).** Each physical product accepts `online`, `cash` or `online_or_cash`; an STL accepts online only. Over the kept lines, after `ORDERS_PAUSED`, `ONLINE_PAYMENT_UNAVAILABLE`, `PRODUCT_NOT_PURCHASABLE` / `QUANTITY_EXCEEDS_LIMIT` and `CART_EMPTY`, and before the fulfillment fields are checked: if they share no method, `422 NO_COMMON_PAYMENT_METHOD` (`lines[{product_id, accepted_payment_methods}]`, detail "These items can't be paid the same way; please order them separately."); otherwise a method some line's product does not accept is `PAYMENT_METHOD_NOT_ALLOWED` (`cash_requires_physical` with an STL line, else `cash_not_accepted` / `online_not_accepted` with `product_ids`). `GET /api/v1/cart` shows the shared methods in advance (`payment_methods`). Each physical order line snapshots what its product accepted (`accepted_payment_methods_snapshot`); a later product change never touches a placed order or its retry.
+
 **Response `201`:** the order (live prices, lines `pending`), the payment, and `dropped_lines` (STLs bought since they were added, not charged; filled on the cash path too). The order also carries `estimated_dispatch_at`, `delivery_fee_note` (delivery only), `delivery_address` (the snapshot; never the contact phone or its hash), `payment_due` and `amount_due` (a `PriceRead`, or null).
 - **Online:** the order is `pending_payment`; `payment` is `pending` with the provider and its `redirect_url`.
 - **Cash:** the order is `in_progress`, `payment` is `null`, `payment_due` is `true` and `amount_due` equals `total`.
@@ -55,8 +57,9 @@ A replay of the same key and body returns the stored response with `Idempotent-R
 | 409 | `IDEMPOTENCY_REQUEST_IN_PROGRESS` | same key and body still running, or crashed between placing the order and starting the payment; `order_id`, `order_number`, `Retry-After: 2` |
 | 422 | `PRODUCT_NOT_PURCHASABLE` | any line hidden, unavailable or WhatsApp-only (over-cap lines are listed too); `lines[{product_id, reason, max_quantity?}]` |
 | 422 | `QUANTITY_EXCEEDS_LIMIT` | only over-cap lines; same `lines` |
+| 422 | `NO_COMMON_PAYMENT_METHOD` | the kept lines share no accepted payment method; `lines[{product_id, accepted_payment_methods}]` (VS-049) |
 | 422 | `INVALID_FULFILLMENT` | the fulfillment fields do not fit the kept lines (table above); an unknown, another customer's or a deleted `address_id` (one answer for all three); pickup while `pickup_address` is not set |
-| 422 | `PAYMENT_METHOD_NOT_ALLOWED` | `reason`: `cash_requires_physical`, `cash_disabled`, `zero_total`, `provider_not_configured`, `provider_required`, `provider_not_applicable` (a provider sent with cash) |
+| 422 | `PAYMENT_METHOD_NOT_ALLOWED` | `reason`: `cash_requires_physical`, `cash_not_accepted` / `online_not_accepted` (with `product_ids`, VS-049), `cash_disabled`, `zero_total`, `provider_not_configured`, `provider_required`, `provider_not_applicable` (a provider sent with cash) |
 | 422 | `CASH_PAYMENT_LIMIT_REACHED` | `reason`: `order_total` (the live total is above `cash_max_order_total`) |
 | 422 | `CASH_NOT_AVAILABLE` | no `reason`: an uncleared cash block, or `cash_max_open_orders` unpaid cash orders (a cash order the customer cancelled counts for 24 hours, ADR-038 d23), for this account **or** this phone; or a cart with a physical line priced 0 (ADR-043 d12). Detail: "Cash on delivery isn't available for this order; please pay online." |
 | 422 | `VALIDATION_ERROR` | schema, a client-sent total, an invalid `contact_phone`, or a missing `accept_digital_final_sale` / `accept_cash_terms` |

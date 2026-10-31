@@ -4,6 +4,7 @@
 **Date:** 2026-10-10
 **Source basis:** Business decision by the owner, 2026-10-08, and follow-up answers of 2026-10-10; SRS §1, §3, §5, §7, §8, §9, §15, §16, §19, §20, §22, §23, §27, §29, §30
 **Supersedes:** nothing in full. Amends [ADR-012](ADR-012-payment-provider-abstraction.md) in two places: its provider choice ("Whish is V1's provider") is reopened, and its rule "verify before granting/producing anything" applies to online orders only — a cash order is produced before it is paid; and the port has no refund operation in V1, because every refund is manual (decision 16). ADR-012's abstraction and verification decisions otherwise stand.
+**Amended by:** [ADR-048](ADR-048-accepted-payment-methods-per-product.md): cash also needs every line's product to accept cash, and online every line's product to accept online (decision 2, VS-049).
 
 ## Context
 

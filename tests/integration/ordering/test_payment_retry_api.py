@@ -145,6 +145,31 @@ async def test_the_amount_is_the_orders_total_whatever_the_product_now_costs(
     assert response.json()["payment"]["amount_cents"] == 1234
 
 
+async def test_a_product_turned_cash_only_after_placement_never_blocks_the_retry(
+    db_session: AsyncSession,
+) -> None:
+    """VS-049 (ADR-048 d6): the order's payment method is fixed; products are not re-read."""
+    with client_for(main_app) as client:
+        user_id = await _signed_in(client, db_session)
+        order = await _unpaid(db_session, user_id, physical=True)
+        lamp = await db_session.scalar(
+            text(
+                "SELECT product_id FROM order_items WHERE order_id = :o"
+                " AND product_type = 'physical'"
+            ),
+            {"o": order.order_id},
+        )
+        assert lamp is not None
+        await db_session.execute(
+            text("UPDATE products SET accepted_payment_methods = 'cash' WHERE id = :p"),
+            {"p": lamp},
+        )
+        await db_session.commit()
+        response = _retry(client, order.order_id)
+    assert response.status_code == 201, response.text
+    assert response.json()["payment"]["status"] == "pending"
+
+
 # --- A live attempt: 409 PAYMENT_ALREADY_ACTIVE ----------------------------------------------
 
 

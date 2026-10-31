@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from app.catalog.domain.enums import ProductType, PurchaseMode
+from app.catalog.domain.enums import AcceptedPaymentMethods, ProductType, PurchaseMode
 from app.catalog.domain.exceptions import ArchivedValueNotMutableError, ProductValidationError
 from app.catalog.domain.product import (
     PHYSICAL_ONLY_FIELDS,
@@ -16,6 +16,7 @@ from app.catalog.domain.product import (
     Product,
     ProductAttributes,
     ProductDraft,
+    with_create_defaults,
 )
 
 NOW = datetime(2026, 10, 7, 12, 0, tzinfo=UTC)
@@ -25,6 +26,7 @@ STL = ProductAttributes(category_id=uuid.uuid4(), name="Dragon", slug="dragon", 
 PHYSICAL = replace(
     STL,
     purchase_mode=PurchaseMode.ONLINE_ONLY,
+    accepted_payment_methods=AcceptedPaymentMethods.ONLINE_OR_CASH,
     production_lead_time_days=3,
     batch_size=4,
     max_quantity_per_line=10,
@@ -32,6 +34,7 @@ PHYSICAL = replace(
 # A value each physical-only field may legally hold, so the STL test sets one at a time.
 PHYSICAL_VALUES: dict[str, Any] = {
     "purchase_mode": PurchaseMode.BOTH,
+    "accepted_payment_methods": AcceptedPaymentMethods.CASH,
     "material_id": uuid.uuid4(),
     "colour_id": uuid.uuid4(),
     "dimensions": Dimensions(10, 20, 30),
@@ -180,3 +183,27 @@ def test_the_audit_snapshot_is_json_ready_and_omits_aggregates() -> None:
     assert snapshot["dimensions"] == {"length_mm": 1, "width_mm": 2, "height_mm": 3}
     assert snapshot["version"] == 1
     assert not {"average_rating", "review_count", "wishlist_count"} & set(snapshot)
+
+
+def test_a_physical_product_created_without_accepted_methods_accepts_both() -> None:
+    bare = replace(PHYSICAL, accepted_payment_methods=None)
+    filled = with_create_defaults(ProductType.PHYSICAL, bare)
+    assert filled == replace(
+        PHYSICAL, accepted_payment_methods=AcceptedPaymentMethods.ONLINE_OR_CASH
+    )
+    ProductDraft(ProductType.PHYSICAL, filled)
+
+
+@pytest.mark.parametrize("given", list(AcceptedPaymentMethods))
+def test_create_defaults_keep_a_given_value(given: AcceptedPaymentMethods) -> None:
+    attrs = replace(PHYSICAL, accepted_payment_methods=given)
+    assert with_create_defaults(ProductType.PHYSICAL, attrs) == attrs
+
+
+def test_create_defaults_leave_an_stl_product_without_accepted_methods() -> None:
+    assert with_create_defaults(ProductType.STL, STL) == STL
+
+
+def test_an_audit_snapshot_records_accepted_methods_as_text() -> None:
+    product = _product(ProductType.PHYSICAL, PHYSICAL)
+    assert product.audit_snapshot()["accepted_payment_methods"] == "online_or_cash"

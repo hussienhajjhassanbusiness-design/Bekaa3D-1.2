@@ -14,7 +14,7 @@ from pydantic import (
 
 from app.catalog.api.product_image_schemas import ProductImageRead
 from app.catalog.api.schemas import MAX_NAME_LENGTH, ReferenceName
-from app.catalog.domain.enums import ProductType, PurchaseMode
+from app.catalog.domain.enums import AcceptedPaymentMethods, ProductType, PurchaseMode
 from app.catalog.domain.product import Dimensions, Product, ProductAttributes
 from app.catalog.domain.product_image import ProductImage
 from app.core.text import (
@@ -81,6 +81,7 @@ class _ProductFields(BaseModel):
     seo_description: SeoDescription | None = None
     og_image_url: HttpUrlText | None = None
     purchase_mode: PurchaseMode | None = None
+    accepted_payment_methods: AcceptedPaymentMethods | None = None
     material_id: UUID | None = None
     colour_id: UUID | None = None
     dimensions: DimensionsIn | None = None
@@ -183,6 +184,7 @@ class AdminProductDetail(BaseModel):
     is_featured: bool
     is_available: bool
     purchase_mode: PurchaseMode | None
+    accepted_payment_methods: AcceptedPaymentMethods | None
     material_id: UUID | None
     colour_id: UUID | None
     dimensions: DimensionsRead | None

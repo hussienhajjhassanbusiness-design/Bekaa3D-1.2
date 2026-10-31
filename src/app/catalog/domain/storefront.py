@@ -8,7 +8,7 @@ from enum import StrEnum
 from typing import Literal
 from uuid import UUID
 
-from app.catalog.domain.enums import ProductType, PurchaseMode
+from app.catalog.domain.enums import AcceptedPaymentMethods, ProductType, PurchaseMode
 from app.catalog.domain.exceptions import ProductValidationError
 from app.catalog.domain.product import Product
 from app.catalog.domain.product_image import ProductImage
@@ -177,6 +177,7 @@ class CartProduct:
     cover: ProductImage | None = None
     production_lead_time_days: int | None = None
     batch_size: int | None = None
+    accepted_payment_methods: AcceptedPaymentMethods | None = None  # None on STL (BR-019)
 
 
 def purchase_refusal(product: CartProduct) -> PurchaseRefusal | None:

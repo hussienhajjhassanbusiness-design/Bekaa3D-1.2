@@ -182,6 +182,7 @@ async def seed_order(
             "payment_method": method,
             "lead_time_days_snapshot": 3,
             "batch_size_snapshot": 2,
+            "accepted_payment_methods_snapshot": "online_or_cash",
         }
     await _insert(db, "orders", order | over)
     await _insert(db, "order_items", line)
@@ -616,6 +617,7 @@ async def test_a_line_an_admin_cancelled_does_not_block_self_cancel(
             "fulfillment_status": second,
             "lead_time_days_snapshot": 3,
             "batch_size_snapshot": 2,
+            "accepted_payment_methods_snapshot": "online_or_cash",
         },
     )
     await seed_payment(db_session, oid, "paid")

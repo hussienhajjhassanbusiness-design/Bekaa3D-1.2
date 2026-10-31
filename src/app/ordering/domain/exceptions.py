@@ -3,6 +3,7 @@ from datetime import datetime
 from uuid import UUID
 
 from app.catalog.application.ports import PurchaseRefusal
+from app.ordering.domain.enums import PaymentMethod
 
 
 class OrderingDomainError(Exception):
@@ -98,11 +99,21 @@ class InvalidFulfillmentError(OrderingDomainError):
 
 
 class PaymentMethodNotAllowedError(OrderingDomainError):
-    """422 PAYMENT_METHOD_NOT_ALLOWED with a machine-readable `reason`."""
+    """422 PAYMENT_METHOD_NOT_ALLOWED with a machine-readable `reason`; `product_ids` names
+    the lines whose product does not accept the method (ADR-048)."""
 
-    def __init__(self, reason: str) -> None:
+    def __init__(self, reason: str, product_ids: tuple[UUID, ...] = ()) -> None:
         super().__init__(f"Payment method not allowed: {reason}.")
         self.reason = reason
+        self.product_ids = product_ids
+
+
+class NoCommonPaymentMethodError(OrderingDomainError):
+    """422 NO_COMMON_PAYMENT_METHOD: the kept lines share no accepted method (ADR-048)."""
+
+    def __init__(self, lines: list[tuple[UUID, list[PaymentMethod]]]) -> None:
+        super().__init__("The cart's lines share no accepted payment method.")
+        self.lines = lines
 
 
 class OnlinePaymentUnavailableError(OrderingDomainError):
