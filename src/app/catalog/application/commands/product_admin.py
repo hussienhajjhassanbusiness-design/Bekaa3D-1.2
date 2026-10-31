@@ -20,6 +20,7 @@ from app.catalog.domain.product import (
     Product,
     ProductAttributes,
     ProductDraft,
+    with_create_defaults,
 )
 from app.catalog.domain.slug import normalise_slug
 from app.platform.application.ports.audit_writer import AuditWriter
@@ -97,7 +98,9 @@ class CreateProduct(_ProductCommand):
         ip_hash: str | None,
     ) -> Product:
         """Slug uniqueness is left to the live-slug index, never pre-checked."""
-        attrs = replace(attributes, slug=normalise_slug(attributes.slug))
+        attrs = with_create_defaults(
+            product_type, replace(attributes, slug=normalise_slug(attributes.slug))
+        )
         draft = ProductDraft(product_type, attrs)
         await _lock_references(self._references, attrs, list(REFERENCE_FIELDS))
         product = await self._products.add(draft)

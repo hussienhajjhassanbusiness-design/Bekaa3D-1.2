@@ -38,6 +38,7 @@ class SqlCartProductReader:
                 _P.price_cents,
                 _P.currency,
                 _P.purchase_mode,
+                _P.accepted_payment_methods,
                 _P.is_available,
                 _P.max_quantity_per_line,
                 _P.production_lead_time_days,
@@ -64,6 +65,7 @@ class SqlCartProductReader:
                 listed=bool(row.listed),
                 production_lead_time_days=row.production_lead_time_days,
                 batch_size=row.batch_size,
+                accepted_payment_methods=row.accepted_payment_methods,
                 cover=_image(row.ProductImageModel) if row.ProductImageModel else None,
             )
             for row in rows

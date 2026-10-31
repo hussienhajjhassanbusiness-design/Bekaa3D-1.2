@@ -218,6 +218,7 @@ async def test_a_physical_line_cannot_carry_an_offer(db_session: AsyncSession) -
             "payment_method": "cash",
             "lead_time_days_snapshot": 3,
             "batch_size_snapshot": 2,
+            "accepted_payment_methods_snapshot": "online_or_cash",
         },
     }
     with pytest.raises(IntegrityError) as caught:

@@ -17,7 +17,7 @@ from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalog.api.product_cursor import encode_cursor
-from app.catalog.domain.enums import ProductType, PurchaseMode
+from app.catalog.domain.enums import AcceptedPaymentMethods, ProductType, PurchaseMode
 from app.catalog.infrastructure.models import (
     CategoryModel,
     MaterialModel,
@@ -336,7 +336,8 @@ def test_a_postgres_outage_is_a_structured_503(monkeypatch: pytest.MonkeyPatch, 
 
 LIST_KEYS = {
     "id", "type", "name", "slug", "cover_image", "price", "category", "material", "colour",
-    "is_available", "purchase_mode", "average_rating", "review_count", "is_featured",
+    "is_available", "purchase_mode", "accepted_payment_methods", "average_rating",
+    "review_count", "is_featured",
 }  # fmt: skip
 DETAIL_KEYS = LIST_KEYS | {
     "description", "images", "seo_title", "seo_description", "og_image_url", "dimensions",
@@ -378,6 +379,7 @@ async def test_a_physical_detail_carries_gallery_specs_seo_and_capabilities(
         db_session,
         refs,
         purchase_mode=PurchaseMode.BOTH,
+        accepted_payment_methods=AcceptedPaymentMethods.CASH,
         description="Hand finished.",
         seo_title="Lamp | Bekaa3D",
         seo_description="A lamp.",
@@ -419,6 +421,7 @@ async def test_a_physical_detail_carries_gallery_specs_seo_and_capabilities(
     assert detail["og_image_url"] == "https://cdn.example.com/og.png"
     assert (detail["average_rating"], detail["review_count"]) == (4.25, 8)
     assert detail["purchase_mode"] == "both"
+    assert detail["accepted_payment_methods"] == item["accepted_payment_methods"] == "cash"
     assert detail["capabilities"] == {
         "can_add_to_cart": True,
         "can_offer": False,
@@ -435,7 +438,14 @@ async def test_an_stl_detail_has_no_physical_fields_and_can_be_offered(
         detail = _get(client, f"{PRODUCTS}/{product.slug}")
     assert detail["type"] == "stl"
     assert detail["cover_image"] is None and detail["images"] == []
-    physical = ("purchase_mode", "material", "colour", "dimensions", "production_lead_time_days")
+    physical = (
+        "purchase_mode",
+        "accepted_payment_methods",
+        "material",
+        "colour",
+        "dimensions",
+        "production_lead_time_days",
+    )
     assert all(detail[name] is None for name in physical)
     assert detail["capabilities"] == {
         "can_add_to_cart": True,

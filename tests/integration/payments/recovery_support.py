@@ -131,6 +131,7 @@ async def seed_order(
                 "line_total_cents": 2000,
                 "lead_time_days_snapshot": 3,
                 "batch_size_snapshot": 2,
+                "accepted_payment_methods_snapshot": "online_or_cash",
             },
         )
     await db.commit()

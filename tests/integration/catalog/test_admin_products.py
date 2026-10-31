@@ -74,6 +74,7 @@ def _physical(refs: dict[str, str], **over: Any) -> dict[str, Any]:
     body = _stl(refs) | {
         "type": "physical",
         "purchase_mode": "online_only",
+        "accepted_payment_methods": "cash",
         "material_id": refs["material_id"],
         "colour_id": refs["colour_id"],
         "dimensions": {"length_mm": 100, "width_mm": 50, "height_mm": 20},
@@ -161,6 +162,7 @@ async def test_an_stl_product_can_be_made_unavailable(db_session: AsyncSession) 
     "field",
     [
         "purchase_mode",
+        "accepted_payment_methods",
         "material_id",
         "colour_id",
         "dimensions",
@@ -279,6 +281,8 @@ async def test_a_slug_is_normalised_and_the_bad_one_names_its_field(
         ("stl", {"purchase_mode": "both"}, "purchase_mode"),
         ("physical", {"batch_size": None}, "batch_size"),
         ("physical", {"purchase_mode": None}, "purchase_mode"),
+        ("stl", {"accepted_payment_methods": "online"}, "accepted_payment_methods"),
+        ("physical", {"accepted_payment_methods": None}, "accepted_payment_methods"),
     ],
 )
 async def test_patch_cannot_break_type_integrity(
@@ -358,6 +362,53 @@ async def test_a_patch_updates_in_place_and_clears_optional_fields(
     assert body["purchase_mode"] == "whatsapp_only" and body["dimensions"] is None
     assert body["price"] == {"amount_cents": 999, "currency": "USD"}
     assert body["updated_at"] > product["updated_at"]
+
+
+async def test_a_physical_product_created_without_accepted_methods_accepts_both(
+    db_session: AsyncSession,
+) -> None:
+    """BR-019 default; the column has no DB default, so the application must fill it."""
+    refs = await _refs(db_session)
+    body = _physical(refs)
+    del body["accepted_payment_methods"]
+    with client_for(main_app) as client:
+        await mfa_admin(client, db_session)
+        created = _create(client, body)
+    assert created["accepted_payment_methods"] == "online_or_cash"
+    [row] = await _product_rows(db_session, body["slug"])
+    assert row.accepted_payment_methods == "online_or_cash"
+
+
+async def test_accepted_methods_round_trip_and_a_change_is_audited(
+    db_session: AsyncSession,
+) -> None:
+    refs = await _refs(db_session)
+    with client_for(main_app) as client:
+        await mfa_admin(client, db_session)
+        product = _create(client, _physical(refs))
+        response = _patch(client, product, accepted_payment_methods="online")
+        stl = _create(client, _stl(refs))
+
+    assert product["accepted_payment_methods"] == "cash" and stl["accepted_payment_methods"] is None
+    assert response.status_code == 200 and response.json()["accepted_payment_methods"] == "online"
+    updated = (await _audit(db_session, product["id"]))[-1]
+    assert updated.action == "product.updated"
+    assert updated.before_data is not None and updated.after_data is not None
+    assert updated.before_data["accepted_payment_methods"] == "cash"
+    assert updated.after_data["accepted_payment_methods"] == "online"
+
+
+@pytest.mark.parametrize("value", ["both", "cash_only", "", 1])
+async def test_an_unknown_accepted_methods_value_is_422(
+    db_session: AsyncSession, value: Any
+) -> None:
+    refs = await _refs(db_session)
+    body = _physical(refs, accepted_payment_methods=value)
+    with client_for(main_app) as client:
+        await mfa_admin(client, db_session)
+        response = client.post(PRODUCTS, json=body, headers=csrf(client))
+    assert_problem(response, 422, "VALIDATION_ERROR")
+    assert ("body", "accepted_payment_methods") in _locs(response)
 
 
 async def test_a_no_op_patch_keeps_the_version_and_is_still_audited(

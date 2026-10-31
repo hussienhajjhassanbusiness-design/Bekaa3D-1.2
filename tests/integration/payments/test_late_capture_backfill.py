@@ -59,7 +59,9 @@ CASES: dict[str, tuple[int | None, str | None, Any]] = {
 async def _late_payment(engine: AsyncEngine, case: str) -> uuid.UUID:
     captured, currency, audit = CASES[case]
     async with async_sessionmaker(engine, expire_on_commit=False)() as db:
-        order = await seed_physical_order(db, payment_method="online", payment_status="expired")
+        order = await seed_physical_order(
+            db, payment_method="online", payment_status="expired", before_vs049=True
+        )
         payment_id = await db.scalar(
             text(
                 "UPDATE payments SET late_captured_at = now(), captured_amount_cents = :a,"
@@ -148,7 +150,9 @@ async def _seed_many(url: str, count: int) -> None:
     """`count` late-captured attempts on one order (only live attempts are unique)."""
     engine = create_async_engine(url)
     async with async_sessionmaker(engine, expire_on_commit=False)() as db:
-        order = await seed_physical_order(db, payment_method="online", payment_status="expired")
+        order = await seed_physical_order(
+            db, payment_method="online", payment_status="expired", before_vs049=True
+        )
         await db.execute(
             text(
                 "INSERT INTO payments (order_id, provider, order_payment_method,"

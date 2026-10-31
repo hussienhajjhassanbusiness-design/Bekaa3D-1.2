@@ -56,6 +56,7 @@ from app.ordering.domain.fulfillment import (
 from app.ordering.domain.order_number import new_order_number
 from app.ordering.domain.order_status import LineState, OrderStatusInputs, derive_order_status
 from app.ordering.domain.orders import NewOrder, Order, OrderLine, StatusChange
+from app.ordering.domain.payment_methods import LineMethods, require_accepted
 from app.platform.application.ports import AuditWriter
 
 
@@ -119,6 +120,15 @@ async def place_order(
     )
     if not kept:
         raise CartEmptyError(dropped)
+    require_accepted(
+        [
+            LineMethods(
+                line.product_id, line.product_type, found[line.product_id].accepted_payment_methods
+            )
+            for line in kept
+        ],
+        command.payment_method,
+    )
     fulfillment = resolve_fulfillment(
         [line.product_type for line in kept],
         payment_method=command.payment_method,

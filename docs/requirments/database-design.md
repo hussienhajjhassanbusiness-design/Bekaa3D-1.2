@@ -176,6 +176,16 @@ cash
 
 Chosen at checkout and immutable (ADR-024). `cash` requires every line to be physical. Distinct from `purchase_mode` and `fulfillment_method`.
 
+## 3.4aa `accepted_payment_methods`
+
+```text
+online
+cash
+online_or_cash
+```
+
+What a physical product accepts (ADR-048): set on `products` (physical only) and snapshotted on physical `order_items`. Distinct from `payment_method`, the per-order choice, and from `purchase_mode`.
+
 ## 3.4b `cancel_reason`
 
 ```text
@@ -798,6 +808,7 @@ Products referencing a material prevent destructive removal.
 | `review_count` | INTEGER | No | Default 0; CHECK ≥ 0 |
 | `wishlist_count` | INTEGER | No | Default 0; CHECK ≥ 0 |
 | `purchase_mode` | `purchase_mode` | Yes | physical only |
+| `accepted_payment_methods` | `accepted_payment_methods` | Yes | physical only; no DB default, the application defaults to `online_or_cash` (ADR-048) |
 | `material_id` | UUID | Yes | FK → `materials.id`; physical only |
 | `colour_id` | UUID | Yes | FK → `colours.id`; physical only |
 | `dimensions` | JSONB | Yes | physical only |
@@ -826,6 +837,7 @@ For `physical`:
 
 ```text
 purchase_mode IS NOT NULL
+accepted_payment_methods IS NOT NULL
 production_lead_time_days IS NOT NULL
 batch_size IS NOT NULL AND batch_size > 0
 max_quantity_per_line IS NOT NULL AND max_quantity_per_line > 0
@@ -837,6 +849,7 @@ For `stl`:
 
 ```text
 purchase_mode IS NULL
+accepted_payment_methods IS NULL
 material_id IS NULL
 colour_id IS NULL
 dimensions IS NULL
@@ -1117,6 +1130,7 @@ As built (VS-030, migration `c01e53ab3e0f`): `uq_orders_id_user UNIQUE (id, user
 | `fulfilled_at` | TIMESTAMPTZ | Yes | for STL: when marked delivered |
 | `delivered_by` | UUID | Yes | FK → `users.id`; STL only: administrator who marked it delivered |
 | `payment_method` | `payment_method` | No | copy of the order's; composite FK `(order_id, payment_method)` → `orders(id, payment_method)` |
+| `accepted_payment_methods_snapshot` | `accepted_payment_methods` | Yes | physical lines only: what the product accepted at checkout (ADR-048) |
 | `cancel_reason` | `cancel_reason` | Yes | set only with `fulfillment_status = 'cancelled'` from `ready_to_ship`, `returned` or `ready_for_pickup`, or `other` from `shipped` on an unpaid $0 cash line (VS-031) |
 | `receipt_confirmed_at` | TIMESTAMPTZ | Yes | physical only: customer pressed "I got it" (ADR-024) |
 | `problem_reported_at` | TIMESTAMPTZ | Yes | physical only: customer reported a problem (ADR-024) |
@@ -1157,6 +1171,14 @@ Cash integrity (INV-21):
 ```text
 payment_method = 'cash' → product_type = 'physical'
 cancel_reason IS NOT NULL → fulfillment_status = 'cancelled'
+```
+
+Accepted payment methods (INV-25, ADR-048):
+
+```text
+ck_order_items_accepted_methods_by_type: (product_type = 'physical') = (accepted_payment_methods_snapshot IS NOT NULL)
+ck_order_items_method_accepted: payment_method = 'cash' → snapshot IN ('cash', 'online_or_cash');
+                                payment_method = 'online' AND physical → snapshot IN ('online', 'online_or_cash')
 ```
 
 For physical snapshots:

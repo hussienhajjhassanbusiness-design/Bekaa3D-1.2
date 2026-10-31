@@ -70,7 +70,7 @@ serves two distinct commercial models through one system:
 
 | Half                       | What it sells                       | How it transacts                                |
 | -------------------------- | ----------------------------------- | ----------------------------------------------- |
-| **A — Physical catalogue** | 3D-printed products, made on demand | Per product: checkout (paid online or in cash on delivery), WhatsApp, or both |
+| **A — Physical catalogue** | 3D-printed products, made on demand | Per product: checkout (paid online, in cash on delivery, or either, as the product accepts), WhatsApp, or both |
 | **B — STL marketplace**    | Digital model files                 | Online checkout only, emailed by the administrator |
 
 ### 1.2 Business Context
@@ -94,7 +94,7 @@ delivery or at pickup (ADR-024), or use WhatsApp.
 * STL digital marketplace; purchased files are emailed manually by the administrator (ADR-019)
 * Cart supporting mixed digital + physical orders
 * Online payment through a provider still to be chosen (§30.4)
-* Cash on delivery and cash at pickup for orders whose every line is physical (ADR-024)
+* Cash on delivery and cash at pickup for orders whose every line is physical and accepts cash (ADR-024, ADR-048)
 * Manual fulfillment workflow (courier delivery and workshop pickup)
 * Offer/negotiation system for STL products
 * Reviews, wishlist, notifications
@@ -186,6 +186,7 @@ Every rule is numbered for traceability. `BR-` prefix.
 | BR-016 | Removed by ADR-019 — the platform keeps no STL files, so it keeps no file versions.                                         |
 | BR-017 | Product name is required.                                                                                                   |
 | BR-018 | Nothing is ever hard-deleted; all entities use soft delete.                                                                 |
+| BR-019 | Each physical product declares the payment methods it accepts at checkout: online, cash, or both (default both). It is separate from purchase mode, the admin may change it at any time, and a change never affects a placed order. STL products accept online only ([ADR-048](adr/ADR-048-accepted-payment-methods-per-product.md)). |
 
 ### 3.2 Cart
 
@@ -333,7 +334,7 @@ Every rule is numbered for traceability. `BR-` prefix.
 | ID     | Rule                                                                                                                                         |
 | ------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | BR-140 | The customer chooses the payment method at checkout: online, or cash (on delivery, or at pickup). It is snapshotted on the order and never changes. |
-| BR-141 | Cash is allowed only when every line of the order is physical. STL-only and mixed orders are paid online first, because an emailed file cannot be taken back. |
+| BR-141 | Cash is allowed only when every line of the order is physical and every line's product accepts cash; online is allowed only when every line's product accepts online (BR-019). STL-only and mixed orders are paid online first, because an emailed file cannot be taken back. A cart whose lines share no payment method is refused at checkout, and the customer is asked to order them separately ([ADR-048](adr/ADR-048-accepted-payment-methods-per-product.md)). |
 | BR-142 | A cash order is placed without payment and has no checkout hold; its physical lines may enter production once it is placed.                  |
 | BR-143 | The administrator records the cash once per order, at handover, in the same action and transaction that marks every live line delivered or picked up. The order must have at least one live line, and the amount must equal the sum of live line totals and be above zero. A courier who later remits less is settled outside the platform. |
 | BR-144 | A refused or unreachable cash delivery goes shipped → returned → cancelled; a refusal before shipping is cancelled from ready to ship; a pickup refusal or no-show is cancelled from ready for pickup — with no refund because nothing was paid. Admin cancels from these states record a reason: `refused`, `no_show` (pickup only) or `other`. When a cancel leaves the cash order with no live line, and every line cancelled from these states carries `refused` or `no_show` (at least one), cash is blocked for that customer and that contact phone until an administrator clears it. Refusing only some lines, or any `other`, never blocks. |
@@ -579,7 +580,7 @@ F-080 to F-082 and F-084 to F-088 (STL upload, bundles, versions, downloads, dow
 
 ### 5.7 Purchase a Physical Product with Cash on Delivery
 
-1. A verified customer's cart holds only physical products.
+1. A verified customer's cart holds only physical products, each of which accepts cash (BR-019).
 2. At checkout they choose delivery or pickup and pay in cash; the cash limits apply (BR-145).
 3. The order is placed unpaid, with no checkout hold; confirmation email states the amount due in cash on delivery (or at pickup) and that the delivery fee is paid to the courier.
 4. The administrator may call the contact phone, then marks start printing → ready → shipped (or ready for pickup), notifying the customer as in 5.2.
@@ -596,7 +597,7 @@ F-080 to F-082 and F-084 to F-088 (STL upload, bundles, versions, downloads, dow
 
 **Common to both types:** name, description, category, price, multiple images, visibility flag, featured flag, availability toggle, SEO metadata (title, description, OG image, slug). Catalogue text lives in plain columns on the owning table — V1 is English-only, see ADR-016 and §17.2.
 
-**Physical only:** purchase mode, material, colour, dimensions, production lead time (days), batch size, maximum quantity per line, weight (optional; unused since the courier prices delivery, ADR-024).
+**Physical only:** purchase mode, accepted payment methods (online, cash, or both; BR-019), material, colour, dimensions, production lead time (days), batch size, maximum quantity per line, weight (optional; unused since the courier prices delivery, ADR-024).
 
 Availability is common to both types (owner decision, 2026-10-07): with manual STL delivery (ADR-019) the administrator must be able to pause STL sales.
 
@@ -654,12 +655,12 @@ Executed inside a single transaction:
 1. Verify the idempotency key; return the prior response if this is a replay.
 2. Check the global kill switch — if orders are paused, reject with 503.
 3. Lock the cart.
-4. Validate every line: product exists, not deleted, visible, available, purchase mode permits online sale.
+4. Validate every line: product exists, not deleted, visible, available, purchase mode permits online sale. After step 5, the lines must share at least one accepted payment method, or the checkout is refused and the customer is asked to order them separately (BR-019, BR-141).
 5. Re-verify STL ownership (a paid, unrefunded STL line); silently drop anything acquired since adding.
 6. Validate quantities against current caps.
 7. Determine fulfillment method; require an address for delivery and a contact phone for pickup (BR-078).
 8. **Recompute all totals server-side.** There is no shipping component.
-9. Validate the payment method against the recomputed total: cash only if every line is physical, cash is enabled, neither the customer nor the normalised contact phone is blocked from cash, fewer than `cash_max_open_orders` unpaid, uncancelled cash orders, or cash orders the customer cancelled themselves in the last 24 hours (ADR-038 d23), exist for that customer or phone, no line is priced 0 (ADR-043 d12), and the total is above zero and within `cash_max_order_total` (BR-141, BR-145). An online order names its provider when more than one is configured (§30.4).
+9. Validate the payment method against the recomputed total: the method must be accepted by every line's product (an STL accepts online only); cash only if every line is physical, cash is enabled, neither the customer nor the normalised contact phone is blocked from cash, fewer than `cash_max_open_orders` unpaid, uncancelled cash orders, or cash orders the customer cancelled themselves in the last 24 hours (ADR-038 d23), exist for that customer or phone, no line is priced 0 (ADR-043 d12), and the total is above zero and within `cash_max_order_total` (BR-141, BR-145). An online order names its provider when more than one is configured (§30.4).
 10. Create order and order items with snapshots; for an online order also create a pending payment with the chosen provider. A cash order gets no payment until the cash is recorded.
 11. Compute the estimated dispatch date.
 12. Clear the cart.
@@ -670,12 +671,12 @@ Executed inside a single transaction:
 | Cart contents      | Address      | Contact phone   | Fulfillment method | Payment method  |
 | ------------------ | ------------ | --------------- | ------------------ | --------------- |
 | STL only           | Not required | Not required    | None (null)        | Online          |
-| Physical, delivery | Required     | From address    | Delivery           | Online or cash  |
-| Physical, pickup   | Not required | Entered         | Pickup             | Online or cash  |
+| Physical, delivery | Required     | From address    | Delivery           | Online or cash, as every product accepts |
+| Physical, pickup   | Not required | Entered         | Pickup             | Online or cash, as every product accepts |
 | Mixed, delivery    | Required     | From address    | Delivery           | Online          |
 | Mixed, pickup      | Not required | Entered         | Pickup             | Online          |
 
-No row carries a shipping fee: the courier sets and collects it on delivery (ADR-024).
+No row carries a shipping fee: the courier sets and collects it on delivery (ADR-024). A mixed order's physical products must accept online; a cart sharing no accepted method is refused (BR-141, ADR-048).
 
 ### 7.5 Idempotency
 
@@ -800,7 +801,7 @@ The event is audited. A file already emailed cannot be recalled; the mitigations
 
 Decided in ADR-024.
 
-1. **Eligibility.** Cash is offered only when every line is physical, `cash_payment_enabled` is on, no uncleared cash payment block matches the customer or the normalised contact phone, fewer than `cash_max_open_orders` unpaid, uncancelled cash orders, or cash orders the customer cancelled themselves in the last 24 hours (ADR-038 d23), exist for that customer or that phone, no line is priced 0 (ADR-043 d12), and the **recomputed** total is above zero and at most `cash_max_order_total`. Phones are matched by a keyed hash of the normalised number (`orders.contact_phone_hash`; `PHONE_HASH_SALT`, never rotated). Checked at checkout under the cart lock, which serialises one customer's checkouts; the block and the open-order count are also read under a transaction-scoped advisory lock on the phone hash, which serialises checkouts from different accounts with the same phone (the checks that need no phone run before it, ADR-038).
+1. **Eligibility.** Cash is offered only when every line is physical and its product accepts cash (BR-019), `cash_payment_enabled` is on, no uncleared cash payment block matches the customer or the normalised contact phone, fewer than `cash_max_open_orders` unpaid, uncancelled cash orders, or cash orders the customer cancelled themselves in the last 24 hours (ADR-038 d23), exist for that customer or that phone, no line is priced 0 (ADR-043 d12), and the **recomputed** total is above zero and at most `cash_max_order_total`. Phones are matched by a keyed hash of the normalised number (`orders.contact_phone_hash`; `PHONE_HASH_SALT`, never rotated). Checked at checkout under the cart lock, which serialises one customer's checkouts; the block and the open-order count are also read under a transaction-scoped advisory lock on the phone hash, which serialises checkouts from different accounts with the same phone (the checks that need no phone run before it, ADR-038).
 2. **Placement.** The order is created without a payment row and without a checkout hold. Stale-checkout release, reconciliation and payment retry never apply to it. Its physical lines may enter production at once.
 3. **Handover — one action, one transaction, once per order.** The order must have at least one live (non-cancelled) line, and every live line must be `shipped` (delivery) or `ready_for_pickup` (pickup). The administrator enters the cash collected, which must equal the sum of live line totals and be above zero. Under the lock order of §20.8, the action marks the lines `delivered` or `picked_up`, creates one `payments` row (provider `cash`, status `paid`, amount, recording administrator, `verified_at`), recomputes the order status, and writes history, audit, the in-app notification and the delivered / picked-up email with the cash receipt. A unique index allows one cash payment per order. If a refusal leaves only lines totalling 0, the administrator cancels them (reason `other`) instead of a handover.
 4. **When to record.** When the courier reports the order delivered and paid, for the full amount the customer paid. A courier who remits less to the business is settled outside the platform.
@@ -1161,6 +1162,7 @@ Numbered for traceability. `INV-` prefix.
 * INV-22 — A cash payment is created only by the handover action, in the same transaction that marks every live line delivered or picked up, for exactly the sum of live line totals and above zero; at most one per order (unique index).
 * INV-23 — No physical line of an unpaid online order changes state, except the hold release cancelling its pending lines.
 * INV-24 — Every write that changes an order's lines, payment or refunds locks the `orders` row before any line (§20.8).
+* INV-25 — Every physical order line snapshots the payment methods its product accepted, and the order's payment method is one of them (enforced by the database, ADR-048).
 
 ---
 
@@ -1385,7 +1387,8 @@ Every error carries a **stable machine-readable code**. The client renders its o
 | Full refund of an unfinished physical line | 422    | REFUND_REQUIRES_CANCELLATION                                   |
 | Offer below floor                          | 422    | OFFER_BELOW_MINIMUM                                            |
 | Product not purchasable                    | 422    | PRODUCT_NOT_PURCHASABLE                                        |
-| Cash chosen for an order with an STL line, or a zero total, or cash disabled; an unconfigured online provider chosen | 422 | PAYMENT_METHOD_NOT_ALLOWED |
+| Cash chosen for an order with an STL line, or a zero total, or cash disabled; an unconfigured online provider chosen; a method some line's product does not accept (ADR-048) | 422 | PAYMENT_METHOD_NOT_ALLOWED |
+| The cart's lines share no accepted payment method; order them separately (ADR-048) | 422 | NO_COMMON_PAYMENT_METHOD |
 | Cash total over limit                      | 422    | CASH_PAYMENT_LIMIT_REACHED                                     |
 | Cash blocked, or open cash orders at the limit, for the customer or the phone (one body, no reason; ADR-038) | 422 | CASH_NOT_AVAILABLE |
 | Cash entered differs from the amount due   | 422    | CASH_AMOUNT_MISMATCH                                           |

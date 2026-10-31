@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from app.catalog.application.ports import ProductType
+from app.catalog.application.ports import AcceptedPaymentMethods, ProductType
 from app.ordering.domain.enums import (
     CancelReason,
     FulfillmentMethod,
@@ -30,6 +30,7 @@ class NewOrderLine:
     offer_id: UUID | None = None
     lead_time_days_snapshot: int | None = None
     batch_size_snapshot: int | None = None
+    accepted_payment_methods_snapshot: AcceptedPaymentMethods | None = None  # physical only
 
 
 @dataclass(frozen=True)

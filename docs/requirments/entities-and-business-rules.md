@@ -241,12 +241,14 @@ Visibility, availability, and deletion must remain separate concepts.
   - `whatsapp_only`
   - `both`
 
+- **[Domain]** A physical product has exactly one set of accepted payment methods (BR-019, ADR-048): `online`, `cash` or `online_or_cash`, defaulting to `online_or_cash`; an STL product has none and accepts online only.
+- **[DB]** `ck_products_type_integrity` requires `accepted_payment_methods` on a physical product and forbids it on an STL product.
 - **[Domain]** Physical products are made on demand and have no stock quantity.
 - **[Domain]** `lead_time_days`, `batch_size`, and `max_quantity_per_line` must be positive.
 - **[Application]** An unavailable product remains visible but cannot be added to the cart.
 - **[Application]** A hidden or soft-deleted product does not appear in storefront queries.
 - **[Application]** A WhatsApp-only product bypasses cart and checkout.
-- **[Application]** Purchase mode and availability are revalidated during checkout.
+- **[Application]** Purchase mode, availability and accepted payment methods are revalidated during checkout.
 - **[Application]** Product changes must not change historical OrderItem snapshots.
 - **[Application]** Rating aggregates are recalculated after review creation, edit, moderation, or deletion.
 
@@ -435,6 +437,8 @@ This is a projection rule rather than a normal command-driven state machine. A f
 - **[DB]** Every Order with a fulfillment method has a contact phone snapshot.
 - **[Application]** `payment_method = cash` requires every OrderItem to be physical, cash enabled, no uncleared CashPaymentBlock for the customer or the contact phone hash, fewer than `cash_max_open_orders` open unpaid cash Orders, or cash Orders the customer cancelled themselves in the last 24 hours (ADR-038 d23), for the customer or that hash, and a **recomputed** total above 0 and within `cash_max_order_total`; checked after the totals are recomputed, under the cart lock; the block and the open-order count also under an advisory lock on the phone hash, taken after the checks that need no phone (ADR-038).
 - **[DB]** `payment_method` is copied onto every OrderItem and Payment under a composite foreign key to `orders(id, payment_method)`; CHECKs forbid an STL item on a cash Order and require `provider = cash` exactly on cash Orders.
+- **[Domain]** The payment method must be accepted by every OrderItem's product (an STL accepts online only); kept items sharing no accepted method refuse checkout with `NO_COMMON_PAYMENT_METHOD` (BR-141, ADR-048).
+- **[DB]** Every physical OrderItem snapshots `accepted_payment_methods_snapshot`, and `ck_order_items_method_accepted` requires the Order's `payment_method` to be in it (INV-25).
 - **[Application]** The contact phone snapshot is stored normalised to E.164, with `contact_phone_hash` (keyed `HMAC-SHA256`, secret `PHONE_HASH_SALT`, never rotated) for matching.
 - **[Application]** A cash Order has no checkout hold and no Payment until the cash handover.
 - **[Application]** An unpaid online Order never appears in the fulfillment queue, and none of its physical items may change state (BR-148), except the hold release cancelling its `pending` items.
@@ -489,6 +493,7 @@ Orders are **retained**, not deleted through business workflows. Cancellation an
 - physical production snapshots
 - `receipt_confirmed_at`, `problem_reported_at` — optional customer feedback after delivery or pickup (ADR-024)
 - `payment_method` — copy of the Order's, for the database cash-integrity check
+- `accepted_payment_methods_snapshot` — physical items only: what the product accepted at checkout (ADR-048)
 - `cancel_reason` — `refused`, `no_show` (from `ready_for_pickup` only) or `other`, recorded on an administrator cancel from `ready_to_ship`, `returned` or `ready_for_pickup`
 - `offer_id`
 - lifecycle timestamps

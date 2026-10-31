@@ -8,7 +8,7 @@ from uuid import uuid4
 import pytest
 
 from app.catalog.application.ports import CartProduct, ProductType, PurchaseRefusal
-from app.catalog.domain.enums import PurchaseMode
+from app.catalog.domain.enums import AcceptedPaymentMethods, PurchaseMode
 from app.catalog.domain.product_image import ProductImage
 from app.ordering.domain.cart_rules import (
     cap_for,
@@ -18,6 +18,7 @@ from app.ordering.domain.cart_rules import (
     view_line,
 )
 from app.ordering.domain.entities import MAX_CART_LINES, CartLine
+from app.ordering.domain.enums import PaymentMethod
 from app.ordering.domain.exceptions import (
     CartLineLimitReachedError,
     ProductNotPurchasableError,
@@ -36,6 +37,7 @@ def physical(**over: Any) -> CartProduct:
         "price_cents": 1000,
         "currency": "USD",
         "purchase_mode": PurchaseMode.ONLINE_ONLY,
+        "accepted_payment_methods": AcceptedPaymentMethods.ONLINE_OR_CASH,
         "is_available": True,
         "max_quantity_per_line": 5,
         "listed": True,
@@ -44,7 +46,12 @@ def physical(**over: Any) -> CartProduct:
 
 
 def stl(**over: Any) -> CartProduct:
-    base = {"type": ProductType.STL, "purchase_mode": None, "max_quantity_per_line": None}
+    base = {
+        "type": ProductType.STL,
+        "purchase_mode": None,
+        "accepted_payment_methods": None,
+        "max_quantity_per_line": None,
+    }
     return physical(**(base | over))
 
 
@@ -184,6 +191,26 @@ def test_a_purchasable_line_shows_everything() -> None:
     assert view.purchasable
     assert (view.name, view.slug, view.cover, view.max_quantity) == ("Lamp", "lamp", cover, 5)
     assert view.over_cap is False
+
+
+@pytest.mark.parametrize(
+    ("accepted", "methods"),
+    [
+        (AcceptedPaymentMethods.ONLINE, {PaymentMethod.ONLINE}),
+        (AcceptedPaymentMethods.CASH, {PaymentMethod.CASH}),
+        (AcceptedPaymentMethods.ONLINE_OR_CASH, {PaymentMethod.ONLINE, PaymentMethod.CASH}),
+    ],
+)
+def test_a_line_carries_what_its_product_accepts(
+    accepted: AcceptedPaymentMethods, methods: set[PaymentMethod]
+) -> None:
+    product = physical(accepted_payment_methods=accepted)
+    assert view_line(line(product, 1), product).payment_methods == methods
+
+
+def test_an_stl_line_accepts_online_only() -> None:
+    product = stl()
+    assert view_line(line(product, 1), product).payment_methods == {PaymentMethod.ONLINE}
 
 
 def test_a_line_whose_product_is_not_listed_keeps_only_its_name() -> None:
