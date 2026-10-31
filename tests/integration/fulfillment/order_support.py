@@ -83,9 +83,11 @@ async def seed_physical_order(
     placed_at: datetime | None = None,
     email: str = "buyer@example.com",
     stl_line: str | None = None,
+    before_vs049: bool = False,
 ) -> PhysicalOrder:
     """A physical order; online ones get one `mock` payment in `payment_status` (none if
-    None). `stl_line` adds an STL line in that state (online only)."""
+    None). `stl_line` adds an STL line in that state (online only). `before_vs049`: for a
+    schema migrated below 089f97a72014."""
     user_id = user_id or (await create_user(db)).id
     totals = list(line_totals or [1000] * len(line_states))
     refs = await seed_refs(db)
@@ -132,17 +134,22 @@ async def seed_physical_order(
     )
     ids = []
     for state, line_total in zip(line_states, totals, strict=True):
-        product = (await seed_product(db, refs)).id
+        product = await (_product_before_vs049(db, refs) if before_vs049 else _product(db, refs))
         line_id = uuid.uuid4()
+        snapshot = (
+            ("", "")
+            if before_vs049
+            else (", accepted_payment_methods_snapshot", ", 'online_or_cash'")
+        )
         await db.execute(
             text(
                 "INSERT INTO order_items (id, order_id, user_id, product_id, product_type,"
                 " product_name_snapshot, unit_price_cents, quantity, line_total_cents,"
                 " fulfillment_status, payment_method, lead_time_days_snapshot,"
-                " batch_size_snapshot, cancelled_at, accepted_payment_methods_snapshot)"
+                f" batch_size_snapshot, cancelled_at{snapshot[0]})"
                 " VALUES (:id, :o, :u, :p, 'physical', 'Lamp', :t, 1, :t,"
-                " CAST(:s AS order_item_status), CAST(:pm AS payment_method), 3, 2, :c,"
-                " 'online_or_cash')"
+                " CAST(:s AS order_item_status), CAST(:pm AS payment_method), 3, 2,"
+                f" :c{snapshot[1]})"
             ),
             {
                 "id": line_id,
@@ -162,6 +169,24 @@ async def seed_physical_order(
         await seed_payment(db, order_id, total, payment_status, at=at)
     await db.commit()
     return PhysicalOrder(order_id, user_id, number, tuple(ids), phone)
+
+
+async def _product(db: AsyncSession, refs: Any) -> uuid.UUID:
+    return (await seed_product(db, refs)).id
+
+
+async def _product_before_vs049(db: AsyncSession, refs: Any) -> uuid.UUID:
+    """The ORM writes every mapped column; a schema below 089f97a72014 lacks one of them."""
+    product_id: uuid.UUID = await db.scalar(
+        text(
+            "INSERT INTO products (type, category_id, name, slug, price_cents, is_visible,"
+            " purchase_mode, production_lead_time_days, batch_size, max_quantity_per_line)"
+            " VALUES ('physical', :c, 'Lamp', :s, 1000, true, 'online_only', 3, 2, 5)"
+            " RETURNING id"
+        ),
+        {"c": refs.category.id, "s": f"p-{uuid.uuid4().hex[:12]}"},
+    )
+    return product_id
 
 
 async def _seed_stl_line(
