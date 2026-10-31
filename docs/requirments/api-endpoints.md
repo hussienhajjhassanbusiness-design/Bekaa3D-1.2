@@ -903,7 +903,7 @@ As built in VS-028 ([ADR-038](../adr/ADR-038-physical-checkout-and-cash-eligibil
 - `contact_phone` sent with delivery → `INVALID_FULFILLMENT`; an invalid number → `VALIDATION_ERROR` at `body.contact_phone`, never echoing the input;
 - an unknown, another customer's or a deleted `address_id` → one `INVALID_FULFILLMENT`; pickup while `pickup_address` is unset → `INVALID_FULFILLMENT`;
 - `payment_provider` sent with cash → `PAYMENT_METHOD_NOT_ALLOWED` (`provider_not_applicable`);
-- kept lines sharing no accepted payment method → `NO_COMMON_PAYMENT_METHOD`; a method some line's product does not accept → `PAYMENT_METHOD_NOT_ALLOWED` (`cash_requires_physical` with an STL line, else `cash_not_accepted` / `online_not_accepted` with `product_ids`); both come after `CART_EMPTY` and before `CART_PRICE_CHANGED` (VS-049, [ADR-048](../adr/ADR-048-accepted-payment-methods-per-product.md));
+- kept lines sharing no accepted payment method → `NO_COMMON_PAYMENT_METHOD`; a method some line's product does not accept → `PAYMENT_METHOD_NOT_ALLOWED` (`cash_requires_physical` with an STL line, else `cash_not_accepted` / `online_not_accepted` with `product_ids`); both come after `CART_EMPTY` and before `INVALID_FULFILLMENT` and `CART_PRICE_CHANGED` (VS-049, [ADR-048](../adr/ADR-048-accepted-payment-methods-per-product.md));
 - a missing `accept_cash_terms` for cash → `VALIDATION_ERROR` at `body.accept_cash_terms`;
 - a block or the open-order limit → one `CASH_NOT_AVAILABLE` with no `reason`, whether the account or the phone matched; the total cap (`CASH_PAYMENT_LIMIT_REACHED`, `order_total`) is checked first, before the phone (ADR-038 d19-d20).
 

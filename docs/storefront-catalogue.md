@@ -123,6 +123,7 @@ until the term has a word of 3 letters or digits; shorter terms are a 422.
 `cover_image` (`{id, url, alt_text, is_cover}` or null), `price`
 (`{amount_cents, currency}`), `category` (`{id, name, slug}`), `material` /
 `colour` (`{id, name}` or null), `is_available`, `purchase_mode` (null for STL),
+`accepted_payment_methods` (`online`/`cash`/`online_or_cash`, null for STL; VS-049),
 `average_rating`, `review_count`, `is_featured`.
 
 `ProductDetail` adds `description`, `images` (every live image, in display
