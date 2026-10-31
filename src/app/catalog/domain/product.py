@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from app.catalog.domain.enums import ProductType, PurchaseMode
+from app.catalog.domain.enums import AcceptedPaymentMethods, ProductType, PurchaseMode
 from app.catalog.domain.exceptions import ArchivedValueNotMutableError, ProductValidationError
 
 ENTITY_TYPE = "Product"
@@ -13,6 +13,7 @@ CURRENCY = "USD"
 # SRS 6.1: blank on an STL product (6.2), and checked by `ck_products_type_integrity`.
 PHYSICAL_ONLY_FIELDS = (
     "purchase_mode",
+    "accepted_payment_methods",
     "material_id",
     "colour_id",
     "dimensions",
@@ -23,6 +24,7 @@ PHYSICAL_ONLY_FIELDS = (
 )
 PHYSICAL_REQUIRED_FIELDS = (
     "purchase_mode",
+    "accepted_payment_methods",
     "production_lead_time_days",
     "batch_size",
     "max_quantity_per_line",
@@ -63,6 +65,7 @@ class ProductAttributes:
     is_featured: bool = False
     is_available: bool = True
     purchase_mode: PurchaseMode | None = None
+    accepted_payment_methods: AcceptedPaymentMethods | None = None
     material_id: UUID | None = None
     colour_id: UUID | None = None
     dimensions: Dimensions | None = None
@@ -75,7 +78,7 @@ class ProductAttributes:
         out: dict[str, Any] = {}
         for f in fields(self):
             value = getattr(self, f.name)
-            if isinstance(value, UUID | PurchaseMode):
+            if isinstance(value, UUID | PurchaseMode | AcceptedPaymentMethods):
                 value = str(value)
             elif isinstance(value, Dimensions):
                 value = value.as_dict()
@@ -84,6 +87,13 @@ class ProductAttributes:
 
 
 EDITABLE_FIELDS = frozenset(f.name for f in fields(ProductAttributes))
+
+
+def with_create_defaults(product_type: ProductType, attrs: ProductAttributes) -> ProductAttributes:
+    """BR-019: a physical product created without accepted methods accepts both."""
+    if product_type is ProductType.PHYSICAL and attrs.accepted_payment_methods is None:
+        return replace(attrs, accepted_payment_methods=AcceptedPaymentMethods.ONLINE_OR_CASH)
+    return attrs
 
 
 def check_product(product_type: ProductType, attrs: ProductAttributes) -> None:

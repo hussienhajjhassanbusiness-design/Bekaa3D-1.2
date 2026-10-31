@@ -1,5 +1,5 @@
-"""`products` as migration fc18b48a1780 built it: every rule is refused by PostgreSQL
-itself, through raw SQL, so no application check is standing in for a constraint."""
+"""`products` as migrations fc18b48a1780 and 089f97a72014 (VS-049) built it: PostgreSQL
+itself refuses every rule, through raw SQL, so no application check stands in for one."""
 
 import uuid
 
@@ -12,6 +12,7 @@ from tests.integration.catalog.test_reference_schema import _constraint_name
 
 PHYSICAL_ONLY = {
     "purchase_mode": "'both'",
+    "accepted_payment_methods": "'cash'",
     "material_id": ":material_id",
     "colour_id": ":colour_id",
     "dimensions": """'{"length_mm": 1, "width_mm": 1, "height_mm": 1}'""",
@@ -22,6 +23,7 @@ PHYSICAL_ONLY = {
 }
 PHYSICAL_REQUIRED = (
     "purchase_mode",
+    "accepted_payment_methods",
     "production_lead_time_days",
     "batch_size",
     "max_quantity_per_line",

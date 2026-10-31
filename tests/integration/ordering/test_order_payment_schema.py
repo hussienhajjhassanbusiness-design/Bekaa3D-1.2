@@ -148,6 +148,7 @@ def physical_line(c: Ctx, oid: uuid.UUID, **over: Any) -> Stmt:
         "fulfillment_status": "pending",
         "lead_time_days_snapshot": 3,
         "batch_size_snapshot": 2,
+        "accepted_payment_methods_snapshot": "online_or_cash",
         "payment_method": "cash",
     }
     return ins("order_items", row | over)

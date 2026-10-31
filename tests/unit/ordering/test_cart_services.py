@@ -10,7 +10,7 @@ from uuid import UUID, uuid4
 import pytest
 
 from app.catalog.application.ports import CartProduct, ProductType, PurchaseRefusal
-from app.catalog.domain.enums import PurchaseMode
+from app.catalog.domain.enums import AcceptedPaymentMethods, PurchaseMode
 from app.ordering.application.services.cart import (
     add_item,
     clear_cart,
@@ -141,6 +141,7 @@ def physical(**over: Any) -> CartProduct:
         "price_cents": 1000,
         "currency": "USD",
         "purchase_mode": PurchaseMode.ONLINE_ONLY,
+        "accepted_payment_methods": AcceptedPaymentMethods.ONLINE_OR_CASH,
         "is_available": True,
         "max_quantity_per_line": 5,
         "listed": True,
@@ -149,7 +150,12 @@ def physical(**over: Any) -> CartProduct:
 
 
 def stl(**over: Any) -> CartProduct:
-    base = {"type": ProductType.STL, "purchase_mode": None, "max_quantity_per_line": None}
+    base = {
+        "type": ProductType.STL,
+        "purchase_mode": None,
+        "accepted_payment_methods": None,
+        "max_quantity_per_line": None,
+    }
     return physical(**(base | over))
 
 

@@ -139,9 +139,10 @@ async def seed_physical_order(
                 "INSERT INTO order_items (id, order_id, user_id, product_id, product_type,"
                 " product_name_snapshot, unit_price_cents, quantity, line_total_cents,"
                 " fulfillment_status, payment_method, lead_time_days_snapshot,"
-                " batch_size_snapshot, cancelled_at)"
+                " batch_size_snapshot, cancelled_at, accepted_payment_methods_snapshot)"
                 " VALUES (:id, :o, :u, :p, 'physical', 'Lamp', :t, 1, :t,"
-                " CAST(:s AS order_item_status), CAST(:pm AS payment_method), 3, 2, :c)"
+                " CAST(:s AS order_item_status), CAST(:pm AS payment_method), 3, 2, :c,"
+                " 'online_or_cash')"
             ),
             {
                 "id": line_id,

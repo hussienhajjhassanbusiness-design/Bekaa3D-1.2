@@ -115,7 +115,7 @@ def price_changes(
 def price_lines(
     lines: Sequence[CartLine], products: Mapping[UUID, CartProduct]
 ) -> tuple[NewOrderLine, ...]:
-    """Order lines at the live price, with name and cover snapshots."""
+    """Order lines at the live price, with name, cover and accepted-methods snapshots."""
     priced: list[NewOrderLine] = []
     for line in lines:
         product = products[line.product_id]
@@ -134,6 +134,9 @@ def price_lines(
                 currency=product.currency,
                 lead_time_days_snapshot=lead,
                 batch_size_snapshot=batch,
+                accepted_payment_methods_snapshot=product.accepted_payment_methods
+                if physical
+                else None,
             )
         )
     return tuple(priced)

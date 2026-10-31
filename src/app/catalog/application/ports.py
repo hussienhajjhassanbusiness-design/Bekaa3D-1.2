@@ -7,6 +7,7 @@ from typing import Protocol
 from uuid import UUID
 
 from app.catalog.domain.entities import Category
+from app.catalog.domain.enums import AcceptedPaymentMethods as AcceptedPaymentMethods  # VS-049
 from app.catalog.domain.enums import ProductType as ProductType  # re-exported (VS-038)
 from app.catalog.domain.enums import PurchaseMode as PurchaseMode  # re-exported (VS-036)
 from app.catalog.domain.product import Product as Product  # re-exported (VS-038)

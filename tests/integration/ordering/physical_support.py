@@ -153,9 +153,10 @@ async def seed_cash_order(
         text(
             "INSERT INTO order_items (order_id, user_id, product_id, product_type,"
             " product_name_snapshot, unit_price_cents, quantity, line_total_cents, currency,"
-            " fulfillment_status, payment_method, lead_time_days_snapshot, batch_size_snapshot)"
+            " fulfillment_status, payment_method, lead_time_days_snapshot, batch_size_snapshot,"
+            " accepted_payment_methods_snapshot)"
             " VALUES (:o, :u, :p, 'physical', 'Lamp', :t, 1, :t, 'USD',"
-            " CAST(:ls AS order_item_status), 'cash', 3, 2)"
+            " CAST(:ls AS order_item_status), 'cash', 3, 2, 'online_or_cash')"
         ),
         {"o": order_id, "u": user_id, "p": product_id, "t": total_cents, "ls": line_status},
     )

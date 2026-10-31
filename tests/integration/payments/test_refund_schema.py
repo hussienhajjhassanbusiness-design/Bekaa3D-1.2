@@ -29,6 +29,7 @@ _LINE_ENUMS = {
     "product_type": "product_type",
     "fulfillment_status": "order_item_status",
     "payment_method": "payment_method",
+    "accepted_payment_methods_snapshot": "accepted_payment_methods",
 }
 
 
@@ -609,7 +610,8 @@ async def _line_values(engine: AsyncEngine, line_id: uuid.UUID) -> dict[str, Any
                 text(
                     "SELECT order_id, user_id, product_id, product_type, product_name_snapshot,"
                     " unit_price_cents, quantity, line_total_cents, fulfillment_status,"
-                    " payment_method, lead_time_days_snapshot, batch_size_snapshot"
+                    " payment_method, lead_time_days_snapshot, batch_size_snapshot,"
+                    " accepted_payment_methods_snapshot"
                     " FROM order_items WHERE id = :i"
                 ),
                 {"i": line_id},

@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from app.catalog.api.product_image_schemas import media_url
 from app.catalog.api.product_schemas import DimensionsRead, PriceRead
-from app.catalog.domain.enums import ProductType, PurchaseMode
+from app.catalog.domain.enums import AcceptedPaymentMethods, ProductType, PurchaseMode
 from app.catalog.domain.product_image import ProductImage
 from app.catalog.domain.storefront import FacetRef, StorefrontProduct
 
@@ -56,6 +56,7 @@ class ProductListItem(BaseModel):
     colour: FacetSummary | None
     is_available: bool
     purchase_mode: PurchaseMode | None
+    accepted_payment_methods: AcceptedPaymentMethods | None
     average_rating: float
     review_count: int
     is_featured: bool
@@ -80,6 +81,7 @@ class ProductListItem(BaseModel):
             "colour": _facet(item.colour),
             "is_available": a.is_available,
             "purchase_mode": a.purchase_mode,
+            "accepted_payment_methods": a.accepted_payment_methods,
             "average_rating": float(p.average_rating),
             "review_count": p.review_count,
             "is_featured": a.is_featured,

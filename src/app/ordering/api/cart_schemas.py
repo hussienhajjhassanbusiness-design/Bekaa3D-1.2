@@ -11,6 +11,8 @@ from app.catalog.application.ports import ProductType, PurchaseRefusal
 from app.catalog.public import PriceRead, PublicImage
 from app.ordering.application.services.cart import CartView
 from app.ordering.domain.cart_rules import CartLineView
+from app.ordering.domain.enums import PaymentMethod
+from app.ordering.domain.payment_methods import in_order, shared_methods
 
 PG_INT_MAX = 2_147_483_647
 Quantity = Annotated[StrictInt, Field(ge=1, le=PG_INT_MAX)]
@@ -74,6 +76,9 @@ class CartRead(BaseModel):
     items: list[CartLineRead]
     contains_physical: bool
     contains_digital: bool
+    payment_methods: list[PaymentMethod] = Field(
+        description="Methods every line's product accepts; empty: order them separately."
+    )
     updated_at: datetime | None
 
     @classmethod
@@ -84,5 +89,6 @@ class CartRead(BaseModel):
             items=[CartLineRead.of(v, media_base_url) for v in view.lines],
             contains_physical=ProductType.PHYSICAL in types,
             contains_digital=ProductType.STL in types,
+            payment_methods=in_order(shared_methods(v.payment_methods for v in view.lines)),
             updated_at=view.cart.updated_at if view.cart else None,
         )

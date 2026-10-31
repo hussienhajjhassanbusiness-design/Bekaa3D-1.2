@@ -38,6 +38,7 @@ from app.ordering.domain.exceptions import (
     ConsentRequiredError,
     CustomerAccountClosedError,
     InvalidFulfillmentError,
+    NoCommonPaymentMethodError,
     OnlinePaymentUnavailableError,
     OrderingDomainError,
     OrdersPausedError,
@@ -216,13 +217,27 @@ def translate_checkout_error(exc: OrderingDomainError) -> ApiError:
             title="Cash on delivery not available",
             detail="Cash on delivery isn't available for this order; please pay online.",
         )
+    if isinstance(exc, NoCommonPaymentMethodError):
+        return ApiError(
+            status_code=unprocessable,
+            code="NO_COMMON_PAYMENT_METHOD",
+            title="No shared payment method",
+            detail="These items can't be paid the same way; please order them separately.",
+            extensions={
+                "lines": [
+                    {"product_id": str(p), "accepted_payment_methods": [m.value for m in ms]}
+                    for p, ms in exc.lines
+                ]
+            },
+        )
     if isinstance(exc, PaymentMethodNotAllowedError):
+        named = {"product_ids": [str(p) for p in exc.product_ids]} if exc.product_ids else {}
         return ApiError(
             status_code=unprocessable,
             code="PAYMENT_METHOD_NOT_ALLOWED",
             title="Payment method not allowed",
             detail="This payment method cannot be used for this order.",
-            extensions={"reason": exc.reason},
+            extensions={"reason": exc.reason} | named,
         )
     if isinstance(exc, ConsentRequiredError):
         return ApiError(
@@ -262,6 +277,7 @@ CHECKOUT_ERRORS = (
     ProductAlreadyOwnedError,
     CheckoutLinesRefusedError,
     InvalidFulfillmentError,
+    NoCommonPaymentMethodError,
     PaymentMethodNotAllowedError,
     ConsentRequiredError,
     CashLimitReachedError,

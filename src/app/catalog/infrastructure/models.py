@@ -23,7 +23,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.catalog.domain.enums import ProductType, PurchaseMode
+from app.catalog.domain.enums import AcceptedPaymentMethods, ProductType, PurchaseMode
 from app.core.database import Base
 
 # No `onupdate` on `updated_at`: the application writes it, so a no-op PATCH
@@ -143,6 +143,7 @@ class ColourModel(Base):
 # Physical-only columns: all NULL on an STL row (SRS 6.2, database-design.md 6.4).
 PHYSICAL_ONLY_COLUMNS = (
     "purchase_mode",
+    "accepted_payment_methods",
     "material_id",
     "colour_id",
     "dimensions",
@@ -153,6 +154,7 @@ PHYSICAL_ONLY_COLUMNS = (
 )
 PHYSICAL_REQUIRED_COLUMNS = (
     "purchase_mode",
+    "accepted_payment_methods",
     "production_lead_time_days",
     "batch_size",
     "max_quantity_per_line",
@@ -185,7 +187,9 @@ SEARCH_VECTOR = (
 LIVE_VISIBLE = text("deleted_at IS NULL AND is_visible")
 
 
-def _enum(enum_type: type[ProductType] | type[PurchaseMode], name: str) -> Enum:
+def _enum(
+    enum_type: type[ProductType] | type[PurchaseMode] | type[AcceptedPaymentMethods], name: str
+) -> Enum:
     return Enum(enum_type, name=name, values_callable=lambda e: [m.value for m in e])
 
 
@@ -221,6 +225,9 @@ class ProductModel(Base):
     review_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     wishlist_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     purchase_mode: Mapped[PurchaseMode | None] = mapped_column(_enum(PurchaseMode, "purchase_mode"))
+    accepted_payment_methods: Mapped[AcceptedPaymentMethods | None] = mapped_column(
+        _enum(AcceptedPaymentMethods, "accepted_payment_methods")
+    )
     material_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("materials.id", ondelete="RESTRICT")
     )

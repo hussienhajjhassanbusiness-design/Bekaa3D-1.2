@@ -1,6 +1,16 @@
 {
   "components": {
     "schemas": {
+      "AcceptedPaymentMethods": {
+        "description": "How a physical product may be paid at checkout (BR-019, ADR-048). Not a purchase mode.",
+        "enum": [
+          "online",
+          "cash",
+          "online_or_cash"
+        ],
+        "title": "AcceptedPaymentMethods",
+        "type": "string"
+      },
       "AcceptedPriceIn": {
         "additionalProperties": false,
         "properties": {
@@ -2005,6 +2015,16 @@
         "additionalProperties": false,
         "description": "api-endpoints.md 29.10. `type` and price are required; aggregates are not accepted.",
         "properties": {
+          "accepted_payment_methods": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AcceptedPaymentMethods"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "batch_size": {
             "anyOf": [
               {
@@ -2201,6 +2221,16 @@
       },
       "AdminProductDetail": {
         "properties": {
+          "accepted_payment_methods": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AcceptedPaymentMethods"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "average_rating": {
             "title": "Average Rating",
             "type": "number"
@@ -2430,6 +2460,7 @@
           "is_featured",
           "is_available",
           "purchase_mode",
+          "accepted_payment_methods",
           "material_id",
           "colour_id",
           "dimensions",
@@ -2481,6 +2512,16 @@
         "additionalProperties": false,
         "description": "Every field optional except `version`; `type` and aggregates are refused (extra=forbid).",
         "properties": {
+          "accepted_payment_methods": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AcceptedPaymentMethods"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "batch_size": {
             "anyOf": [
               {
@@ -3588,6 +3629,14 @@
             "title": "Items",
             "type": "array"
           },
+          "payment_methods": {
+            "description": "Methods every line's product accepts; empty: order them separately.",
+            "items": {
+              "$ref": "#/components/schemas/PaymentMethod"
+            },
+            "title": "Payment Methods",
+            "type": "array"
+          },
           "updated_at": {
             "anyOf": [
               {
@@ -3606,6 +3655,7 @@
           "items",
           "contains_physical",
           "contains_digital",
+          "payment_methods",
           "updated_at"
         ],
         "title": "CartRead",
@@ -8948,6 +8998,16 @@
       },
       "ProductDetail": {
         "properties": {
+          "accepted_payment_methods": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AcceptedPaymentMethods"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "average_rating": {
             "title": "Average Rating",
             "type": "number"
@@ -9136,6 +9196,7 @@
           "colour",
           "is_available",
           "purchase_mode",
+          "accepted_payment_methods",
           "average_rating",
           "review_count",
           "is_featured",
@@ -9272,6 +9333,16 @@
       },
       "ProductListItem": {
         "properties": {
+          "accepted_payment_methods": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AcceptedPaymentMethods"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "average_rating": {
             "title": "Average Rating",
             "type": "number"
@@ -9363,6 +9434,7 @@
           "colour",
           "is_available",
           "purchase_mode",
+          "accepted_payment_methods",
           "average_rating",
           "review_count",
           "is_featured"
