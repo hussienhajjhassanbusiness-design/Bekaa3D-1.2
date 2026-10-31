@@ -292,7 +292,7 @@ The customer has a non-empty cart
 An idempotency key is supplied
 The platform is accepting orders
 Required delivery or pickup information is present, including a contact phone for pickup
-A payment method is chosen: online (naming the provider when more than one is configured), or cash for an order whose every line is physical
+A payment method is chosen: online (naming the provider when more than one is configured), or cash for an order whose every line is physical; either way, every line's product accepts it (BR-019)
 
 When:
 
@@ -319,6 +319,9 @@ WhatsApp-only, unavailable, hidden, or deleted products are rejected
 Delivery without a valid address, or pickup without a contact phone, is rejected
 Cash is rejected for an order with any STL line, when cash is switched off, or when the customer or the normalised contact phone is blocked from cash
 Cash is rejected when the customer or the contact phone already has the maximum number of unpaid cash orders, or the recomputed total is zero or exceeds the cash maximum
+A payment method that any line's product does not accept is rejected, naming those products (cash for an online-only product, online for a cash-only product)
+A cart whose lines share no accepted payment method (for example a cash-only product beside an online-only product or an STL) is rejected, and the customer is told to order them separately
+An accepted-payment-methods change made after the order was placed never affects it, its payment retry or its handover
 The same phone written in different formats is matched as one number (normalised, then keyed-hashed)
 An unconfigured online provider is rejected
 An already-owned STL is removed or rejected according to the checkout rule

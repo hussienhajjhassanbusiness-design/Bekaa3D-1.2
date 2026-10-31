@@ -53,6 +53,7 @@ Only expensive-to-reverse decisions belong here. Folder names and small refactor
 - [ADR-045: Business analytics - per-line revenue from one read-only snapshot, a chargeback counted once, Beirut days, a reporting context that joins no other context (VS-043) - Accepted](ADR-045-business-analytics.md)
 - [ADR-046: Customer data export - six data sets from one read-only snapshot, composed in the reporting context, streamed, 3 a day, audited before the first byte (VS-044) - Accepted](ADR-046-customer-data-export.md)
 - [ADR-047: Account deletion by anonymisation - one transaction under a fixed lock order, every personal field stripped, records kept, requests queued behind it refused (VS-045) - Accepted](ADR-047-account-deletion-by-anonymisation.md)
+- [ADR-048: Accepted payment methods per product - each physical product accepts online, cash or both, a cart pays only by a method every line accepts, and each order line snapshots what its product accepted (VS-049) - Accepted](ADR-048-accepted-payment-methods-per-product.md)
 
 ## Governance
 
