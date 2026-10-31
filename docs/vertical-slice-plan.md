@@ -49,7 +49,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 | VS-044 | Customer data export | VS-023b, VS-025, VS-026, VS-036, VS-039 | Done |
 | VS-045 | Account deletion by anonymisation | VS-026, VS-031, VS-036, VS-038, VS-039 | Done |
 | VS-046 | Security data retention and IP-salt rotation | VS-004 | Done |
-| VS-049 | Accepted payment methods per product | VS-013, VS-028 | In progress |
+| VS-049 | Accepted payment methods per product | VS-013, VS-028 | Done |
 | **Final phase** | **Needs a server; built after everything above is finished and tested locally** | | |
 | VS-020 | Staging environment and deploy pipeline | VS-015 | Not started |
 | VS-021 | Production email delivery | VS-020 | Not started |
@@ -1276,7 +1276,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 - **Done when:** Both jobs run on schedule and are safe to run twice.
 
 ## VS-049 — Accepted payment methods per product
-**Status:** In progress
+**Status:** Done
 **Depends on:** VS-013, VS-028
 **Goal:** The administrator decides, per physical product, whether it may be paid online, in cash or either, and checkout only offers a method every line accepts ([ADR-048](adr/ADR-048-accepted-payment-methods-per-product.md)).
 - **Model / migration:** Enum `accepted_payment_methods` (`online`, `cash`, `online_or_cash`). `products.accepted_payment_methods`, required on physical and forbidden on STL by `ck_products_type_integrity`. `order_items.accepted_payment_methods_snapshot` on physical lines, with `ck_order_items_accepted_methods_by_type` and `ck_order_items_method_accepted` (INV-25). Existing physical products and lines become `online_or_cash`.

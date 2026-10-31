@@ -94,7 +94,7 @@ delivery or at pickup (ADR-024), or use WhatsApp.
 * STL digital marketplace; purchased files are emailed manually by the administrator (ADR-019)
 * Cart supporting mixed digital + physical orders
 * Online payment through a provider still to be chosen (§30.4)
-* Cash on delivery and cash at pickup for orders whose every line is physical (ADR-024)
+* Cash on delivery and cash at pickup for orders whose every line is physical and accepts cash (ADR-024, ADR-048)
 * Manual fulfillment workflow (courier delivery and workshop pickup)
 * Offer/negotiation system for STL products
 * Reviews, wishlist, notifications
@@ -1387,7 +1387,8 @@ Every error carries a **stable machine-readable code**. The client renders its o
 | Full refund of an unfinished physical line | 422    | REFUND_REQUIRES_CANCELLATION                                   |
 | Offer below floor                          | 422    | OFFER_BELOW_MINIMUM                                            |
 | Product not purchasable                    | 422    | PRODUCT_NOT_PURCHASABLE                                        |
-| Cash chosen for an order with an STL line, or a zero total, or cash disabled; an unconfigured online provider chosen | 422 | PAYMENT_METHOD_NOT_ALLOWED |
+| Cash chosen for an order with an STL line, or a zero total, or cash disabled; an unconfigured online provider chosen; a method some line's product does not accept (ADR-048) | 422 | PAYMENT_METHOD_NOT_ALLOWED |
+| The cart's lines share no accepted payment method; order them separately (ADR-048) | 422 | NO_COMMON_PAYMENT_METHOD |
 | Cash total over limit                      | 422    | CASH_PAYMENT_LIMIT_REACHED                                     |
 | Cash blocked, or open cash orders at the limit, for the customer or the phone (one body, no reason; ADR-038) | 422 | CASH_NOT_AVAILABLE |
 | Cash entered differs from the amount due   | 422    | CASH_AMOUNT_MISMATCH                                           |

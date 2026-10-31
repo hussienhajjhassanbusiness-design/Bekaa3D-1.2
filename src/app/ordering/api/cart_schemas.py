@@ -77,7 +77,7 @@ class CartRead(BaseModel):
     contains_physical: bool
     contains_digital: bool
     payment_methods: list[PaymentMethod] = Field(
-        description="Methods every line's product accepts; empty: order them separately."
+        description="Methods every line's product accepts; owned STLs still count here."
     )
     updated_at: datetime | None
 

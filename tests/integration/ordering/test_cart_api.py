@@ -181,6 +181,7 @@ async def test_an_unverified_user_reads_an_empty_cart_and_cannot_write(
         "items": [],
         "contains_physical": False,
         "contains_digital": False,
+        "payment_methods": ["online", "cash"],
         "updated_at": None,
     }
     for response in writes:

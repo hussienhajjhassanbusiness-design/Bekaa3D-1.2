@@ -100,8 +100,10 @@ _RESPONSES: dict[int | str, dict[str, Any]] = {
     },
     422: {
         "description": "PRODUCT_NOT_PURCHASABLE or QUANTITY_EXCEEDS_LIMIT (with `lines`), "
-        "INVALID_FULFILLMENT, PAYMENT_METHOD_NOT_ALLOWED or CASH_PAYMENT_LIMIT_REACHED (each "
-        "with `reason`), CASH_NOT_AVAILABLE (no reason: a block or an open cash order on the "
+        "NO_COMMON_PAYMENT_METHOD (with `lines` and each one's `accepted_payment_methods`), "
+        "INVALID_FULFILLMENT, PAYMENT_METHOD_NOT_ALLOWED (with `reason`; `cash_not_accepted` "
+        "and `online_not_accepted` add `product_ids`) or CASH_PAYMENT_LIMIT_REACHED (with "
+        "`reason`), CASH_NOT_AVAILABLE (no reason: a block or an open cash order on the "
         "account or the phone, never saying which), or VALIDATION_ERROR."
     },
     429: {"description": "RATE_LIMITED: too many checkouts this hour."},

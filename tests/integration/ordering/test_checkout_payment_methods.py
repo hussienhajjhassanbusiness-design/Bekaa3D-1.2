@@ -10,10 +10,11 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
+from app.core.config import get_settings
 from app.main import app as main_app
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
 from tests.integration.catalog.storefront_support import seed_refs
-from tests.integration.deep_support import assert_problem, client_for
+from tests.integration.deep_support import assert_problem, client_for, create_user
 from tests.integration.ordering.checkout_support import (
     checkout_body,
     new_key,
@@ -25,6 +26,8 @@ from tests.integration.ordering.physical_support import (
     pickup_body,
     post,
     random_phone,
+    seed_block,
+    seed_cash_order,
     setting,
     signed_in_buyer,
     stl,
@@ -226,6 +229,90 @@ async def test_a_cash_only_cart_still_obeys_the_cash_switch(
             response = await refused(client, db_engine, user_id, pickup_body(random_phone()))
     assert_problem(response, 422, "PAYMENT_METHOD_NOT_ALLOWED")
     assert response.json()["reason"] == "cash_disabled"
+
+
+@pytest.mark.parametrize("phone_state", ["blocked", "open_order"])
+@pytest.mark.parametrize("cart", ["online_only", "conflicting"])
+async def test_a_product_refusal_comes_before_any_phone_check(
+    db_engine: AsyncEngine, db_session: AsyncSession, phone_state: str, cart: str
+) -> None:
+    """ADR-038 d20: a product-only refusal never tells a blocked or busy phone from a clean one."""
+    refs = await seed_refs(db_session)
+    accepted = ["online"] if cart == "online_only" else ["cash", "online"]
+    products = [await physical(db_session, refs, accepted_payment_methods=a) for a in accepted]
+    phone, stranger = random_phone(), (await create_user(db_session)).id
+    if phone_state == "blocked":
+        await seed_block(db_session, stranger, phone)
+    else:
+        await seed_cash_order(db_session, stranger, phone)
+    with client_for(main_app) as client:
+        user_id = await signed_in_buyer(client, db_session, *products)
+        response = await refused(client, db_engine, user_id, pickup_body(phone))
+    if cart == "online_only":
+        assert_problem(response, 422, "PAYMENT_METHOD_NOT_ALLOWED")
+        assert response.json()["reason"] == "cash_not_accepted"
+    else:
+        assert_problem(response, 422, "NO_COMMON_PAYMENT_METHOD")
+
+
+async def test_a_cash_only_cart_over_the_cap_is_refused_on_the_total(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    lamp = await physical(db_session, accepted_payment_methods="cash", price_cents=10_001)
+    cap = {"amount_cents": 10_000, "currency": "USD"}
+    async with setting(db_engine, "cash_max_order_total", cap):
+        with client_for(main_app) as client:
+            user_id = await signed_in_buyer(client, db_session, lamp)
+            response = await refused(client, db_engine, user_id, pickup_body(random_phone()))
+    assert_problem(response, 422, "CASH_PAYMENT_LIMIT_REACHED")
+    assert response.json()["reason"] == "order_total"
+
+
+async def test_a_cash_only_product_priced_zero_cannot_be_paid_at_all(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """ADR-043 d12 still refuses cash, and online is not accepted: no method is left."""
+    refs = await seed_refs(db_session)
+    free = await physical(db_session, refs, accepted_payment_methods="cash", price_cents=0)
+    paid = await physical(db_session, refs, accepted_payment_methods="cash")
+    with client_for(main_app) as client:
+        user_id = await signed_in_buyer(client, db_session, free, paid)
+        cash = await refused(client, db_engine, user_id, pickup_body(random_phone()))
+        online = await refused(client, db_engine, user_id, online_pickup())
+    assert_problem(cash, 422, "CASH_NOT_AVAILABLE")
+    assert_problem(online, 422, "PAYMENT_METHOD_NOT_ALLOWED")
+    assert online.json()["reason"] == "online_not_accepted"
+
+
+async def test_without_a_provider_an_online_checkout_is_503_before_any_product_rule(
+    db_engine: AsyncEngine, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    lamp = await physical(db_session, accepted_payment_methods="cash")
+    monkeypatch.setenv("PAYMENT_PROVIDER", "none")
+    get_settings.cache_clear()
+    try:
+        with client_for(main_app) as client:
+            user_id = await signed_in_buyer(client, db_session, lamp)
+            response = await refused(client, db_engine, user_id, online_pickup())
+    finally:
+        get_settings.cache_clear()
+    assert_problem(response, 503, "ONLINE_PAYMENT_UNAVAILABLE")
+
+
+async def test_an_unpurchasable_line_is_refused_before_the_payment_methods(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    refs = await seed_refs(db_session)
+    cash = await physical(db_session, refs, accepted_payment_methods="cash")
+    online = await physical(db_session, refs, accepted_payment_methods="online")
+    with client_for(main_app) as client:
+        user_id = await signed_in_buyer(client, db_session, cash, online)
+        await db_session.execute(
+            text("UPDATE products SET is_available = false WHERE id = :p"), {"p": online}
+        )
+        await db_session.commit()
+        response = await refused(client, db_engine, user_id, online_pickup())
+    assert_problem(response, 422, "PRODUCT_NOT_PURCHASABLE")
 
 
 # --------------------------------------------------------------------- cart
