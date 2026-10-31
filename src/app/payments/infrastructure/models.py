@@ -138,6 +138,11 @@ class PaymentModel(Base):
             "OR status IN ('paid', 'partially_refunded', 'refunded')))",
             name="ck_payments_captured_when",
         ),
+        # VS-050 (941b40d285ce): nothing can report a `manual` attempt as in progress.
+        CheckConstraint(
+            "provider <> 'manual' OR status <> 'processing'",
+            name="ck_payments_manual_never_processing",
+        ),
         Index(
             "uq_payments_one_live",
             "order_id",
@@ -161,6 +166,12 @@ class PaymentModel(Base):
             "ix_payments_late_captured",
             "late_captured_at",
             postgresql_where=text("late_captured_at IS NOT NULL"),
+        ),
+        Index(  # the admin work list (ADR-049 d11)
+            "ix_payments_awaiting_manual",
+            "initiated_at",
+            "id",
+            postgresql_where=text("provider = 'manual' AND status = 'pending'"),
         ),
     )
 

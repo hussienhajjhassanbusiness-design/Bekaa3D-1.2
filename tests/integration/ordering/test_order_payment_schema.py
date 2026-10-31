@@ -513,6 +513,14 @@ REFUSALS: list[Case] = [
         "ck_payments_terminal_timestamps",
         lambda c, a, b: ([online_order(c, a)], online_payment(c, a, status="expired")),
     ),
+    _c(  # VS-050 (941b40d285ce): nothing can report a manual attempt in progress
+        "manual-payment-processing",
+        "ck_payments_manual_never_processing",
+        lambda c, a, b: (
+            [online_order(c, a)],
+            online_payment(c, a, provider="manual", status="processing"),
+        ),
+    ),
     # payments.captured_* (VS-024, migration 00ce1ce252a6); each row breaks one CHECK only
     _c(
         "captured-amount-negative",
@@ -631,6 +639,17 @@ ACCEPTED: list[tuple[str, Build]] = [
         lambda c, a, b: ([cash_delivery_order(c, a), physical_line(c, a)], cash_payment(c, a)),
     ),
     ("pickup-order-with-phone-and-hash", lambda c, a, b: ([], pickup_order(c, a))),
+    (  # VS-050: a `manual` attempt has no reference until (if ever) the admin types one
+        "manual-payment-pending-without-reference",
+        lambda c, a, b: ([online_order(c, a)], online_payment(c, a, provider="manual")),
+    ),
+    (  # VS-050 Q1: an STL-only `manual` order keeps the phone the administrator calls
+        "stl-only-order-with-the-phone-to-call",
+        lambda c, a, b: (
+            [],
+            online_order(c, a, contact_phone_snapshot="+96171123456", contact_phone_hash="b" * 64),
+        ),
+    ),
     (
         "online-order-without-digital-terms",
         lambda c, a, b: (
@@ -784,6 +803,7 @@ _NON_UNIQUE_INDEXES = {
     "ix_payments_order": "payments",
     "ix_payments_unsettled": "payments",
     "ix_payments_late_captured": "payments",
+    "ix_payments_awaiting_manual": "payments",
     "ix_webhook_events_unprocessed": "webhook_events",
     "ix_webhook_events_payment_unprocessed": "webhook_events",
     "ix_idempotency_records_expires_at": "idempotency_records",
