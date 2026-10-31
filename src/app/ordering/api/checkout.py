@@ -23,6 +23,7 @@ from app.ordering.api.checkout_schemas import (
 )
 from app.ordering.api.idempotent import replay, stored
 from app.ordering.api.problems import already_owned_error
+from app.ordering.application.ports import PaymentAttemptRef
 from app.ordering.application.services.checkout import (
     CheckoutCustomer,
     OnlinePlacedOrder,
@@ -46,6 +47,7 @@ from app.ordering.domain.exceptions import (
     PaymentMethodNotAllowedError,
     ProductAlreadyOwnedError,
 )
+from app.ordering.domain.orders import Order
 from app.ordering.domain.payment_recovery import MANUAL_PROVIDER
 from app.ordering.infrastructure.carts import SqlCartStore
 from app.ordering.infrastructure.cash import SqlCashChecks
@@ -379,6 +381,8 @@ async def checkout(
             except CHECKOUT_ERRORS as exc:
                 raise translate_checkout_error(exc) from exc
             await claims.attach(claim.record_id, resource_id=placed.order.id)
+            if placed.payment is not None:
+                await announce_if_manual(session, placed.order, placed.payment)
             if placed.payment is None:
                 read = CheckoutRead.of(placed).model_dump(mode="json")
                 await claims.complete(
@@ -418,18 +422,17 @@ async def checkout(
                 at=datetime.now(UTC),
             )
             await claims.complete(claim.record_id, status_code=status.HTTP_201_CREATED, body=read)
-            await announce_if_manual(session, online)
     return JSONResponse(read, status_code=status.HTTP_201_CREATED)
 
 
-async def announce_if_manual(session: AsyncSession, placed: OnlinePlacedOrder) -> None:
-    """The administrators' `manual_payment_due` alert, last in Tx2 (VS-050 Q2)."""
-    if placed.payment.provider == MANUAL_PROVIDER:
+async def announce_if_manual(
+    session: AsyncSession, order: Order, payment: PaymentAttemptRef
+) -> None:
+    """The administrators' `manual_payment_due` alert, the last lock of Tx1 (VS-050 Q2):
+    it commits with the order, so a lost Tx2 cannot lose it."""
+    if payment.provider == MANUAL_PROVIDER:
         await announce_manual_payment(
-            session,
-            payment_id=placed.payment.id,
-            order_id=placed.order.id,
-            order_number=placed.order.order_number,
+            session, payment_id=payment.id, order_id=order.id, order_number=order.order_number
         )
 
 

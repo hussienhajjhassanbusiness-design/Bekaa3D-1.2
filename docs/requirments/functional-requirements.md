@@ -291,7 +291,7 @@ Given:
 The customer has a non-empty cart
 An idempotency key is supplied
 The platform is accepting orders
-Required delivery or pickup information is present, including a contact phone for pickup
+Required delivery or pickup information is present, including a contact phone for pickup, and for an STL-only order on the `manual` provider (ADR-049)
 A payment method is chosen: online (naming the provider when more than one is configured), or cash for an order whose every line is physical; either way, every line's product accepts it (BR-019)
 
 When:
@@ -308,6 +308,7 @@ Totals are recomputed server-side; no shipping amount is charged, because the co
 The payment method is validated against the recomputed total, never against a cart snapshot or client value
 Order and order-line snapshots are created, including the payment method and contact phone
 For an online order, a pending payment attempt is created with the chosen provider on the payment row; a cash order gets no payment until its cash handover
+On the `manual` provider the response says the administrator will make contact (`next_step: await_admin_contact`, no redirect) and gives the hold deadline; the customer is notified, and every administrator alerted, in the order's transaction
 Terms consent is recorded, including the cash terms for a cash order
 Estimated dispatch is calculated for physical lines
 The cart is cleared
@@ -317,6 +318,8 @@ Negative cases:
 
 WhatsApp-only, unavailable, hidden, or deleted products are rejected
 Delivery without a valid address, or pickup without a contact phone, is rejected
+An STL-only or offer checkout on the `manual` provider without a contact phone is rejected (CONTACT_PHONE_REQUIRED); any other provider refuses one there
+A retry onto the `manual` provider of an order with no contact phone is rejected
 Cash is rejected for an order with any STL line, when cash is switched off, or when the customer or the normalised contact phone is blocked from cash
 Cash is rejected when the customer or the contact phone already has the maximum number of unpaid cash orders, or the recomputed total is zero or exceeds the cash maximum
 A payment method that any line's product does not accept is rejected, naming those products (cash for an online-only product, online for a cash-only product)
@@ -362,10 +365,10 @@ A valid pending order and live payment attempt exist
 
 When:
 
-The customer is redirected to the payment provider chosen at checkout
+The customer is redirected to the payment provider chosen at checkout, or, on the `manual` provider, the administrator contacts the customer to arrange payment
 The provider sends a callback to its own route
 The system reconciles a payment
-An administrator performs permitted manual confirmation: it applies a live attempt of an uncancelled order, and records a late capture for any other
+An administrator performs permitted manual confirmation: it applies a live attempt of an uncancelled order, and records a late capture for any other (on `manual` the reference is optional, unique per provider when given)
 
 Then:
 
@@ -390,6 +393,8 @@ Underpayment is not accepted
 Duplicate provider events do not apply a payment twice
 A second live payment for the same order is prohibited
 Unauthorized users cannot manually confirm payment
+A reference already on another payment of the same provider is refused, also for two confirms racing on one reference
+The `manual` provider takes no webhooks and is never reconciled
 
 State transitions touched:
 
@@ -414,7 +419,7 @@ The callback endpoint persists the event and responds quickly
 External provider queries occur without holding database locks
 A failed provider query leaves payment unresolved rather than paid
 A late provider success is never applied to the order; the captured money becomes a refund obligation
-The hold release never cancels an order whose provider check failed or timed out, or that has an unprocessed webhook event; it skips and alerts
+The hold release never cancels an order whose provider check failed or timed out, or that has an unprocessed webhook event; it skips and alerts. A `manual` order is released at the end of `manual_payment_hold_period`, and money confirmed after that is a late capture with its refund obligation
 A payment retry locks the order and re-checks it, so it cannot add a payment to an order the hold release has cancelled
 Stuck payments are retried through reconciliation
 If provider queries are unavailable, payment requires administrator confirmation against the provider dashboard

@@ -93,7 +93,7 @@ delivery or at pickup (ADR-024), or use WhatsApp.
 * Physical product catalogue with three purchase modes
 * STL digital marketplace; purchased files are emailed manually by the administrator (ADR-019)
 * Cart supporting mixed digital + physical orders
-* Online payment through a provider still to be chosen (§30.4)
+* Online payment through the `manual` provider: the administrator arranges each payment with the customer and confirms it (§30.4, ADR-049)
 * Cash on delivery and cash at pickup for orders whose every line is physical and accepts cash (ADR-024, ADR-048)
 * Manual fulfillment workflow (courier delivery and workshop pickup)
 * Offer/negotiation system for STL products
@@ -138,7 +138,7 @@ delivery or at pickup (ADR-024), or use WhatsApp.
 | **Customer (verified)**      | Yes                      | All purchasing, cart, checkout, offers, reviews, wishlist, order management, self-cancellation, data export, account deletion |
 | **Administrator**            | Yes                      | Full catalogue, order, fulfillment, refund, offer, moderation, settings, and analytics control                                           |
 | **System**                   | —                        | Scheduled jobs, projections, notifications, expiry, reconciliation                                                                       |
-| **Payment Provider**         | External                 | Online payment processing, webhook callbacks, status queries. Provider not yet chosen (§30.4)                                            |
+| **Payment Provider**         | External                 | Online payment processing, webhook callbacks, status queries. V1 integrates none: the `manual` provider is the administrator (§30.4, ADR-049)                                            |
 | **Courier**                  | External, outside system | Physical delivery; sets and collects the delivery fee, and collects the cash for cash-on-delivery orders. **Not a system user** — no tracking integration in V1 |
 
 ### 2.2 The Verification Boundary
@@ -1086,7 +1086,7 @@ Cross-context access goes through service interfaces. Direct joins into another 
 
 | Abstraction              | Purpose                                               |
 | ------------------------ | ----------------------------------------------------- |
-| Payment provider port    | Online provider still to be chosen (§30.4), mock for development |
+| Payment provider port    | `manual` in production (§30.4, ADR-049), mock for development |
 | Storage port             | Local filesystem today, S3-compatible later           |
 | Email provider port      | Provider-agnostic transactional delivery              |
 | Captcha port             | Provider-agnostic verification                        |
@@ -1269,7 +1269,7 @@ new ──> contacted ──> quoted ──> in_progress ──> completed ─�
 
 ### 20.8 Lock Order
 
-Every write that changes an order's lines, payment or refunds locks the `orders` row first, then the lines it reads or changes in `id` order (refund and chargeback paths lock every line), then the payment row (refund and chargeback paths lock all of the order's payments by `id`), then the refund rows (`FOR UPDATE` or INSERT), then a chargeback's INSERT (ADR-042 d8), and recomputes the order status under those locks: line transitions, customer self-cancel, admin cancel, cash handover, payment apply (including late captures), payment retry, reconciliation marking an attempt failed or expired, manual confirmation, refund creation, settlement, failure, reissue and void, chargeback recording, record-capture, receipt confirmation and problem reports, and `release_stale_checkouts`. Nothing locks `payments` before `orders`, including batch selection: a job selects candidate ids without locking, then locks each order and re-reads. Locking a line before its order would deadlock against the handover, and two parallel line changes could each derive the order status from a stale view of the other (ADR-024). A payment that pays an STL then takes a transaction-scoped advisory lock on (customer, product) and that product's live offers by id, last (ADR-037); offer submission takes the same advisory lock, and offer checkout inserts its order before it locks the offer.
+Every write that changes an order's lines, payment or refunds locks the `orders` row first, then the lines it reads or changes in `id` order (refund and chargeback paths lock every line), then the payment row (refund and chargeback paths lock all of the order's payments by `id`), then the refund rows (`FOR UPDATE` or INSERT), then a chargeback's INSERT (ADR-042 d8), and recomputes the order status under those locks: line transitions, customer self-cancel, admin cancel, cash handover, payment apply (including late captures), payment retry, reconciliation marking an attempt failed or expired, manual confirmation (which then takes a transaction-scoped advisory lock on the typed `(provider, reference)`, after the payment, ADR-049), refund creation, settlement, failure, reissue and void, chargeback recording, record-capture, receipt confirmation and problem reports, and `release_stale_checkouts`. Nothing locks `payments` before `orders`, including batch selection: a job selects candidate ids without locking, then locks each order and re-reads. Locking a line before its order would deadlock against the handover, and two parallel line changes could each derive the order status from a stale view of the other (ADR-024). A payment that pays an STL then takes a transaction-scoped advisory lock on (customer, product) and that product's live offers by id, last (ADR-037); offer submission takes the same advisory lock, and offer checkout inserts its order before it locks the offer.
 
 ---
 
@@ -1418,7 +1418,7 @@ Admin routes are mounted on a separate router with separate authentication and r
 | --------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `dispatch_outbox`           | 1 min   | Delivers queued email with backoff. Without it, verification emails are lost and users are locked out entirely.                                              |
 | `expire_offers`             | 5 min   | Expires offers whose turn deadline passed. Without it, negotiations never close.                                                                             |
-| `release_stale_checkouts`   | 5 min   | Cancels unpaid online orders past hold only on an explicit `failed` or `expired` answer for the latest attempt; skips (and alerts on) every other answer, a failed or timed-out query, a provider without a status API, or an unprocessed webhook event; never touches cash orders. An administrator releases what it skips, from the hold deadline plus 24 h (ADR-036). Without it, abandoned checkouts hold their STLs until released by hand. |
+| `release_stale_checkouts`   | 5 min   | Cancels unpaid online orders past hold only on an explicit `failed` or `expired` answer for the latest attempt; skips (and alerts on) every other answer, a failed or timed-out query, a provider without a status API, or an unprocessed webhook event; never touches cash orders. The `manual` provider has no one to ask: at the end of `manual_payment_hold_period` the job answers `expired` itself and releases the order (ADR-049). An administrator releases what it skips, from the hold deadline plus 24 h (ADR-036), or a `manual` order at any time (ADR-049). Without it, abandoned checkouts hold their STLs until released by hand. |
 | `reconcile_payments`        | 15 min  | Queries the provider for stuck online payments. **Most important job in the system** — without it a lost callback leaves a customer charged with nothing delivered. |
 | `purge_unverified_accounts` | Daily   | Removes never-verified accounts.                                                                                                                             |
 | `purge_expired_attachments` | Daily   | Deletes expired reference images from disk and database.                                                                                                     |
@@ -1559,7 +1559,7 @@ Lint, type check, test, migration reversibility check, image build, deployment w
 | **4 — Payments live** | Online provider adapter, webhook, verification, reconciliation, manual confirmation                         | **Yes**              |
 | **5 — Hardening**     | Rate limits, captcha, scanning, MFA, monitoring, backup drill, data rights, load test                       | No                   |
 
-Phases 0–3 and 5 are fully unblocked. Only Phase 4 requires the provider decision (§30.4) and merchant credentials, and its interface is fixed by the adapter contract, making it a swap rather than a rewrite. Cash orders need no provider at all.
+Phases 0–3 and 5 are fully unblocked. Phase 4 is met in V1 by the `manual` provider (§30.4, ADR-049), which needs no merchant credentials; an API provider later is a swap behind the same adapter contract, not a rewrite. Cash orders need no provider at all.
 
 ---
 
@@ -1567,7 +1567,7 @@ Phases 0–3 and 5 are fully unblocked. Only Phase 4 requires the provider decis
 
 | #  | Severity     | Risk                                                                                    | Mitigation                                                                                      |
 | -- | ------------ | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| 1  | **Critical** | Online provider not yet chosen or onboarded; gates all STL revenue and online physical revenue | Decide per §30.4 and apply immediately; develop against mock; cash orders sell physical goods meanwhile |
+| 1  | **Critical** | Online payment is manual (§30.4, ADR-049): every online order waits for the administrator's call and confirm | The `manual_payment_due` alert and the awaiting-confirmation list drive the work; unpaid orders are released after `manual_payment_hold_period`; an API provider remains possible (VS-032) |
 | 2  | **Critical** | Webhook authenticity unresolved — a forged callback would yield free goods              | Always re-query the provider server-side; never trust callback payload; idempotency by event ID |
 | 3  | **High**     | Every V1 refund is manual (ADR-024); manual refunds and failed transfers get forgotten | Obligations queue lists pending and owed refunds until settled; alerts on late captures and chargeback excess |
 | 4  | **High**     | Online prepaid plus made-on-demand — money held for goods that do not yet exist         | Lead times, quantity caps, availability toggle, kill switch, fast refund path                   |
@@ -1682,7 +1682,7 @@ These questions apply to an API provider. §30.4 chose manual payment for V1 (AD
 | **STL Delivery Queue**    | Admin list of paid STL lines awaiting delivery, oldest first (ADR-019)                       |
 | **Soft Delete**           | Marking a record deleted without removing it                                                 |
 | **Verified Purchase**     | Review badge indicating a genuine purchase record exists                                     |
-| **Whish**                 | Lebanese payment provider; Whish Pay is its merchant service. A candidate online provider (§30.4) |
+| **Whish**                 | Lebanese payment provider; Whish Pay is its merchant service. In V1 one way a customer may pay a `manual` order, not an integrated provider (§30.4, ADR-049) |
 
 ---
 

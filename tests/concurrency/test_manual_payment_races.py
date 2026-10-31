@@ -13,13 +13,16 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.identity.domain.enums import UserRole
-from app.payments.domain.exceptions import PaymentReferenceMismatchError
+from app.payments.domain.exceptions import (
+    ManualReleaseRefusedError,
+    PaymentReferenceMismatchError,
+)
 from app.payments.domain.outcome import Outcome
 from app.payments.infrastructure import manual, release
 from app.payments.infrastructure.manual import confirm_payment_manually
 from app.payments.infrastructure.payments import SqlPaymentStore
 from app.payments.infrastructure.providers.manual import ManualPaymentProvider
-from app.payments.infrastructure.release import release_stale
+from app.payments.infrastructure.release import release_order_by_admin, release_stale
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
 from tests.concurrency.barrier import meet_or_fail
 from tests.integration.deep_support import create_user
@@ -134,6 +137,50 @@ async def test_a_confirm_and_the_release_at_the_deadline_never_both_win(
             ["awaiting_delivery"],
             "paid",
         )
+
+
+@pytest.mark.parametrize("first", ["release", "confirm"])
+async def test_an_admin_release_and_a_confirm_never_both_win(
+    db_engine: AsyncEngine,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    first: str,
+) -> None:
+    """VS-050 Q3 allows the release at any time, so it can meet a confirm mid-hold."""
+    at = epoch(2034 if first == "release" else 2035)
+    order = await seed_order(db_session, placed_at=at)
+    payment = await seed_attempt(db_session, order, initiated_at=at, provider="manual")
+    admin = (await create_user(db_session, role=UserRole.ADMIN)).id
+    _sync_first_lock(monkeypatch, {order.order_id})
+
+    async def released() -> Any:
+        try:
+            async with async_sessionmaker(db_engine)() as session, session.begin():
+                return await release_order_by_admin(
+                    session,
+                    order.order_id,
+                    admin_id=admin,
+                    reason="customer said by phone they will not pay",
+                    events_reviewed=False,
+                    now=at + timedelta(hours=1),
+                )
+        except ManualReleaseRefusedError as exc:
+            return exc
+
+    order_of = (1, 2) if first == "release" else (2, 1)
+    release_result, outcome = await asyncio.gather(
+        _as(order_of[0], released), _as(order_of[1], lambda: _confirm(db_engine, payment, None))
+    )
+    state = await one(db_engine, ORDER_STATE, o=order.order_id)
+    paid = await one(db_engine, PAYMENT_STATE, p=payment)
+    if first == "release":
+        assert release_result.attempts_expired == (payment,)
+        assert outcome is Outcome.LATE_CAPTURE  # and its refund obligation
+        assert (state.status, paid.status) == ("cancelled", "expired")
+    else:
+        assert outcome is Outcome.APPLY_PAID
+        assert release_result.reason == "order_not_payable"
+        assert (state.status, paid.status) == ("in_progress", "paid")
 
 
 async def test_one_reference_typed_on_two_payments_pays_one(

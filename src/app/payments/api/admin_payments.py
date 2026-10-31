@@ -269,12 +269,7 @@ async def confirm_payment(
     except ManualConfirmRefusedError as exc:
         raise _refused(exc) from exc
     except PaymentReferenceMismatchError as exc:
-        raise ApiError(
-            status_code=status.HTTP_409_CONFLICT,
-            code="PAYMENT_REFERENCE_MISMATCH",
-            title="Provider reference mismatch",
-            detail="That reference belongs to another payment, or this one has another.",
-        ) from exc
+        raise _reference_mismatch() from exc
     payment = await SqlPaymentStore(session).get(payment_id)
     assert payment is not None
     return ManualConfirmRead(outcome=outcome, payment=PaymentSummary.of(payment))
@@ -323,6 +318,7 @@ _LIVE_LATE_REFUND = text(
             "description": "MANUAL_CONFIRMATION_NOT_ALLOWED (the provider has a status API), "
             "INVALID_STATE_TRANSITION (`reason`: `cash_payment`, `already_paid`, "
             "`already_late_captured`, `use_confirm` for a matching amount), "
+            "PAYMENT_REFERENCE_MISMATCH (a `manual` reference another payment has), "
             "IDEMPOTENCY_KEY_CONFLICT or IDEMPOTENCY_REQUEST_IN_PROGRESS."
         },
         422: {
@@ -385,6 +381,17 @@ async def record_capture(
             raise not_found_error() from exc
         except CaptureRecordRefusedError as exc:
             raise _capture_refused(exc) from exc
+        except PaymentReferenceMismatchError as exc:
+            raise _reference_mismatch() from exc
+
+
+def _reference_mismatch() -> ApiError:
+    return ApiError(
+        status_code=status.HTTP_409_CONFLICT,
+        code="PAYMENT_REFERENCE_MISMATCH",
+        title="Provider reference mismatch",
+        detail="That reference belongs to another payment, or this one has another.",
+    )
 
 
 def _reference_required() -> ApiError:

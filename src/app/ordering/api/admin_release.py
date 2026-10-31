@@ -1,6 +1,6 @@
 """`POST /api/v1/admin/orders/{order_id}/release` (VS-024 plan 2.5): the manual exit for
-an unpaid order the job cannot release. After the 24 h grace, with a reason, and with
-`events_reviewed` when unprocessed events exist. The provider is never called."""
+an unpaid order. After the 24 h grace (at any time for `manual`, ADR-049), with a reason,
+and `events_reviewed` when unprocessed events exist. The provider is never called."""
 
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal

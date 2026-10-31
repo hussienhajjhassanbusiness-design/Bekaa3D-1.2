@@ -18892,7 +18892,7 @@
                 }
               }
             },
-            "description": "MANUAL_CONFIRMATION_NOT_ALLOWED (the provider has a status API), INVALID_STATE_TRANSITION (`reason`: `cash_payment`, `already_paid`, `already_late_captured`, `use_confirm` for a matching amount), IDEMPOTENCY_KEY_CONFLICT or IDEMPOTENCY_REQUEST_IN_PROGRESS."
+            "description": "MANUAL_CONFIRMATION_NOT_ALLOWED (the provider has a status API), INVALID_STATE_TRANSITION (`reason`: `cash_payment`, `already_paid`, `already_late_captured`, `use_confirm` for a matching amount), PAYMENT_REFERENCE_MISMATCH (a `manual` reference another payment has), IDEMPOTENCY_KEY_CONFLICT or IDEMPOTENCY_REQUEST_IN_PROGRESS."
           },
           "422": {
             "content": {

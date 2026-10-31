@@ -9,6 +9,7 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ordering.public import lock_order_for_change
+from app.payments.domain.enums import PaymentProvider
 from app.payments.domain.exceptions import (
     CaptureRecordRefusedError,
     ManualConfirmRefusedError,
@@ -141,12 +142,22 @@ async def record_capture_manually(
     )
     if refusal is not None:
         raise CaptureRecordRefusedError(refusal)
+    stored = None  # another provider's dashboard reference is audited only, as before
+    if dashboard_reference is not None and seen.provider is PaymentProvider.MANUAL:
+        if await lock_order_for_change(session, seen.order_id) is None:
+            raise PaymentNotFoundError(f"payment {payment_id} vanished")
+        locked = await store.lock(payment_id)
+        if locked is None:
+            raise PaymentNotFoundError(f"payment {payment_id} vanished")
+        await _require_own_reference(store, locked, dashboard_reference)
+        stored = dashboard_reference  # ADR-049 d5: unique per provider when given
     outcome = await apply_provider_result(
         session,
         payment_id,
         ProviderResult("paid", amount_cents, currency),
         source="manual",
         actor_user_id=admin_id,
+        provider_payment_id=stored,
     )
     if outcome not in (Outcome.LATE_CAPTURE, Outcome.LATE_CAPTURE_AND_FAIL):
         raise CaptureRecordRefusedError(CaptureRefusal.ALREADY_LATE_CAPTURED)  # moved meanwhile

@@ -87,13 +87,13 @@ Every active, verified administrator receives each alert as an in-app `payment.a
 
 `PAYMENT_PROVIDER=manual` is V1's production provider ([ADR-049](adr/ADR-049-manual-payment.md)). The website shows no payment details; the administrator arranges each payment with the customer by WhatsApp or phone.
 
-1. **Checkout** (cart, offer or retry) creates the order `pending_payment` with a `pending` attempt and no reference. The response's payment has `next_step: await_admin_contact` and `hold_expires_at`. An STL-only or offer order must give `contact_phone` (`422 CONTACT_PHONE_REQUIRED`); delivery and pickup already carry one. The customer gets `order.awaiting_payment` and an `order_awaiting_payment` email; every administrator gets one `manual_payment_due` alert.
+1. **Checkout** (cart, offer or retry) creates the order `pending_payment` with a `pending` attempt and no reference. The response's payment has `next_step: await_admin_contact` and `hold_expires_at`. An STL-only or offer order must give `contact_phone` (`422 CONTACT_PHONE_REQUIRED`); delivery and pickup already carry one. The customer gets `order.awaiting_payment` and an `order_awaiting_payment` email; every administrator gets one `manual_payment_due` alert, in the same transaction as the order. A retry onto `manual` of an order without a phone is `422 CONTACT_PHONE_REQUIRED`.
 2. **Work list:** `GET /api/v1/admin/payments?awaiting_confirmation=true`, oldest first, with each order's `hold_expires_at`. The customer's phone and email are on `GET /api/v1/admin/orders/{order_id}`.
 3. **Paid as arranged:** confirm with the exact total, the transfer's reference if there is one, and a `reason`. STL lines enter `awaiting_delivery`; physical lines may start production.
-4. **A different amount** (short, over, or not USD): confirm refuses it; record-capture records it as a late capture with its refund obligation, the attempt fails, and the customer may retry within the hold.
+4. **A different amount** (short, over, or not USD): confirm refuses it; record-capture records it as a late capture with its refund obligation (a given reference is stored and unique, as on confirm), the attempt fails, and the customer may retry within the hold.
 5. **Never paid:** the job releases the order at `hold_expires_at`; the administrator may release it earlier, with a reason. Money that arrives after a release is confirmed against the expired attempt: a late capture and its refund.
 
-Reconciliation skips `manual`, and its webhook route answers 404.
+Reconciliation skips `manual`, and its webhook route answers 404. A second transfer on an attempt already paid has no record in the platform (an open owner decision, ADR-049): return it outside the platform.
 
 ## Go-live
 

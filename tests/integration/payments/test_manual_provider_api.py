@@ -14,6 +14,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.main import app as main_app
+from app.ordering.api import checkout as checkout_api
 from app.payments.infrastructure.providers.manual import ManualPaymentProvider
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
 from tests.integration.deep_support import (
@@ -34,7 +35,14 @@ from tests.integration.ordering.checkout_support import (
     rows,
     shop_open,  # noqa: F401
 )
-from tests.integration.ordering.physical_support import physical, random_phone, setting, spaced, stl
+from tests.integration.ordering.physical_support import (
+    physical,
+    random_phone,
+    seed_address,
+    setting,
+    spaced,
+    stl,
+)
 from tests.integration.payments.recovery_support import (
     ORDER_STATE,
     PAYMENT_STATE,
@@ -52,6 +60,7 @@ pytestmark = [
 ]
 
 MANUAL_HOLD = timedelta(days=7)
+PHONE: dict[str, Any] = {"contact_phone_snapshot": "+96171555123", "contact_phone_hash": "c" * 64}
 AWAIT = "await_admin_contact"
 REASON = "customer paid by OMT; receipt seen by the administrator"
 ORDER_ROW = "SELECT contact_phone_snapshot, contact_phone_hash FROM orders WHERE id = :o"
@@ -84,6 +93,12 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
 def _post(client: TestClient, path: str, body: dict[str, Any], **headers: str) -> httpx.Response:
     response: httpx.Response = client.post(path, json=body, headers=csrf(client) | headers)
     return response
+
+
+def _capture(client: TestClient, payment_id: Any, cents: int, **over: Any) -> httpx.Response:
+    body = {"captured_amount_cents": cents, "captured_currency": "USD", "reason": REASON}
+    path = f"/api/v1/admin/payments/{payment_id}/record-capture"
+    return _post(client, path, body | over, **{"Idempotency-Key": new_key()})
 
 
 def _confirm(client: TestClient, payment_id: Any, cents: int, **over: Any) -> httpx.Response:
@@ -206,20 +221,23 @@ async def test_a_wrong_amount_is_refused_recorded_as_a_late_capture_and_retried(
 ) -> None:
     customer = await create_user(db_session)
     placed_at = datetime.now(UTC) - timedelta(hours=1)
-    order = await seed_order(db_session, placed_at=placed_at, user_id=customer.id)
+    order = await seed_order(db_session, placed_at=placed_at, user_id=customer.id, **PHONE)
     payment_id = await seed_attempt(db_session, order, initiated_at=placed_at, provider="manual")
+    other = await seed_order(db_session, placed_at=placed_at)
+    other_id = await seed_attempt(db_session, other, initiated_at=placed_at, provider="manual")
+    reference = f"Whish-{uuid.uuid4().hex[:8]}"
     await mfa_admin(client, db_session)
     assert_problem(_confirm(client, payment_id, 999), 422, "PAYMENT_AMOUNT_MISMATCH")
-    recorded = _post(
-        client,
-        f"/api/v1/admin/payments/{payment_id}/record-capture",
-        {"captured_amount_cents": 900, "captured_currency": "USD", "reason": REASON},
-        **{"Idempotency-Key": new_key()},
-    )
+    recorded = _capture(client, payment_id, 900, dashboard_reference=f" {reference} ")
     assert recorded.status_code == 201, recorded.text
     assert recorded.json()["outcome"] == "late_capture_and_fail"
     state = await one(db_engine, PAYMENT_STATE, p=payment_id)
     assert state.status == "failed" and state.captured_amount_cents == 900
+    assert state.provider_payment_id == reference  # stored, so it is unique (ADR-049 d5)
+    reused = _capture(client, other_id, 900, dashboard_reference=reference)
+    assert_problem(reused, 409, "PAYMENT_REFERENCE_MISMATCH")
+    assert_problem(_confirm(client, other_id, 1000, provider_reference=reference), 409)
+    assert (await one(db_engine, PAYMENT_STATE, p=other_id)).status == "pending"
     login(client, customer.email)
     retried = _post(
         client,
@@ -233,6 +251,21 @@ async def test_a_wrong_amount_is_refused_recorded_as_a_late_capture_and_retried(
     expires = _parse(retried.json()["order"]["hold_expires_at"])
     assert expires > datetime.now(UTC) + MANUAL_HOLD - timedelta(minutes=5)
     assert await alerts(db_engine, uuid.UUID(again["id"])) == {"manual_payment_due": 1}
+
+
+async def test_a_manual_retry_on_an_order_without_a_phone_is_422(
+    client: TestClient, db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """An STL-only order placed on another provider has no phone for the administrator."""
+    customer = await create_user(db_session)
+    placed_at = datetime.now(UTC) - timedelta(minutes=5)
+    order = await seed_order(db_session, placed_at=placed_at, user_id=customer.id)
+    await seed_attempt(db_session, order, initiated_at=placed_at, status="failed")  # mock
+    login(client, customer.email)
+    path = f"/api/v1/me/orders/{order.order_id}/payments"
+    refused = _post(client, path, {}, **{"Idempotency-Key": new_key()})
+    assert_problem(refused, 422, "CONTACT_PHONE_REQUIRED")
+    assert (await one(db_engine, LATEST_PAYMENT, o=order.order_id)).provider == "mock"
 
 
 # --- Offer checkout --------------------------------------------------------------------------
@@ -259,10 +292,85 @@ async def test_an_offer_checkout_needs_the_phone_and_is_paid_by_confirm(
     assert (payment["provider"], payment["next_step"]) == ("manual", AWAIT)
     assert placed.json()["order"]["total"]["amount_cents"] == 800  # the agreed price
     assert (await one(db_engine, ORDER_ROW, o=order_id)).contact_phone_snapshot == phone
+    placed_at = _parse(placed.json()["order"]["placed_at"])
+    assert _parse(payment["hold_expires_at"]) == placed_at + MANUAL_HOLD
+    notices = await one(db_engine, NOTICES, o=order_id, phone=phone)
+    assert (notices.emails, notices.notices, notices.phone_leaks) == (1, 1, 0)
+    assert await alerts(db_engine, uuid.UUID(payment["id"])) == {"manual_payment_due": 1}
     await mfa_admin(client, db_session)
     assert _confirm(client, payment["id"], 800).status_code == 200
     assert (await one(db_engine, ORDER_STATE, o=order_id)).lines == ["awaiting_delivery"]
     assert (await offer_state(db_engine, offer))["status"] == "paid"
+
+
+async def test_another_provider_refuses_a_phone_on_an_offer_checkout(
+    client: TestClient, db_engine: AsyncEngine, db_session: AsyncSession, monkeypatch: Any
+) -> None:
+    customer = await create_user(db_session)
+    login(client, customer.email)
+    product = await stl(db_session)
+    offer = await seed_offer(
+        db_session, user_id=customer.id, product_id=product, status="accepted", responds_by=None
+    )
+    monkeypatch.setattr(main_app.state, "payment_providers", {"mock": ManualPaymentProvider()})
+    body = {"accept_terms": True, "accept_digital_final_sale": True}
+    refused = _post(
+        client,
+        f"/api/v1/me/offers/{offer}/checkout",
+        body | {"contact_phone": random_phone()},
+        **{"Idempotency-Key": new_key()},
+    )
+    assert_problem(refused, 422, "INVALID_FULFILLMENT")
+    assert await rows(db_engine, customer.id) == Rows(0, 0, 0, 0, 0, 0)
+
+
+async def test_a_physical_delivery_order_is_paid_with_the_address_phone(
+    client: TestClient, db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """The plan's "physical" path: delivery already carries the phone the admin calls."""
+    lamp = await physical(db_session)
+    user_id = await _buyer(client, db_session, lamp)
+    phone = random_phone()
+    address = await seed_address(db_session, user_id, phone)
+    placed = post_checkout(
+        client, checkout_body(fulfillment_method="delivery", address_id=str(address))
+    )
+    assert placed.status_code == 201, placed.text
+    order_id, payment = placed.json()["order"]["id"], placed.json()["payment"]
+    assert payment["next_step"] == AWAIT
+    assert (await one(db_engine, ORDER_ROW, o=order_id)).contact_phone_snapshot == phone
+    total = placed.json()["order"]["total"]["amount_cents"]
+    await mfa_admin(client, db_session)
+    assert _confirm(client, payment["id"], total).status_code == 200
+    state = await one(db_engine, ORDER_STATE, o=order_id)
+    assert (state.status, state.lines) == ("in_progress", ["pending"])
+
+
+async def test_the_alert_commits_with_the_order_even_if_the_second_transaction_fails(
+    db_engine: AsyncEngine, db_session: AsyncSession, monkeypatch: Any
+) -> None:
+    """Money review F3: reconciliation skips `manual`, so a lost alert would never return."""
+
+    async def broken(*args: Any, **kwargs: Any) -> None:
+        raise RuntimeError("Tx2 lost")
+
+    monkeypatch.setattr(checkout_api, "record_provider_reference", broken)
+    with client_for(main_app, raise_server_exceptions=False) as client:
+        monkeypatch.setattr(
+            main_app.state, "payment_providers", {"manual": ManualPaymentProvider()}
+        )
+        user_id = await _buyer(client, db_session, await stl(db_session))
+        failed = post_checkout(client, checkout_body(contact_phone=random_phone()))
+    assert failed.status_code == 500
+    async with db_engine.connect() as conn:
+        payment = await conn.scalar(
+            text(
+                "SELECT p.id FROM payments p JOIN orders o ON o.id = p.order_id"
+                " WHERE o.user_id = :u"
+            ),
+            {"u": user_id},
+        )
+    assert await alerts(db_engine, payment) == {"manual_payment_due": 1}
 
 
 # --- Reads -----------------------------------------------------------------------------------

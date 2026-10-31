@@ -18,6 +18,7 @@ from app.core.exceptions import ApiError
 from app.core.rate_limit import enforce_rate_limit
 from app.identity.public import User, not_found_error, verified_user_short_read
 from app.negotiation.public import SqlOfferCheckouts
+from app.ordering.api.checkout import announce_if_manual
 from app.ordering.api.checkout_schemas import IDEMPOTENCY_KEY_PATTERN
 from app.ordering.api.idempotent import replay, stored
 from app.ordering.api.problems import payment_already_active_error
@@ -26,18 +27,17 @@ from app.ordering.application.services.retry import RetriedPayment, start_retry
 from app.ordering.domain.customer_view import PaymentNextStep, payment_next_step
 from app.ordering.domain.enums import OrderStatus
 from app.ordering.domain.exceptions import (
+    ContactPhoneRequiredError,
     OnlinePaymentUnavailableError,
     PaymentAlreadyActiveError,
     PaymentMethodNotAllowedError,
     RetryOrderNotFoundError,
     RetryRefusedError,
 )
-from app.ordering.domain.payment_recovery import MANUAL_PROVIDER
 from app.ordering.infrastructure.orders import SqlOrderStore
 from app.payments.public import (
     CreatePayment,
     ProviderUnavailableError,
-    announce_manual_payment,
     fail_attempt,
     limits,
     payment_attempts,
@@ -180,6 +180,13 @@ def _translate(exc: Exception) -> ApiError:
             detail="This payment method cannot be used for this order.",
             extensions={"reason": exc.reason},
         )
+    if isinstance(exc, ContactPhoneRequiredError):
+        return ApiError(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            code="CONTACT_PHONE_REQUIRED",
+            title="Contact phone required",
+            detail="This order has no phone for the administrator to call; place a new one.",
+        )
     if isinstance(exc, OnlinePaymentUnavailableError):
         return ApiError(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -191,6 +198,7 @@ def _translate(exc: Exception) -> ApiError:
 
 
 _TRANSLATED = (
+    ContactPhoneRequiredError,
     RetryOrderNotFoundError,
     PaymentAlreadyActiveError,
     RetryRefusedError,
@@ -280,6 +288,7 @@ async def retry_payment(
             except _TRANSLATED as exc:
                 raise _translate(exc) from exc
             await claims.attach(claim.record_id, resource_id=order_id)
+            await announce_if_manual(session, retried.order, retried.payment)
 
         try:
             created = await start_online_payment(
@@ -310,13 +319,6 @@ async def retry_payment(
                 at=datetime.now(UTC),
             )
             await claims.complete(claim.record_id, status_code=status.HTTP_201_CREATED, body=read)
-            if retried.payment.provider == MANUAL_PROVIDER:  # last in Tx2 (VS-050 Q2)
-                await announce_manual_payment(
-                    session,
-                    payment_id=retried.payment.id,
-                    order_id=order_id,
-                    order_number=retried.order.order_number,
-                )
     return JSONResponse(read, status_code=status.HTTP_201_CREATED)
 
 

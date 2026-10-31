@@ -9,6 +9,8 @@
 
 **Revision 2 (owner, 2026-10-31):** every recommendation Q1-Q7 approved. Decisions taken while building, without stopping (none changes a requirement; each is in ADR-049): `manual` is recognised by name even when not configured (d1); a blank reference is none, a given one is trimmed (d5); two confirms on one reference serialise on an advisory lock, so the loser is a 409 (d5); the admin work list carries no customer contact, which stays on `GET /admin/orders/{id}` (d11); reconciliation skips `manual` without an alert (d12); `release_order_by_admin` reads the holds itself; `OrderDetail.payment.next_step` is null for a redirecting provider (the detail never carries a redirect URL). Not built from the first plan: T14 (an offer order released at the deadline), already covered for any provider by VS-041's `expire_offers` tests.
 
+**Review fixes (2026-10-31):** srs-reviewer and money-reviewer findings acted on are rows RF1-RF6 and the SRS §23, §20.8, FR-06, FR-07 amendments. Left open for the owner: a second real transfer on one attempt (ADR-049 Consequences). Accepted: lowering the manual hold moves existing deadlines.
+
 **Goal.** Production takes online orders (cart, STL and accepted-offer checkouts) with one provider, `manual`. The order waits for payment, the administrator contacts the customer and confirms with VS-024's manual confirm, paid STL lines go to `awaiting_delivery`, and physical lines become workable exactly as today. No gateway, no crypto, no outbound call.
 
 **Reused unchanged.** `confirm_payment_manually` (`src/app/payments/infrastructure/manual.py:37`) refuses only cash, a provider with a status API and a differing amount, then goes through `apply_provider_result` → `apply_result` (STL → `awaiting_delivery`, offers closed, projection, history, `order_payment_confirmed`). Record-capture, late capture, refunds, chargebacks, `release_unpaid_order`, retry and offer checkout already work for any adapter with `supports_status_query = False`. This is proven today with a test-only stand-in (`tests/integration/payments/test_manual_recovery.py:387`).
@@ -84,8 +86,14 @@ Files: `S` = `tests/integration/payments/test_manual_provider_service.py`, `A` =
 | C1 | Confirm vs the job's release at the deadline, in both orders | lock order + re-check | `R :: test_a_confirm_and_the_release_at_the_deadline_never_both_win` (`release`, `confirm`) |
 | C2 | One reference typed on two payments: one paid, one 409 | reference advisory lock | `R :: test_one_reference_typed_on_two_payments_pays_one` |
 | C3 | One payment confirmed twice: paid once | payment lock | `R :: test_one_payment_confirmed_twice_is_paid_once` |
+| RF1 | Money review: record-capture's `manual` reference is stored and unique; reused on record-capture or confirm is 409 | infra | `A :: test_a_wrong_amount_is_refused_recorded_as_a_late_capture_and_retried` |
+| RF2 | Money review: the admin alert commits with the order even if Tx2 fails | API (Tx1) | `A :: test_the_alert_commits_with_the_order_even_if_the_second_transaction_fails` |
+| RF3 | Both reviews: a retry onto `manual` of an order without a phone is 422 | app | `A :: test_a_manual_retry_on_an_order_without_a_phone_is_422` |
+| RF4 | SRS review: offer checkout's notices, alert and hold; another provider refuses its phone | app | `A :: test_an_offer_checkout_needs_the_phone_and_is_paid_by_confirm`, `test_another_provider_refuses_a_phone_on_an_offer_checkout` |
+| RF5 | SRS review: a physical delivery order on `manual`, paid by confirm | app | `A :: test_a_physical_delivery_order_is_paid_with_the_address_phone` |
+| RF6 | Money review: an admin release racing a confirm, both orders | lock order | `R :: test_an_admin_release_and_a_confirm_never_both_win` (`release`, `confirm`) |
 
-Mutation checks run (each guard deleted, its test failed): the reference lock, the job's manual answer, the provider-chosen hold, both phone-required checks, the webhook 404, `REFERENCE_REQUIRED`, reconcile's manual skip, the any-time manual release, the admin alert, the customer notice, reference trimming, `manual` by name. Equivalent mutant: skipping `set_provider_reference` for `None` (it would write `NULL` over `NULL`).
+Mutation checks run (each guard deleted, its test failed): the record-capture reference store, the retry phone check, the Tx1 alert (cart and offer), the offer's other-provider phone refusal, the reference lock, the job's manual answer, the provider-chosen hold, both phone-required checks, the webhook 404, `REFERENCE_REQUIRED`, reconcile's manual skip, the any-time manual release, the admin alert, the customer notice, reference trimming, `manual` by name. Equivalent mutant: skipping `set_provider_reference` for `None` (it would write `NULL` over `NULL`).
 
 ---
 

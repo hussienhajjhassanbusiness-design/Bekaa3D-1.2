@@ -15,6 +15,7 @@ from app.ordering.application.ports import (
 )
 from app.ordering.domain.checkout_rules import choose_provider
 from app.ordering.domain.exceptions import (
+    ContactPhoneRequiredError,
     LiveAttemptExistsError,
     OfferCheckoutExpiredError,
     OfferCheckoutNotFoundError,
@@ -26,6 +27,7 @@ from app.ordering.domain.exceptions import (
 )
 from app.ordering.domain.orders import Order, OrderLine
 from app.ordering.domain.payment_recovery import (
+    MANUAL_PROVIDER,
     Holds,
     RetryRefusal,
     hold_deadline,
@@ -72,6 +74,8 @@ async def start_retry(
         raise already_active(live)
     await _require_open_offer(offers, lines, user_id=user_id, clock=clock)
     provider = choose_provider(requested_provider, configured, previous)
+    if provider == MANUAL_PROVIDER and order.contact_phone_hash is None:
+        raise ContactPhoneRequiredError("A manual retry needs the phone to call (ADR-049 d8).")
     try:
         payment = await attempts.open_retry_attempt(
             order_id=order_id,

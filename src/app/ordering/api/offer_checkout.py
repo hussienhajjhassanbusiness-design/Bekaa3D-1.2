@@ -201,6 +201,7 @@ async def checkout_offer(
             except _TRANSLATED as exc:
                 raise _translate(exc) from exc
             await claims.attach(claim.record_id, resource_id=placed.order.id)
+            await announce_if_manual(session, placed.order, placed.payment)
 
         try:
             created = await start_online_payment(
@@ -231,5 +232,4 @@ async def checkout_offer(
                 at=datetime.now(UTC),
             )
             await claims.complete(claim.record_id, status_code=status.HTTP_201_CREATED, body=read)
-            await announce_if_manual(session, placed)
     return JSONResponse(read, status_code=status.HTTP_201_CREATED)
