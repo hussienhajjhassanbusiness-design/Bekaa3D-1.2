@@ -1,5 +1,6 @@
-"""Every payment adapter keeps the same contract (VS-023 plan 6.4). Parametrised over
-`ADAPTERS`; VS-032 adds its sandbox adapter here and gets the whole suite."""
+"""Every API payment adapter keeps the same contract (VS-023 plan 6.4). Parametrised over
+`ADAPTERS` but `manual`, which asks and signs nothing (ADR-049) and has its own contract below;
+VS-032 adds its sandbox adapter here and gets the whole suite."""
 
 import json
 import re
@@ -45,7 +46,7 @@ def _signed_event(
     return {"X-Mock-Signature": sign(SECRET, body)}, body
 
 
-@pytest_asyncio.fixture(params=sorted(ADAPTERS))
+@pytest_asyncio.fixture(params=sorted(set(ADAPTERS) - {"manual"}))
 async def adapter(request: pytest.FixtureRequest) -> AsyncIterator[PaymentProviderPort]:
     build: Callable[[Settings], PaymentProviderPort] = ADAPTERS[request.param]
     instance = build(_settings())
@@ -154,3 +155,19 @@ def test_a_signed_but_unreadable_event_is_malformed(adapter: PaymentProviderPort
 def test_the_adapter_answers_status_queries(adapter: PaymentProviderPort) -> None:
     """Verification relies on asking the provider; an adapter that cannot is refused."""
     assert adapter.supports_status_query is True
+
+
+# --- `manual` (VS-050, ADR-049): nothing to create, ask or receive -------------------------
+
+
+async def test_the_manual_adapter_creates_nothing_and_takes_no_webhooks() -> None:
+    manual = ADAPTERS["manual"](_settings())
+    created = await manual.create_payment(
+        CreatePayment(uuid.uuid4(), "B3D-CONTRACT", 1000, "USD", "http://shop.test/return")
+    )
+    assert (created.provider_payment_id, created.redirect_url) == (None, None)
+    assert manual.supports_status_query is False
+    assert getattr(manual, "accepts_webhooks", True) is False
+    with pytest.raises(InvalidSignatureError):
+        manual.parse_webhook({}, b"{}")
+    await manual.aclose()

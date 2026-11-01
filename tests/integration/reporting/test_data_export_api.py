@@ -295,9 +295,13 @@ async def test_each_order_matches_its_order_page(db_session: AsyncSession) -> No
         pages = {o["id"]: client.get(f"/api/v1/me/orders/{o['id']}").json() for o in doc["orders"]}
     for exported in doc["orders"]:
         page = pages[exported["id"]]
-        shared = (set(exported) & set(page)) - {"lines"}
-        assert shared >= {"payment_due", "amount_due", "payment", "refunds", "status_history"}
+        shared = (set(exported) & set(page)) - {"lines", "payment"}
+        assert shared >= {"payment_due", "amount_due", "refunds", "status_history"}
         assert {k: exported[k] for k in shared} == {k: page[k] for k in shared}, exported["id"]
+        mine, shown = exported["payment"], page["payment"]  # the page adds a UI `next_step`
+        assert (mine is None) == (shown is None)
+        if mine is not None:
+            assert {k: mine[k] for k in mine} == {k: shown[k] for k in mine}, exported["id"]
         for mine, shown in zip(exported["lines"], page["lines"], strict=True):
             common = set(mine) & set(shown)
             assert {k: mine[k] for k in common} == {k: shown[k] for k in common}

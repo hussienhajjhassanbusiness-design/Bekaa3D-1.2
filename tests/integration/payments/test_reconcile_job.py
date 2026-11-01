@@ -12,6 +12,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
+from app.jobs.partitions import ensure_partitions
 from app.payments.domain.exceptions import ProviderUnavailableError
 from app.payments.infrastructure import verification
 from app.payments.infrastructure.payments import stale_live_query
@@ -208,6 +209,9 @@ async def test_stuck_is_raised_once_a_day(
     for _ in range(2):
         assert (await _run(db_engine, {"mock": mock}, at, at + LATER))["stuck"] == 1
     assert await alerts(db_engine, payment_id) == {"stuck": 1}
+    # On the 1st of a month, 25 h ago is a month a fresh test database has no partition for.
+    yesterday = datetime.now(UTC) - timedelta(hours=25)
+    await ensure_partitions({"session_factory": factory(db_engine)}, ("audit_logs",), now=yesterday)
     async with db_engine.begin() as conn:
         await conn.execute(
             text(
