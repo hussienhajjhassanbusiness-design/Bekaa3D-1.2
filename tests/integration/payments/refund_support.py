@@ -261,3 +261,15 @@ async def refund_rows(engine: AsyncEngine, order_id: uuid.UUID) -> list[Any]:
             {"o": order_id},
         )
         return list(rows)
+
+
+async def audit_rows(engine: AsyncEngine, action: str, entity_id: str | uuid.UUID) -> list[Any]:
+    async with engine.connect() as conn:
+        rows = await conn.execute(
+            text(
+                "SELECT actor_user_id, entity_type, before_data, after_data FROM audit_logs"
+                " WHERE action = :a AND entity_id = :e ORDER BY created_at"
+            ),
+            {"a": action, "e": uuid.UUID(str(entity_id))},
+        )
+        return list(rows)

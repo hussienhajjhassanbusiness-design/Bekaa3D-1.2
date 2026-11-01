@@ -1,8 +1,12 @@
 """VS-030 PR B over HTTP: refund create, settle, fail, reissue and void (plan 6.2 I1-I5,
 I7-I14, I21, I25; 6.5 S2-S3). Orders are seeded paid; no provider is ever called."""
 
+import io
 import json
+import logging
+import re
 import uuid
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -23,10 +27,16 @@ from tests.integration.deep_support import (
     mfa_admin,
 )
 from tests.integration.fulfillment.order_support import PhysicalOrder, move, seed_physical_order
+from tests.integration.ordering.checkout_support import (
+    add_to_cart,
+    post_checkout,
+    shop_open,  # noqa: F401
+)
 from tests.integration.payments.refund_support import (
     ADMIN,
     REFUNDS,
     act,
+    audit_rows,
     count,
     create,
     key,
@@ -44,6 +54,19 @@ pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("configured_app")
 
 async def _admin(client: TestClient, db: AsyncSession) -> uuid.UUID:
     return (await mfa_admin(client, db))[0].id
+
+
+@pytest.fixture
+def app_logs(monkeypatch: pytest.MonkeyPatch) -> io.StringIO:
+    """`configure_logging()` drops caplog's handler at app start, so its handlers write here."""
+    buffer = io.StringIO()
+    original = logging.StreamHandler
+
+    def into_buffer(*_args: Any, **_kwargs: Any) -> logging.Handler:
+        return original(buffer)
+
+    monkeypatch.setattr(logging, "StreamHandler", into_buffer)
+    return buffer
 
 
 # --- I1, S2 -------------------------------------------------------------------------------
@@ -143,6 +166,34 @@ async def test_i2_partial_then_rest_on_a_delivered_line_and_an_awaiting_stl(
     assert await statuses(db_engine, order.order_id) == ("refunded", "refunded")
 
 
+@pytest.mark.usefixtures("shop_open")
+async def test_a_customer_whose_stl_line_was_refunded_in_full_can_buy_it_again(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    order = await paid_online(db_session)
+    assert order.stl is not None
+    product, email = (
+        await db_session.execute(
+            text(
+                "SELECT i.product_id, u.email FROM order_items i JOIN users u ON u.id = i.user_id"
+                " WHERE i.id = :i"
+            ),
+            {"i": order.stl},
+        )
+    ).one()
+    with client_for(main_app) as client:
+        await _admin(client, db_session)
+        ok(create(client, order.order_id, [(order.stl, 500)]), 201)
+    assert await line_state(db_engine, order.stl) == "refunded"
+    with client_for(main_app) as customer:
+        login(customer, email)
+        add_to_cart(customer, product)  # the cart's ownership check lets it in
+        response = post_checkout(customer)  # and the ownership index lets the new line in
+    assert response.status_code == 201, response.text
+    [line] = response.json()["order"]["lines"]
+    assert (line["product_id"], line["fulfillment_status"]) == (str(product), "pending")
+
+
 # --- I3, I4, I5 ----------------------------------------------------------------------------
 
 
@@ -191,7 +242,7 @@ async def test_i4_a_cash_payment_below_its_lines_caps_the_sum(
 
 
 async def test_i5_an_order_total_mismatch_writes_nothing_and_alerts(
-    db_engine: AsyncEngine, db_session: AsyncSession
+    db_engine: AsyncEngine, db_session: AsyncSession, app_logs: io.StringIO
 ) -> None:
     order = await paid_online(db_session, stl=None)
     await db_session.execute(
@@ -222,6 +273,13 @@ async def test_i5_an_order_total_mismatch_writes_nothing_and_alerts(
         == 1
     )
     assert await statuses(db_engine, order.order_id) == ("in_progress", "paid")
+    logged = [
+        re.sub(r"\x1b\[[0-9;]*m", "", entry)  # the dev console renderer colours its output
+        for entry in app_logs.getvalue().splitlines()
+        if "refund_integrity_error" in entry
+    ]
+    assert len(logged) == 1, app_logs.getvalue() or "log capture is not working"
+    assert "[error" in logged[0] and str(order.order_id) in logged[0]
 
 
 # --- I7 -----------------------------------------------------------------------------------
@@ -275,13 +333,21 @@ async def test_i8_settle_changes_no_status_and_repeats(
 ) -> None:
     order = await paid_online(db_session, stl=None)
     with client_for(main_app) as client:
-        await _admin(client, db_session)
+        admin = await _admin(client, db_session)
         refund = ok(create(client, order.order_id, [(order.physical[0], 1000)]), 201)["id"]
         before = await statuses(db_engine, order.order_id)
         settled = ok(act(client, refund, "settle", {"reference": "dash-123"}))
         assert settled["status"] == "settled" and settled["settlement_reference"] == "dash-123"
         assert await statuses(db_engine, order.order_id) == before == ("refunded", "refunded")
         assert ok(act(client, refund, "settle", {})) == settled
+        (audit,) = await audit_rows(db_engine, "refund.settled", refund)  # the replay writes none
+        assert (audit.actor_user_id, audit.entity_type) == (admin, "refund")
+        assert audit.before_data == {"status": "pending"}
+        assert audit.after_data == {
+            "status": "settled",
+            "order_id": str(order.order_id),
+            "amount_cents": 1000,
+        }
         assert refund not in queue_ids(client, order.order_id)
         other = await paid_online(db_session, stl=None)
         failed = ok(create(client, other.order_id, [(other.physical[0], 10)]), 201)["id"]
@@ -300,7 +366,7 @@ async def test_i9_a_failed_full_refund_stays_owed_until_reissued(
     order = await paid_online(db_session, stl=None)
     line = order.physical[0]
     with client_for(main_app) as client:
-        await _admin(client, db_session)
+        admin = await _admin(client, db_session)
         refund = ok(create(client, order.order_id, [(line, 1000)]), 201)["id"]
         assert await statuses(db_engine, order.order_id) == ("refunded", "refunded")
         failed = ok(act(client, refund, "fail", {"reason": "Card closed."}))
@@ -324,6 +390,15 @@ async def test_i9_a_failed_full_refund_stays_owed_until_reissued(
     assert again.json()["reason"] == "already_reissued"
     assert again.json()["reissued_by_refund_id"] == twin["id"]
     assert await statuses(db_engine, order.order_id) == ("refunded", "refunded")
+    common = {"order_id": str(order.order_id), "amount_cents": 1000}
+    (fail_row,) = await audit_rows(db_engine, "refund.failed", refund)  # the replay writes none
+    assert (fail_row.actor_user_id, fail_row.entity_type) == (admin, "refund")
+    assert fail_row.before_data == {"status": "pending"}
+    assert fail_row.after_data == common | {"status": "failed", "reason": "Card closed."}
+    (reissue_row,) = await audit_rows(db_engine, "refund.reissued", refund)
+    assert (reissue_row.actor_user_id, reissue_row.entity_type) == (admin, "refund")
+    assert reissue_row.before_data == {"status": "failed"}
+    assert reissue_row.after_data == common | {"reissued_by_refund_id": twin["id"]}
 
 
 async def test_i10_two_partials_complete_a_line_then_the_first_fails(
