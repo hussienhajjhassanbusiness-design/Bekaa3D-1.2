@@ -2,7 +2,7 @@
 caller's own unpaid order. Two transactions with the provider call between them, as
 checkout; `redirect_url` reaches only the owner's 201 or 409, never a log or audit row."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Annotated, Any, Self
 from uuid import UUID
 
@@ -18,12 +18,16 @@ from app.core.exceptions import ApiError
 from app.core.rate_limit import enforce_rate_limit
 from app.identity.public import User, not_found_error, verified_user_short_read
 from app.negotiation.public import SqlOfferCheckouts
+from app.ordering.api.checkout import announce_if_manual
 from app.ordering.api.checkout_schemas import IDEMPOTENCY_KEY_PATTERN
 from app.ordering.api.idempotent import replay, stored
 from app.ordering.api.problems import payment_already_active_error
+from app.ordering.application.services.holds import read_holds
 from app.ordering.application.services.retry import RetriedPayment, start_retry
+from app.ordering.domain.customer_view import PaymentNextStep, payment_next_step
 from app.ordering.domain.enums import OrderStatus
 from app.ordering.domain.exceptions import (
+    ContactPhoneRequiredError,
     OnlinePaymentUnavailableError,
     PaymentAlreadyActiveError,
     PaymentMethodNotAllowedError,
@@ -54,7 +58,6 @@ from app.platform.public import (
 
 router = APIRouter(prefix="/me/orders", tags=["orders"])
 
-HOLD_SETTING = "checkout_hold_period"
 
 IdempotencyKey = Annotated[
     str,
@@ -107,6 +110,9 @@ class RetryPaymentRead(BaseModel):
     amount_cents: int
     currency: str
     redirect_url: str | None = Field(description="The provider's payment page; null if none.")
+    next_step: PaymentNextStep | None = Field(
+        description="`redirect` to `redirect_url`, or `await_admin_contact` for `manual`."
+    )
 
 
 class PaymentRetryRead(BaseModel):
@@ -132,6 +138,9 @@ class PaymentRetryRead(BaseModel):
                 amount_cents=payment.amount_cents,
                 currency=payment.currency,
                 redirect_url=redirect_url,
+                next_step=payment_next_step(
+                    provider=payment.provider, status=payment.status, redirect_url=redirect_url
+                ),
             ),
         )
 
@@ -171,6 +180,13 @@ def _translate(exc: Exception) -> ApiError:
             detail="This payment method cannot be used for this order.",
             extensions={"reason": exc.reason},
         )
+    if isinstance(exc, ContactPhoneRequiredError):
+        return ApiError(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            code="CONTACT_PHONE_REQUIRED",
+            title="Contact phone required",
+            detail="This order has no phone for the administrator to call; place a new one.",
+        )
     if isinstance(exc, OnlinePaymentUnavailableError):
         return ApiError(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -182,6 +198,7 @@ def _translate(exc: Exception) -> ApiError:
 
 
 _TRANSLATED = (
+    ContactPhoneRequiredError,
     RetryOrderNotFoundError,
     PaymentAlreadyActiveError,
     RetryRefusedError,
@@ -254,7 +271,7 @@ async def retry_payment(
                 raise await _in_progress(session, claim)
             if isinstance(claim, Conflict):
                 raise _conflict()
-            hold = await settings_reader(session).get_duration_seconds(HOLD_SETTING)
+            holds = await read_holds(settings_reader(session))
             try:
                 retried = await start_retry(
                     orders=SqlOrderStore(session),
@@ -263,7 +280,7 @@ async def retry_payment(
                     user_id=user.id,
                     order_id=order_id,
                     requested_provider=body.payment_provider,
-                    hold=timedelta(seconds=hold),
+                    holds=holds,
                     now=now,
                     offers=SqlOfferCheckouts(session),
                     clock=lambda: datetime.now(UTC),
@@ -271,6 +288,7 @@ async def retry_payment(
             except _TRANSLATED as exc:
                 raise _translate(exc) from exc
             await claims.attach(claim.record_id, resource_id=order_id)
+            await announce_if_manual(session, retried.order, retried.payment)
 
         try:
             created = await start_online_payment(

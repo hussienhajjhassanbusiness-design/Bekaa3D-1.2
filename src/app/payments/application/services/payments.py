@@ -31,7 +31,10 @@ async def start_online_payment(
 async def record_provider_reference(
     payments: PaymentStore, *, payment_id: UUID, created: CreatedPayment, at: datetime
 ) -> None:
-    """Tx2 success: only the new attempt's row (plan 8.1, Checkout Tx2)."""
+    """Tx2 success: only the new attempt's row (plan 8.1, Checkout Tx2); nothing when the
+    provider gave no reference (`manual`)."""
+    if created.provider_payment_id is None:
+        return
     await payments.set_provider_reference(
         payment_id, created.provider_payment_id, redirect_url=created.redirect_url, at=at
     )

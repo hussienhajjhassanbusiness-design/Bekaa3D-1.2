@@ -13,6 +13,7 @@ class AlertKind(StrEnum):
     LATE_CAPTURE = "late_capture"
     STUCK = "stuck"
     MANUAL_CONFIRMATION_DUE = "manual_confirmation_due"
+    MANUAL_PAYMENT_DUE = "manual_payment_due"  # ADR-049: a `manual` order to arrange, once
     EVENT_UNVERIFIED = "event_unverified"
     PROVIDER_UNAVAILABLE = "provider_unavailable"
     RELEASE_DUE = "release_due"

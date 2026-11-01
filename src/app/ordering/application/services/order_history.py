@@ -2,7 +2,7 @@
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from uuid import UUID
 
 from app.ordering.application.ports import (
@@ -28,6 +28,7 @@ from app.ordering.domain.exceptions import (
     OfferNotCheckoutableError,
 )
 from app.ordering.domain.orders import CustomerOrder, CustomerOrderLine, HistoryEntry
+from app.ordering.domain.payment_recovery import Holds
 
 _UNPAID = OrderPaymentView(reached_paid=False, shown=None)
 
@@ -55,7 +56,7 @@ class RetryContext:
     """What `can_retry_payment` and `hold_expires_at` need beyond the order (VS-024, VS-041)."""
 
     offers: OfferCheckouts
-    hold: timedelta
+    holds: Holds
     now: datetime
 
 
@@ -95,6 +96,7 @@ async def get_order(
         return None
     lines: Sequence[CustomerOrderLine] = await orders.lines(user_id, order_id)
     view = (await payments.views([order_id])).get(order_id, _UNPAID)
+    hold = retry.holds.for_provider(view.shown.provider if view.shown else None)
     return OrderDetailView(
         order=order,
         lines=customer_lines(lines),
@@ -113,10 +115,10 @@ async def get_order(
             attempt_status=view.shown.status if view.shown else None,
             offer_open=await _offer_open(retry, order, lines, user_id),
             now=retry.now,
-            hold=retry.hold,
+            hold=hold,
         ),
         hold_expires_at=hold_expires_at(
-            order, latest_initiated_at=view.latest_initiated_at, hold=retry.hold
+            order, latest_initiated_at=view.latest_initiated_at, hold=hold
         ),
     )
 

@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalog.application.ports import ProductType
 from app.engagement.public import PurchaseEvidence, refresh_review_badges
+from app.ordering.application.services.holds import read_holds
 from app.ordering.domain.admin_orders import (
     AdminHistoryEntry,
     AdminOrder,
@@ -74,6 +75,8 @@ from app.ordering.domain.order_status import (
 )
 from app.ordering.domain.orders import Order, OrderLine, StatusChange, StlDeliveryRow
 from app.ordering.domain.payment_recovery import (
+    MANUAL_PROVIDER,
+    Holds,
     ReleaseRefusal,
     can_retry_payment,
     hold_deadline,
@@ -103,6 +106,7 @@ from app.ordering.infrastructure.reports import (
 
 __all__ = [
     "DELIVERY_FEE_NOTE",
+    "MANUAL_PROVIDER",
     "NO_REFUNDS",
     "AdminHistoryEntry",
     "AdminOrder",
@@ -115,6 +119,7 @@ __all__ = [
     "FulfillmentMethod",
     "HandoverRefusal",
     "HandoverRefusedError",
+    "Holds",
     "InvalidLineTransitionError",
     "LineCancel",
     "LineContext",
@@ -125,6 +130,7 @@ __all__ = [
     "OfferCheckoutExpiredError",
     "OfferCheckoutNotFoundError",
     "OfferNotCheckoutableError",
+    "Order",
     "OrderFacts",
     "OrderItemStatus",
     "OrderLine",
@@ -178,6 +184,7 @@ __all__ = [
     "orders_for_export",
     "payment_due",
     "purchase_evidence",
+    "read_holds",
     "recompute_order_status",
     "refund_lines",
     "release_candidates",

@@ -139,6 +139,18 @@ _DEFINITIONS: Final[tuple[SettingDefinition, ...]] = (
         maximum=7_200,  # 2 hours
     ),
     SettingDefinition(
+        key="manual_payment_hold_period",
+        type=SettingType.DURATION,
+        description=(
+            "How long an unpaid order on the manual payment provider is held before it is "
+            "cancelled automatically (ADR-049)."
+        ),
+        default=604_800,  # 7 days
+        unit="seconds",
+        minimum=3_600,  # 1 hour
+        maximum=2_592_000,  # 30 days
+    ),
+    SettingDefinition(
         key="unverified_account_purge_period",
         type=SettingType.DURATION,
         description=(

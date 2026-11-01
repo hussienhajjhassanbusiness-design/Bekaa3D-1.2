@@ -118,6 +118,9 @@ async def _one(
     provider = payment.provider.value
     ids: dict[str, Any] = {"payment_id": payment.id, "order_id": payment.order_id}
     able = capability(providers, provider)
+    if able is Capability.MANUAL:  # announced once at placement (ADR-049); nothing to ask
+        counts["skipped_manual"] += 1
+        return
     if able is Capability.NOT_CONFIGURED:
         counts["skipped_unconfigured"] += 1
         await alert(

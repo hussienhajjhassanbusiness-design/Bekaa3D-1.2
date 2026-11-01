@@ -16,10 +16,11 @@ class PaymentStatus(StrEnum):
 
 
 class PaymentProvider(StrEnum):
-    """`cash` has no adapter; VS-032 adds the real online value(s)."""
+    """`cash` has no adapter; `manual` is V1's online provider (ADR-049)."""
 
     MOCK = "mock"
     CASH = "cash"
+    MANUAL = "manual"
 
 
 class RefundKind(StrEnum):

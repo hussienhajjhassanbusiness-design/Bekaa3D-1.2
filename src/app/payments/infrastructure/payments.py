@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Select, insert, select, tuple_, update
+from sqlalchemy import Select, func, insert, select, tuple_, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -82,6 +82,12 @@ class SqlPaymentStore:
             )
         ).first()
         return _payment(row) if row is not None else None
+
+    async def lock_reference(self, provider: PaymentProvider, provider_payment_id: str) -> None:
+        """Serialises two confirms typing one reference, so the second sees the first's row
+        instead of tripping `uq_payments_provider_reference`; taken after the payment lock."""
+        key = func.hashtextextended(f"payment_reference:{provider}:{provider_payment_id}", 0)
+        await self._session.execute(select(func.pg_advisory_xact_lock(key)))
 
     async def find_by_reference(
         self, provider: PaymentProvider, provider_payment_id: str

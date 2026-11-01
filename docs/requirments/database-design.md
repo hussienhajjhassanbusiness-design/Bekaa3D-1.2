@@ -390,9 +390,10 @@ lost
 ```text
 mock
 cash
+manual
 ```
 
-`cash` has no adapter: only the administrator's cash handover creates a `cash` payment (ADR-024). It is a value here, rather than a separate column, so one live-payment index and one refund path cover both kinds; the glossary's Payment Method (`online`/`cash`) is still a separate concept on the order. The online provider is undecided (SRS §30.4); VS-032 adds its value(s) with an additive enum migration before its adapter is enabled. Each attempt's provider is stored on its row: chosen by the customer at checkout or retry when more than one is configured. `mock` is never configured in production.
+`cash` has no adapter: only the administrator's cash handover creates a `cash` payment (ADR-024). It is a value here, rather than a separate column, so one live-payment index and one refund path cover both kinds; the glossary's Payment Method (`online`/`cash`) is still a separate concept on the order. `manual` (VS-050, migration `941b40d285ce`, ADR-049) is V1's production online provider: the administrator arranges each payment with the customer and confirms it; its reference is optional. An API provider (VS-032, deferred) would add its value with another additive enum migration. Each attempt's provider is stored on its row: chosen by the customer at checkout or retry when more than one is configured. `mock` is never configured in production.
 
 ---
 
@@ -998,7 +999,7 @@ but determining whether the referenced product is STL is cross-table. VS-022 the
 | `total_cents` | BIGINT | No | CHECK ≥ 0 |
 | `currency` | CHAR(3) | No | CHECK = `USD` |
 | `recipient_name` | TEXT | Yes | delivery snapshot |
-| `contact_phone_snapshot` | TEXT | Yes | required when `fulfillment_method` is not NULL: the address phone for delivery, entered at checkout for pickup (BR-078); stored normalised to E.164 |
+| `contact_phone_snapshot` | TEXT | Yes | required when `fulfillment_method` is not NULL: the address phone for delivery, entered at checkout for pickup (BR-078); on an STL-only or offer order, set only for the `manual` provider, the number the administrator calls (VS-050); stored normalised to E.164 |
 | `contact_phone_hash` | TEXT | Yes | keyed `HMAC-SHA256` of the normalised phone (secret `PHONE_HASH_SALT`, never rotated); set with `contact_phone_snapshot`; used for cash matching |
 | `governorate` | TEXT | Yes | delivery snapshot |
 | `city` | TEXT | Yes | delivery snapshot |
@@ -1305,9 +1306,9 @@ ix_cash_payment_blocks_phone_active: (contact_phone_hash) WHERE cleared_at IS NU
 |---|---|---:|---|
 | `id` | UUID | No | PK |
 | `order_id` | UUID | No | FK → `orders.id` |
-| `provider` | `payment_provider` | No | `mock` in development; `cash` for a recorded cash payment; the online provider per SRS §30.4, chosen at checkout or retry |
+| `provider` | `payment_provider` | No | `mock` in development; `cash` for a recorded cash payment; `manual` in production (SRS §30.4, ADR-049), chosen at checkout or retry |
 | `order_payment_method` | `payment_method` | No | copy of the order's; composite FK `(order_id, order_payment_method)` → `orders(id, payment_method)` |
-| `provider_payment_id` | TEXT | Yes | provider reference |
+| `provider_payment_id` | TEXT | Yes | provider reference; for `manual`, what the administrator typed at confirm (trimmed, case kept), or none |
 | `status` | `payment_status` | No |  |
 | `amount_cents` | BIGINT | No | CHECK ≥ 0 |
 | `currency` | CHAR(3) | No | CHECK = `USD` |
@@ -1362,6 +1363,15 @@ ck_payments_captured_when:  captured_amount_cents IS NULL
     OR (provider <> 'cash' AND (late_captured_at IS NOT NULL
         OR status IN ('paid', 'partially_refunded', 'refunded')))
 ```
+
+Added by VS-050 (migration `941b40d285ce`):
+
+```text
+ck_payments_manual_never_processing: provider <> 'manual' OR status <> 'processing'
+ix_payments_awaiting_manual: (initiated_at, id) WHERE provider = 'manual' AND status = 'pending'
+```
+
+Two confirms typing one reference serialise on a transaction-level advisory lock on `(provider, reference)`, taken after the payment's lock, so the second is refused with 409 instead of tripping `UNIQUE(provider, provider_payment_id)`.
 
 The cash index is created before the live-payment index, so a second cash payment reports INV-22 by name.
 

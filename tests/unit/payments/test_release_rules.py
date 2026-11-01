@@ -1,5 +1,6 @@
 """Table T2, row by row, and the property that only an explicit `failed` or `expired` ever
-releases an order (VS-024 plan 3.1, 6.1; Revision 1 item 1)."""
+releases an order (VS-024 plan 3.1, 6.1; Revision 1 item 1): the provider's, or for
+`manual` the platform's own at the hold's end (ADR-049 d6)."""
 
 import itertools
 
@@ -16,6 +17,7 @@ from app.payments.domain.release import (
     must_skip_unasked,
     release_action,
 )
+from app.payments.infrastructure.release import MANUAL_HOLD_ENDED
 
 STATES: tuple[ProviderState, ...] = (
     "pending",
@@ -67,7 +69,7 @@ def test_only_failed_and_expired_ever_release() -> None:
             continue
         if verdict.kind is ReleaseKind.RELEASE:
             assert isinstance(ans, ProviderResult)
-            assert capability is Capability.STATUS_QUERY and events == 0
+            assert capability in (Capability.STATUS_QUERY, Capability.MANUAL) and events == 0
             released.add(ans.state)
     assert released == {"failed", "expired"}
 
@@ -80,7 +82,7 @@ def test_an_unprocessed_event_beats_every_answer(
     verdict = act(ans, events=1, capability=capability)
     expected = (
         AlertKind.MANUAL_CONFIRMATION_DUE
-        if capability is Capability.NO_STATUS_QUERY
+        if capability in (Capability.NO_STATUS_QUERY, Capability.MANUAL)
         else AlertKind.EVENT_UNVERIFIED
     )
     assert verdict == ReleaseVerdict(ReleaseKind.SKIP, expected)
@@ -137,3 +139,12 @@ def test_the_provider_must_be_asked_when_no_row_decides_unasked() -> None:
     )
     with pytest.raises(ValueError, match="answer"):
         act(None)
+
+
+def test_a_manual_attempt_is_answered_by_the_platform_and_released() -> None:
+    """ADR-049 d6: nobody can be asked about `manual`, so the job answers `expired` itself."""
+    manual = Capability.MANUAL
+    assert must_skip_unasked(unprocessed_events=0, capability=manual, grace_passed=False) is None
+    ended = act(MANUAL_HOLD_ENDED, capability=manual)
+    assert ended == ReleaseVerdict(ReleaseKind.RELEASE)
+    assert ProviderResult("expired", None, None) == MANUAL_HOLD_ENDED

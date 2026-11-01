@@ -51,7 +51,7 @@ class Settings(BaseSettings):
     clamav_timeout_seconds: float = 30.0
     xaccel_prefix: str = "/protected"
 
-    # `mock`, or `none` (no online payment: checkout answers 503). VS-023 plan 3.9.
+    # `manual` (ADR-049, production's V1 provider), `mock`, or `none` (checkout answers 503).
     payment_provider: str = "mock"
     # Signs mock webhooks; the default is refused outside development and test.
     mock_webhook_secret: str = "mock-webhook-dev-secret"

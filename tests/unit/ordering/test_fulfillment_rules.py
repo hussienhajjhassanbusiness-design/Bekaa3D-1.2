@@ -19,6 +19,7 @@ from app.ordering.domain.enums import (
 from app.ordering.domain.exceptions import (
     CashLimitReachedError,
     CashNotAvailableError,
+    ContactPhoneRequiredError,
     InvalidFulfillmentError,
     PaymentMethodNotAllowedError,
 )
@@ -49,9 +50,16 @@ def resolve(
     method: FulfillmentMethod | None = None,
     address: UUID | None = None,
     phone: str | None = None,
+    *,
+    to_call: bool = False,
 ) -> Fulfillment:
     return resolve_fulfillment(
-        types, payment_method=pay, method=method, address_id=address, contact_phone=phone
+        types,
+        payment_method=pay,
+        method=method,
+        address_id=address,
+        contact_phone=phone,
+        phone_to_call=to_call,
     )
 
 
@@ -68,6 +76,22 @@ def test_an_stl_only_cart_takes_no_fulfillment_and_pays_online() -> None:
     with pytest.raises(PaymentMethodNotAllowedError) as caught:
         resolve([S], CASH)
     assert caught.value.reason == "cash_requires_physical"
+
+
+def test_a_manual_stl_only_order_takes_the_phone_to_call_and_needs_it() -> None:
+    """VS-050 Q1: the administrator arranges payment by phone."""
+    assert resolve([S], ONLINE, phone=PHONE, to_call=True) == Fulfillment(None, None, PHONE)
+    with pytest.raises(ContactPhoneRequiredError):
+        resolve([S], ONLINE, to_call=True)
+    with pytest.raises(InvalidFulfillmentError):
+        resolve([S], ONLINE, phone=PHONE)  # any other provider still takes none
+    with pytest.raises(InvalidFulfillmentError):
+        resolve([S], ONLINE, DELIVERY, ADDRESS, PHONE, to_call=True)
+
+
+def test_a_physical_order_already_has_its_phone_to_call() -> None:
+    assert resolve([P, S], ONLINE, DELIVERY, ADDRESS, to_call=True).contact_phone is None
+    assert resolve([P], ONLINE, PICKUP, None, PHONE, to_call=True).contact_phone == PHONE
 
 
 @pytest.mark.parametrize("pay", [ONLINE, CASH])

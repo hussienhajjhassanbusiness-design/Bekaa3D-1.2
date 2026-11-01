@@ -1,6 +1,6 @@
 """The hold release (VS-024 plan 2.5, 3.1 T2): `release_stale`, the job body, and
-`release_order_by_admin`, the manual release. Only an explicit `failed` or `expired` for
-the latest attempt releases automatically; both re-check under orders, lines, payments."""
+`release_order_by_admin`, the manual release. Only an explicit `failed` or `expired` for the
+latest attempt releases automatically (for `manual`, the platform's own at its deadline)."""
 
 import time
 from collections.abc import Callable, Sequence
@@ -13,12 +13,15 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ordering.public import (
+    MANUAL_PROVIDER,
+    Holds,
     LockedOrder,
     OrderStatus,
     hold_deadline,
     lock_order_for_change,
     manual_release_available_at,
     manual_release_refusal,
+    read_holds,
     release_candidates,
     release_unpaid_order,
 )
@@ -59,7 +62,6 @@ from app.platform.public import SqlAuditWriter, settings_reader
 
 logger = structlog.get_logger()
 Keyset = tuple[datetime, UUID]
-HOLD_SETTING = "checkout_hold_period"
 RELEASE_ACTION = "order.checkout_released"
 COUNTERS = (
     "seen",
@@ -80,10 +82,13 @@ def _latest(attempts: Sequence[Payment]) -> Payment | None:
     return max(dated, key=lambda p: (p.initiated_at, p.id), default=None)
 
 
-async def checkout_hold(factory: Factory) -> timedelta:
+async def checkout_holds(factory: Factory) -> Holds:
     async with factory() as session, session.begin():
-        seconds = await settings_reader(session).get_duration_seconds(HOLD_SETTING)
-    return timedelta(seconds=seconds)
+        return await read_holds(settings_reader(session))
+
+
+# ADR-049 d6: no provider can answer for `manual`; its hold's end is the answer.
+MANUAL_HOLD_ENDED = ProviderResult("expired", None, None)
 
 
 async def release_stale(
@@ -97,20 +102,20 @@ async def release_stale(
 ) -> dict[str, int]:
     """The `release_stale_checkouts` body: unpaid online orders past their hold, oldest
     first, keyset-paged; `start_after` resumes from a cursor."""
-    hold = await checkout_hold(factory)
+    holds = await checkout_holds(factory)
     counts = dict.fromkeys(COUNTERS, 0)
     breaker, started, after = Breaker(), clock(), start_after
     while True:
         async with factory() as session:
             page = await release_candidates(
-                session, placed_before=now - hold, after=after, limit=RELEASE_PAGE_SIZE
+                session, placed_before=now - holds.shortest, after=after, limit=RELEASE_PAGE_SIZE
             )
         for placed_at, order_id in page:
             if clock() - started > deadline_seconds:
                 counts["truncated"] = 1
                 break
             counts["seen"] += 1
-            await _one(factory, providers, order_id, placed_at, hold, now, breaker, counts)
+            await _one(factory, providers, order_id, placed_at, holds, now, breaker, counts)
         else:
             if len(page) == RELEASE_PAGE_SIZE:
                 after = page[-1]
@@ -125,7 +130,7 @@ async def _one(
     providers: Providers,
     order_id: UUID,
     placed_at: datetime,
-    hold: timedelta,
+    holds: Holds,
     now: datetime,
     breaker: Breaker,
     counts: dict[str, int],
@@ -139,6 +144,7 @@ async def _one(
     if latest is None or latest.initiated_at is None:
         counts["skipped"] += 1
         return
+    hold = holds.for_provider(latest.provider.value)
     deadline = hold_deadline(placed_at, latest.initiated_at, hold)
     if now < deadline:
         counts["not_due"] += 1
@@ -147,7 +153,9 @@ async def _one(
     able = capability(providers, provider)
     answer: ProviderResult | Unavailable | None = None
     reference: str | None = None
-    if events == 0 and able is Capability.STATUS_QUERY:
+    if able is Capability.MANUAL:
+        answer = MANUAL_HOLD_ENDED
+    elif events == 0 and able is Capability.STATUS_QUERY:
         if breaker.is_open(provider):
             counts["breaker_open"] += 1
             answer = Unavailable.UNAVAILABLE
@@ -252,7 +260,9 @@ async def _release(
         entity_id=order_id,
         after_data={
             "source": "job",
-            "reason": f"provider_{answer.state}",
+            "reason": "manual_hold_expired"
+            if asked.provider.value == MANUAL_PROVIDER
+            else f"provider_{answer.state}",
             "payment_id": str(asked.id),
             "hold_deadline": hold_deadline(
                 locked.order.placed_at, latest.initiated_at, hold
@@ -279,7 +289,6 @@ async def release_order_by_admin(
     admin_id: UUID,
     reason: str,
     events_reviewed: bool,
-    hold: timedelta,
     now: datetime,
     request_id: str | None = None,
     ip_hash: str | None = None,
@@ -289,14 +298,10 @@ async def release_order_by_admin(
     locked, payments, events = await _locked(session, order_id)
     if locked is None:
         raise OrderNotFoundError(f"order {order_id} does not exist")
-    latest = _latest(payments)
-    deadline = hold_deadline(locked.order.placed_at, latest.initiated_at if latest else None, hold)
-    early = (
-        latest is not None
-        and latest.provider_payment_id is None
-        and await answered_unknown(session, latest)
+    holds = await read_holds(settings_reader(session))
+    deadline, available_at = await release_window(
+        session, locked.order.placed_at, _latest(payments), holds
     )
-    available_at = manual_release_available_at(deadline, MANUAL_RELEASE_GRACE, early=early)
     refusal = manual_release_refusal(
         locked.order,
         locked.lines,
@@ -351,6 +356,27 @@ async def release_order_by_admin(
     )
     await SqlPaymentNotices(session).checkout_released(locked)
     return ManualRelease(order_id, now, expired, dismissed)
+
+
+async def release_window(
+    session: AsyncSession, placed_at: datetime, latest: Payment | None, holds: Holds
+) -> tuple[datetime, datetime]:
+    """The hold deadline, and when an administrator may release: after the grace (ADR-036
+    d8), or at once for a `manual` attempt (VS-050 Q3)."""
+    provider = latest.provider.value if latest is not None else None
+    initiated = latest.initiated_at if latest is not None else None
+    deadline = hold_deadline(placed_at, initiated, holds.for_provider(provider))
+    manual = provider == MANUAL_PROVIDER
+    early = (
+        latest is not None
+        and not manual
+        and latest.provider_payment_id is None
+        and await answered_unknown(session, latest)
+    )
+    available_at = manual_release_available_at(
+        deadline, MANUAL_RELEASE_GRACE, early=early, manual_from=placed_at if manual else None
+    )
+    return deadline, available_at
 
 
 async def answered_unknown(session: AsyncSession, payment: Payment) -> bool:

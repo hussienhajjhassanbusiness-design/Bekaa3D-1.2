@@ -4,17 +4,34 @@
 from collections.abc import Iterable, Sequence
 from dataclasses import replace
 from datetime import datetime, timedelta
+from enum import StrEnum
 from typing import Protocol
 from uuid import UUID
 
 from app.catalog.application.ports import ProductType
 from app.ordering.domain.enums import OrderItemStatus, OrderStatus, PaymentMethod
 from app.ordering.domain.orders import CustomerOrder, CustomerOrderLine, HistoryEntry
-from app.ordering.domain.payment_recovery import hold_deadline, retry_refusal
+from app.ordering.domain.payment_recovery import MANUAL_PROVIDER, hold_deadline, retry_refusal
 
 HIDDEN_STATUS = OrderItemStatus.IN_PRODUCTION
 CANCELLABLE_ORDER_STATUSES = frozenset({OrderStatus.IN_PROGRESS, OrderStatus.PARTIALLY_REFUNDED})
 LIVE_ATTEMPT_STATUSES = frozenset({"pending", "processing"})
+
+
+class PaymentNextStep(StrEnum):
+    REDIRECT = "redirect"  # to the provider's payment page
+    AWAIT_ADMIN_CONTACT = "await_admin_contact"  # `manual`: the administrator calls (ADR-049)
+
+
+def payment_next_step(
+    *, provider: str, status: str, redirect_url: str | None
+) -> PaymentNextStep | None:
+    """What the customer does next with a live attempt; None once it is over."""
+    if status not in LIVE_ATTEMPT_STATUSES:
+        return None
+    if provider == MANUAL_PROVIDER:
+        return PaymentNextStep.AWAIT_ADMIN_CONTACT
+    return PaymentNextStep.REDIRECT if redirect_url else None
 
 
 class _Line(Protocol):

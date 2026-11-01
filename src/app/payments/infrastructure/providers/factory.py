@@ -6,6 +6,7 @@ from collections.abc import Callable, Mapping
 from app.core.config import Settings
 from app.payments.application.ports import PaymentProviderPort
 from app.payments.domain.exceptions import PaymentConfigurationError
+from app.payments.infrastructure.providers.manual import ManualPaymentProvider
 from app.payments.infrastructure.providers.mock import MockPaymentProvider
 
 DEFAULT_MOCK_SECRET = "mock-webhook-dev-secret"
@@ -23,7 +24,11 @@ def _mock(settings: Settings) -> PaymentProviderPort:
     )
 
 
-ADAPTERS: dict[str, Callable[[Settings], PaymentProviderPort]] = {"mock": _mock}
+# `manual` runs everywhere, production included (ADR-049 d4).
+ADAPTERS: dict[str, Callable[[Settings], PaymentProviderPort]] = {
+    "mock": _mock,
+    "manual": lambda _settings: ManualPaymentProvider(),
+}
 
 
 def configured_payment_providers(settings: Settings) -> Mapping[str, PaymentProviderPort]:

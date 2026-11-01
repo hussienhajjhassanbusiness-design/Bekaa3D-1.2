@@ -19,10 +19,9 @@ from app.platform.domain.settings_registry import (
     validate_value,
 )
 
-# SRS 15.4's keys, VS-046's retention periods, VS-034's attachment retention and VS-028's
-# three cash keys (free_shipping_threshold removed by ADR-024), written out
-# rather than derived from the registry: a test that builds its expectation from
-# the thing under test would pass just as happily if a key were deleted.
+# SRS 15.4's keys plus VS-028, VS-034, VS-046 and VS-050's, written out rather than derived
+# from the registry: an expectation built from the thing under test would pass just as
+# happily if a key were deleted.
 REQUIRED_KEYS = (
     "accepting_orders",
     "offer_response_window",
@@ -30,6 +29,7 @@ REQUIRED_KEYS = (
     "offer_rejection_cooldown",
     "minimum_offer_percentage",
     "checkout_hold_period",
+    "manual_payment_hold_period",
     "unverified_account_purge_period",
     "cash_payment_enabled",
     "cash_max_open_orders",
@@ -79,6 +79,7 @@ def test_no_internal_setting_is_marked_public() -> None:
         "offer_rejection_cooldown",
         "minimum_offer_percentage",
         "checkout_hold_period",
+        "manual_payment_hold_period",
         "unverified_account_purge_period",
         "cash_max_open_orders",
         "security_token_retention_period",
@@ -336,6 +337,7 @@ def test_each_setting_declares_the_type_its_consumers_expect() -> None:
         "offer_rejection_cooldown": SettingType.DURATION,
         "minimum_offer_percentage": SettingType.INTEGER,
         "checkout_hold_period": SettingType.DURATION,
+        "manual_payment_hold_period": SettingType.DURATION,
         "unverified_account_purge_period": SettingType.DURATION,
         "cash_payment_enabled": SettingType.BOOLEAN,
         "cash_max_open_orders": SettingType.INTEGER,
@@ -348,6 +350,17 @@ def test_each_setting_declares_the_type_its_consumers_expect() -> None:
         "custom_request_attachment_retention": SettingType.DURATION,
     }
     assert {key: definition.type for key, definition in REGISTRY.items()} == expected
+
+
+def test_the_manual_hold_is_seven_days_editable_from_one_hour_to_thirty_days() -> None:
+    """VS-050 Q6 (ADR-049 d6)."""
+    key = "manual_payment_hold_period"
+    assert REGISTRY[key].default == 604_800
+    assert validate_value(key, 3_600) == 3_600
+    assert validate_value(key, 2_592_000) == 2_592_000
+    for refused in (3_599, 2_592_001):
+        with pytest.raises(InvalidSettingValueError):
+            validate_value(key, refused)
 
 
 def test_attachment_retention_is_ninety_days_editable_from_one_to_365() -> None:

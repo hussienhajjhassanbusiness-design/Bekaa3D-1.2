@@ -93,7 +93,6 @@ async def _admin_release(
             admin_id=admin_id,
             reason="dashboard shows no payment; customer unreachable",
             events_reviewed=kw.get("events_reviewed", False),
-            hold=HOLD,
             now=at + HOLD + GRACE,
         )
 

@@ -4,7 +4,7 @@ without a status API only). Mounted on the admin router: admin, MFA, CSRF, limit
 
 import base64
 import binascii
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Annotated, Any, Literal, Self
 from uuid import UUID
 
@@ -27,13 +27,15 @@ from app.identity.public import (
     require_csrf,
 )
 from app.ordering.public import (
+    Holds,
+    Order,
     OrderStatus,
     PaymentMethod,
     hold_deadline,
-    manual_release_available_at,
     manual_release_refusal,
     order_lines,
     orders_by_id,
+    read_holds,
 )
 from app.payments.api.admin_refunds import IdempotencyKey, _idempotent
 from app.payments.domain import limits
@@ -45,7 +47,7 @@ from app.payments.domain.exceptions import (
     PaymentReferenceMismatchError,
 )
 from app.payments.domain.manual import CaptureRefusal, ConfirmRefusal
-from app.payments.domain.outcome import Outcome
+from app.payments.domain.outcome import LIVE, Outcome
 from app.payments.domain.payments import Payment
 from app.payments.domain.release import Capability
 from app.payments.infrastructure.admin_reads import (
@@ -58,7 +60,7 @@ from app.payments.infrastructure.admin_reads import (
 from app.payments.infrastructure.manual import confirm_payment_manually, record_capture_manually
 from app.payments.infrastructure.payments import SqlPaymentStore
 from app.payments.infrastructure.reconcile import reconcile_in_background
-from app.payments.infrastructure.release import answered_unknown
+from app.payments.infrastructure.release import release_window
 from app.payments.infrastructure.verification import capability
 from app.payments.infrastructure.webhook_events import SqlWebhookEventStore
 from app.platform.public import SqlAuditWriter, audit_history, settings_reader
@@ -113,7 +115,11 @@ class ReconcileQueued(BaseModel):
 class ManualPaymentConfirmRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    provider_reference: Annotated[PlainStr, Field(min_length=1, max_length=255)]
+    provider_reference: Annotated[PlainStr, Field(min_length=1, max_length=255)] | None = Field(
+        default=None,
+        description="The transfer's own reference; optional for `manual` only, unique per "
+        "provider when given (ADR-049). Notes go in `reason`.",
+    )
     verified_amount_cents: Annotated[int, Field(ge=0)]
     verified_currency: Annotated[PlainStr, Field(min_length=3, max_length=3)] = "USD"
     reason: Annotated[
@@ -223,7 +229,7 @@ async def reconcile_payment(
         Depends(require_csrf),
         Depends(_limit("admin_payment_confirm", limits.CONFIRM_RATE_LIMIT)),
     ],
-    summary="Confirm a payment by hand from the provider's dashboard",
+    summary="Confirm a payment by hand: from the provider's dashboard, or as arranged (`manual`)",
     responses={
         **_RESPONSES,
         409: {
@@ -232,7 +238,8 @@ async def reconcile_payment(
         },
         422: {
             "description": "PAYMENT_AMOUNT_MISMATCH (with `expected_amount_cents`, `currency`): "
-            "nothing is written; or VALIDATION_ERROR."
+            "nothing is written; PAYMENT_REFERENCE_REQUIRED (no reference, not `manual`); "
+            "or VALIDATION_ERROR."
         },
     },
 )
@@ -262,12 +269,7 @@ async def confirm_payment(
     except ManualConfirmRefusedError as exc:
         raise _refused(exc) from exc
     except PaymentReferenceMismatchError as exc:
-        raise ApiError(
-            status_code=status.HTTP_409_CONFLICT,
-            code="PAYMENT_REFERENCE_MISMATCH",
-            title="Provider reference mismatch",
-            detail="That reference belongs to another payment, or this one has another.",
-        ) from exc
+        raise _reference_mismatch() from exc
     payment = await SqlPaymentStore(session).get(payment_id)
     assert payment is not None
     return ManualConfirmRead(outcome=outcome, payment=PaymentSummary.of(payment))
@@ -280,7 +282,9 @@ class RecordCaptureRequest(BaseModel):
 
     captured_amount_cents: Annotated[int, Field(gt=0, le=limits.REFUND_MAX_AMOUNT_CENTS)]
     captured_currency: Annotated[str, Field(pattern=r"^[A-Z]{3}$")]
-    dashboard_reference: Annotated[PlainStr, Field(min_length=1, max_length=255)]
+    dashboard_reference: Annotated[PlainStr, Field(min_length=1, max_length=255)] | None = Field(
+        default=None, description="Optional for `manual` only (ADR-049)."
+    )
     reason: Annotated[
         MultilineStr, Field(min_length=limits.REASON_MIN, max_length=limits.REASON_MAX)
     ]
@@ -314,9 +318,13 @@ _LIVE_LATE_REFUND = text(
             "description": "MANUAL_CONFIRMATION_NOT_ALLOWED (the provider has a status API), "
             "INVALID_STATE_TRANSITION (`reason`: `cash_payment`, `already_paid`, "
             "`already_late_captured`, `use_confirm` for a matching amount), "
+            "PAYMENT_REFERENCE_MISMATCH (a `manual` reference another payment has), "
             "IDEMPOTENCY_KEY_CONFLICT or IDEMPOTENCY_REQUEST_IN_PROGRESS."
         },
-        422: {"description": "VALIDATION_ERROR."},
+        422: {
+            "description": "PAYMENT_REFERENCE_REQUIRED (no reference, not `manual`), or "
+            "VALIDATION_ERROR."
+        },
     },
 )
 async def record_capture(
@@ -373,9 +381,31 @@ async def record_capture(
             raise not_found_error() from exc
         except CaptureRecordRefusedError as exc:
             raise _capture_refused(exc) from exc
+        except PaymentReferenceMismatchError as exc:
+            raise _reference_mismatch() from exc
+
+
+def _reference_mismatch() -> ApiError:
+    return ApiError(
+        status_code=status.HTTP_409_CONFLICT,
+        code="PAYMENT_REFERENCE_MISMATCH",
+        title="Provider reference mismatch",
+        detail="That reference belongs to another payment, or this one has another.",
+    )
+
+
+def _reference_required() -> ApiError:
+    return ApiError(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        code="PAYMENT_REFERENCE_REQUIRED",
+        title="Reference required",
+        detail="Only a manual payment may be confirmed without the provider's reference.",
+    )
 
 
 def _capture_refused(exc: CaptureRecordRefusedError) -> ApiError:
+    if exc.refusal is CaptureRefusal.REFERENCE_REQUIRED:
+        return _reference_required()
     if exc.refusal is CaptureRefusal.STATUS_QUERY_AVAILABLE:
         return ApiError(
             status_code=status.HTTP_409_CONFLICT,
@@ -389,6 +419,8 @@ def _capture_refused(exc: CaptureRecordRefusedError) -> ApiError:
 def _refused(exc: ManualConfirmRefusedError) -> ApiError:
     if exc.refusal is ConfirmRefusal.CASH_PAYMENT:
         return _invalid("cash_payment")
+    if exc.refusal is ConfirmRefusal.REFERENCE_REQUIRED:
+        return _reference_required()
     if exc.refusal is ConfirmRefusal.STATUS_QUERY_AVAILABLE:
         return ApiError(
             status_code=status.HTTP_409_CONFLICT,
@@ -407,7 +439,6 @@ def _refused(exc: ManualConfirmRefusedError) -> ApiError:
 
 # --- Reads (plan 2.2): read-only, so no CSRF; the admin boundary and its 300/min apply ---
 
-HOLD_SETTING = "checkout_hold_period"
 _SEPARATOR = "|"
 
 
@@ -431,10 +462,19 @@ class AdminPaymentRead(BaseModel):
     late_captured_at: datetime | None
     needs_manual_confirmation: bool
     unprocessed_event_count: int
+    hold_expires_at: datetime | None = Field(
+        description="A live attempt on an unpaid order: when the order is released. The "
+        "customer's contact is on `GET /admin/orders/{order_id}`."
+    )
 
     @classmethod
-    def of(cls, row: AdminPaymentRow, order_number: str | None) -> Self:
-        return cls(**vars(row), order_number=order_number)
+    def of(cls, row: AdminPaymentRow, order: Order | None, holds: Holds) -> Self:
+        expires = None
+        if order is not None and row.status in LIVE and order.status is OrderStatus.PENDING_PAYMENT:
+            hold = holds.for_provider(row.provider.value)
+            expires = hold_deadline(order.placed_at, row.initiated_at, hold)
+        number = order.order_number if order is not None else None
+        return cls(**vars(row), order_number=number, hold_expires_at=expires)
 
 
 class AdminPaymentPage(BaseModel):
@@ -504,7 +544,8 @@ def decode_cursor(raw: str | None) -> tuple[datetime, UUID] | None:
 @admin_router.get(
     "",
     response_model=AdminPaymentPage,
-    summary="List payments, oldest first (`late_captured=true`: the refunds to make)",
+    summary="List payments, oldest first (`late_captured=true`: the refunds to make; "
+    "`awaiting_confirmation=true`: the `manual` payments to arrange and confirm)",
     responses={**_RESPONSES, 422: {"description": "VALIDATION_ERROR: a bad filter or cursor."}},
 )
 async def list_payments(
@@ -513,6 +554,7 @@ async def list_payments(
     provider: PaymentProvider | None = None,
     order_id: UUID | None = None,
     late_captured: bool | None = None,
+    awaiting_confirmation: bool = False,
     initiated_after: AwareDatetime | None = None,
     initiated_before: AwareDatetime | None = None,
     limit: Annotated[int, Query(ge=1, le=limits.ADMIN_PAGE_MAX)] = limits.ADMIN_PAGE_DEFAULT,
@@ -525,16 +567,13 @@ async def list_payments(
         late_captured=late_captured,
         initiated_after=initiated_after,
         initiated_before=initiated_before,
+        awaiting_confirmation=awaiting_confirmation,
     )
     rows = await payment_page(session, filters, after=decode_cursor(cursor), limit=limit + 1)
     page = rows[:limit]
     orders = await orders_by_id(session, sorted({row.order_id for row in page}, key=str))
-    items = [
-        AdminPaymentRead.of(
-            row, order.order_number if (order := orders.get(row.order_id)) else None
-        )
-        for row in page
-    ]
+    holds = await read_holds(settings_reader(session))
+    items = [AdminPaymentRead.of(row, orders.get(row.order_id), holds) for row in page]
     last = page[-1] if len(rows) > limit else None
     return AdminPaymentPage(
         items=items, next_cursor=encode_cursor(last.initiated_at, last.id) if last else None
@@ -557,19 +596,9 @@ async def get_payment(
     attempts = await SqlPaymentStore(session).for_order(order.id)
     latest = max(attempts, key=lambda p: (p.initiated_at, p.id), default=None)
     deadline = available_at = None
+    holds = await read_holds(settings_reader(session))
     if order.payment_method is PaymentMethod.ONLINE and order.status is OrderStatus.PENDING_PAYMENT:
-        seconds = await settings_reader(session).get_duration_seconds(HOLD_SETTING)
-        deadline = hold_deadline(
-            order.placed_at, latest.initiated_at if latest else None, timedelta(seconds=seconds)
-        )
-        early = (
-            latest is not None
-            and latest.provider_payment_id is None
-            and await answered_unknown(session, latest)
-        )
-        available_at = manual_release_available_at(
-            deadline, limits.MANUAL_RELEASE_GRACE, early=early
-        )
+        deadline, available_at = await release_window(session, order.placed_at, latest, holds)
     events = await payment_events(session, payment_id)
     history = await audit_history(
         session, entity_type="payment", entity_id=payment_id, limit=limits.ADMIN_PAGE_MAX
@@ -593,7 +622,7 @@ async def get_payment(
         if refusal is None:
             actions.append("release_order")
     return AdminPaymentDetail(
-        payment=AdminPaymentRead.of(row, order.order_number),
+        payment=AdminPaymentRead.of(row, order, holds),
         order=AdminPaymentOrderRead(
             id=order.id,
             order_number=order.order_number,

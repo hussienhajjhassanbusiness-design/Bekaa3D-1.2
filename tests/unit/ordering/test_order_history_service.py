@@ -24,10 +24,12 @@ from app.ordering.domain.enums import (
 )
 from app.ordering.domain.exceptions import OfferCheckoutExpiredError
 from app.ordering.domain.orders import CustomerOrder, CustomerOrderLine, HistoryEntry
+from app.ordering.domain.payment_recovery import Holds
 
 AT = datetime(2026, 10, 19, tzinfo=UTC)
 OWNER = uuid.uuid4()
 HOLD = timedelta(minutes=30)
+MANUAL_HOLD = timedelta(days=7)
 
 
 @dataclass
@@ -46,7 +48,7 @@ class FakeOffers:
 
 
 def _retry(offers: FakeOffers | None = None, now: datetime = AT) -> RetryContext:
-    return RetryContext(offers or FakeOffers(), HOLD, now)
+    return RetryContext(offers or FakeOffers(), Holds(HOLD, MANUAL_HOLD), now)
 
 
 def _order(**over: Any) -> CustomerOrder:

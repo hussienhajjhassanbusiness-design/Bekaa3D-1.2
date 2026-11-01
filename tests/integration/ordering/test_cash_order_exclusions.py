@@ -121,7 +121,6 @@ async def test_release_reconcile_retry_and_admin_release_never_select_a_cash_ord
                     admin_id=admin.id,
                     reason="testing a cash order",
                     events_reviewed=True,
-                    hold=timedelta(minutes=1),
                     now=now,
                 )
     assert str(order_id) not in {str(i) for _, i in candidates}

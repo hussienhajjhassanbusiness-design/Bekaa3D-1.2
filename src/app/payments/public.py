@@ -93,6 +93,7 @@ __all__ = [
     "RefundRow",
     "admin_refunds",
     "alert_refund_integrity",
+    "announce_manual_payment",
     "apply_provider_result",
     "chargeback_excess_cents",
     "configured_payment_providers",
@@ -203,3 +204,17 @@ async def alert_refund_integrity(
             else {"reason": "refund_exceeds_available"},
             dedupe_window=repeat_window(AlertKind.REFUND_INTEGRITY),
         )
+
+
+async def announce_manual_payment(
+    session: AsyncSession, *, payment_id: UUID, order_id: UUID, order_number: str
+) -> None:
+    """ADR-049, VS-050 Q2: tell every administrator a `manual` order awaits their call. On
+    the caller's session, as its last lock; at most once per payment."""
+    await SqlPaymentAlerts(session).raise_alert(
+        AlertKind.MANUAL_PAYMENT_DUE,
+        payment_id=payment_id,
+        order_id=order_id,
+        details={"order_number": order_number, "provider": "manual"},
+        dedupe_window=repeat_window(AlertKind.MANUAL_PAYMENT_DUE),
+    )

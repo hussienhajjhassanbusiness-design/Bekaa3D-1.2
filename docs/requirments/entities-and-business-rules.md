@@ -381,7 +381,7 @@ Removed or consumed CartItems are **hard deleted**: cart lines are operational d
 - `currency`
 - `address_snapshot`
 - `customer_email_snapshot` — the verified account email at checkout; STL files are emailed here (ADR-019)
-- `contact_phone_snapshot` — every physical Order; from the address for delivery, entered at checkout for pickup
+- `contact_phone_snapshot` — every physical Order; from the address for delivery, entered at checkout for pickup; on an STL-only or offer Order, only and always for the `manual` provider (VS-050)
 - `customer_note`
 - `internal_admin_note`
 - `estimated_dispatch_at`
@@ -435,6 +435,7 @@ This is a projection rule rather than a normal command-driven state machine. A f
 - **[Application]** Delivery Orders require an address snapshot.
 - **[Application]** Pickup Orders require no delivery address.
 - **[DB]** Every Order with a fulfillment method has a contact phone snapshot.
+- **[Application]** An online Order on the `manual` provider has a contact phone: the administrator calls it to arrange payment (ADR-049, VS-050 Q1).
 - **[Application]** `payment_method = cash` requires every OrderItem to be physical, cash enabled, no uncleared CashPaymentBlock for the customer or the contact phone hash, fewer than `cash_max_open_orders` open unpaid cash Orders, or cash Orders the customer cancelled themselves in the last 24 hours (ADR-038 d23), for the customer or that hash, and a **recomputed** total above 0 and within `cash_max_order_total`; checked after the totals are recomputed, under the cart lock; the block and the open-order count also under an advisory lock on the phone hash, taken after the checks that need no phone (ADR-038).
 - **[DB]** `payment_method` is copied onto every OrderItem and Payment under a composite foreign key to `orders(id, payment_method)`; CHECKs forbid an STL item on a cash Order and require `provider = cash` exactly on cash Orders.
 - **[Domain]** The payment method must be accepted by every OrderItem's product (an STL accepts online only); kept items sharing no accepted method refuse checkout with `NO_COMMON_PAYMENT_METHOD` (BR-141, ADR-048).
@@ -599,7 +600,7 @@ The payment provider’s transaction identifier is an external reference, not th
 
 - `id`
 - `order_id`
-- `provider` — the online provider chosen at checkout or retry, or `cash`
+- `provider` — the online provider chosen at checkout or retry (`manual` in production, ADR-049), or `cash`
 - `order_payment_method` — copy of the Order's, for the database cash-integrity check
 - `provider_transaction_id`
 - `status`
@@ -643,12 +644,14 @@ A cash Payment (`provider = cash`) is created directly as `PAID` by the cash han
 - **[Application]** A callback is a notification, never proof of payment.
 - **[Application]** `paid` is reachable only after independent server-side verification of a live attempt on an uncancelled Order for the exact total, or manual confirmation of such an attempt.
 - **[Application]** A capture for a `failed` or `expired` attempt, on a cancelled Order, or for an amount that does not match (the attempt then becomes `failed`) is a late capture, whether found by verification or by manual confirmation: `late_captured_at` is set, the status does not change, an automatic `late_capture` Refund is created, an alert is raised, and the Order and its items are untouched. A duplicate success for an attempt already `paid` is a no-op.
-- **[Worker]** The hold release skips (and alerts on) an Order whose provider query fails or times out, whose provider has no status API, or that has an unprocessed webhook event.
+- **[Worker]** The hold release skips (and alerts on) an Order whose provider query fails or times out, whose provider has no status API, or that has an unprocessed webhook event. A `manual` attempt is the exception: at its deadline (`manual_payment_hold_period`) the job itself marks it `expired` and releases the Order (ADR-049).
+- **[DB]** A `manual` Payment is never `processing` (`ck_payments_manual_never_processing`); its provider reference is optional, and unique per provider when given.
+- **[Application]** Two confirms typing one reference serialise on an advisory lock, so the second is refused (`PAYMENT_REFERENCE_MISMATCH`), never a constraint error.
 - **[Application]** A retry locks the Order first and re-checks that it is still `pending_payment` and not cancelled.
 - **[Application]** Underpayment must never produce `paid`.
 - **[DB]** Duplicate provider events must not apply a Payment result twice.
 - **[Application]** External provider queries occur without holding database locks, through the adapter named on the Payment row, never the callback URL; an event whose provider differs from its Payment's is stored and ignored.
-- **[Infrastructure]** Only configured online providers are routable; `cash` never, `mock` never in production.
+- **[Infrastructure]** Only configured online providers are routable; `cash` never, `mock` never in production; `manual` takes no webhooks.
 - **[Application]** Applying a verified result updates Payment, digital items (to `awaiting_delivery`), Order projection, offer state, audit history, and email outbox atomically; physical items stay `pending`, now eligible for production.
 - **[Worker]** Online Payments stuck in processing are reconciled every fifteen minutes.
 - **[Application]** A new Payment attempt is permitted only after the previous live attempt fails or expires.

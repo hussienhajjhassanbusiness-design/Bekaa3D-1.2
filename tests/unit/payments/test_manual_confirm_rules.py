@@ -1,5 +1,6 @@
 """Manual confirm's refusals (VS-024 plan 2.3 steps 1-3, 6.1): cash, a status-capable
-provider, and any differing amount or currency, which is never a late capture."""
+provider, a missing reference off `manual` (ADR-049 d5), and any differing amount or
+currency, which is never a late capture."""
 
 import pytest
 
@@ -19,6 +20,7 @@ def refuse(
     capability: Capability = Capability.NO_STATUS_QUERY,
     amount: int = 1000,
     currency: str = "USD",
+    reference_given: bool = True,
 ) -> ConfirmRefusal | None:
     return confirm_refusal(
         provider=provider,
@@ -26,6 +28,7 @@ def refuse(
         payment_amount_cents=1000,
         typed_amount_cents=amount,
         typed_currency=currency,
+        reference_given=reference_given,
     )
 
 
@@ -56,6 +59,27 @@ def test_the_exact_amount_in_usd_is_applied(capability: Capability) -> None:
     assert refuse(capability=capability) is None
 
 
+@pytest.mark.parametrize("given", [True, False])
+def test_only_manual_may_omit_the_reference(given: bool) -> None:
+    manual = refuse(
+        provider=PaymentProvider.MANUAL, capability=Capability.MANUAL, reference_given=given
+    )
+    assert manual is None
+    other = refuse(reference_given=given)
+    assert other is (None if given else ConfirmRefusal.REFERENCE_REQUIRED)
+
+
+def test_a_missing_reference_is_refused_before_the_amount() -> None:
+    assert refuse(amount=1, reference_given=False) is ConfirmRefusal.REFERENCE_REQUIRED
+    manual = refuse(
+        provider=PaymentProvider.MANUAL,
+        capability=Capability.MANUAL,
+        amount=1,
+        reference_given=False,
+    )
+    assert manual is ConfirmRefusal.AMOUNT_MISMATCH
+
+
 # --- Record-capture (VS-030 plan 3.6, Q5): a mismatch only, on an attempt never paid -------
 
 R = CaptureRefusal
@@ -69,6 +93,7 @@ def capture(
     late_captured: bool = False,
     amount: int = 1200,
     currency: str = "USD",
+    reference_given: bool = True,
 ) -> CaptureRefusal | None:
     return capture_refusal(
         provider=provider,
@@ -78,6 +103,7 @@ def capture(
         payment_amount_cents=1000,
         typed_amount_cents=amount,
         typed_currency=currency,
+        reference_given=reference_given,
     )
 
 
@@ -88,6 +114,11 @@ def test_record_capture_refusals_in_order() -> None:
         R.CASH_PAYMENT
     )
     assert capture(capability=Capability.STATUS_QUERY) is R.STATUS_QUERY_AVAILABLE
+    assert capture(reached_paid=True, reference_given=False) is R.REFERENCE_REQUIRED
+    manual = capture(
+        provider=PaymentProvider.MANUAL, capability=Capability.MANUAL, reference_given=False
+    )
+    assert manual is None
     assert capture(reached_paid=True, late_captured=True) is R.ALREADY_PAID
     assert capture(late_captured=True) is R.ALREADY_LATE_CAPTURED
     assert capture(amount=1000) is R.USE_CONFIRM

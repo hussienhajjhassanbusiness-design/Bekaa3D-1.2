@@ -125,13 +125,15 @@ A refused action writes nothing. The kill switch never blocks an answer.
 `POST /api/v1/me/offers/{offer_id}/checkout`. Verified email, CSRF header, an `Idempotency-Key` (8-255 characters of `[A-Za-z0-9._:-]`), and cart checkout's 30 per user per hour.
 
 ```json
-{"accept_terms": true, "accept_digital_final_sale": true, "payment_provider": "optional"}
+{"accept_terms": true, "accept_digital_final_sale": true, "payment_provider": "optional", "contact_phone": "+96171123456"}
 ```
+
+`contact_phone` is required on the `manual` provider (production, VS-050): it is the number the administrator calls to arrange payment, normalised to E.164 and stored on the order. Any other provider refuses it.
 
 `201` returns `CheckoutRead`, the same shape as `POST /checkout` ([`checkout.md`](checkout.md)):
 - the order is `pending_payment` with `source: "offer"`;
 - its one STL line is priced at the offer's `agreed_amount`. The list price is never read, so a later price change, up or down, is ignored;
-- the payment is `pending`, with the provider's `redirect_url`;
+- the payment is `pending`, with the provider's `redirect_url`, `next_step` and `hold_expires_at`; on `manual`, `redirect_url` is null and `next_step` is `await_admin_contact` ([`payment-recovery.md`](payment-recovery.md#manual-payment-vs-050));
 - `dropped_lines` is `[]`.
 
 The offer stays `accepted` until the payment is verified. A replay of the same key and body returns the stored `201` (or `502`) with `Idempotent-Replayed: true`.
@@ -148,6 +150,7 @@ The offer stays `accepted` until the payment is verified. A replay of the same k
 | The offer's unpaid order has a live attempt | `409 PAYMENT_ALREADY_ACTIVE`, with `payment_id`, `payment_status`, `redirect_url` |
 | The offer's unpaid order has no live attempt, or the STL is already owned | `409 PRODUCT_ALREADY_OWNED`, with `product_ids`. Retry that order with `POST /api/v1/me/orders/{order_id}/payments` |
 | An unknown `payment_provider` | `422 PAYMENT_METHOD_NOT_ALLOWED`, with `reason` |
+| `manual` without `contact_phone` / another provider with one | `422 CONTACT_PHONE_REQUIRED` / `422 INVALID_FULFILLMENT` (VS-050; checked right after the provider is known to be configured) |
 | Same key, different body / still running | `409 IDEMPOTENCY_KEY_CONFLICT` / `409 IDEMPOTENCY_REQUEST_IN_PROGRESS` |
 | The provider could not start the payment | `502 PAYMENT_PROVIDER_UNAVAILABLE`; the order exists unpaid |
 | Anonymous / unverified / no CSRF / over the limit | `401` / `403 EMAIL_VERIFICATION_REQUIRED` / `403 CSRF_INVALID` / `429 RATE_LIMITED` |

@@ -3,7 +3,7 @@ Reads: a session is enough, no verified email and no rate limit, like `GET /cart
 
 import base64
 import binascii
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -24,6 +24,7 @@ from app.ordering.api.order_schemas import (
     OrderSummaryRead,
 )
 from app.ordering.application.ports import OrderFilters
+from app.ordering.application.services.holds import read_holds
 from app.ordering.application.services.order_history import (
     RetryContext,
     get_order,
@@ -40,7 +41,6 @@ _DEFAULT_PAGE_SIZE = 20
 _MAX_PAGE_SIZE = 100
 _CURSOR_SEPARATOR = "|"
 _BAD_CURSOR = "cursor is not a valid pagination cursor"
-HOLD_SETTING = "checkout_hold_period"
 
 _RESPONSES: dict[int | str, dict[str, Any]] = {
     401: {"description": "No valid session cookie was presented."},
@@ -147,13 +147,13 @@ async def order_detail_read(
     session: AsyncSession, *, user_id: UUID, order_id: UUID
 ) -> OrderDetailRead:
     """The owner's `OrderDetail`, also returned by VS-029b's POSTs; 404 if not theirs."""
-    hold = await settings_reader(session).get_duration_seconds(HOLD_SETTING)
+    holds = await read_holds(settings_reader(session))
     view = await get_order(
         SqlOrderHistory(session),
         order_payment_reader(session),
         user_id=user_id,
         order_id=order_id,
-        retry=RetryContext(SqlOfferCheckouts(session), timedelta(seconds=hold), datetime.now(UTC)),
+        retry=RetryContext(SqlOfferCheckouts(session), holds, datetime.now(UTC)),
     )
     if view is None:
         raise not_found_error()

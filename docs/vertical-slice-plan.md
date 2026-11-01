@@ -50,14 +50,15 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 | VS-045 | Account deletion by anonymisation | VS-026, VS-031, VS-036, VS-038, VS-039 | Done |
 | VS-046 | Security data retention and IP-salt rotation | VS-004 | Done |
 | VS-049 | Accepted payment methods per product | VS-013, VS-028 | Done |
+| VS-050 | Manual payment | VS-024, VS-030, VS-041, VS-049 | Done |
 | **Final phase** | **Needs a server; built after everything above is finished and tested locally** | | |
 | VS-020 | Staging environment and deploy pipeline | VS-015 | Not started |
 | VS-021 | Production email delivery | VS-020 | Not started |
-| VS-032 | Live online payment provider | VS-020, VS-024, VS-030, VS-031 | Not started |
+| VS-032 | Live online payment provider (API) | VS-020, VS-024, VS-030, VS-031 | Deferred (VS-050 replaces it for V1, ADR-049) |
 | VS-047 | Backups, restore drill and monitoring | VS-020 | Not started |
 | VS-048 | Launch readiness | VS-011 – VS-047 | Not started |
 
-**Final phase (owner decision, 2026-10-17):** no server is set up until the project is finished and tested locally. VS-020, VS-021, VS-032, VS-047 and VS-048 come last, in that order. Nothing before them may depend on them; where an earlier slice would have used nginx, it uses the API instead and records how VS-020 may take over (VS-035, ADR-031).
+**Final phase (owner decision, 2026-10-17):** no server is set up until the project is finished and tested locally. VS-020, VS-021, VS-032, VS-047 and VS-048 come last, in that order. **Owner decision, 2026-10-31 (ADR-049):** V1 takes online payment by manual transfer only, so VS-050 (local, no server needed) replaces VS-032 for now and VS-032 is deferred. Nothing before them may depend on them; where an earlier slice would have used nginx, it uses the API instead and records how VS-020 may take over (VS-035, ADR-031).
 
 ---
 
@@ -923,16 +924,16 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   1. **Self-cancel reopens the cash phone probe (VS-028 review, 2026-10-22).** [ADR-038](adr/ADR-038-physical-checkout-and-cash-eligibility.md) d22 accepts that `CASH_NOT_AVAILABLE` tells a prober a phone is blocked or has an open cash order, bounded because the first miss places a real cash order that refuses further cash from that account. A customer self-cancel of an unpaid cash order is an `other` cancel: no block, and the order stops counting toward `cash_max_open_orders`. So a prober can place, cancel and probe again, about 30 phones per hour per verified account, and each miss holds the phone's owner off cash meanwhile. Suggested fix: count the customer's own cash orders self-cancelled in a recent window toward the limit, or rate-limit cash self-cancels; or accept the wider bound explicitly in ADR-038. Test: place, self-cancel, probe again.
   2. **A line cancelled with less than full refund coverage must not make chargebacks on its order unsatisfiable (PR #39 note).** A chargeback's items must total exactly `min(charged − absorbed, the payment's remaining balance)` ([ADR-042](adr/ADR-042-refunds-voids-and-chargebacks.md) d16, plan Revision 4), and a `cancelled` line counts its balance as the line total less its items, or 0 when it has none. If a cancel (with `cancelling`, or any new writer) could leave a paid line `cancelled` with less than its total covered, the payment's balance would exceed the sum of the line balances and no set of items could reach the required total, so every chargeback on that order would get a 422 it cannot satisfy. Suggested fix: guarantee every cancel of a paid line covers its whole remaining balance in the same transaction, or cap the required total by the sum of the line balances. Test: cancel a paid line, then record a chargeback for the whole payment.
 
-## VS-032 — Live online payment provider
-**Status:** Not started (final phase: needs a server)
-**Depends on:** VS-020, VS-024, VS-030, VS-031 (a chargeback test cancels a line; ADR-042 d5), and the SRS §30.4 provider decision and merchant credentials
+## VS-032 — Live online payment provider (API)
+**Status:** Deferred. The owner chose manual payment for V1 (SRS §30.4, [ADR-049](adr/ADR-049-manual-payment.md)); [VS-050](#vs-050--manual-payment) delivers production payments. This slice is kept for an API provider (Whish API or a card gateway) the owner may want later.
+**Depends on:** VS-020, VS-024, VS-030, VS-031 (a chargeback test cancels a line; ADR-042 d5), VS-050, and an owner decision to add an API provider, with merchant credentials
 **Go-live gate:** [ADR-032](adr/ADR-032-checkout-idempotency-and-payment-verification.md) decision 24: no real online provider is configured in production before VS-024 and VS-030 are merged, unless an operational alert on late captures and stuck payments exists. Every adapter must sign its webhooks (ADR-032 decision 15).
 **Goal:** Real online revenue: configuring the chosen provider(s) runs the same checkout, verification and recovery flows against them. Refunds stay manual (ADR-024).
 - **Model / migration:** Adds the chosen provider value(s) to `payment_provider`; provider metadata only if needed.
 - **Endpoints / jobs:** None new; the provider-neutral webhook route from VS-023 is IP-allowlisted in VS-020's nginx.
 - **Logic:**
   - Reuses the payment port from VS-023.
-  - Replaces the single `payment_provider` setting with a list of configured online providers, and renames the Whish-specific settings in `src/app/core/config.py` and `.env.example` (`whish_*`, `whish_webhook_ips`) to per-provider names. If §30.4 chooses both, checkout and retry let the customer pick one, stored on the payment row (VS-023, VS-024).
+  - Replaces the single `payment_provider` setting with a list of configured online providers (`manual` from VS-050 plus the new one), and renames the Whish-specific settings in `src/app/core/config.py` and `.env.example` (`whish_*`, `whish_webhook_ips`) to per-provider names. If §30.4 chooses both, checkout and retry let the customer pick one, stored on the payment row (VS-023, VS-024).
   - The adapter implements create-payment and redirect, signature check (if offered), and status query (if not offered, manual confirmation from VS-024 stays on). It has no refund operation: every V1 refund is manual, even if the provider offers a refund API. A card gateway uses a hosted or redirect page so card data never reaches the platform.
   - Chargebacks are built in VS-030 ([ADR-042](adr/ADR-042-refunds-voids-and-chargebacks.md) d3-d5, d16-d18; [`refunds.md`](refunds.md)): their own record, recorded by `POST /api/v1/admin/orders/{id}/chargebacks`. VS-032 only wires provider disputes, if the provider sends any, into `record_chargeback`, with `provider_dispute_reference` as the dedupe key.
   - Record the decision and the provider's answers to SRS §30.1 in an ADR.
@@ -1289,6 +1290,27 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - A retry still works after the product becomes cash-only.
 - **Done when:** BR-019 and the extended BR-141 hold at checkout and in the database, and existing products and orders behave as before.
 
+## VS-050 — Manual payment
+**Status:** Done — [plan](plans/VS-050-manual-payment-plan.md) (Q1-Q7 approved), migration `941b40d285ce`, [ADR-049](adr/ADR-049-manual-payment.md)
+**Depends on:** VS-024, VS-030, VS-041, VS-049. Needs no server; production use needs VS-020, and its emails need VS-021.
+**Go-live gate:** ADR-032 d24 is met (VS-024 and VS-030 are merged).
+**Goal:** Production takes online orders — cart, STL and accepted-offer checkouts — with one provider, `manual`. The administrator arranges payment with the customer directly (WhatsApp or phone) and confirms it with VS-024's manual confirm ([ADR-049](adr/ADR-049-manual-payment.md)). The website handles no payment details. No gateway, no crypto, no outbound call.
+- **Model / migration:** `941b40d285ce`: `payment_provider` gains `manual`. `ck_payments_manual_never_processing`, `ix_payments_awaiting_manual`. Seeds the setting `manual_payment_hold_period` (7 days, 1 h - 30 d).
+- **Endpoints / jobs:**
+  - Checkout, offer checkout, retry and `GET /api/v1/me/orders/{id}` give the payment `next_step: await_admin_contact` and `hold_expires_at`.
+  - `POST /api/v1/admin/payments/{id}/confirm`: `provider_reference` optional for `manual`, unique when given.
+  - `GET /api/v1/admin/payments?awaiting_confirmation=true`.
+  - `release_stale_checkouts` releases a manual order at its deadline; the webhook route answers 404 for `manual`.
+- **Logic:**
+  - `ManualPaymentProvider`: no status query, no webhooks, no reference and no redirect at checkout. `PAYMENT_PROVIDER=manual` boots in production.
+  - Q1: an STL-only or offer checkout on `manual` must send `contact_phone` (`422 CONTACT_PHONE_REQUIRED`), the number the administrator calls. Q2: the customer gets `order.awaiting_payment` / `order_awaiting_payment`; every administrator one `manual_payment_due` alert. Q3: the administrator may release a `manual` order at any time. Q4: record-capture's reference is optional for `manual` too.
+  - The hold for a manual attempt is `manual_payment_hold_period`. At the deadline the attempt becomes `expired` and the order is released automatically. Money after a release is a late capture with its refund obligation (§9.2).
+- **Tests:** the plan's T1-T19 and races C1-C3 (confirm vs release, one reference on two payments, a double confirm); STL-only, physical, mixed and offer paths end to end through confirm.
+- **Done when:**
+  - A customer can check out a cart (STL, physical, mixed) and an accepted offer with `manual`, and the administrator's confirm makes it `paid` with STL lines `awaiting_delivery`.
+  - An unpaid manual order is released at its deadline.
+  - The SRS sections listed in the plan are updated and ADR-049 is Accepted.
+
 ## VS-047 — Backups, restore drill and monitoring
 **Status:** Not started (final phase: needs a server)
 **Depends on:** VS-020
@@ -1322,7 +1344,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - A load test on staging-sized hardware.
   - A launch checklist:
     - client values for pickup address and WhatsApp number, and a review of the cash limits (`cash_max_order_total`, `cash_max_open_orders`);
-    - the online payment provider decided (SRS §30.4) and live (VS-032);
+    - online payment live: manual payment (VS-050, SRS §30.4);
     - legal pages;
     - the real captcha keys;
     - `accepting_orders` switched to `true`.

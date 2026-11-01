@@ -2,6 +2,7 @@
 timings arrive as parameters, so Ordering imports nothing from Payments here."""
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import Protocol
@@ -25,6 +26,25 @@ class PayableOrder(Protocol):
 class PayableLine(Protocol):
     @property
     def fulfillment_status(self) -> OrderItemStatus: ...
+
+
+# The online provider whose attempts the administrator confirms by hand (ADR-049).
+MANUAL_PROVIDER = "manual"
+
+
+@dataclass(frozen=True)
+class Holds:
+    """`checkout_hold_period`, and `manual_payment_hold_period` for a `manual` attempt."""
+
+    online: timedelta
+    manual: timedelta
+
+    def for_provider(self, provider: str | None) -> timedelta:
+        return self.manual if provider == MANUAL_PROVIDER else self.online
+
+    @property
+    def shortest(self) -> timedelta:
+        return min(self.online, self.manual)
 
 
 class RetryRefusal(StrEnum):
@@ -56,8 +76,13 @@ def hold_deadline(
     return start + hold
 
 
-def manual_release_available_at(deadline: datetime, grace: timedelta, *, early: bool) -> datetime:
-    """`early` (Revision 2, Q7): no stored provider reference and a latest answer `unknown`."""
+def manual_release_available_at(
+    deadline: datetime, grace: timedelta, *, early: bool, manual_from: datetime | None = None
+) -> datetime:
+    """`early` (Revision 2, Q7): no stored provider reference and a latest answer `unknown`.
+    `manual_from`: a `manual` attempt's order may be released from placement (VS-050 Q3)."""
+    if manual_from is not None:
+        return manual_from
     return deadline if early else deadline + grace
 
 

@@ -8,11 +8,13 @@ import pytest
 
 from app.catalog.application.ports import ProductType
 from app.ordering.domain.customer_view import (
+    PaymentNextStep,
     can_cancel,
     customer_history,
     customer_line_status,
     customer_lines,
     payment_due,
+    payment_next_step,
 )
 from app.ordering.domain.enums import OrderItemStatus, OrderStatus, PaymentMethod
 from app.ordering.domain.orders import CustomerOrderLine, HistoryEntry
@@ -189,3 +191,19 @@ def test_can_cancel_when_every_condition_holds(over: dict[str, Any]) -> None:
 )
 def test_can_cancel_is_false_when_one_condition_fails(over: dict[str, Any]) -> None:
     assert not _can(**over)
+
+
+@pytest.mark.parametrize("status", ["pending", "processing"])
+def test_a_live_manual_attempt_awaits_the_administrators_call(status: str) -> None:
+    """ADR-049 d2: the website shows no payment details; the administrator calls."""
+    step = payment_next_step(provider="manual", status=status, redirect_url=None)
+    assert step is PaymentNextStep.AWAIT_ADMIN_CONTACT
+    redirect = payment_next_step(provider="mock", status=status, redirect_url="https://pay")
+    assert redirect is PaymentNextStep.REDIRECT
+    assert payment_next_step(provider="mock", status=status, redirect_url=None) is None
+
+
+@pytest.mark.parametrize("status", ["paid", "partially_refunded", "refunded", "failed", "expired"])
+@pytest.mark.parametrize("provider", ["manual", "mock", "cash"])
+def test_an_attempt_that_is_over_has_no_next_step(provider: str, status: str) -> None:
+    assert payment_next_step(provider=provider, status=status, redirect_url="https://pay") is None

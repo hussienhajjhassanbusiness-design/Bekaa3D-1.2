@@ -19,7 +19,7 @@ payment_method: "online" | "cash"          # cash: every kept line physical
 payment_provider?: str                     # online only; default: the one configured provider
 fulfillment_method?: "delivery" | "pickup" # required when a kept line is physical; absent for STL-only
 address_id?: uuid                          # delivery only, and required there
-contact_phone?: str                        # pickup only, and required there; normalised to E.164
+contact_phone?: str                        # pickup, or STL-only on `manual` (VS-050); required there; E.164
 customer_note?: str (<= 1000)
 accept_terms: true
 accept_digital_final_sale?: true           # required when an STL line remains
@@ -33,7 +33,7 @@ The SRS 7.4 matrix runs on the **kept** lines (after owned STLs are dropped), so
 
 | Kept lines | `fulfillment_method` | `address_id` | `contact_phone` | Cash |
 |---|---|---|---|---|
-| STL only | absent | absent | absent | refused (`cash_requires_physical`) |
+| STL only | absent | absent | absent; **required** on the `manual` provider (VS-050) | refused (`cash_requires_physical`) |
 | Physical, delivery | `delivery` | required | absent | allowed |
 | Physical, pickup | `pickup` | absent | required | allowed |
 | Mixed | `delivery` or `pickup` as above | | | refused (`cash_requires_physical`) |
@@ -41,7 +41,8 @@ The SRS 7.4 matrix runs on the **kept** lines (after owned STLs are dropped), so
 **Accepted payment methods (VS-049, [ADR-048](adr/ADR-048-accepted-payment-methods-per-product.md)).** Each physical product accepts `online`, `cash` or `online_or_cash`; an STL accepts online only. Over the kept lines, after `ORDERS_PAUSED`, `ONLINE_PAYMENT_UNAVAILABLE`, `PRODUCT_NOT_PURCHASABLE` / `QUANTITY_EXCEEDS_LIMIT` and `CART_EMPTY`, and before the fulfillment fields are checked: if they share no method, `422 NO_COMMON_PAYMENT_METHOD` (`lines[{product_id, accepted_payment_methods}]`, detail "These items can't be paid the same way; please order them separately."); otherwise a method some line's product does not accept is `PAYMENT_METHOD_NOT_ALLOWED` (`cash_requires_physical` with an STL line, else `cash_not_accepted` / `online_not_accepted` with `product_ids`). `GET /api/v1/cart` shows the shared methods in advance (`payment_methods`). Each physical order line snapshots what its product accepted (`accepted_payment_methods_snapshot`); a later product change never touches a placed order or its retry.
 
 **Response `201`:** the order (live prices, lines `pending`), the payment, and `dropped_lines` (STLs bought since they were added, not charged; filled on the cash path too). The order also carries `estimated_dispatch_at`, `delivery_fee_note` (delivery only), `delivery_address` (the snapshot; never the contact phone or its hash), `payment_due` and `amount_due` (a `PriceRead`, or null).
-- **Online:** the order is `pending_payment`; `payment` is `pending` with the provider and its `redirect_url`.
+- **Online:** the order is `pending_payment`; `payment` is `pending` with the provider, its `redirect_url`, `next_step` (`redirect`) and `hold_expires_at`.
+- **Online on `manual`** (production, [ADR-049](adr/ADR-049-manual-payment.md)): `redirect_url` is null and `next_step` is `await_admin_contact`; the administrator contacts the customer by WhatsApp or phone to arrange payment and confirms it by hand. `hold_expires_at` is placement plus `manual_payment_hold_period` (7 days). The customer gets an `order.awaiting_payment` notification and an `order_awaiting_payment` email; the administrators get a `manual_payment_due` alert. The full flow: [`payment-recovery.md`](payment-recovery.md#manual-payment-vs-050).
 - **Cash:** the order is `in_progress`, `payment` is `null`, `payment_due` is `true` and `amount_due` equals `total`.
 
 A replay of the same key and body returns the stored response with `Idempotent-Replayed: true`. A replay is a pure read: it takes no lock and re-runs no limit check.
@@ -59,6 +60,7 @@ A replay of the same key and body returns the stored response with `Idempotent-R
 | 422 | `QUANTITY_EXCEEDS_LIMIT` | only over-cap lines; same `lines` |
 | 422 | `NO_COMMON_PAYMENT_METHOD` | the kept lines share no accepted payment method; `lines[{product_id, accepted_payment_methods}]` (VS-049) |
 | 422 | `INVALID_FULFILLMENT` | the fulfillment fields do not fit the kept lines (table above); an unknown, another customer's or a deleted `address_id` (one answer for all three); pickup while `pickup_address` is not set |
+| 422 | `CONTACT_PHONE_REQUIRED` | an STL-only order on the `manual` provider without `contact_phone` (VS-050) |
 | 422 | `PAYMENT_METHOD_NOT_ALLOWED` | `reason`: `cash_requires_physical`, `cash_not_accepted` / `online_not_accepted` (with `product_ids`, VS-049), `cash_disabled`, `zero_total`, `provider_not_configured`, `provider_required`, `provider_not_applicable` (a provider sent with cash) |
 | 422 | `CASH_PAYMENT_LIMIT_REACHED` | `reason`: `order_total` (the live total is above `cash_max_order_total`) |
 | 422 | `CASH_NOT_AVAILABLE` | no `reason`: an uncleared cash block, or `cash_max_open_orders` unpaid cash orders (a cash order the customer cancelled counts for 24 hours, ADR-038 d23), for this account **or** this phone; or a cart with a physical line priced 0 (ADR-043 d12). Detail: "Cash on delivery isn't available for this order; please pay online." |

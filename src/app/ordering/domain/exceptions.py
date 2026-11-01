@@ -98,6 +98,10 @@ class InvalidFulfillmentError(OrderingDomainError):
     """The fulfillment fields do not fit the kept lines (422 INVALID_FULFILLMENT)."""
 
 
+class ContactPhoneRequiredError(OrderingDomainError):
+    """A `manual` order with no phone to call (422 CONTACT_PHONE_REQUIRED; VS-050 Q1)."""
+
+
 class PaymentMethodNotAllowedError(OrderingDomainError):
     """422 PAYMENT_METHOD_NOT_ALLOWED with a machine-readable `reason`; `product_ids` names
     the lines whose product does not accept the method (ADR-048)."""

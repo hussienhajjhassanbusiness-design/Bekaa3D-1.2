@@ -335,6 +335,7 @@ async def test_detail_shows_what_checkout_charged_and_survives_product_edits(
         "status": "pending",
         "provider": "mock",
         "amount": {"amount_cents": 900, "currency": "USD"},
+        "next_step": None,  # the order detail carries no redirect URL
     }
     assert (detail["payment_due"], detail["can_cancel"]) == (False, False)
 
@@ -377,7 +378,7 @@ async def test_the_schemas_carry_exactly_the_customer_fields(
     assert set(summary) == SUMMARY_KEYS
     assert set(detail) == DETAIL_KEYS
     assert set(detail["lines"][0]) == LINE_KEYS
-    assert set(detail["payment"]) == {"status", "provider", "amount"}
+    assert set(detail["payment"]) == {"status", "provider", "amount", "next_step"}
 
 
 # -------------------------------------------------------------- STL purchases (F-027)
@@ -573,6 +574,7 @@ async def test_a_paid_cash_order_still_in_progress_is_not_due(
         "status": "paid",
         "provider": "cash",
         "amount": {"amount_cents": 1500, "currency": "USD"},
+        "next_step": None,
     }
     [summary] = client.get(ORDERS).json()["items"]
     assert summary["payment_due"] is False

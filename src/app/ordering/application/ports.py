@@ -146,6 +146,8 @@ class SettingsSource(Protocol):
 
     async def get_text(self, key: str) -> str | None: ...
 
+    async def get_duration_seconds(self, key: str) -> int: ...
+
 
 @dataclass(frozen=True)
 class CheckoutAddressSnapshot:
@@ -228,6 +230,10 @@ class ProblemReportInbox(Protocol):
 
 class OrderNotices(Protocol):
     async def cash_order_placed(self, order: Order, lines: Sequence[OrderLine]) -> None: ...
+
+    async def awaiting_admin_contact(self, order: Order) -> None:
+        """A `manual` order: the administrator will contact the customer (ADR-049)."""
+        ...
 
 
 class OrderStore(Protocol):

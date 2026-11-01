@@ -4,7 +4,7 @@ idempotency claim; never commits and never calls the provider. Locks the caller'
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from uuid import UUID
 
 from app.ordering.application.ports import (
@@ -15,6 +15,7 @@ from app.ordering.application.ports import (
 )
 from app.ordering.domain.checkout_rules import choose_provider
 from app.ordering.domain.exceptions import (
+    ContactPhoneRequiredError,
     LiveAttemptExistsError,
     OfferCheckoutExpiredError,
     OfferCheckoutNotFoundError,
@@ -25,7 +26,13 @@ from app.ordering.domain.exceptions import (
     RetryRefusedError,
 )
 from app.ordering.domain.orders import Order, OrderLine
-from app.ordering.domain.payment_recovery import RetryRefusal, hold_deadline, retry_refusal
+from app.ordering.domain.payment_recovery import (
+    MANUAL_PROVIDER,
+    Holds,
+    RetryRefusal,
+    hold_deadline,
+    retry_refusal,
+)
 from app.platform.application.ports import AuditWriter
 
 
@@ -44,7 +51,7 @@ async def start_retry(
     user_id: UUID,
     order_id: UUID,
     requested_provider: str | None,
-    hold: timedelta,
+    holds: Holds,
     now: datetime,
     offers: OfferCheckouts,
     clock: Callable[[], datetime],
@@ -55,7 +62,8 @@ async def start_retry(
     if order is None:
         raise RetryOrderNotFoundError(str(order_id))
     lines = await orders.order_lines(order_id)
-    refusal = retry_refusal(order, lines, now=now, hold=hold)
+    previous = await attempts.previous_provider(order_id)
+    refusal = retry_refusal(order, lines, now=now, hold=holds.for_provider(previous))
     if refusal is not None:
         raise RetryRefusedError(refusal.value)
     configured = attempts.configured_providers()
@@ -65,9 +73,9 @@ async def start_retry(
     if (live := await attempts.live_attempt(order_id)) is not None:
         raise already_active(live)
     await _require_open_offer(offers, lines, user_id=user_id, clock=clock)
-    provider = choose_provider(
-        requested_provider, configured, await attempts.previous_provider(order_id)
-    )
+    provider = choose_provider(requested_provider, configured, previous)
+    if provider == MANUAL_PROVIDER and order.contact_phone_hash is None:
+        raise ContactPhoneRequiredError("A manual retry needs the phone to call (ADR-049 d8).")
     try:
         payment = await attempts.open_retry_attempt(
             order_id=order_id,
@@ -86,6 +94,7 @@ async def start_retry(
         entity_id=payment.id,
         after_data={"order_id": str(order_id), "payment_id": str(payment.id), "provider": provider},
     )
+    hold = holds.for_provider(provider)
     return RetriedPayment(order, payment, hold_deadline(order.placed_at, now, hold))
 
 

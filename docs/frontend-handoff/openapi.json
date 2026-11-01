@@ -1913,6 +1913,19 @@
             ],
             "title": "Failed At"
           },
+          "hold_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A live attempt on an unpaid order: when the order is released. The customer's contact is on `GET /admin/orders/{order_id}`.",
+            "title": "Hold Expires At"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -2006,7 +2019,8 @@
           "expired_at",
           "late_captured_at",
           "needs_manual_confirmation",
-          "unprocessed_event_count"
+          "unprocessed_event_count",
+          "hold_expires_at"
         ],
         "title": "AdminPaymentRead",
         "type": "object"
@@ -4455,10 +4469,34 @@
       },
       "CheckoutPaymentRead": {
         "properties": {
+          "hold_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the order is released if still unpaid.",
+            "title": "Hold Expires At"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "next_step": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PaymentNextStep"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`redirect` to `redirect_url`, or `await_admin_contact` for `manual`: the administrator contacts the customer to arrange payment (ADR-049)."
           },
           "provider": {
             "title": "Provider",
@@ -4485,7 +4523,9 @@
           "id",
           "status",
           "provider",
-          "redirect_url"
+          "redirect_url",
+          "next_step",
+          "hold_expires_at"
         ],
         "title": "CheckoutPaymentRead",
         "type": "object"
@@ -6884,10 +6924,18 @@
         "additionalProperties": false,
         "properties": {
           "provider_reference": {
-            "maxLength": 255,
-            "minLength": 1,
-            "title": "Provider Reference",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The transfer's own reference; optional for `manual` only, unique per provider when given (ADR-049). Notes go in `reason`.",
+            "title": "Provider Reference"
           },
           "reason": {
             "maxLength": 1000,
@@ -6909,7 +6957,6 @@
           }
         },
         "required": [
-          "provider_reference",
           "verified_amount_cents",
           "reason"
         ],
@@ -7494,6 +7541,19 @@
             "const": true,
             "title": "Accept Terms",
             "type": "boolean"
+          },
+          "contact_phone": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Lebanese; required when the provider is `manual` (the administrator calls it to arrange payment), refused otherwise (VS-050 Q1).",
+            "title": "Contact Phone"
           },
           "payment_provider": {
             "anyOf": [
@@ -8424,6 +8484,17 @@
           "amount": {
             "$ref": "#/components/schemas/PriceRead"
           },
+          "next_step": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PaymentNextStep"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "While the attempt is live: `await_admin_contact` for `manual` (the administrator contacts the customer to arrange payment); null otherwise."
+          },
           "provider": {
             "title": "Provider",
             "type": "string"
@@ -8436,7 +8507,8 @@
         "required": [
           "status",
           "provider",
-          "amount"
+          "amount",
+          "next_step"
         ],
         "title": "OrderPaymentRead",
         "type": "object"
@@ -8709,11 +8781,20 @@
         "title": "PaymentMethod",
         "type": "string"
       },
+      "PaymentNextStep": {
+        "enum": [
+          "redirect",
+          "await_admin_contact"
+        ],
+        "title": "PaymentNextStep",
+        "type": "string"
+      },
       "PaymentProvider": {
-        "description": "`cash` has no adapter; VS-032 adds the real online value(s).",
+        "description": "`cash` has no adapter; `manual` is V1's online provider (ADR-049).",
         "enum": [
           "mock",
-          "cash"
+          "cash",
+          "manual"
         ],
         "title": "PaymentProvider",
         "type": "string"
@@ -9816,10 +9897,18 @@
             "type": "string"
           },
           "dashboard_reference": {
-            "maxLength": 255,
-            "minLength": 1,
-            "title": "Dashboard Reference",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional for `manual` only (ADR-049).",
+            "title": "Dashboard Reference"
           },
           "reason": {
             "maxLength": 1000,
@@ -9831,7 +9920,6 @@
         "required": [
           "captured_amount_cents",
           "captured_currency",
-          "dashboard_reference",
           "reason"
         ],
         "title": "RecordCaptureRequest",
@@ -10414,6 +10502,17 @@
             "title": "Id",
             "type": "string"
           },
+          "next_step": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PaymentNextStep"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`redirect` to `redirect_url`, or `await_admin_contact` for `manual`."
+          },
           "provider": {
             "title": "Provider",
             "type": "string"
@@ -10441,7 +10540,8 @@
           "provider",
           "amount_cents",
           "currency",
-          "redirect_url"
+          "redirect_url",
+          "next_step"
         ],
         "title": "RetryPaymentRead",
         "type": "object"
@@ -18159,6 +18259,16 @@
           },
           {
             "in": "query",
+            "name": "awaiting_confirmation",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Awaiting Confirmation",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
             "name": "initiated_after",
             "required": false,
             "schema": {
@@ -18308,7 +18418,7 @@
             "sessionCookie": []
           }
         ],
-        "summary": "List payments, oldest first (`late_captured=true`: the refunds to make)",
+        "summary": "List payments, oldest first (`late_captured=true`: the refunds to make; `awaiting_confirmation=true`: the `manual` payments to arrange and confirm)",
         "tags": [
           "admin",
           "admin"
@@ -18518,7 +18628,7 @@
                 }
               }
             },
-            "description": "PAYMENT_AMOUNT_MISMATCH (with `expected_amount_cents`, `currency`): nothing is written; or VALIDATION_ERROR."
+            "description": "PAYMENT_AMOUNT_MISMATCH (with `expected_amount_cents`, `currency`): nothing is written; PAYMENT_REFERENCE_REQUIRED (no reference, not `manual`); or VALIDATION_ERROR."
           },
           "429": {
             "content": {
@@ -18557,7 +18667,7 @@
             "sessionCookie": []
           }
         ],
-        "summary": "Confirm a payment by hand from the provider's dashboard",
+        "summary": "Confirm a payment by hand: from the provider's dashboard, or as arranged (`manual`)",
         "tags": [
           "admin",
           "admin"
@@ -18782,7 +18892,7 @@
                 }
               }
             },
-            "description": "MANUAL_CONFIRMATION_NOT_ALLOWED (the provider has a status API), INVALID_STATE_TRANSITION (`reason`: `cash_payment`, `already_paid`, `already_late_captured`, `use_confirm` for a matching amount), IDEMPOTENCY_KEY_CONFLICT or IDEMPOTENCY_REQUEST_IN_PROGRESS."
+            "description": "MANUAL_CONFIRMATION_NOT_ALLOWED (the provider has a status API), INVALID_STATE_TRANSITION (`reason`: `cash_payment`, `already_paid`, `already_late_captured`, `use_confirm` for a matching amount), PAYMENT_REFERENCE_MISMATCH (a `manual` reference another payment has), IDEMPOTENCY_KEY_CONFLICT or IDEMPOTENCY_REQUEST_IN_PROGRESS."
           },
           "422": {
             "content": {
@@ -18792,7 +18902,7 @@
                 }
               }
             },
-            "description": "VALIDATION_ERROR."
+            "description": "PAYMENT_REFERENCE_REQUIRED (no reference, not `manual`), or VALIDATION_ERROR."
           },
           "429": {
             "content": {
@@ -24228,7 +24338,7 @@
                 }
               }
             },
-            "description": "PRODUCT_NOT_PURCHASABLE or QUANTITY_EXCEEDS_LIMIT (with `lines`), NO_COMMON_PAYMENT_METHOD (with `lines` and each one's `accepted_payment_methods`), INVALID_FULFILLMENT, PAYMENT_METHOD_NOT_ALLOWED (with `reason`; `cash_not_accepted` and `online_not_accepted` add `product_ids`) or CASH_PAYMENT_LIMIT_REACHED (with `reason`), CASH_NOT_AVAILABLE (no reason: a block or an open cash order on the account or the phone, never saying which), or VALIDATION_ERROR."
+            "description": "PRODUCT_NOT_PURCHASABLE or QUANTITY_EXCEEDS_LIMIT (with `lines`), NO_COMMON_PAYMENT_METHOD (with `lines` and each one's `accepted_payment_methods`), INVALID_FULFILLMENT, CONTACT_PHONE_REQUIRED (a `manual` STL-only order without `contact_phone`), PAYMENT_METHOD_NOT_ALLOWED (with `reason`; `cash_not_accepted` and `online_not_accepted` add `product_ids`) or CASH_PAYMENT_LIMIT_REACHED (with `reason`), CASH_NOT_AVAILABLE (no reason: a block or an open cash order on the account or the phone, never saying which), or VALIDATION_ERROR."
           },
           "429": {
             "content": {
@@ -26160,7 +26270,7 @@
                 }
               }
             },
-            "description": "PRODUCT_NOT_PURCHASABLE (with `lines`), PAYMENT_METHOD_NOT_ALLOWED (with `reason`), or VALIDATION_ERROR."
+            "description": "PRODUCT_NOT_PURCHASABLE (with `lines`), PAYMENT_METHOD_NOT_ALLOWED (with `reason`), CONTACT_PHONE_REQUIRED (`manual` without `contact_phone`), INVALID_FULFILLMENT (`contact_phone` for another provider), or VALIDATION_ERROR."
           },
           "429": {
             "content": {
@@ -28967,7 +29077,7 @@
                 }
               }
             },
-            "description": "The provider is not configured here (never `cash`)."
+            "description": "The provider is not configured here or takes no webhooks (never `cash` or `manual`)."
           },
           "422": {
             "content": {
