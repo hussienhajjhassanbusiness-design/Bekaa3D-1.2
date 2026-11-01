@@ -75,6 +75,10 @@ The VS-041 audit added two more:
 22. **One alert per chargeback** (`chargeback`, or `chargeback_excess` with excess), never folded into an earlier one (a zero window skips the dedupe lookup); the dispute reference stays on the chargeback record and out of audit rows and logs. Every refund a chargeback voids or creates gets its own `refund.voided` or `refund.created` audit row.
 23. **PR B review fixes.** A void is refused when one of its lines is `cancelled` as well as `refunded` (the 0-balance rule would strand the money); a line named twice in one request is refused; Q-2 also compares the payment's currency to the order's; settle skips Q-2 (C3); the order-status facts count only the paid payment's refunds and chargebacks.
 
+### Decided after the VS-030 audit (owner, 2026-11-01; audit Q-1)
+
+24. **A Q-2 mismatch stops refund work on that order until a reviewed fix repairs it.** Only settle is exempt (d23), because it records a payout already made; late-capture refunds never run Q-2 (d19). Create, fail, void, reissue and a paid chargeback stay refused with 409 `ORDER_TOTAL_MISMATCH`, so a payout that bounces on such an order is recorded only after the repair. This is intended: a mismatch means the order's money rows cannot be trusted, and deciding anything from them could pay out the wrong amount. When `refund_integrity_error` appears, the administrator stops and contacts the developer. The data is repaired only by a reviewed fix (a pull request with its test), never by hand in the database. No repair tool is built. Runbook step 8 in [`docs/refunds.md`](../refunds.md).
+
 ## Consequences
 
 - PR B rewrites the `derive_order_status` tests for cases A and B (VS-023's note asked for this ADR), and replaces the `refund_present` stop-gap.

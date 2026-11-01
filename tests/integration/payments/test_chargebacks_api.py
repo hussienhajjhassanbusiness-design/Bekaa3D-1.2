@@ -16,6 +16,7 @@ from tests.integration.payments.refund_support import (
     ADMIN,
     REFUNDS,
     act,
+    audit_rows,
     chargeback,
     count,
     create,
@@ -48,7 +49,7 @@ async def test_i17_a_pending_goodwill_refund_is_absorbed_and_payout_stays_within
     line = order.physical[0]
     payment = await payment_of(db_engine, order.order_id)
     with client_for(main_app) as client:
-        await _admin(client, db_session)
+        admin = await _admin(client, db_session)
         goodwill = ok(create(client, order.order_id, [(line, 200)]), 201)["id"]
         body = ok(chargeback(client, order.order_id, payment, 1000, [(line, 800)]), 201)
         assert (body["applied_cents"], body["excess_cents"]) == (1000, 0)
@@ -60,6 +61,25 @@ async def test_i17_a_pending_goodwill_refund_is_absorbed_and_payout_stays_within
     assert voided["void_reason"] == f"absorbed by chargeback {body['id']}"
     assert await line_state(db_engine, line) == "refunded"
     assert await statuses(db_engine, order.order_id) == ("refunded", "refunded")
+    (audit,) = await audit_rows(db_engine, "chargeback.recorded", body["id"])
+    assert (audit.actor_user_id, audit.entity_type, audit.before_data) == (
+        admin,
+        "chargeback",
+        None,
+    )
+    assert audit.after_data == {
+        "order_id": str(order.order_id),
+        "payment_id": str(payment),
+        "charged_cents": 1000,
+        "applied_cents": 1000,
+        "excess_cents": 0,
+        "items": [{"order_item_id": str(line), "amount_cents": 1000}],
+        "voided_refund_ids": [goodwill],
+        "remainder_refund_ids": [],
+        "lines_refunded": [str(line)],
+        "lines_cancelled": [],
+        "reason": "Bank dispute: not received.",
+    }
 
 
 async def test_c1_a_partial_charge_on_a_pending_full_refund_leaves_the_rest_owed(
@@ -101,6 +121,42 @@ async def test_i17_after_a_settled_full_refund_the_whole_charge_is_excess_and_al
         " AND after_data->>'kind' = 'chargeback_excess' AND after_data->>'chargeback_id' = :c"
     )
     assert await count(db_engine, alerts, c=body["id"]) == 1
+
+
+async def test_a_chargeback_on_a_drifted_order_writes_nothing_and_alerts(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """ADR-042 d18: Q-2 guards the balances a paid chargeback derives (audit A-03)."""
+    order = await paid_online(db_session, stl=None)
+    line = order.physical[0]
+    payment = await payment_of(db_engine, order.order_id)
+    with client_for(main_app) as client:
+        await _admin(client, db_session)
+        goodwill = ok(create(client, order.order_id, [(line, 200)]), 201)["id"]
+        await db_session.execute(
+            text(
+                "UPDATE orders SET subtotal_cents = subtotal_cents + 1,"
+                " total_cents = total_cents + 1 WHERE id = :o"
+            ),
+            {"o": order.order_id},
+        )
+        await db_session.commit()
+        idem = key()
+        response = chargeback(
+            client, order.order_id, payment, 1000, [(line, 800)], idempotency_key=idem
+        )
+        assert_problem(response, 409, "ORDER_TOTAL_MISMATCH")
+        assert goodwill in queue_ids(client, order.order_id)  # nothing absorbed
+    assert await count(db_engine, CHARGEBACKS, o=order.order_id) == 0
+    assert [r.status for r in await refund_rows(db_engine, order.order_id)] == ["pending"]
+    claims = "SELECT count(*) FROM idempotency_records WHERE key = :k"
+    assert await count(db_engine, claims, k=idem) == 0
+    alerts = (
+        "SELECT count(*) FROM audit_logs WHERE action = 'payment.alert_raised'"
+        " AND after_data->>'kind' = 'refund_integrity' AND after_data->>'order_id' = :o"
+    )
+    assert await count(db_engine, alerts, o=str(order.order_id)) == 1
+    assert await statuses(db_engine, order.order_id) == ("partially_refunded", "partially_refunded")
 
 
 async def test_two_chargebacks_on_one_payment_each_alert(

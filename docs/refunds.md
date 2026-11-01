@@ -28,7 +28,7 @@ As built. Decisions: [ADR-042](adr/ADR-042-refunds-voids-and-chargebacks.md) (am
 - A refund over either balance is 422 `REFUND_EXCEEDS_AVAILABLE`, with `available`.
 - A refund that empties an unfinished physical line (`pending`, `in_production`, `ready_to_ship`, `shipped`, `ready_for_pickup`) is 422 `REFUND_REQUIRES_CANCELLATION`: cancel it (VS-031).
 - A line covered in full becomes `refunded` at creation if it is delivered, picked up, returned or an STL line; an STL line still awaiting delivery then leaves the queue and frees ownership. A partial refund leaves the line as it is.
-- Before any balance, the order's total must equal its lines, an online payment must equal the total, and the payment's currency the order's (Q-2): otherwise 409 `ORDER_TOTAL_MISMATCH`, nothing written, a `refund_integrity_error` log and a `refund_integrity` alert. Settle skips this check: it records a payout already made.
+- Before any balance, the order's total must equal its lines, an online payment must equal the total, and the payment's currency the order's (Q-2): otherwise 409 `ORDER_TOTAL_MISMATCH`, nothing written, a `refund_integrity_error` log and a `refund_integrity` alert. Settle skips this check: it records a payout already made. Create, fail, void, reissue and a paid chargeback do not (late-capture refunds skip it entirely, ADR-042 d19), so on such an order those stay refused until the data is repaired (runbook step 8; ADR-042 d24).
 
 ## Status
 
@@ -65,3 +65,4 @@ Claim, then `orders`, every line by id, the order's payments by id, the refund(s
 5. **It was a mistake:** void it with the reason, unless it is settled or its line is already `refunded` or `cancelled` (settle or fail it instead).
 6. **The queue shows a `late_capture` refund:** the provider took money that paid nothing. Check the dashboard (the reason says if the amount or currency was a guess), refund it there, then settle it here. A wrong one is voided.
 7. **The bank charged back:** record the chargeback with the dispute reference and the lines it covers beyond the open refunds; a 422 tells you the exact total to name (`chargeable_cents`). Read any excess alert.
+8. **A `refund_integrity` alert, or 409 `ORDER_TOTAL_MISMATCH`** (logged as `refund_integrity_error`): stop. Do not retry, and do not record that order's refunds, failures, voids or chargebacks another way. Contact the developer. The order's data is repaired only by a reviewed fix (a pull request), never by hand in the database, and there is no repair tool. You can still settle a payout you already made.
