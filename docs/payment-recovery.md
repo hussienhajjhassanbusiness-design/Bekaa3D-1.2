@@ -93,7 +93,7 @@ Every active, verified administrator receives each alert as an in-app `payment.a
 4. **A different amount** (short, over, or not USD): confirm refuses it; record-capture records it as a late capture with its refund obligation (a given reference is stored and unique, as on confirm), the attempt fails, and the customer may retry within the hold.
 5. **Never paid:** the job releases the order at `hold_expires_at`; the administrator may release it earlier, with a reason. Money that arrives after a release is confirmed against the expired attempt: a late capture and its refund.
 
-Reconciliation skips `manual`, and its webhook route answers 404. A second transfer on an attempt already paid has no record in the platform (an open owner decision, ADR-049): return it outside the platform.
+Reconciliation skips `manual`, and its webhook route answers 404. A second transfer on an attempt already paid has no record in the platform (an accepted V1 limitation, ADR-049): the administrator returns the extra money to the customer outside the system.
 
 ## Go-live
 
