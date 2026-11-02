@@ -13,6 +13,7 @@ from app.payments.domain.enums import PaymentProvider
 from app.payments.domain.exceptions import (
     CaptureRecordRefusedError,
     ManualConfirmRefusedError,
+    PaymentAlreadyPaidOtherReferenceError,
     PaymentNotFoundError,
     PaymentReferenceMismatchError,
 )
@@ -21,6 +22,7 @@ from app.payments.domain.manual import (
     ConfirmRefusal,
     capture_refusal,
     confirm_refusal,
+    second_transfer,
 )
 from app.payments.domain.outcome import REACHED_PAID, Outcome, ProviderResult
 from app.payments.domain.payments import Payment
@@ -49,8 +51,8 @@ async def confirm_payment_manually(
     request_id: str | None = None,
     ip_hash: str | None = None,
 ) -> Outcome:
-    """Raises PaymentNotFoundError, ManualConfirmRefusedError or
-    PaymentReferenceMismatchError; the caller's rollback then leaves nothing written."""
+    """Raises PaymentNotFoundError, ManualConfirmRefusedError, PaymentReferenceMismatchError
+    or PaymentAlreadyPaidOtherReferenceError; the caller's rollback leaves nothing written."""
     provider_reference = (provider_reference or "").strip() or None  # case kept (ADR-049)
     store = SqlPaymentStore(session)
     seen = await store.get(payment_id)  # unlocked: the provider, amount and order
@@ -74,7 +76,12 @@ async def confirm_payment_manually(
     payment = await store.lock(payment_id)
     if locked is None or payment is None:
         raise PaymentNotFoundError(f"payment {payment_id} vanished")
-    if provider_reference is not None:
+    captured = payment.status in REACHED_PAID or payment.late_captured_at is not None
+    if second_transfer(
+        captured=captured, stored=payment.provider_payment_id, typed=provider_reference
+    ):
+        raise PaymentAlreadyPaidOtherReferenceError(f"payment {payment_id} is already paid")
+    if provider_reference is not None and not captured:
         await _require_own_reference(store, payment, provider_reference)
     outcome = await apply_provider_result(
         session,

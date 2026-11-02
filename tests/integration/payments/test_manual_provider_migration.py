@@ -1,6 +1,6 @@
 """Migration 941b40d285ce (VS-050) on its own throwaway Postgres: stepping back drops the
 CHECK, the index and the hold setting but keeps the enum value (PostgreSQL cannot drop
-one); stepping forward again restores them, the setting at its 7-day default."""
+one); stepping forward again restores them. The cap migration steps the same way."""
 
 import asyncio
 import os
@@ -16,6 +16,7 @@ from testcontainers.postgres import PostgresContainer
 from app.core.config import get_settings
 
 REVISION = "941b40d285ce"
+CAP_REVISION = "95ffee5fde3b"
 _STATE = """
 SELECT
  (SELECT count(*) FROM pg_constraint WHERE conname = 'ck_payments_manual_never_processing')
@@ -35,6 +36,16 @@ async def _state(url: str) -> Any:
     return tuple(row)
 
 
+async def _cap(url: str) -> Any:
+    engine = create_async_engine(url)
+    async with engine.connect() as conn:
+        value = await conn.scalar(
+            text("SELECT value::text FROM settings WHERE key = 'manual_max_open_orders'")
+        )
+    await engine.dispose()
+    return value
+
+
 @pytest.mark.integration
 def test_stepping_back_and_forward_restores_the_manual_provider_schema() -> None:
     previous = os.environ.get("DATABASE_URL")
@@ -50,6 +61,12 @@ def test_stepping_back_and_forward_restores_the_manual_provider_schema() -> None
             assert asyncio.run(_state(url)) == (0, 0, None, 1)
             command.upgrade(config, REVISION)
             assert asyncio.run(_state(url)) == (1, 1, "604800", 1)
+            command.upgrade(config, CAP_REVISION)  # the audit's open-order cap (Q-1)
+            assert asyncio.run(_cap(url)) == "3"
+            command.downgrade(config, REVISION)
+            assert asyncio.run(_cap(url)) is None
+            command.upgrade(config, "head")
+            assert asyncio.run(_cap(url)) == "3"
     finally:
         if previous is None:
             os.environ.pop("DATABASE_URL", None)

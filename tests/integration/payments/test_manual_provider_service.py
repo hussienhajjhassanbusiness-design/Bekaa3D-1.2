@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from app.identity.domain.enums import UserRole
 from app.payments.domain.exceptions import (
     ManualConfirmRefusedError,
+    PaymentAlreadyPaidOtherReferenceError,
     PaymentReferenceMismatchError,
 )
 from app.payments.domain.manual import ConfirmRefusal
@@ -208,6 +209,27 @@ async def test_a_payment_after_the_release_is_a_late_capture_with_its_refund(
     assert state.status == "expired" and state.late_captured_at is not None
     assert (await one(db_engine, LATE_REFUNDS, p=payment)) == ("late_capture", "pending", 1000)
     assert (await one(db_engine, ORDER_STATE, o=order.order_id)).status == "cancelled"
+
+
+@pytest.mark.usefixtures("an_admin")
+async def test_a_late_captured_attempt_keeps_its_reference(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """VS-050 audit A-01: money already recorded late; a new reference is a second transfer."""
+    at = epoch(2014)
+    _, payment = await _manual(db_session, at)
+    await release_stale(
+        factory(db_engine), MANUAL, now=at + MANUAL_HOLD, start_after=keyset_start(at)
+    )
+    first = f"late-{uuid.uuid4().hex[:6]}"
+    assert await _confirm(db_engine, payment, first) is Outcome.LATE_CAPTURE
+    with pytest.raises(PaymentAlreadyPaidOtherReferenceError):
+        await _confirm(db_engine, payment, f"other-{uuid.uuid4().hex[:6]}")
+    assert await _confirm(db_engine, payment, first) is Outcome.NOOP
+    assert await _confirm(db_engine, payment, None) is Outcome.NOOP
+    assert (await one(db_engine, PAYMENT_STATE, p=payment)).provider_payment_id == first
+    # `one()` fails on a second row: still the single obligation for the first transfer.
+    assert (await one(db_engine, LATE_REFUNDS, p=payment)) == ("late_capture", "pending", 1000)
 
 
 async def test_the_administrator_may_release_a_manual_order_at_once(

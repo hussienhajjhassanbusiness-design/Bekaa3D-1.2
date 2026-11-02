@@ -320,6 +320,7 @@ WhatsApp-only, unavailable, hidden, or deleted products are rejected
 Delivery without a valid address, or pickup without a contact phone, is rejected
 An STL-only or offer checkout on the `manual` provider without a contact phone is rejected (CONTACT_PHONE_REQUIRED); any other provider refuses one there
 A retry onto the `manual` provider of an order with no contact phone is rejected
+A cart or offer checkout on the `manual` provider is rejected (MANUAL_ORDER_LIMIT_REACHED) while the customer already holds `manual_max_open_orders` unpaid `manual` orders; two placements racing at the limit place one (ADR-049 d14)
 Cash is rejected for an order with any STL line, when cash is switched off, or when the customer or the normalised contact phone is blocked from cash
 Cash is rejected when the customer or the contact phone already has the maximum number of unpaid cash orders, or the recomputed total is zero or exceeds the cash maximum
 A payment method that any line's product does not accept is rejected, naming those products (cash for an online-only product, online for a cash-only product)
@@ -395,6 +396,7 @@ A second live payment for the same order is prohibited
 Unauthorized users cannot manually confirm payment
 A reference already on another payment of the same provider is refused, also for two confirms racing on one reference
 The `manual` provider takes no webhooks and is never reconciled
+A manual confirmation of a payment that already holds money never changes its reference: another reference is refused as a likely second transfer
 
 State transitions touched:
 

@@ -647,6 +647,7 @@ A cash Payment (`provider = cash`) is created directly as `PAID` by the cash han
 - **[Worker]** The hold release skips (and alerts on) an Order whose provider query fails or times out, whose provider has no status API, or that has an unprocessed webhook event. A `manual` attempt is the exception: at its deadline (`manual_payment_hold_period`) the job itself marks it `expired` and releases the Order (ADR-049).
 - **[DB]** A `manual` Payment is never `processing` (`ck_payments_manual_never_processing`); its provider reference is optional, and unique per provider when given.
 - **[Application]** Two confirms typing one reference serialise on an advisory lock, so the second is refused (`PAYMENT_REFERENCE_MISMATCH`), never a constraint error.
+- **[Application]** A Payment that already holds money (paid or late-captured) keeps its provider reference: a manual confirm typing another one, also where none is stored, is refused (`PAYMENT_ALREADY_PAID_OTHER_REFERENCE`, likely a second transfer) and writes nothing (ADR-049 d5).
 - **[Application]** A retry locks the Order first and re-checks that it is still `pending_payment` and not cancelled.
 - **[Application]** Underpayment must never produce `paid`.
 - **[DB]** Duplicate provider events must not apply a Payment result twice.

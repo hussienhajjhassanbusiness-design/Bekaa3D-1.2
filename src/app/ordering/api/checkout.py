@@ -40,6 +40,7 @@ from app.ordering.domain.exceptions import (
     ContactPhoneRequiredError,
     CustomerAccountClosedError,
     InvalidFulfillmentError,
+    ManualOrderLimitReachedError,
     NoCommonPaymentMethodError,
     OnlinePaymentUnavailableError,
     OrderingDomainError,
@@ -107,7 +108,9 @@ _RESPONSES: dict[int | str, dict[str, Any]] = {
         "description": "PRODUCT_NOT_PURCHASABLE or QUANTITY_EXCEEDS_LIMIT (with `lines`), "
         "NO_COMMON_PAYMENT_METHOD (with `lines` and each one's `accepted_payment_methods`), "
         "INVALID_FULFILLMENT, CONTACT_PHONE_REQUIRED (a `manual` STL-only order without "
-        "`contact_phone`), PAYMENT_METHOD_NOT_ALLOWED (with `reason`; `cash_not_accepted` "
+        "`contact_phone`), MANUAL_ORDER_LIMIT_REACHED (with `max_open_orders`: unpaid `manual` "
+        "orders already at `manual_max_open_orders`), PAYMENT_METHOD_NOT_ALLOWED (with "
+        "`reason`; `cash_not_accepted` "
         "and `online_not_accepted` add `product_ids`) or CASH_PAYMENT_LIMIT_REACHED (with "
         "`reason`), CASH_NOT_AVAILABLE (no reason: a block or an open cash order on the "
         "account or the phone, never saying which), or VALIDATION_ERROR."
@@ -203,6 +206,15 @@ def translate_checkout_error(exc: OrderingDomainError) -> ApiError:
             detail="Some lines cannot be bought right now.",
             extensions={"lines": lines},
         )
+    if isinstance(exc, ManualOrderLimitReachedError):
+        return ApiError(
+            status_code=unprocessable,
+            code="MANUAL_ORDER_LIMIT_REACHED",
+            title="Too many unpaid orders",
+            detail="You already have the most unpaid orders waiting for our call. Pay or cancel "
+            "one with us first.",
+            extensions={"max_open_orders": exc.max_open_orders},
+        )
     if isinstance(exc, ContactPhoneRequiredError):
         return ApiError(
             status_code=unprocessable,
@@ -293,6 +305,7 @@ CHECKOUT_ERRORS = (
     CheckoutLinesRefusedError,
     ContactPhoneRequiredError,
     InvalidFulfillmentError,
+    ManualOrderLimitReachedError,
     NoCommonPaymentMethodError,
     PaymentMethodNotAllowedError,
     ConsentRequiredError,

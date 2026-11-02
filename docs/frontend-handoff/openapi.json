@@ -18618,7 +18618,7 @@
                 }
               }
             },
-            "description": "MANUAL_CONFIRMATION_NOT_ALLOWED (the provider has a status API), PAYMENT_REFERENCE_MISMATCH, or INVALID_STATE_TRANSITION (`cash_payment`)."
+            "description": "MANUAL_CONFIRMATION_NOT_ALLOWED (the provider has a status API), PAYMENT_REFERENCE_MISMATCH, PAYMENT_ALREADY_PAID_OTHER_REFERENCE (already paid; the typed reference is not its stored one, likely a second transfer), or INVALID_STATE_TRANSITION (`cash_payment`)."
           },
           "422": {
             "content": {
@@ -24338,7 +24338,7 @@
                 }
               }
             },
-            "description": "PRODUCT_NOT_PURCHASABLE or QUANTITY_EXCEEDS_LIMIT (with `lines`), NO_COMMON_PAYMENT_METHOD (with `lines` and each one's `accepted_payment_methods`), INVALID_FULFILLMENT, CONTACT_PHONE_REQUIRED (a `manual` STL-only order without `contact_phone`), PAYMENT_METHOD_NOT_ALLOWED (with `reason`; `cash_not_accepted` and `online_not_accepted` add `product_ids`) or CASH_PAYMENT_LIMIT_REACHED (with `reason`), CASH_NOT_AVAILABLE (no reason: a block or an open cash order on the account or the phone, never saying which), or VALIDATION_ERROR."
+            "description": "PRODUCT_NOT_PURCHASABLE or QUANTITY_EXCEEDS_LIMIT (with `lines`), NO_COMMON_PAYMENT_METHOD (with `lines` and each one's `accepted_payment_methods`), INVALID_FULFILLMENT, CONTACT_PHONE_REQUIRED (a `manual` STL-only order without `contact_phone`), MANUAL_ORDER_LIMIT_REACHED (with `max_open_orders`: unpaid `manual` orders already at `manual_max_open_orders`), PAYMENT_METHOD_NOT_ALLOWED (with `reason`; `cash_not_accepted` and `online_not_accepted` add `product_ids`) or CASH_PAYMENT_LIMIT_REACHED (with `reason`), CASH_NOT_AVAILABLE (no reason: a block or an open cash order on the account or the phone, never saying which), or VALIDATION_ERROR."
           },
           "429": {
             "content": {
@@ -26270,7 +26270,7 @@
                 }
               }
             },
-            "description": "PRODUCT_NOT_PURCHASABLE (with `lines`), PAYMENT_METHOD_NOT_ALLOWED (with `reason`), CONTACT_PHONE_REQUIRED (`manual` without `contact_phone`), INVALID_FULFILLMENT (`contact_phone` for another provider), or VALIDATION_ERROR."
+            "description": "PRODUCT_NOT_PURCHASABLE (with `lines`), PAYMENT_METHOD_NOT_ALLOWED (with `reason`), CONTACT_PHONE_REQUIRED (`manual` without `contact_phone`), MANUAL_ORDER_LIMIT_REACHED (with `max_open_orders`), INVALID_FULFILLMENT (`contact_phone` for another provider), or VALIDATION_ERROR."
           },
           "429": {
             "content": {

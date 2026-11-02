@@ -19,9 +19,9 @@ from app.platform.domain.settings_registry import (
     validate_value,
 )
 
-# SRS 15.4's keys plus VS-028, VS-034, VS-046 and VS-050's, written out rather than derived
-# from the registry: an expectation built from the thing under test would pass just as
-# happily if a key were deleted.
+# SRS 15.4's keys plus VS-028, VS-034, VS-046, VS-050 and its audit's, written out rather
+# than derived from the registry: an expectation built from the thing under test would pass
+# just as happily if a key were deleted.
 REQUIRED_KEYS = (
     "accepting_orders",
     "offer_response_window",
@@ -34,6 +34,7 @@ REQUIRED_KEYS = (
     "cash_payment_enabled",
     "cash_max_open_orders",
     "cash_max_order_total",
+    "manual_max_open_orders",
     "pickup_address",
     "pickup_hours",
     "whatsapp_number",
@@ -82,6 +83,7 @@ def test_no_internal_setting_is_marked_public() -> None:
         "manual_payment_hold_period",
         "unverified_account_purge_period",
         "cash_max_open_orders",
+        "manual_max_open_orders",
         "security_token_retention_period",
         "session_retention_period",
         "custom_request_attachment_retention",
@@ -341,6 +343,7 @@ def test_each_setting_declares_the_type_its_consumers_expect() -> None:
         "unverified_account_purge_period": SettingType.DURATION,
         "cash_payment_enabled": SettingType.BOOLEAN,
         "cash_max_open_orders": SettingType.INTEGER,
+        "manual_max_open_orders": SettingType.INTEGER,
         "cash_max_order_total": SettingType.MONEY,
         "pickup_address": SettingType.STRING,
         "pickup_hours": SettingType.STRING,
@@ -359,6 +362,17 @@ def test_the_manual_hold_is_seven_days_editable_from_one_hour_to_thirty_days() -
     assert validate_value(key, 3_600) == 3_600
     assert validate_value(key, 2_592_000) == 2_592_000
     for refused in (3_599, 2_592_001):
+        with pytest.raises(InvalidSettingValueError):
+            validate_value(key, refused)
+
+
+def test_manual_max_open_orders_is_three_editable_from_one_to_ten() -> None:
+    """VS-050 audit Q-1 (ADR-049 d14)."""
+    key = "manual_max_open_orders"
+    assert REGISTRY[key].default == 3
+    assert REGISTRY[key].is_public is False
+    assert (validate_value(key, 1), validate_value(key, 10)) == (1, 10)
+    for refused in (0, 11):
         with pytest.raises(InvalidSettingValueError):
             validate_value(key, refused)
 

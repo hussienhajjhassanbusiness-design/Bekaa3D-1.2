@@ -1292,6 +1292,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 
 ## VS-050 — Manual payment
 **Status:** Done — [plan](plans/VS-050-manual-payment-plan.md) (Q1-Q7 approved), migration `941b40d285ce`, [ADR-049](adr/ADR-049-manual-payment.md)
+**Audit:** [VS-050 audit](audits/VS-050-audit.md) (2026-11-02). Fixes: A-01 (a paid attempt keeps its reference), Q-1 (`manual_max_open_orders`, ADR-049 d14, migration `95ffee5fde3b`), A-02 to A-04; Q-2 in the frontend handoff.
 **Depends on:** VS-024, VS-030, VS-041, VS-049. Needs no server; production use needs VS-020, and its emails need VS-021.
 **Go-live gate:** ADR-032 d24 is met (VS-024 and VS-030 are merged).
 **Goal:** Production takes online orders — cart, STL and accepted-offer checkouts — with one provider, `manual`. The administrator arranges payment with the customer directly (WhatsApp or phone) and confirms it with VS-024's manual confirm ([ADR-049](adr/ADR-049-manual-payment.md)). The website handles no payment details. No gateway, no crypto, no outbound call.

@@ -36,6 +36,11 @@ def confirm_refusal(
     return None
 
 
+def second_transfer(*, captured: bool, stored: str | None, typed: str | None) -> bool:
+    """A-01: an attempt holding money keeps its reference; another one is a second transfer."""
+    return captured and typed is not None and typed != stored
+
+
 class CaptureRefusal(StrEnum):
     """Record-capture's refusals (VS-030 plan 3.6, Q5); nothing is written for any."""
 
