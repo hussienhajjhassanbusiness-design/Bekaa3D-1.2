@@ -66,7 +66,7 @@ Nothing is written on any refusal.
 |---|---|
 | `GET /api/v1/admin/cash-blocks` | `customer_id`, `active`, `limit`, `cursor`; newest first |
 | `POST /api/v1/admin/cash-blocks/search` | body `{ phone, active?, limit?, cursor? }`: the phone stays out of URLs and logs; any spelling of one number matches; a non-Lebanese number is `422` |
-| `POST /api/v1/admin/cash-blocks/{block_id}/clear` | sets `cleared_at`, `cleared_by`, audited `cash_block.cleared`; clearing a cleared block is a `200` that changes nothing |
+| `POST /api/v1/admin/cash-blocks/{block_id}/clear` | sets `cleared_at`, `cleared_by`, audited `cash_payment_block.cleared`; clearing a cleared block is a `200` that changes nothing |
 
 Each block: `id`, `customer_id`, `order_id`, `order_number`, `reason`, `created_at`, `active`, `cleared_at`, `cleared_by`. Never the phone or its hash. Search and clear share 60 per administrator per hour. VS-031 creates blocks.
 

@@ -2493,6 +2493,7 @@ There is no total: compute one for display if you need it; checkout recomputes i
 - Order status cannot be patched. It is always derived.
 - `TransitionAffordance` reads `available_actions`: one button per entry. A line with `[]` has no action. After a `409`, re-read the order and render the new list.
 - The cash handover is an order-level action and is not in `available_actions`. Offer it when `payment_due` is true and every live line is `shipped` (delivery) or `ready_for_pickup` (pickup).
+- **A handover answering `409` with `reason: already_recorded` is shown as done** (VS-029 audit Q-2, 2026-11-02). The cash for that order is already recorded: a retry after a lost response, or another administrator got there first. Don't show an error. Show it as recorded, then reload `GET /api/v1/admin/orders/{order_id}` and render the order's payment and line states from that response. The handover takes no `Idempotency-Key`, so this `409` is the retry signal.
 - Cash blocks never carry the phone or its hash; search by phone in the body.
 
 ### Domain / item: P1-12 — Cancellation and returns

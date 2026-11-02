@@ -1269,7 +1269,7 @@ reason: str
 phone: str   # normalised and hashed server-side; never logged
 ```
 
-Each search writes one `cash_block.searched` audit row with the filters, the result count and the block ids: never the phone or its hash (VS-030 Q8, ADR-038).
+Each search writes one `cash_payment_block.searched` audit row with the filters, the result count and the block ids: never the phone or its hash (VS-030 Q8, ADR-038).
 
 ### `RefundFailureRequest`
 
