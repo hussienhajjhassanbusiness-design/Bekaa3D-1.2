@@ -62,6 +62,35 @@ async def test_a_second_cash_payment_is_refused_by_the_index(
     assert (row.verified_at, row.recorded_by) == (at, admin.id)
 
 
+async def test_a_second_cash_payment_reported_by_the_live_index_is_already_recorded(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """ADR-040 d6: which index Postgres names depends on index order, so `uq_payments_one_live`
+    maps too (audit A-04). The DROP INDEX is rolled back with the transaction."""
+    order = await seed_physical_order(db_session, line_states=["shipped"])
+    admin = await create_user(db_session, role=UserRole.ADMIN)
+    insert = partial(
+        insert_cash_payment,
+        order_id=order.order_id,
+        amount_cents=1000,
+        currency="USD",
+        recorded_by=admin.id,
+        at=datetime.now(UTC),
+    )
+    async with async_sessionmaker(db_engine)() as session, session.begin():
+        await session.execute(text("DROP INDEX uq_payments_one_cash"))
+        await insert(session)
+        with pytest.raises(CashAlreadyRecordedError) as caught:
+            await insert(session)
+        await session.rollback()
+    assert "uq_payments_one_live" in str(caught.value.__cause__)
+    async with db_engine.connect() as conn:
+        index = await conn.scalar(
+            text("SELECT count(*) FROM pg_indexes WHERE indexname = 'uq_payments_one_cash'")
+        )
+    assert index == 1
+
+
 async def test_other_integrity_errors_are_not_reported_as_already_recorded(
     db_engine: AsyncEngine, db_session: AsyncSession
 ) -> None:

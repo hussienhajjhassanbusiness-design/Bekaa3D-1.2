@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
+from app.fulfillment.domain.limits import ADMIN_NOTE_RATE_LIMIT
 from app.main import app as main_app
 from app.ordering.domain.admin_orders import AdminOrderFilters
 from app.ordering.infrastructure.admin_orders import admin_queue_query
@@ -27,6 +28,7 @@ from tests.integration.fulfillment.order_support import (
     ORDERS,
     PhysicalOrder,
     order_path,
+    preset_rate_limit,
     seed_physical_order,
 )
 from tests.integration.ordering.physical_support import usd
@@ -193,7 +195,10 @@ async def test_the_queue_query_uses_its_partial_index(
     async with db_engine.connect() as conn:
         await conn.execute(text("ANALYZE orders, order_items"))
         await conn.commit()
-        await conn.execute(text("SET LOCAL enable_seqscan = off"))
+        # Shared-DB stats once picked a bitmap scan plus a sort (CI 39933621938, audit A-01).
+        # Without those, only an index already in `(placed_at, id)` order can serve the page.
+        for plan_node in ("seqscan", "bitmapscan", "sort", "incremental_sort"):
+            await conn.execute(text(f"SET LOCAL enable_{plan_node} = off"))
         rows = await conn.execute(text(f"EXPLAIN {compiled}"), dict(compiled.params))
         plan = "\n".join(str(row[0]) for row in rows)
         await conn.rollback()
@@ -295,6 +300,20 @@ async def test_a_patch_needs_csrf_and_an_existing_order(db_session: AsyncSession
         unknown = _patch(client, uuid.uuid4(), {"admin_note": NOTE})
     assert_problem(no_csrf, 403, "CSRF_INVALID")
     assert_problem(unknown, 404, "NOT_FOUND")
+
+
+async def test_the_note_has_its_own_hourly_limit(db_session: AsyncSession) -> None:
+    """ADR-040 d10: 120 an hour per administrator; the 121st changes nothing (audit A-02)."""
+    order = await seed_physical_order(db_session)
+    with client_for(main_app) as client:
+        admin, _, _ = await mfa_admin(client, db_session)
+        await preset_rate_limit("admin_order_note", admin.id, ADMIN_NOTE_RATE_LIMIT - 1)
+        last_allowed = _patch(client, order.order_id, {"admin_note": "first"})
+        refused = _patch(client, order.order_id, {"admin_note": "second"})
+        detail = client.get(order_path(order.order_id)).json()
+    assert last_allowed.status_code == 200, last_allowed.text
+    assert_problem(refused, 429, "RATE_LIMITED")
+    assert detail["admin_note"] == "first"
 
 
 async def test_the_internal_note_is_never_visible_to_the_customer(

@@ -36,6 +36,7 @@ from tests.integration.fulfillment.order_support import (
     transition_path,
 )
 from tests.integration.ordering.physical_support import setting
+from tests.integration.payments.refund_support import act, create, ok
 
 pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("configured_app")]
 
@@ -130,6 +131,31 @@ async def test_an_online_order_completes_and_records_completed_at(
             assert move(client, order, step).status_code == 200
         detail = client.get(order_path(order.order_id)).json()
     assert detail["status"] == "completed" and detail["completed_at"] is not None
+
+
+async def _completed_at(engine: AsyncEngine, order_id: uuid.UUID) -> Any:
+    async with engine.connect() as conn:
+        return await conn.scalar(
+            text("SELECT completed_at FROM orders WHERE id = :o"), {"o": order_id}
+        )
+
+
+async def test_an_order_completed_again_keeps_its_first_completed_at(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """ADR-040 d5: a voided refund derives `completed` again; the date must not move (A-03)."""
+    order = await seed_physical_order(db_session, payment_method="online", payment_status="paid")
+    with client_for(main_app) as client:
+        await mfa_admin(client, db_session)
+        for step in DELIVERY_PATH[1:]:
+            assert move(client, order, step).status_code == 200
+        first = await _completed_at(db_engine, order.order_id)
+        refund = ok(create(client, order.order_id, [(order.line_ids[0], 400)]), 201)["id"]
+        refunding = (await states(db_engine, order.order_id))[0]
+        ok(act(client, refund, "void", {"reason": "Entered by mistake."}))
+    assert first is not None and refunding == "partially_refunded"
+    assert (await states(db_engine, order.order_id))[0] == "completed"
+    assert await _completed_at(db_engine, order.order_id) == first
 
 
 # --- BR-148 and the cash rule -------------------------------------------------------------
