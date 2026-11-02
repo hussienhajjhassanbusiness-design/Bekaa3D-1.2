@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.core.security import hash_phone
 from app.main import app as main_app
+from app.ordering.api.admin_cash_blocks import RATE_LIMIT
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
 from tests.integration.deep_support import (
     PASSWORD,
@@ -22,6 +23,7 @@ from tests.integration.deep_support import (
     login,
     mfa_admin,
 )
+from tests.integration.fulfillment.order_support import preset_rate_limit
 from tests.integration.ordering.checkout_support import (
     add_to_cart,
     shop_open,  # noqa: F401
@@ -83,7 +85,7 @@ async def _audits(engine: AsyncEngine, block_id: str) -> list[Any]:
         rows = await conn.execute(
             text(
                 "SELECT actor_user_id, after_data FROM audit_logs"
-                " WHERE action = 'cash_block.cleared' AND entity_id = :b"
+                " WHERE action = 'cash_payment_block.cleared' AND entity_id = :b"
             ),
             {"b": uuid.UUID(block_id)},
         )
@@ -194,6 +196,24 @@ async def test_search_and_clear_need_csrf(db_session: AsyncSession) -> None:
         after = client.get(BLOCKS, params={"customer_id": str(buyer.id), "active": "true"})
     assert_problem(search, 403, "CSRF_INVALID")
     assert_problem(clear, 403, "CSRF_INVALID")
+    assert [b["id"] for b in after.json()["items"]] == [block_id]
+
+
+async def test_search_and_clear_share_one_hourly_limit(db_session: AsyncSession) -> None:
+    """ADR-040 d10: 60 an hour per administrator for both routes together (audit A-02)."""
+    buyer = await create_user(db_session)
+    phone = random_phone()
+    block_id = await _block(db_session, buyer.id, phone)
+    with client_for(main_app) as client:
+        admin, _, _ = await mfa_admin(client, db_session)
+        await preset_rate_limit("admin_cash_blocks", admin.id, RATE_LIMIT - 1)
+        last_allowed = _search(client, {"phone": phone})
+        clear = client.post(clear_path(block_id), headers=csrf(client))
+        search = _search(client, {"phone": phone})
+        after = client.get(BLOCKS, params={"customer_id": str(buyer.id), "active": "true"})
+    assert last_allowed.status_code == 200, last_allowed.text
+    assert_problem(clear, 429, "RATE_LIMITED")
+    assert_problem(search, 429, "RATE_LIMITED")
     assert [b["id"] for b in after.json()["items"]] == [block_id]
 
 

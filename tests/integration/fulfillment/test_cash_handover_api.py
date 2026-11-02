@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
+from app.fulfillment.domain.limits import HANDOVER_RATE_LIMIT
 from app.main import app as main_app
 from app.payments.domain.exceptions import CashAlreadyRecordedError
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
@@ -25,11 +26,13 @@ from tests.integration.fulfillment.order_support import (
     emails,
     hand_over,
     handover_path,
+    move,
     notifications,
+    preset_rate_limit,
     seed_physical_order,
     states,
 )
-from tests.integration.ordering.physical_support import usd
+from tests.integration.ordering.physical_support import setting, usd
 
 pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("configured_app")]
 
@@ -334,3 +337,37 @@ async def test_an_index_refusal_without_the_lock_is_a_409_not_a_500(
     assert_problem(response, 409, "INVALID_STATE_TRANSITION")
     assert response.json()["reason"] == "already_recorded"
     assert await effects(db_engine, order.order_id) == (0, 0, 0, 0, 0)
+
+
+async def test_the_handover_has_its_own_hourly_limit(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """ADR-040 d10: 60 an hour per administrator; the 61st changes nothing (audit A-02)."""
+    first = await seed_physical_order(db_session, line_states=["shipped"])
+    second = await seed_physical_order(db_session, line_states=["shipped"])
+    with client_for(main_app) as client:
+        admin, _, _ = await mfa_admin(client, db_session)
+        await preset_rate_limit("admin_cash_handover", admin.id, HANDOVER_RATE_LIMIT - 1)
+        last_allowed = hand_over(client, first, 1000)
+        refused = hand_over(client, second, 1000)
+    assert last_allowed.status_code == 200, last_allowed.text
+    assert_problem(refused, 429, "RATE_LIMITED")
+    assert await states(db_engine, second.order_id) == ("in_progress", ["shipped"])
+    assert await effects(db_engine, second.order_id) == (0, 0, 0, 0, 0)
+
+
+async def test_closing_the_shop_never_blocks_a_handover_or_a_transition(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """BR-040: the kill switch stops new orders, never work on existing ones (audit A-07)."""
+    cash = await seed_physical_order(db_session, line_states=["shipped"])
+    paid = await seed_physical_order(db_session, payment_method="online", payment_status="paid")
+    async with setting(db_engine, "accepting_orders", False):
+        with client_for(main_app) as client:
+            await mfa_admin(client, db_session)
+            handed = hand_over(client, cash, 1000)
+            moved = move(client, paid, "in_production")
+    assert handed.status_code == 200, handed.text
+    assert moved.status_code == 200, moved.text
+    assert await states(db_engine, cash.order_id) == ("completed", ["delivered"])
+    assert (await states(db_engine, paid.order_id))[1] == ["in_production"]

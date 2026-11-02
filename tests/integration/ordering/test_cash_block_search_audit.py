@@ -1,5 +1,5 @@
-"""I20 (VS-030 plan 2.6, Q8): each cash-block search writes one `cash_block.searched` audit
-row with the filters, the count and the block ids, never the phone or its hash."""
+"""I20 (VS-030 plan 2.6, Q8): each cash-block search writes one `cash_payment_block.searched`
+audit row with the filters, the count and the block ids, never the phone or its hash."""
 
 import json
 
@@ -37,7 +37,7 @@ async def test_a_search_is_audited_without_the_phone_or_its_hash(
             await conn.execute(
                 text(
                     "SELECT actor_user_id, entity_type, entity_id, before_data, after_data"
-                    " FROM audit_logs WHERE action = 'cash_block.searched'"
+                    " FROM audit_logs WHERE action = 'cash_payment_block.searched'"
                     " AND after_data->'block_ids' ? :b"
                 ),
                 {"b": block_ids[0]},
@@ -45,7 +45,7 @@ async def test_a_search_is_audited_without_the_phone_or_its_hash(
         ).all()
     assert len(rows) == 1
     row = rows[0]
-    assert row.actor_user_id == admin and row.entity_type == "cash_block"
+    assert row.actor_user_id == admin and row.entity_type == "cash_payment_block"
     assert row.after_data == {
         "active": None,
         "limit": 5,

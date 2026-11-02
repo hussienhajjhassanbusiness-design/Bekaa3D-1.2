@@ -1,6 +1,7 @@
 """Seeding and probes for the VS-029 admin order tests: physical orders in any line state,
 written directly (later slices own some of the paths that reach those states)."""
 
+import os
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -8,6 +9,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import httpx
+import redis.asyncio as redis_asyncio
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
@@ -62,6 +64,13 @@ def hand_over(client: TestClient, order: PhysicalOrder, amount_cents: int) -> ht
         headers=csrf(client),
     )
     return response
+
+
+async def preset_rate_limit(prefix: str, admin_id: uuid.UUID, used: int) -> None:
+    """Set a per-administrator hourly counter, so the next request is number `used + 1`."""
+    store = redis_asyncio.from_url(os.environ["REDIS_URL"])  # type: ignore[no-untyped-call]
+    await store.set(f"ratelimit:{prefix}:{admin_id}", used, ex=3600)
+    await store.aclose()
 
 
 def _default_status(payment_method: str, payment_status: str | None) -> str:

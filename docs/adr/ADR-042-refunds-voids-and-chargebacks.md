@@ -62,7 +62,7 @@ The VS-041 audit added two more:
 12. **A Q-2 mismatch (owner answer Q11)** answers 409 `ORDER_TOTAL_MISMATCH` and writes nothing. It logs `refund_integrity_error` and raises a `refund_integrity` payment alert in its own transaction, repeated at most daily per payment. Unpaid orders are refused first (409 `ORDER_NOT_PAID`).
 13. **Settle changes no order or payment status.** Create, fail, reissue and void recompute both. The payment may move back (`refunded → partially_refunded → paid`).
 14. **Display reads are unlocked and never decide money.** The customer's `OrderDetail.refunds` shows admin, cancellation and late-capture refunds as `processing` or `refunded`, hiding voided ones and a reissued failure (Q9). `AdminOrderDetail` gains `refunds` and `refund_balance`.
-15. **The cash-block phone search is audited** as `cash_block.searched`, with its filters, result count and block ids only: never the phone or its hash (Q8).
+15. **The cash-block phone search is audited** as `cash_payment_block.searched` (named `cash_block.searched` until the VS-029 audit), with its filters, result count and block ids only: never the phone or its hash (Q8).
 
 ### Decided in PR C (branch `vs-030-pr-c`; owner answers C1-C4, plan Revision 3)
 

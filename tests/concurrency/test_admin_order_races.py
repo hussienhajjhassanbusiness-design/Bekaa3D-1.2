@@ -340,7 +340,7 @@ async def test_two_administrators_clearing_one_block_write_one_audit_row(
     async with db_engine.connect() as conn:
         audits = await conn.scalar(
             text(
-                "SELECT count(*) FROM audit_logs WHERE action = 'cash_block.cleared'"
+                "SELECT count(*) FROM audit_logs WHERE action = 'cash_payment_block.cleared'"
                 " AND entity_id = :b"
             ),
             {"b": block_id},

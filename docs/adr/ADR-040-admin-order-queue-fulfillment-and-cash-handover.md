@@ -23,6 +23,8 @@ VS-023b (ADR-039) built the transition endpoint for STL lines and a pure edge ta
 9. **The internal note is the only `PATCH`able field.** Blank or null clears it. The audit row records `has_note` only, never the text, and no history row is written. No customer schema has the field.
 10. **Limits** (`fulfillment/domain/limits.py`): all line transitions share the VS-023b limit of 300 an hour per administrator; the handover 60, the note 120, the cash-block search and clear 60. Queue pages default to 25, at most 100.
 11. **Cash blocks.** The list filters by customer and active. The phone search takes the phone in the body, so it never reaches request logs, normalises it like checkout (any spelling matches) and matches on its keyed hash. No response carries the phone or its hash (ADR-038). Clearing locks the block, sets `cleared_at` and `cleared_by` and writes an audit row; clearing a cleared block is a `200` that changes and audits nothing.
+12. **Admin order reads are not audited** (VS-029 audit Q-1, owner 2026-11-02). The queue, the detail and the cash-block list write no `*.viewed` row, although they show the recipient's name, phone, address and email. Order handling is the administrator's daily work, and an audit row per page view would bury the writes that matter. The writes stay audited: transitions, the handover, the note, cash-block search and clear. This differs on purpose from the user, contact-message and custom-request reads (BUG-39), which are occasional lookups of personal data.
+13. **No partial-shipment notice in V1** (VS-029 audit Q-3, owner 2026-11-02). d2 stands: the customer hears once per order per visible step, when the last live physical line reaches it. A parcel holding only some lines arrives without its own email; the customer's order page shows each line's status (`fulfillment_status`, with `in_production` shown as `pending`), which is where a partial shipment is visible.
 
 ## Consequences
 
@@ -32,7 +34,7 @@ VS-023b (ADR-039) built the transition endpoint for STL lines and a pure edge ta
 - **VS-031 must keep d8 true.** If cancelling a paid online order sets `orders.cancelled_at`, that order leaves the queue; the predicate must then tell a paid-then-cancelled order from a released one.
 - The handover's `422` names the order's amount due in its currency; the request accepts USD only, as checkout does.
 - Until VS-030 replaces the `refund_present` stop-gap, a transition on a `refunded` order derives `in_progress` (strict-xfail in `tests/unit/ordering/test_status_inputs.py`); no order can be `refunded` before VS-030.
-- A partial shipment is not announced: on a two-line order, the parcel with line A arrives without a "shipped" or "delivered" email until line B reaches the same step (SRS §16.1's order-level triggers; SRS §8.3 does not settle partial shipments).
+- A partial shipment is not announced: on a two-line order, the parcel with line A arrives without a "shipped" or "delivered" email until line B reaches the same step (SRS §16.1's order-level triggers; SRS §8.3 does not settle partial shipments). Accepted for V1 in d13; the order page shows the line statuses.
 
 ## Alternatives rejected
 

@@ -163,8 +163,8 @@ async def search_blocks(
     claims: AccessTokenClaims = Depends(require_admin),
     session: AsyncSession = Depends(get_session),
 ) -> CashPaymentBlockPage:
-    """One `cash_block.searched` audit row per search: filters, count and ids only, never
-    the phone or its hash (VS-030 2.6, Q8)."""
+    """One `cash_payment_block.searched` audit row per search: filters, count and ids only,
+    never the phone or its hash (VS-030 2.6, Q8)."""
     page = await _page(
         session,
         user_id=None,
@@ -176,8 +176,8 @@ async def search_blocks(
     ip = client_ip(request)
     await SqlAuditWriter(session).record(
         actor_user_id=claims.user_id,
-        action="cash_block.searched",
-        entity_type="cash_block",
+        action="cash_payment_block.searched",
+        entity_type="cash_payment_block",
         entity_id=None,
         after_data={
             "active": body.active,
@@ -219,7 +219,7 @@ async def clear_block(
     ip = client_ip(request)
     await SqlAuditWriter(session).record(
         actor_user_id=claims.user_id,
-        action="cash_block.cleared",
+        action="cash_payment_block.cleared",
         entity_type="cash_payment_block",
         entity_id=block_id,
         before_data={"cleared_at": None},
