@@ -25,7 +25,7 @@ class PaymentFilters:
     late_captured: bool | None = None
     initiated_after: datetime | None = None
     initiated_before: datetime | None = None
-    awaiting_confirmation: bool = False  # live `manual` attempts (ADR-049 d8)
+    awaiting_confirmation: bool = False  # live `manual` attempts (ADR-049 d11)
 
 
 @dataclass(frozen=True)

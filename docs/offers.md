@@ -151,6 +151,7 @@ The offer stays `accepted` until the payment is verified. A replay of the same k
 | The offer's unpaid order has no live attempt, or the STL is already owned | `409 PRODUCT_ALREADY_OWNED`, with `product_ids`. Retry that order with `POST /api/v1/me/orders/{order_id}/payments` |
 | An unknown `payment_provider` | `422 PAYMENT_METHOD_NOT_ALLOWED`, with `reason` |
 | `manual` without `contact_phone` / another provider with one | `422 CONTACT_PHONE_REQUIRED` / `422 INVALID_FULFILLMENT` (VS-050; checked right after the provider is known to be configured) |
+| `manual`, and the customer already holds `manual_max_open_orders` unpaid `manual` orders | `422 MANUAL_ORDER_LIMIT_REACHED`, with `max_open_orders` (VS-050 audit Q-1; checked under the customer's advisory lock, before the order is inserted, so at the cap it comes before `409 PRODUCT_ALREADY_OWNED` for an unpaid order of the same offer: pay or retry that order first) |
 | Same key, different body / still running | `409 IDEMPOTENCY_KEY_CONFLICT` / `409 IDEMPOTENCY_REQUEST_IN_PROGRESS` |
 | The provider could not start the payment | `502 PAYMENT_PROVIDER_UNAVAILABLE`; the order exists unpaid |
 | Anonymous / unverified / no CSRF / over the limit | `401` / `403 EMAIL_VERIFICATION_REQUIRED` / `403 CSRF_INVALID` / `429 RATE_LIMITED` |

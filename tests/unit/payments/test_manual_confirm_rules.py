@@ -10,6 +10,7 @@ from app.payments.domain.manual import (
     ConfirmRefusal,
     capture_refusal,
     confirm_refusal,
+    second_transfer,
 )
 from app.payments.domain.release import Capability
 
@@ -122,3 +123,31 @@ def test_record_capture_refusals_in_order() -> None:
     assert capture(reached_paid=True, late_captured=True) is R.ALREADY_PAID
     assert capture(late_captured=True) is R.ALREADY_LATE_CAPTURED
     assert capture(amount=1000) is R.USE_CONFIRM
+
+
+@pytest.mark.parametrize(
+    ("captured", "stored", "typed", "refused"),
+    [
+        (True, None, None, False),
+        (True, "WH-1", None, False),
+        (True, "WH-1", "WH-1", False),
+        (True, "WH-1", "WH-2", True),
+        (True, None, "WH-2", True),  # paid without one: a new reference is another transfer
+        (False, None, "WH-2", False),
+        (False, "WH-1", "WH-2", False),  # not captured: the reference check decides (409)
+    ],
+)
+def test_a_manual_attempt_holding_money_keeps_its_reference(
+    captured: bool, stored: str | None, typed: str | None, refused: bool
+) -> None:
+    """VS-050 audit A-01: same or no reference is a no-op; another is a second transfer."""
+    found = second_transfer(
+        provider=PaymentProvider.MANUAL, captured=captured, stored=stored, typed=typed
+    )
+    assert found is refused
+
+
+def test_another_provider_may_record_its_missing_reference_once_paid() -> None:
+    """The checkout Tx2 crash: a paid attempt without its provider reference gets it here."""
+    found = second_transfer(provider=PaymentProvider.MOCK, captured=True, stored=None, typed="r")
+    assert found is False

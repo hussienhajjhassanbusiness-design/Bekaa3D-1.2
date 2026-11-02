@@ -43,6 +43,7 @@ from app.payments.domain.enums import PaymentProvider, PaymentStatus
 from app.payments.domain.exceptions import (
     CaptureRecordRefusedError,
     ManualConfirmRefusedError,
+    PaymentAlreadyPaidOtherReferenceError,
     PaymentNotFoundError,
     PaymentReferenceMismatchError,
 )
@@ -234,7 +235,9 @@ async def reconcile_payment(
         **_RESPONSES,
         409: {
             "description": "MANUAL_CONFIRMATION_NOT_ALLOWED (the provider has a status API), "
-            "PAYMENT_REFERENCE_MISMATCH, or INVALID_STATE_TRANSITION (`cash_payment`)."
+            "PAYMENT_REFERENCE_MISMATCH, PAYMENT_ALREADY_PAID_OTHER_REFERENCE (already paid; "
+            "the typed reference is not its stored one, likely a second transfer), or "
+            "INVALID_STATE_TRANSITION (`cash_payment`)."
         },
         422: {
             "description": "PAYMENT_AMOUNT_MISMATCH (with `expected_amount_cents`, `currency`): "
@@ -270,6 +273,14 @@ async def confirm_payment(
         raise _refused(exc) from exc
     except PaymentReferenceMismatchError as exc:
         raise _reference_mismatch() from exc
+    except PaymentAlreadyPaidOtherReferenceError as exc:
+        raise ApiError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="PAYMENT_ALREADY_PAID_OTHER_REFERENCE",
+            title="Payment already paid with another reference",
+            detail="This payment is already paid with another reference, and no other payment "
+            "has this one: it may be a second transfer. Check it before returning any money.",
+        ) from exc
     payment = await SqlPaymentStore(session).get(payment_id)
     assert payment is not None
     return ManualConfirmRead(outcome=outcome, payment=PaymentSummary.of(payment))

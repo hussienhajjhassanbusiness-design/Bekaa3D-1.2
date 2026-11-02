@@ -29,7 +29,7 @@ async def test_every_registered_setting_is_seeded_and_nothing_else_is(
     extra row means a key exists that no code knows how to validate."""
     rows = (await db_session.scalars(select(SettingModel))).all()
     assert {row.key for row in rows} == set(REGISTRY)
-    assert len(rows) == 17  # VS-050 added manual_payment_hold_period
+    assert len(rows) == 18  # VS-050's audit added manual_max_open_orders
     assert "free_shipping_threshold" not in {row.key for row in rows}
     assert "daily_download_cap" not in {row.key for row in rows}
 

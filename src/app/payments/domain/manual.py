@@ -36,6 +36,16 @@ def confirm_refusal(
     return None
 
 
+def second_transfer(
+    *, provider: PaymentProvider, captured: bool, stored: str | None, typed: str | None
+) -> bool:
+    """A-01: a `manual` attempt holding money keeps its reference. Elsewhere a missing one is
+    the checkout Tx2 crash, which confirm records (VS-024 Revision 5 item 1)."""
+    if provider is not PaymentProvider.MANUAL:
+        return False
+    return captured and typed is not None and typed != stored
+
+
 class CaptureRefusal(StrEnum):
     """Record-capture's refusals (VS-030 plan 3.6, Q5); nothing is written for any."""
 

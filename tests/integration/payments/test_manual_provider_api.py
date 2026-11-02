@@ -213,6 +213,55 @@ async def test_a_given_reference_must_be_unique_and_others_still_need_one(
     assert (await one(db_engine, PAYMENT_STATE, p=two_id)).status == "pending"
 
 
+CONFIRM_AUDITS = """
+    SELECT count(*) AS n FROM audit_logs
+    WHERE entity_id = :p AND action = 'payment.manual_confirmation'
+"""
+
+
+@pytest.mark.parametrize("first_reference", [None, "OMT-first"])
+async def test_a_paid_attempt_keeps_its_reference_and_flags_a_second_transfer(
+    client: TestClient, db_engine: AsyncEngine, db_session: AsyncSession, first_reference: Any
+) -> None:
+    """VS-050 audit A-01: same or no reference is a no-op; another one is refused, unwritten."""
+    at = datetime(2022 + YEARS_AHEAD, 1, 1, tzinfo=UTC)
+    stored = f"{first_reference}-{uuid.uuid4().hex[:6]}" if first_reference else None
+    order = await seed_order(db_session, placed_at=at)
+    payment_id = await seed_attempt(db_session, order, initiated_at=at, provider="manual")
+    await mfa_admin(client, db_session)
+    paid = _confirm(client, payment_id, 1000, **({"provider_reference": stored} if stored else {}))
+    assert paid.json()["outcome"] == "apply_paid", paid.text
+    same = {"provider_reference": stored} if stored else {}
+    for repeat in ({}, same):
+        again = _confirm(client, payment_id, 1000, **repeat)
+        assert (again.status_code, again.json()["outcome"]) == (200, "noop"), again.text
+    second = _confirm(client, payment_id, 1000, provider_reference=f"Whish-{uuid.uuid4().hex[:6]}")
+    assert_problem(second, 409, "PAYMENT_ALREADY_PAID_OTHER_REFERENCE")
+    state = await one(db_engine, PAYMENT_STATE, p=payment_id)
+    assert (state.status, state.provider_payment_id) == ("paid", stored)
+    assert (await one(db_engine, CONFIRM_AUDITS, p=payment_id)).n == 3  # the 409 wrote none
+
+
+async def test_another_payments_reference_on_a_paid_attempt_is_a_mismatch_not_a_transfer(
+    client: TestClient, db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """Money review: a reference another payment owns is never reported as a second transfer."""
+    at = datetime(2023 + YEARS_AHEAD, 1, 1, tzinfo=UTC)
+    first, second = (
+        await seed_order(db_session, placed_at=at),
+        await seed_order(db_session, placed_at=at),
+    )
+    one_id = await seed_attempt(db_session, first, initiated_at=at, provider="manual")
+    two_id = await seed_attempt(db_session, second, initiated_at=at, provider="manual")
+    own, other = f"WH-{uuid.uuid4().hex[:6]}", f"WH-{uuid.uuid4().hex[:6]}"
+    await mfa_admin(client, db_session)
+    assert _confirm(client, one_id, 1000, provider_reference=own).status_code == 200
+    assert _confirm(client, two_id, 1000, provider_reference=other).status_code == 200
+    reused = _confirm(client, one_id, 1000, provider_reference=other)
+    assert_problem(reused, 409, "PAYMENT_REFERENCE_MISMATCH")
+    assert (await one(db_engine, PAYMENT_STATE, p=one_id)).provider_payment_id == own
+
+
 # --- A wrong amount, then the customer's retry ------------------------------------------------
 
 
@@ -373,6 +422,122 @@ async def test_the_alert_commits_with_the_order_even_if_the_second_transaction_f
     assert await alerts(db_engine, payment) == {"manual_payment_due": 1}
 
 
+# --- The open-order cap (VS-050 audit Q-1, ADR-049 d14) --------------------------------------
+
+
+async def _attempts(db: AsyncSession, order: Any, *steps: tuple[str, str]) -> uuid.UUID:
+    """Attempts one minute apart, as (provider, status); returns the last one's id."""
+    start = datetime.now(UTC) - timedelta(hours=1)
+    last = uuid.uuid4()
+    for minute, (provider, state) in enumerate(steps):
+        at = start + timedelta(minutes=minute)
+        last = await seed_attempt(db, order, initiated_at=at, provider=provider, status=state)
+    return last
+
+
+async def test_the_cap_counts_only_the_customers_unpaid_orders_whose_latest_attempt_is_manual(
+    client: TestClient, db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    customer, stranger = await create_user(db_session), await create_user(db_session)
+    placed_at = datetime.now(UTC) - timedelta(hours=2)
+
+    async def order(user: uuid.UUID, *steps: tuple[str, str]) -> uuid.UUID:
+        seeded = await seed_order(db_session, placed_at=placed_at, user_id=user, **PHONE)
+        return await _attempts(db_session, seeded, *steps)
+
+    await order(customer.id, ("mock", "failed"), ("manual", "pending"))  # counts
+    waiting = await order(customer.id, ("manual", "pending"))  # counts
+    for _ in range(2):  # latest is mock: twice, so counting the earliest attempt shows
+        await order(customer.id, ("manual", "failed"), ("mock", "pending"))
+    await order(stranger.id, ("manual", "pending"))  # another customer's
+    login(client, customer.email)
+    add_to_cart(client, await stl(db_session))
+    before = await rows(db_engine, customer.id)
+    async with setting(db_engine, "manual_max_open_orders", 2):
+        refused = post_checkout(client, checkout_body(contact_phone=random_phone()))
+        assert_problem(refused, 422, "MANUAL_ORDER_LIMIT_REACHED")
+        assert refused.json()["max_open_orders"] == 2
+        assert await rows(db_engine, customer.id) == before  # nothing written
+        await mfa_admin(client, db_session)
+        assert _confirm(client, waiting, 1000).json()["outcome"] == "apply_paid"
+        login(client, customer.email)  # paying one order frees its place
+        placed = post_checkout(client, checkout_body(contact_phone=random_phone()))
+    assert placed.status_code == 201, placed.text
+
+
+async def test_at_the_cap_a_retry_still_works_and_a_release_frees_a_place(
+    client: TestClient, db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """ADR-049 d14: a retry adds no order; releasing an unpaid order frees its place."""
+    customer = await create_user(db_session)
+    placed_at = datetime.now(UTC) - timedelta(hours=1)
+    order = await seed_order(db_session, placed_at=placed_at, user_id=customer.id, **PHONE)
+    await _attempts(db_session, order, ("manual", "failed"))
+    login(client, customer.email)
+    add_to_cart(client, await stl(db_session))
+    async with setting(db_engine, "manual_max_open_orders", 1):
+        path = f"/api/v1/me/orders/{order.order_id}/payments"
+        retried = _post(client, path, {}, **{"Idempotency-Key": new_key()})
+        assert retried.status_code == 201, retried.text
+        refused = post_checkout(client, checkout_body(contact_phone=random_phone()))
+        assert_problem(refused, 422, "MANUAL_ORDER_LIMIT_REACHED")
+        await mfa_admin(client, db_session)
+        released = _post(
+            client,
+            f"/api/v1/admin/orders/{order.order_id}/release",
+            {"reason": "customer said by phone they will not pay"},
+        )
+        assert released.status_code == 200, released.text
+        login(client, customer.email)
+        placed = post_checkout(client, checkout_body(contact_phone=random_phone()))
+    assert placed.status_code == 201, placed.text
+
+
+async def test_the_cap_applies_to_the_manual_provider_only(
+    client: TestClient, db_engine: AsyncEngine, db_session: AsyncSession, monkeypatch: Any
+) -> None:
+    """A customer at the manual cap may still pay through another provider (ADR-049 d14)."""
+    customer = await create_user(db_session)
+    placed_at = datetime.now(UTC) - timedelta(hours=1)
+    order = await seed_order(db_session, placed_at=placed_at, user_id=customer.id, **PHONE)
+    await _attempts(db_session, order, ("manual", "pending"))
+    monkeypatch.setattr(main_app.state, "payment_providers", {"mock": ManualPaymentProvider()})
+    login(client, customer.email)
+    add_to_cart(client, await stl(db_session))
+    async with setting(db_engine, "manual_max_open_orders", 1):
+        placed = post_checkout(client)
+    assert placed.status_code == 201, placed.text
+    assert placed.json()["payment"]["provider"] == "mock"
+
+
+async def test_the_default_cap_of_three_refuses_an_offer_checkout_writing_nothing(
+    client: TestClient, db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    customer = await create_user(db_session)
+    placed_at = datetime.now(UTC) - timedelta(hours=2)
+    for _ in range(3):
+        seeded = await seed_order(db_session, placed_at=placed_at, user_id=customer.id, **PHONE)
+        await _attempts(db_session, seeded, ("manual", "pending"))
+    product = await stl(db_session, price_cents=1000)
+    offer = await seed_offer(
+        db_session, user_id=customer.id, product_id=product, status="accepted", responds_by=None
+    )
+    login(client, customer.email)
+    before = await rows(db_engine, customer.id)
+    body = {
+        "accept_terms": True,
+        "accept_digital_final_sale": True,
+        "contact_phone": random_phone(),
+    }
+    refused = _post(
+        client, f"/api/v1/me/offers/{offer}/checkout", body, **{"Idempotency-Key": new_key()}
+    )
+    assert_problem(refused, 422, "MANUAL_ORDER_LIMIT_REACHED")
+    assert refused.json()["max_open_orders"] == 3
+    assert await rows(db_engine, customer.id) == before
+    assert (await offer_state(db_engine, offer))["status"] == "accepted"
+
+
 # --- Reads -----------------------------------------------------------------------------------
 
 
@@ -424,6 +589,12 @@ async def test_the_order_detail_shows_the_next_step_only_while_waiting(
     assert client.get(f"/api/v1/me/orders/{order.order_id}").json()["payment"]["next_step"] is None
 
 
-def test_the_manual_provider_takes_no_webhooks(client: TestClient) -> None:
-    response = client.post("/api/v1/webhooks/payments/manual", content=b"{}")
+async def test_the_manual_provider_takes_no_webhooks(
+    client: TestClient, db_engine: AsyncEngine
+) -> None:
+    """Plan T9: 404 and nothing stored (VS-050 audit A-04)."""
+    stored = "SELECT count(*) AS n FROM webhook_events"
+    before = (await one(db_engine, stored)).n
+    response = client.post("/api/v1/webhooks/payments/manual", content=b'{"event_id": "e-1"}')
     assert_problem(response, 404, "NOT_FOUND")
+    assert (await one(db_engine, stored)).n == before

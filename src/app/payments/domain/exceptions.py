@@ -52,6 +52,11 @@ class PaymentReferenceMismatchError(PaymentsDomainError):
     """409 PAYMENT_REFERENCE_MISMATCH: the typed reference is another payment's or differs."""
 
 
+class PaymentAlreadyPaidOtherReferenceError(PaymentsDomainError):
+    """409 PAYMENT_ALREADY_PAID_OTHER_REFERENCE: the attempt already holds money, and the
+    typed reference is not its stored one: likely a second transfer (VS-050 audit A-01)."""
+
+
 class CashAlreadyRecordedError(PaymentsDomainError):
     """`uq_payments_one_cash` refused a second cash payment on one order (VS-029)."""
 

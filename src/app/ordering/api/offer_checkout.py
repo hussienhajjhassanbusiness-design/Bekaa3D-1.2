@@ -79,6 +79,7 @@ _RESPONSES: dict[int | str, dict[str, Any]] = {
     422: {
         "description": "PRODUCT_NOT_PURCHASABLE (with `lines`), PAYMENT_METHOD_NOT_ALLOWED "
         "(with `reason`), CONTACT_PHONE_REQUIRED (`manual` without `contact_phone`), "
+        "MANUAL_ORDER_LIMIT_REACHED (with `max_open_orders`), "
         "INVALID_FULFILLMENT (`contact_phone` for another provider), or VALIDATION_ERROR."
     },
     429: {"description": "RATE_LIMITED: shares cart checkout's hourly limit."},

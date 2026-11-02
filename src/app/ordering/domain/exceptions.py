@@ -102,6 +102,15 @@ class ContactPhoneRequiredError(OrderingDomainError):
     """A `manual` order with no phone to call (422 CONTACT_PHONE_REQUIRED; VS-050 Q1)."""
 
 
+class ManualOrderLimitReachedError(OrderingDomainError):
+    """422 MANUAL_ORDER_LIMIT_REACHED: the customer already holds `manual_max_open_orders`
+    unpaid `manual` orders (VS-050 audit Q-1, ADR-049 d14)."""
+
+    def __init__(self, max_open_orders: int) -> None:
+        super().__init__(f"At most {max_open_orders} unpaid manual orders at once.")
+        self.max_open_orders = max_open_orders
+
+
 class PaymentMethodNotAllowedError(OrderingDomainError):
     """422 PAYMENT_METHOD_NOT_ALLOWED with a machine-readable `reason`; `product_ids` names
     the lines whose product does not accept the method (ADR-048)."""
