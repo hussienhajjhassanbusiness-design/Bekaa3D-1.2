@@ -3,6 +3,7 @@ Only for a provider without a status API; a typed amount or currency that differ
 the attempt is refused before any lock or write. `manual` may omit the reference (ADR-049)."""
 
 from datetime import UTC, datetime
+from typing import NoReturn
 from uuid import UUID
 
 import structlog
@@ -80,7 +81,8 @@ async def confirm_payment_manually(
     if second_transfer(
         captured=captured, stored=payment.provider_payment_id, typed=provider_reference
     ):
-        raise PaymentAlreadyPaidOtherReferenceError(f"payment {payment_id} is already paid")
+        assert provider_reference is not None
+        await _refuse_second_transfer(store, payment, provider_reference)
     if provider_reference is not None and not captured:
         await _require_own_reference(store, payment, provider_reference)
     outcome = await apply_provider_result(
@@ -190,6 +192,17 @@ async def record_capture_manually(
         ip_hash=ip_hash,
     )
     return outcome
+
+
+async def _refuse_second_transfer(
+    store: SqlPaymentStore, payment: Payment, reference: str
+) -> NoReturn:
+    """Another payment's reference is a mismatch, never "a second transfer" (money review)."""
+    await store.lock_reference(payment.provider, reference)
+    owner = await store.find_by_reference(payment.provider, reference)
+    if owner is not None and owner.id != payment.id:
+        raise PaymentReferenceMismatchError("another payment has this provider reference")
+    raise PaymentAlreadyPaidOtherReferenceError(f"payment {payment.id} is already paid")
 
 
 async def _require_own_reference(store: SqlPaymentStore, payment: Payment, reference: str) -> None:

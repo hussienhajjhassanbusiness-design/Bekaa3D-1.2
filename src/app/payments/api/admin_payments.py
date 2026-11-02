@@ -278,8 +278,8 @@ async def confirm_payment(
             status_code=status.HTTP_409_CONFLICT,
             code="PAYMENT_ALREADY_PAID_OTHER_REFERENCE",
             title="Payment already paid with another reference",
-            detail="This payment is already paid and that is not its reference: it is likely a "
-            "second transfer, to return to the customer outside the platform (ADR-049).",
+            detail="This payment is already paid with another reference, and no other payment "
+            "has this one: it may be a second transfer. Check it before returning any money.",
         ) from exc
     payment = await SqlPaymentStore(session).get(payment_id)
     assert payment is not None

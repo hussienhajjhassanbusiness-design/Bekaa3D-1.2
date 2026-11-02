@@ -933,6 +933,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
 - **Endpoints / jobs:** None new; the provider-neutral webhook route from VS-023 is IP-allowlisted in VS-020's nginx.
 - **Logic:**
   - Reuses the payment port from VS-023.
+  - A retry that switches onto `manual` from another provider must check `manual_max_open_orders` (ADR-049 d14 known gap; unreachable while one provider is configured).
   - Replaces the single `payment_provider` setting with a list of configured online providers (`manual` from VS-050 plus the new one), and renames the Whish-specific settings in `src/app/core/config.py` and `.env.example` (`whish_*`, `whish_webhook_ips`) to per-provider names. If §30.4 chooses both, checkout and retry let the customer pick one, stored on the payment row (VS-023, VS-024).
   - The adapter implements create-payment and redirect, signature check (if offered), and status query (if not offered, manual confirmation from VS-024 stays on). It has no refund operation: every V1 refund is manual, even if the provider offers a refund API. A card gateway uses a hosted or redirect page so card data never reaches the platform.
   - Chargebacks are built in VS-030 ([ADR-042](adr/ADR-042-refunds-voids-and-chargebacks.md) d3-d5, d16-d18; [`refunds.md`](refunds.md)): their own record, recorded by `POST /api/v1/admin/orders/{id}/chargebacks`. VS-032 only wires provider disputes, if the provider sends any, into `record_chargeback`, with `provider_dispute_reference` as the dedupe key.

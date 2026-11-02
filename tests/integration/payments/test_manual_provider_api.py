@@ -242,6 +242,26 @@ async def test_a_paid_attempt_keeps_its_reference_and_flags_a_second_transfer(
     assert (await one(db_engine, CONFIRM_AUDITS, p=payment_id)).n == 3  # the 409 wrote none
 
 
+async def test_another_payments_reference_on_a_paid_attempt_is_a_mismatch_not_a_transfer(
+    client: TestClient, db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """Money review: a reference another payment owns is never reported as a second transfer."""
+    at = datetime(2023 + YEARS_AHEAD, 1, 1, tzinfo=UTC)
+    first, second = (
+        await seed_order(db_session, placed_at=at),
+        await seed_order(db_session, placed_at=at),
+    )
+    one_id = await seed_attempt(db_session, first, initiated_at=at, provider="manual")
+    two_id = await seed_attempt(db_session, second, initiated_at=at, provider="manual")
+    own, other = f"WH-{uuid.uuid4().hex[:6]}", f"WH-{uuid.uuid4().hex[:6]}"
+    await mfa_admin(client, db_session)
+    assert _confirm(client, one_id, 1000, provider_reference=own).status_code == 200
+    assert _confirm(client, two_id, 1000, provider_reference=other).status_code == 200
+    reused = _confirm(client, one_id, 1000, provider_reference=other)
+    assert_problem(reused, 409, "PAYMENT_REFERENCE_MISMATCH")
+    assert (await one(db_engine, PAYMENT_STATE, p=one_id)).provider_payment_id == own
+
+
 # --- A wrong amount, then the customer's retry ------------------------------------------------
 
 
@@ -443,6 +463,51 @@ async def test_the_cap_counts_only_the_customers_unpaid_orders_whose_latest_atte
         login(client, customer.email)  # paying one order frees its place
         placed = post_checkout(client, checkout_body(contact_phone=random_phone()))
     assert placed.status_code == 201, placed.text
+
+
+async def test_at_the_cap_a_retry_still_works_and_a_release_frees_a_place(
+    client: TestClient, db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """ADR-049 d14: a retry adds no order; releasing an unpaid order frees its place."""
+    customer = await create_user(db_session)
+    placed_at = datetime.now(UTC) - timedelta(hours=1)
+    order = await seed_order(db_session, placed_at=placed_at, user_id=customer.id, **PHONE)
+    await _attempts(db_session, order, ("manual", "failed"))
+    login(client, customer.email)
+    add_to_cart(client, await stl(db_session))
+    async with setting(db_engine, "manual_max_open_orders", 1):
+        path = f"/api/v1/me/orders/{order.order_id}/payments"
+        retried = _post(client, path, {}, **{"Idempotency-Key": new_key()})
+        assert retried.status_code == 201, retried.text
+        refused = post_checkout(client, checkout_body(contact_phone=random_phone()))
+        assert_problem(refused, 422, "MANUAL_ORDER_LIMIT_REACHED")
+        await mfa_admin(client, db_session)
+        released = _post(
+            client,
+            f"/api/v1/admin/orders/{order.order_id}/release",
+            {"reason": "customer said by phone they will not pay"},
+        )
+        assert released.status_code == 200, released.text
+        login(client, customer.email)
+        placed = post_checkout(client, checkout_body(contact_phone=random_phone()))
+    assert placed.status_code == 201, placed.text
+
+
+async def test_the_cap_applies_to_the_manual_provider_only(
+    client: TestClient, db_engine: AsyncEngine, db_session: AsyncSession, monkeypatch: Any
+) -> None:
+    """A customer at the manual cap may still pay through another provider (ADR-049 d14)."""
+    customer = await create_user(db_session)
+    placed_at = datetime.now(UTC) - timedelta(hours=1)
+    order = await seed_order(db_session, placed_at=placed_at, user_id=customer.id, **PHONE)
+    await _attempts(db_session, order, ("manual", "pending"))
+    monkeypatch.setattr(main_app.state, "payment_providers", {"mock": ManualPaymentProvider()})
+    login(client, customer.email)
+    add_to_cart(client, await stl(db_session))
+    async with setting(db_engine, "manual_max_open_orders", 1):
+        placed = post_checkout(client)
+    assert placed.status_code == 201, placed.text
+    assert placed.json()["payment"]["provider"] == "mock"
 
 
 async def test_the_default_cap_of_three_refuses_an_offer_checkout_writing_nothing(

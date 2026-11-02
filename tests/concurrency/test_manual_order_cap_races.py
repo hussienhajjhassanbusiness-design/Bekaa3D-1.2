@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
+from app.ordering.domain.manual_orders import MANUAL_ORDERS_LOCK_NS
 from app.ordering.infrastructure.orders import SqlOrderStore
 from app.payments.infrastructure.providers.manual import ManualPaymentProvider
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
@@ -70,7 +71,11 @@ async def _advisory_wait(engine: AsyncEngine) -> None:
     while loop.time() < deadline:
         async with engine.connect() as conn:
             waiting = await conn.scalar(
-                text("SELECT count(*) FROM pg_locks WHERE NOT granted AND locktype = 'advisory'")
+                text(
+                    "SELECT count(*) FROM pg_locks WHERE NOT granted AND locktype = 'advisory'"
+                    " AND classid = :ns AND objsubid = 2"
+                ),
+                {"ns": MANUAL_ORDERS_LOCK_NS},
             )
         if waiting:
             return

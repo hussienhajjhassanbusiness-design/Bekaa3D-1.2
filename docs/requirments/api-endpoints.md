@@ -209,7 +209,7 @@ These codes are implementation additions needed to give the frontend determinist
 | 422 | `INVALID_FULFILLMENT` | Address, contact phone or method does not match cart contents |
 | 422 | `CONTACT_PHONE_REQUIRED` | An STL-only or offer checkout on the `manual` provider without `contact_phone`, the number the administrator calls (VS-050, ADR-049) |
 | 409 | `PAYMENT_REFERENCE_MISMATCH` (record-capture) | A `manual` reference another payment already has (VS-050) |
-| 409 | `PAYMENT_ALREADY_PAID_OTHER_REFERENCE` | Manual confirm of an attempt that already holds money (paid or late-captured) with a reference other than its stored one, also when none is stored: likely a second transfer. Nothing is written; the same reference or none is a `noop` (VS-050 audit A-01, ADR-049 d5) |
+| 409 | `PAYMENT_ALREADY_PAID_OTHER_REFERENCE` | Manual confirm of an attempt that already holds money (paid or late-captured) with a reference other than its stored one, also when none is stored, that no other payment has: possibly a second transfer, to check before returning money (a reference another payment has stays `PAYMENT_REFERENCE_MISMATCH`). Nothing is written; the same reference or none is a `noop` (VS-050 audit A-01, ADR-049 d5) |
 | 422 | `MANUAL_ORDER_LIMIT_REACHED` | Cart or offer checkout on the `manual` provider while the customer already holds `manual_max_open_orders` unpaid `manual` orders; body carries `max_open_orders` (VS-050 audit Q-1, ADR-049 d14) |
 | 422 | `PAYMENT_REFERENCE_REQUIRED` | Manual confirm or record-capture without a reference on a provider other than `manual` (VS-050) |
 | 422 | `PAYMENT_METHOD_NOT_ALLOWED` | Cash chosen for an order with an STL line or a zero total, or while cash is switched off; or an unconfigured online provider chosen (ADR-024); or a method some line's product does not accept (`cash_not_accepted` / `online_not_accepted` with `product_ids`, ADR-048) |
@@ -898,6 +898,7 @@ Rules:
 - physical pickup → fulfillment=`pickup`, no address; `contact_phone` (Lebanese number) required;
 - mixed order follows physical fulfillment rules and must be `online`;
 - `payment_method=cash` requires every line physical, cash enabled, no uncleared block for the customer or the normalised contact phone, fewer than `cash_max_open_orders` open unpaid cash orders, or cash orders the customer cancelled themselves in the last 24 hours (ADR-038 d23), for the customer or that phone, the **recomputed** total above 0 and ≤ `cash_max_order_total`, and `accept_cash_terms=true`;
+- an online order on the `manual` provider requires fewer than `manual_max_open_orders` unpaid orders of the customer whose latest attempt is `manual`, under a per-customer advisory lock (`422 MANUAL_ORDER_LIMIT_REACHED`, BR-150);
 - `payment_provider` must be a configured online provider; it is stored on the payment row;
 - the contact phone is stored normalised to E.164;
 - `accept_digital_final_sale=true` is required when any digital line exists;
