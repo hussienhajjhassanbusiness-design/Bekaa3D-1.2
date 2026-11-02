@@ -77,13 +77,15 @@ async def confirm_payment_manually(
     payment = await store.lock(payment_id)
     if locked is None or payment is None:
         raise PaymentNotFoundError(f"payment {payment_id} vanished")
-    captured = payment.status in REACHED_PAID or payment.late_captured_at is not None
     if second_transfer(
-        captured=captured, stored=payment.provider_payment_id, typed=provider_reference
+        provider=payment.provider,
+        captured=payment.status in REACHED_PAID or payment.late_captured_at is not None,
+        stored=payment.provider_payment_id,
+        typed=provider_reference,
     ):
         assert provider_reference is not None
         await _refuse_second_transfer(store, payment, provider_reference)
-    if provider_reference is not None and not captured:
+    if provider_reference is not None:
         await _require_own_reference(store, payment, provider_reference)
     outcome = await apply_provider_result(
         session,

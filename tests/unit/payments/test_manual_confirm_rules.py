@@ -137,8 +137,17 @@ def test_record_capture_refusals_in_order() -> None:
         (False, "WH-1", "WH-2", False),  # not captured: the reference check decides (409)
     ],
 )
-def test_an_attempt_holding_money_keeps_its_reference(
+def test_a_manual_attempt_holding_money_keeps_its_reference(
     captured: bool, stored: str | None, typed: str | None, refused: bool
 ) -> None:
     """VS-050 audit A-01: same or no reference is a no-op; another is a second transfer."""
-    assert second_transfer(captured=captured, stored=stored, typed=typed) is refused
+    found = second_transfer(
+        provider=PaymentProvider.MANUAL, captured=captured, stored=stored, typed=typed
+    )
+    assert found is refused
+
+
+def test_another_provider_may_record_its_missing_reference_once_paid() -> None:
+    """The checkout Tx2 crash: a paid attempt without its provider reference gets it here."""
+    found = second_transfer(provider=PaymentProvider.MOCK, captured=True, stored=None, typed="r")
+    assert found is False

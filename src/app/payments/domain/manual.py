@@ -36,8 +36,13 @@ def confirm_refusal(
     return None
 
 
-def second_transfer(*, captured: bool, stored: str | None, typed: str | None) -> bool:
-    """A-01: an attempt holding money keeps its reference; another one is a second transfer."""
+def second_transfer(
+    *, provider: PaymentProvider, captured: bool, stored: str | None, typed: str | None
+) -> bool:
+    """A-01: a `manual` attempt holding money keeps its reference. Elsewhere a missing one is
+    the checkout Tx2 crash, which confirm records (VS-024 Revision 5 item 1)."""
+    if provider is not PaymentProvider.MANUAL:
+        return False
     return captured and typed is not None and typed != stored
 
 

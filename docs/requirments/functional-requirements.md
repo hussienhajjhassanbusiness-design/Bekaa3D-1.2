@@ -397,7 +397,7 @@ A second live payment for the same order is prohibited
 Unauthorized users cannot manually confirm payment
 A reference already on another payment of the same provider is refused, also for two confirms racing on one reference
 The `manual` provider takes no webhooks and is never reconciled
-A manual confirmation of a payment that already holds money never changes its reference: another reference is refused as a likely second transfer
+A manual confirmation of a `manual` payment that already holds money never changes its reference: another reference is refused as a likely second transfer
 
 State transitions touched:
 
