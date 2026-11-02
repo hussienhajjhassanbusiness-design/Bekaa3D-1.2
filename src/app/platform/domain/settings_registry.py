@@ -188,6 +188,18 @@ _DEFINITIONS: Final[tuple[SettingDefinition, ...]] = (
         maximum=10,
     ),
     SettingDefinition(
+        key="manual_max_open_orders",
+        type=SettingType.INTEGER,
+        description=(
+            "Unpaid orders awaiting the administrator's call on the manual payment provider "
+            "allowed per customer at once (ADR-049)."
+        ),
+        default=3,
+        unit="unpaid manual orders per customer",
+        minimum=1,
+        maximum=10,
+    ),
+    SettingDefinition(
         key="cash_max_order_total",
         type=SettingType.MONEY,
         description="Highest recomputed order total that may be paid in cash.",

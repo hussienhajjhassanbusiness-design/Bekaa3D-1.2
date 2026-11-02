@@ -15,6 +15,7 @@ from app.ordering.domain.badge import BADGE_STATES
 from app.ordering.domain.cancellation import LineCancel
 from app.ordering.domain.enums import OrderItemStatus, OrderStatus, PaymentMethod
 from app.ordering.domain.exceptions import OrderNumberExhaustedError, ProductAlreadyOwnedError
+from app.ordering.domain.manual_orders import MANUAL_ORDERS_LOCK_NS
 from app.ordering.domain.orders import (
     NewOrder,
     NewOrderLine,
@@ -225,6 +226,21 @@ class SqlOrderStore:
             )
         )
         return order_id
+
+    async def lock_manual_orders(self, user_id: UUID) -> None:
+        await self._session.execute(
+            select(func.pg_advisory_xact_lock(MANUAL_ORDERS_LOCK_NS, func.hashtext(str(user_id))))
+        )
+
+    async def unpaid_online_order_ids(self, user_id: UUID) -> list[UUID]:
+        rows = await self._session.scalars(
+            select(_O.id).where(
+                _O.user_id == user_id,
+                _O.payment_method == PaymentMethod.ONLINE,
+                _O.status == OrderStatus.PENDING_PAYMENT,
+            )
+        )
+        return list(rows)
 
     async def lock_order(self, order_id: UUID) -> Order | None:
         row = (

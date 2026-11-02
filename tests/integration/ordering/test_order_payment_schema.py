@@ -841,6 +841,21 @@ async def test_the_stl_delivery_queue_index_is_partial_on_created_at_and_id(
     assert others == 0
 
 
+async def test_the_manual_work_list_index_is_partial_on_initiated_at_and_id(
+    db_engine: AsyncEngine,
+) -> None:
+    """VS-050 audit A-03: the admin work list's index covers live `manual` attempts only."""
+    async with db_engine.connect() as conn:
+        definition = await conn.scalar(
+            text("SELECT indexdef FROM pg_indexes WHERE indexname = 'ix_payments_awaiting_manual'")
+        )
+    assert definition is not None
+    assert "UNIQUE" not in definition
+    assert "(initiated_at, id)" in definition
+    assert "provider = 'manual'" in definition
+    assert "status = 'pending'" in definition
+
+
 async def test_the_obsolete_daily_download_cap_setting_is_gone(db_engine: AsyncEngine) -> None:
     async with db_engine.connect() as conn:
         found = await conn.scalar(

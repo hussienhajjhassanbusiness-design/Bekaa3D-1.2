@@ -21,6 +21,7 @@ from app.ordering.application.ports import (
 )
 from app.ordering.application.services.cart import clear_cart, lock_cart_for_checkout
 from app.ordering.application.services.holds import read_holds
+from app.ordering.application.services.manual_orders import require_manual_room
 from app.ordering.domain.cash import cash_limits, cash_precheck
 from app.ordering.domain.checkout_rules import (
     DIGITAL_TERMS_VERSION,
@@ -104,7 +105,7 @@ async def place_order(
     number: Callable[[], str] | None = None,
 ) -> PlacedOrder:
     """Locks, in order: the cart row, the address row FOR SHARE (delivery), the cash phone
-    advisory lock (cash). Then reads and INSERTs only: no existing `orders` row is locked."""
+    or the customer's manual-cap advisory lock. Then reads and INSERTs; no `orders` row lock."""
     online = command.payment_method is PaymentMethod.ONLINE
     if not await settings.get_bool("accepting_orders"):
         raise OrdersPausedError("Checkout is paused.")
@@ -165,6 +166,10 @@ async def place_order(
         if money.total_cents == 0:
             raise PaymentMethodNotAllowedError("zero_total")
         provider = choose_provider(command.payment_provider, configured)
+        if provider == MANUAL_PROVIDER:
+            await require_manual_room(
+                orders=orders, attempts=attempts, settings=settings, user_id=customer.id
+            )
     else:
         if command.payment_provider is not None:
             raise PaymentMethodNotAllowedError("provider_not_applicable")

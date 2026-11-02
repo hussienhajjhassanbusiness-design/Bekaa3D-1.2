@@ -97,6 +97,10 @@ class PaymentAttempts(Protocol):
         """The provider of the order's latest attempt. No lock."""
         ...
 
+    async def count_latest_on(self, order_ids: Sequence[UUID], provider: str) -> int:
+        """How many of these orders have their latest attempt on `provider`. No lock."""
+        ...
+
     async def open_attempt(
         self, *, order_id: UUID, amount_cents: int, currency: str, provider: str, at: datetime
     ) -> PaymentAttemptRef: ...
@@ -263,6 +267,14 @@ class OrderStore(Protocol):
 
     async def unpaid_offer_order(self, offer_id: UUID) -> UUID | None:
         """The uncancelled order whose line still awaits payment for this offer. No lock."""
+        ...
+
+    async def lock_manual_orders(self, user_id: UUID) -> None:
+        """The customer's transaction-scoped advisory lock for the manual cap (ADR-049 d14)."""
+        ...
+
+    async def unpaid_online_order_ids(self, user_id: UUID) -> list[UUID]:
+        """The customer's `pending_payment` online orders. No lock."""
         ...
 
     async def lock_order(self, order_id: UUID) -> Order | None:

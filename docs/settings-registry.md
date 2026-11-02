@@ -26,7 +26,7 @@ rather than inferred from the specification. Changing one is a migration if you
 want the new value to apply to a fresh deployment, or a `PATCH` if you want it
 to apply now.
 
-## The seventeen settings
+## The eighteen settings
 
 | Key | Type | Unit | Default | Range | Public |
 |---|---|---|---|---|:-:|
@@ -40,6 +40,7 @@ to apply now.
 | `unverified_account_purge_period` | duration | seconds | `2592000` (30 d) | 604 800 – 7 776 000 | ❌ |
 | `cash_payment_enabled` | boolean | — | `true` | — | ✅ |
 | `cash_max_open_orders` | integer | unpaid, uncancelled cash orders, plus those the customer cancelled in the last 24 h (ADR-038 d23), / customer or contact phone | `1` | 1 – 10 | ❌ |
+| `manual_max_open_orders` | integer | unpaid orders whose latest attempt is `manual`, / customer | `3` | 1 – 10 | ❌ — checked at cart and offer checkout on `manual`, under a per-customer advisory lock; a retry adds no order (VS-050 audit Q-1, ADR-049 d14) |
 | `cash_max_order_total` | money | cents (USD) | `10000` (100 USD) | 1 – 1 000 000 cents | ✅ |
 | `pickup_address` | string | — | `null` | ≤ 500 chars | ✅ |
 | `pickup_hours` | string | — | `null` | ≤ 200 chars | ✅ |
@@ -134,7 +135,7 @@ VS-028 changed the allowlist this way (ADR-024): `free_shipping_threshold` left 
 `cash_payment_enabled` and `cash_max_order_total` joined it, through the registry and
 `PublicSettingsRead` together, as described above.
 
-Of today's seventeen seeded keys, the eleven not in the six-key list are internal. `daily_download_cap` was deleted by VS-023b (ADR-019: no files are downloaded).
+Of today's eighteen seeded keys, the twelve not in the six-key list are internal. `daily_download_cap` was deleted by VS-023b (ADR-019: no files are downloaded).
 Its migration, `7a1c3e9b5d24`, re-seeds it on downgrade.
 
 ## Validation

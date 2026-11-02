@@ -24,6 +24,7 @@ from app.ordering.application.ports import (
 )
 from app.ordering.application.services.checkout import CheckoutCustomer, OnlinePlacedOrder
 from app.ordering.application.services.holds import read_holds
+from app.ordering.application.services.manual_orders import require_manual_room
 from app.ordering.application.services.retry import already_active
 from app.ordering.domain.checkout_rules import (
     DIGITAL_TERMS_VERSION,
@@ -88,6 +89,10 @@ async def place_offer_order(
     if live is not None:
         raise already_active(live)
     # An unpaid order with no live attempt is refused by the ownership index below.
+    if chooses_manual(command.payment_provider, configured):  # before the INSERT (ADR-049 d14)
+        await require_manual_room(
+            orders=orders, attempts=attempts, settings=settings, user_id=customer.id
+        )
     status = derive_order_status(
         OrderStatusInputs(
             PaymentMethod.ONLINE, cancelled_at_set=False, payment_reached_paid=False, lines=()

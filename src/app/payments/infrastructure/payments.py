@@ -1,7 +1,7 @@
 """`SqlPaymentStore`, and `SqlPaymentAttempts`: the adapter for Ordering's
 `PaymentAttempts` port (VS-023 plan 3.0). Neither commits."""
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -253,6 +253,23 @@ class SqlPaymentAttempts:
     async def previous_provider(self, order_id: UUID) -> str | None:
         provider = await self._store.previous_provider(order_id)
         return provider.value if provider is not None else None
+
+    async def count_latest_on(self, order_ids: Sequence[UUID], provider: str) -> int:
+        if not order_ids:
+            return 0
+        latest = (
+            select(_P.provider)
+            .where(_P.order_id.in_(order_ids))
+            .distinct(_P.order_id)
+            .order_by(_P.order_id, _P.initiated_at.desc().nulls_last(), _P.id.desc())
+            .subquery()
+        )
+        count = await self._session.scalar(
+            select(func.count())
+            .select_from(latest)
+            .where(latest.c.provider == PaymentProvider(provider))
+        )
+        return int(count or 0)
 
     async def open_attempt(
         self, *, order_id: UUID, amount_cents: int, currency: str, provider: str, at: datetime

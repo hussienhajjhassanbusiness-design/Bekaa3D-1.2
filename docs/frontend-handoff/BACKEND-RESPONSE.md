@@ -1137,7 +1137,7 @@ Set-Cookie: csrf_token=<redacted>; Max-Age=2592000; Path=/; SameSite=lax
 }
 ```
 
-**Fixture/test account:** the seeded administrator. A fresh database has seventeen settings (since VS-028, 2026-10-20).
+**Fixture/test account:** the seeded administrator. A fresh database has eighteen settings (since the VS-050 audit fixes, 2026-11-02).
 
 **Authoritative source/OpenAPI file:** [`openapi.json`](openapi.json). **The authoritative key registry is [`../settings-registry.md`](../settings-registry.md)** (code: `src/app/platform/domain/settings_registry.py`).
 
@@ -1145,7 +1145,7 @@ Set-Cookie: csrf_token=<redacted>; Max-Age=2592000; Path=/; SameSite=lax
 - Build the editor from the list response. Each row tells you its control: `boolean` is a switch, `integer` and `duration` are numbers within `minimum`/`maximum` (`duration` is in seconds), `string` is text, `money` is `{"amount_cents": int, "currency": "USD"}`. Where `nullable` is true, `null` means "not set".
 - **Which keys need a confirmation step?** The backend has none: every `PATCH` applies at once. Confirmation is a frontend decision. `accepting_orders` deserves one, because it stops or opens checkout for everybody.
 - Keys cannot be created or deleted through the API.
-- `daily_download_cap` (ADR-019) was deleted by VS-023b; it no longer appears in the settings list. `free_shipping_threshold` (ADR-024) was deleted on 2026-10-20 (VS-028); `cash_payment_enabled`, `cash_max_open_orders` (integer 1 – 10) and `cash_max_order_total` (money, 1 – 1 000 000 cents, never `null`) were added the same day.
+- `daily_download_cap` (ADR-019) was deleted by VS-023b; it no longer appears in the settings list. `free_shipping_threshold` (ADR-024) was deleted on 2026-10-20 (VS-028); `cash_payment_enabled`, `cash_max_open_orders` (integer 1 – 10) and `cash_max_order_total` (money, 1 – 1 000 000 cents, never `null`) were added the same day. `manual_payment_hold_period` (duration, 3 600 – 2 592 000 s) came with VS-050, and `manual_max_open_orders` (integer 1 – 10, default 3, internal) with its audit fixes (2026-11-02).
 
 ### Domain / item: P1-4 — Admin customer management
 
@@ -2212,6 +2212,11 @@ There is no total: compute one for display if you need it; checkout recomputes i
 ### Domain / item: C6 — Checkout contract
 
 **Status:** **built** for every cart type: STL-only online (VS-023); physical and mixed, delivery and pickup, online and cash (VS-028, 2026-10-22).
+
+> **2026-11-02 (VS-050 audit fixes, [ADR-049](../adr/ADR-049-manual-payment.md)): three additions.**
+> - **Cancelling an unpaid order.** A customer cannot cancel a `pending_payment` order themselves (only the administrator can release it). On the order page and in the order list, whenever an order is `pending_payment`, show: **"To cancel an unpaid order, contact us"** with a WhatsApp link built from `whatsapp_number` in `GET /api/v1/settings/public` (`https://wa.me/<number without the +>`, prefilled with the order number if you like). Hide the link when `whatsapp_number` is `null`.
+> - **New checkout error `422 MANUAL_ORDER_LIMIT_REACHED`** on `POST /api/v1/checkout` and `POST /api/v1/me/offers/{offer_id}/checkout`, with `max_open_orders` (default 3): the customer already has that many unpaid orders waiting for the administrator's call. Show its `detail` and the same WhatsApp link; do not retry automatically. Nothing was placed and the cart is unchanged.
+> - **Admin: new `409 PAYMENT_ALREADY_PAID_OTHER_REFERENCE`** on `POST /api/v1/admin/payments/{payment_id}/confirm`: the payment is already paid (or late-captured), the typed reference is not its own, and no other payment has it, so it may be a second transfer. Nothing was written; show the `detail` and ask the administrator to check the transfer before returning any money outside the platform. A reference another payment already has is still `409 PAYMENT_REFERENCE_MISMATCH`. Confirming again with the same reference, or with none, answers `200` with `outcome: "noop"`.
 
 > **2026-10-31 (VS-050, [ADR-049](../adr/ADR-049-manual-payment.md)): online payment in production is manual.** For customers, label the `"online"` payment method **"Pay by transfer, we'll contact you"**: when `payment.next_step` is `await_admin_contact` there is no redirect, and the administrator contacts the customer by WhatsApp or phone to arrange payment. Show `payment.hold_expires_at` (7 days after placement by default; the order is cancelled then if still unpaid). Ask for the contact phone at online and offer checkout: send `contact_phone` on an STL-only online checkout and on `POST /api/v1/me/offers/{offer_id}/checkout` (`422 CONTACT_PHONE_REQUIRED` without it); pickup already sends one and delivery uses the address phone. `GET /api/v1/me/orders/{id}` carries the same `payment.next_step` while waiting.
 
