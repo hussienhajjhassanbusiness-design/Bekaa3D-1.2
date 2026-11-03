@@ -39,7 +39,10 @@ from app.negotiation.application.services.respond_to_offer import (
 )
 from app.negotiation.domain.enums import OfferActor, OfferStatus
 from app.negotiation.domain.exceptions import NegotiationDomainError
-from app.negotiation.infrastructure.adapters import IdentityCustomerDirectory
+from app.negotiation.infrastructure.adapters import (
+    IdentityCustomerDirectory,
+    OrderingStlOwnership,
+)
 from app.negotiation.infrastructure.offers import SqlOfferStore
 
 admin_router = APIRouter(prefix="/offers", tags=["admin"], route_class=AdminBoundaryRoute)
@@ -126,7 +129,12 @@ async def _detail(
     now: datetime,
 ) -> AdminOfferDetailRead:
     view = await offer_detail(
-        offers, products, offer_id=offer_id, customers=IdentityCustomerDirectory(session), now=now
+        offers,
+        products,
+        OrderingStlOwnership(session),
+        offer_id=offer_id,
+        customers=IdentityCustomerDirectory(session),
+        now=now,
     )
     if view is None:
         raise not_found_error()

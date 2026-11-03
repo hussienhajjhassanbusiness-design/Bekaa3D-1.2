@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.jobs.expire_offers import expire_offers
@@ -157,3 +158,86 @@ async def test_one_failing_offer_never_stalls_the_other_passes(
     assert result["expired"] == 0 and result["checkout_expired"] >= 1
     assert (await offer_state(db_engine, stuck))["status"] == "awaiting_admin"
     assert (await offer_state(db_engine, accepted))["status"] == "checkout_expired"
+
+
+@pytest.mark.parametrize(
+    "lost",
+    [
+        OSError("connection reset"),
+        DBAPIError("SELECT 1", {}, Exception("gone"), connection_invalidated=True),
+    ],
+    ids=["os_error", "invalidated"],
+)
+async def test_a_lost_connection_fails_the_run(
+    db_session: AsyncSession,
+    db_engine: AsyncEngine,
+    monkeypatch: pytest.MonkeyPatch,
+    lost: Exception,
+) -> None:
+    """ADR-035 d6: an outage must not look like a run where every row failed on its own."""
+    user = (await create_user(db_session)).id
+    await seed_offer(
+        db_session, user_id=user, product_id=await stl(db_session), responds_by=NOW_MINUS
+    )
+
+    async def broken(*_: Any, **__: Any) -> bool:
+        raise lost
+
+    monkeypatch.setattr(negotiation_public, "expire_offer", broken)
+    with pytest.raises(type(lost)):
+        await expire_offers(_ctx(db_engine), now=datetime.now(UTC))
+
+
+async def test_a_statement_error_on_one_row_is_skipped_not_fatal(
+    db_session: AsyncSession, db_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    user = (await create_user(db_session)).id
+    await seed_offer(
+        db_session, user_id=user, product_id=await stl(db_session), responds_by=NOW_MINUS
+    )
+
+    async def broken(*_: Any, **__: Any) -> bool:
+        raise DBAPIError("SELECT 1", {}, Exception("bad row"), connection_invalidated=False)
+
+    monkeypatch.setattr(negotiation_public, "expire_offer", broken)
+    assert (await expire_offers(_ctx(db_engine), now=datetime.now(UTC)))["expired"] == 0
+
+
+async def test_a_deactivated_customer_gets_the_reminder_in_app_only(
+    db_session: AsyncSession, db_engine: AsyncEngine
+) -> None:
+    """ADR-035 d10."""
+    now = datetime.now(UTC)
+    user = (await create_user(db_session, active=False)).id
+    offer = await seed_offer(
+        db_session,
+        user_id=user,
+        product_id=await stl(db_session),
+        status="awaiting_customer",
+        responds_by=now + timedelta(hours=1),
+        remind_at=now - SECOND,
+    )
+    await expire_offers(_ctx(db_engine), now=now)
+    effects = await side_effects(db_engine, offer)
+    assert (effects["emails"], effects["notifications"]) == ([], ["offer.expiring_soon"])
+    assert (await offer_state(db_engine, offer))["remind_at"] is None
+
+
+@pytest.mark.parametrize("status", ["awaiting_admin", "awaiting_customer"])
+async def test_a_deactivated_customers_offer_expires_normally(
+    db_session: AsyncSession, db_engine: AsyncEngine, status: str
+) -> None:
+    """ADR-035 d10: deactivating an account does not close its offers, and nothing is mailed."""
+    now = datetime.now(UTC)
+    user = (await create_user(db_session, active=False)).id
+    offer = await seed_offer(
+        db_session,
+        user_id=user,
+        product_id=await stl(db_session),
+        status=status,
+        responds_by=now - SECOND,
+    )
+    await expire_offers(_ctx(db_engine), now=now)
+    assert (await offer_state(db_engine, offer))["status"] == "expired"
+    effects = await side_effects(db_engine, offer)
+    assert (effects["audits"], effects["emails"]) == (["offer.expired"], [])

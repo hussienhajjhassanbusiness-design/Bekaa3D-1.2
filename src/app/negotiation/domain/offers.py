@@ -27,6 +27,7 @@ from app.negotiation.domain.exceptions import (
     OfferNotAllowedError,
     OfferNotExpirableError,
     OfferNotYourTurnError,
+    OfferProductOwnedError,
 )
 
 ENTITY_TYPE = "Offer"
@@ -212,23 +213,31 @@ def check_move(offer: Offer, actor: OfferActor, move: OfferMove, now: datetime) 
         raise OfferNotYourTurnError()
 
 
-def allowed_moves(offer: Offer, actor: OfferActor, now: datetime) -> list[OfferMove]:
-    allowed = []
-    for move in MOVES[actor]:
-        try:
-            check_move(offer, actor, move, now)
-        except NegotiationDomainError:
-            continue
-        allowed.append(move)
-    return allowed
-
-
 def check_negotiable(product: CartProduct | None, product_id: UUID) -> CartProduct:
     """At counter and accept: still offerable, and not free (no positive amount fits under 0)."""
     product = check_offerable(product, product_id)
     if product.price_cents <= 0:
         raise OfferNotAllowedError(product_id, str(OfferRefusal.NOT_NEGOTIABLE))
     return product
+
+
+def allowed_moves(
+    offer: Offer, actor: OfferActor, now: datetime, *, product: CartProduct | None, owned: bool
+) -> list[OfferMove]:
+    """What the viewer may do now: counter and accept also need a negotiable, unowned STL
+    (ADR-035 d8); reject and withdraw never do, so nobody is stuck with the offer."""
+    allowed = []
+    for move in MOVES[actor]:
+        try:
+            check_move(offer, actor, move, now)
+            if move in (OfferMove.COUNTER, OfferMove.ACCEPT):
+                check_negotiable(product, offer.product_id)
+                if owned:
+                    raise OfferProductOwnedError()
+        except NegotiationDomainError:
+            continue
+        allowed.append(move)
+    return allowed
 
 
 def reminder_at(start: datetime, deadline: datetime) -> datetime:

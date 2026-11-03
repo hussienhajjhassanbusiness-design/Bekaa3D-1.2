@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.identity.domain.enums import UserRole
 from app.main import app as main_app
+from app.negotiation.infrastructure import adapters
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
 from tests.integration.deep_support import (
     assert_problem,
@@ -35,6 +36,7 @@ from tests.integration.negotiation.offer_support import (
     stl,
     submit,
 )
+from tests.integration.payments.support import seed_online_order
 
 pytestmark = [
     pytest.mark.integration,
@@ -327,3 +329,128 @@ async def test_admin_accept_requires_the_amount_seen(
         response = act(client, offer, "accept", body, admin=True)
         assert_problem(response, 422, "VALIDATION_ERROR")
     assert await offer_state(db_engine, offer) == before
+
+
+async def test_a_customer_withdraws_after_a_real_admin_counter(
+    db_session: AsyncSession, db_engine: AsyncEngine
+) -> None:
+    """A-06: the counter arms a reminder, which the withdrawal must clear (its CHECK)."""
+    customer = await create_user(db_session)
+    product = await stl(db_session)
+    email = customer.email
+    offer = uuid.UUID(as_customer(email, lambda c: submit(c, product)).json()["id"])
+    countered = await as_admin(db_session, lambda c: act(c, offer, "counter", COUNTER, admin=True))
+    assert countered.status_code == 200, countered.text
+    assert (await offer_state(db_engine, offer))["remind_at"] is not None
+    withdrawn = as_customer(email, lambda c: act(c, offer, "withdraw", {"reason": "no"}))
+    assert withdrawn.status_code == 200, withdrawn.text
+    state = await offer_state(db_engine, offer)
+    assert (state["status"], state["remind_at"]) == ("withdrawn", None)
+
+
+@pytest.mark.parametrize("action", ACTIONS)
+async def test_the_kill_switch_never_blocks_an_administrators_answer(
+    client: TestClient, db_session: AsyncSession, db_engine: AsyncEngine, action: str
+) -> None:
+    """BR-040 / INV-10."""
+    offer = await _offer(db_session)
+    await mfa_admin(client, db_session)
+    before = await set_setting(db_engine, "accepting_orders", "false")
+    try:
+        assert act(client, offer, action, _body(action), admin=True).status_code == 200
+    finally:
+        await set_setting(db_engine, "accepting_orders", before)
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"reason": "x" * 1001},
+        {"reason": "a" + chr(0) + "b"},
+        {"reason": "a" + chr(7) + "b"},
+        {"reason": 5},
+        {"note": "extra field"},
+    ],
+)
+async def test_a_bad_reject_reason_is_422_and_writes_nothing(
+    client: TestClient, db_session: AsyncSession, db_engine: AsyncEngine, body: dict[str, Any]
+) -> None:
+    offer = await _offer(db_session)
+    await mfa_admin(client, db_session)
+    before = await offer_state(db_engine, offer)
+    assert_problem(act(client, offer, "reject", body, admin=True), 422, "VALIDATION_ERROR")
+    assert await offer_state(db_engine, offer) == before
+
+
+@pytest.mark.parametrize("refused", ["hidden", "owned"])
+async def test_allowed_actions_leave_the_administrator_only_reject(
+    client: TestClient, db_session: AsyncSession, refused: str
+) -> None:
+    """A-01: counter and accept would be refused; reject always works (ADR-035 d4)."""
+    user = await create_user(db_session)
+    product = await stl(db_session)
+    offer = await seed_offer(db_session, user_id=user.id, product_id=product)
+    if refused == "owned":
+        await seed_online_order(
+            db_session, user_id=user.id, stl_id=product, line_status="awaiting_delivery"
+        )
+    else:
+        await db_session.execute(
+            text("UPDATE products SET deleted_at = now() WHERE id = :p"), {"p": product}
+        )
+        await db_session.commit()
+    await mfa_admin(client, db_session)
+    assert client.get(f"{ADMIN_OFFERS}/{offer}").json()["allowed_actions"] == ["reject"]
+    assert act(client, offer, "reject", admin=True).status_code == 200
+
+
+@pytest.mark.parametrize("action", ACTIONS)
+async def test_a_failing_email_rolls_the_whole_answer_back(
+    db_session: AsyncSession,
+    db_engine: AsyncEngine,
+    monkeypatch: pytest.MonkeyPatch,
+    action: str,
+) -> None:
+    """FR-13 failure behaviour: the email is written last, so everything else is undone."""
+    offer = await _offer(db_session)
+    before = await offer_state(db_engine, offer)
+
+    class BrokenOutbox:
+        def __init__(self, _: AsyncSession) -> None:
+            pass
+
+        async def add(self, **_: Any) -> None:
+            raise RuntimeError("the outbox is down")
+
+    with client_for(main_app, raise_server_exceptions=False) as admin:
+        await mfa_admin(admin, db_session)
+        monkeypatch.setattr(adapters, "SqlOutboxWriter", BrokenOutbox)
+        response = act(admin, offer, action, _body(action), admin=True)
+    assert response.status_code == 500
+    assert await offer_state(db_engine, offer) == before
+    assert await side_effects(db_engine, offer) == {
+        "audits": [],
+        "notifications": [],
+        "emails": [],
+    }
+
+
+@pytest.mark.parametrize(
+    ("action", "event"),
+    [
+        ("counter", "offer.countered"),
+        ("accept", "offer.accepted"),
+        ("reject", "offer.rejected"),
+    ],
+)
+async def test_a_deactivated_customer_gets_no_offer_email(
+    client: TestClient, db_session: AsyncSession, db_engine: AsyncEngine, action: str, event: str
+) -> None:
+    """ADR-035 d10: the answer still lands and is kept in-app; only the email is dropped."""
+    customer = await create_user(db_session, active=False)
+    offer = await seed_offer(db_session, user_id=customer.id, product_id=await stl(db_session))
+    await mfa_admin(client, db_session)
+    response = act(client, offer, action, _body(action), admin=True)
+    assert response.status_code == 200, response.text
+    effects = await side_effects(db_engine, offer)
+    assert (effects["emails"], effects["notifications"]) == ([], [event])

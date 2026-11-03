@@ -39,6 +39,7 @@ __all__ = [
     "account_is_live",
     "active_administrator_contacts",
     "active_administrator_ids",
+    "active_user_emails",
     "addresses_for_export",
     "current_user",
     "current_verified_user",
@@ -72,6 +73,11 @@ async def active_administrator_contacts(session: AsyncSession) -> list[tuple[UUI
 async def user_emails(session: AsyncSession, user_ids: list[UUID]) -> dict[UUID, str]:
     """Account emails by id, read in the caller's transaction (VS-039 admin offer queue)."""
     return await UserRepository(session).emails_by_id(user_ids)
+
+
+async def active_user_emails(session: AsyncSession, user_ids: list[UUID]) -> dict[UUID, str]:
+    """Emails of accounts still mailable; a deactivated or anonymised one is absent."""
+    return await UserRepository(session).active_emails_by_id(user_ids)
 
 
 async def addresses_for_export(session: AsyncSession, user_id: UUID) -> list[Address]:

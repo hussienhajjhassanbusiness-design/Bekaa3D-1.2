@@ -5,6 +5,7 @@ from datetime import timedelta
 
 import pytest
 
+from app.catalog.application.ports import CartProduct
 from app.negotiation.domain.enums import (
     AWAITING_STATUSES,
     OfferAction,
@@ -215,7 +216,9 @@ def test_reject_arms_the_cooldown(cooldown: int, until: object) -> None:
 @pytest.mark.parametrize("status", sorted(AWAITING_STATUSES))
 def test_withdraw_from_either_awaiting_state_whoever_has_the_turn(status: OfferStatus) -> None:
     turn = OfferTurn.ADMIN if status is OfferStatus.AWAITING_ADMIN else OfferTurn.CUSTOMER
-    offer = make_offer(status=status, turn=turn, remind_at=None)
+    # A customer's turn holds a live reminder after a real administrator counter.
+    remind_at = NOW if status is OfferStatus.AWAITING_CUSTOMER else None
+    offer = make_offer(status=status, turn=turn, remind_at=remind_at)
     withdrawn, round_ = withdraw(offer, reason=None, next_sequence=2, now=NOW)
     assert (withdrawn.status, withdrawn.turn, withdrawn.remind_at) == (
         OfferStatus.WITHDRAWN,
@@ -307,8 +310,32 @@ def test_expiry_outranks_the_turn() -> None:
 def test_allowed_actions(status: OfferStatus, actor: OfferActor, expected: list[str]) -> None:
     turn = {OfferStatus.AWAITING_ADMIN: OfferTurn.ADMIN}.get(status, OfferTurn.CUSTOMER)
     offer = make_offer(status=status, turn=turn if status in AWAITING_STATUSES else None)
-    assert [move.value for move in allowed_moves(offer, actor, NOW)] == expected
-    assert allowed_moves(replace(offer, responds_by=NOW), actor, NOW) == []
+    moves = allowed_moves(offer, actor, NOW, product=STL, owned=False)
+    assert [move.value for move in moves] == expected
+    overdue = replace(offer, responds_by=NOW)
+    assert allowed_moves(overdue, actor, NOW, product=STL, owned=False) == []
+
+
+@pytest.mark.parametrize(
+    ("product", "owned"),
+    [
+        (None, False),
+        (replace(STL, listed=False), False),
+        (replace(STL, is_available=False), False),
+        (replace(STL, price_cents=0), False),
+        (STL, True),
+    ],
+)
+def test_allowed_actions_never_list_a_move_the_rechecks_refuse(
+    product: CartProduct | None, owned: bool
+) -> None:
+    """A-01: reject and withdraw stay, so nobody is stuck with the offer."""
+    admin_turn = make_offer()
+    customer_turn = make_offer(status=OfferStatus.AWAITING_CUSTOMER, turn=OfferTurn.CUSTOMER)
+    mine = allowed_moves(customer_turn, CUSTOMER, NOW, product=product, owned=owned)
+    theirs = allowed_moves(admin_turn, ADMIN, NOW, product=product, owned=owned)
+    assert mine == [OfferMove.WITHDRAW]
+    assert theirs == [OfferMove.REJECT]
 
 
 def test_negotiable_needs_a_listed_priced_stl() -> None:

@@ -1,8 +1,6 @@
-"""Alembic's autogenerate diff is empty for the tables listed below: VS-023's six, VS-024's
-payments.captured_*, VS-028's cash_payment_blocks and orders index, VS-029b's
-contact_messages (0f43e238eaae, linked to orders), and VS-030's refunds, refund_items,
-chargebacks and chargeback_items with the new order and payment keys (c01e53ab3e0f), and
-VS-036's reviews plus the order_items badge index (eeed201dcfd2)."""
+"""Alembic's autogenerate diff is empty for the tables listed below: every money table from
+VS-023 on, and the offer tables since the VS-040 audit (A-13). A table left off the list
+can drift from its migration unnoticed."""
 
 from typing import Any
 
@@ -31,6 +29,8 @@ VS023_TABLES = {
     "chargebacks",
     "chargeback_items",
     "reviews",
+    "offers",
+    "offer_rounds",
 }
 
 

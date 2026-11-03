@@ -1247,6 +1247,7 @@ For a cash order, `ready_for_pickup → picked_up` happens only through the hand
 ```
                   ┌──> rejected (sets cooldown)
                   ├──> expired
+                  ├──> withdrawn
 awaiting_admin ───┴──> accepted ──┬──> paid
    ↑    │                 ↑       ├──> checkout_expired
    │    │                 │       └──> auto_closed
@@ -1258,6 +1259,8 @@ awaiting_admin ───┴──> accepted ──┬──> paid
 ```
 
 Either party accepts on its own turn: the administrator from `awaiting_admin`, the customer from `awaiting_customer` (F-092, FR-13). Once accepted, only the checkout window applies.
+
+The customer may withdraw from either awaiting state, whoever's turn it is (BR-092, ADR-034).
 
 `auto_closed` is reachable from every live state (`awaiting_admin`, `awaiting_customer`, `accepted`): buying the STL by another route closes any live offer (BR-088, §11.4; ADR-037).
 

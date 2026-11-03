@@ -403,16 +403,16 @@ async def test_missing_csrf_is_403(client: TestClient, db_session: AsyncSession)
     assert_problem(client.post(OFFERS, json=body), 403, "CSRF_INVALID")
 
 
-async def test_submission_is_rate_limited_per_user(
-    client: TestClient, db_session: AsyncSession
-) -> None:
+async def test_submission_is_rate_limited_per_user(db_session: AsyncSession) -> None:
+    """One client at a time: a nested one hung the outer client's teardown (A-03)."""
     product = await stl(db_session)
-    user = await _customer(client, db_session)
-    store = redis_asyncio.from_url(os.environ["REDIS_URL"])  # type: ignore[no-untyped-call]
-    await store.set(f"ratelimit:offers:{user}", 20, ex=3600)
-    await store.aclose()
-    assert_problem(submit(client, product), 429, "RATE_LIMITED")
-    assert client.get(MY_OFFERS).status_code == 200
+    with client_for(main_app) as limited:
+        user = await _customer(limited, db_session)
+        store = redis_asyncio.from_url(os.environ["REDIS_URL"])  # type: ignore[no-untyped-call]
+        await store.set(f"ratelimit:offers:{user}", 20, ex=3600)
+        await store.aclose()
+        assert_problem(submit(limited, product), 429, "RATE_LIMITED")
+        assert limited.get(MY_OFFERS).status_code == 200
     with client_for(main_app) as other:
         await _customer(other, db_session)
         assert submit(other, product).status_code == 201

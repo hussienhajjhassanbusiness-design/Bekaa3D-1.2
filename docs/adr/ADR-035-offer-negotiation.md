@@ -1,7 +1,7 @@
 # ADR-035: Offer negotiation - the agreed price capped at today's list price, a floor on customer counters, a stored reminder time, and one error order
 
 **Status:** Accepted
-**Date:** 2026-10-20; amended 2026-10-20 (decision 9, VS-040 follow-up); amended 2026-10-21 (decision 9, PR #25 questions)
+**Date:** 2026-10-20; amended 2026-10-20 (decision 9, VS-040 follow-up); amended 2026-10-21 (decision 9, PR #25 questions); amended 2026-11-03 (decisions 8 and 10, VS-040 audit)
 **Source basis:** Owner decisions of 2026-10-20 on the VS-040 plan (the open item of [ADR-034](ADR-034-offer-submission-and-expiry.md), and Q1 to Q8); SRS §11, §16.1, §20.6; BR-040, BR-082 to BR-092; FR-13; api-endpoints.md §13, §21, §29.7; database-design.md §11, §17.6
 
 ## Context
@@ -57,7 +57,7 @@ VS-040 adds counter, accept and withdraw for the customer, and counter, accept a
 8. **Limits and bodies.**
    - Customer actions share a bucket of 60 per user per hour, separate from submission's 20 (SEC-11). Administrator actions need CSRF and sit behind the admin boundary.
    - Reject and withdraw take an optional `reason`, and a counter an optional `message`. Each is kept as the round's message under the 1 000-character rule.
-   - `allowed_actions` lists what the viewer may do now.
+   - `allowed_actions` lists what the viewer may do now. It leaves out counter and accept whenever the route would refuse them under decision 4 (an unlisted, unavailable or zero-priced product, or an STL the customer owns), so a page never offers a button that always fails. Reject and withdraw stay (VS-040 audit A-01).
 9. **Accept names the amount it accepts** (owner decision, VS-040 follow-up).
    - Both accept routes require `{"expected_amount_cents": …}`: the `current_amount` the caller's page showed. A missing or malformed value is `422 VALIDATION_ERROR`.
    - If it is not the offer's `current_amount_cents`, the answer is `409 OFFER_AMOUNT_CHANGED` with `current_amount`, and nothing is written. Without it, an administrator accepting from a stale page after the customer countered lower would bind the shop to the lower amount, and a customer's stale tab could do the same to them.
@@ -67,6 +67,12 @@ VS-040 adds counter, accept and withdraw for the customer, and counter, accept a
    - **The two questions PR #25 left open are decided as built** (owner, 2026-10-21):
      - The accept body carries no `currency`. The database forces USD (`ck_offers_money`), so a currency field could only ever repeat it.
      - The amount guard is enough; there is no version guard. Accepting the amount actually on the table is correct, even if the offer changed and changed back in between.
+10. **A deactivated customer gets no offer email** (owner decision, VS-040 audit Q-1).
+   - That customer cannot log in to answer, so an email would invite an action they cannot take.
+   - `PlatformOfferMailer` writes to the outbox only for an account that is active and not anonymised or deleted. It carries all four templates: countered, accepted, rejected and expiring soon.
+   - In-app notifications are still written, so they are there if the account is reactivated.
+   - Deactivation does not close an offer. An administrator can still answer it, and it expires normally when its deadline passes.
+   - An email already in the outbox when the account is deactivated is still sent.
 
 ## Consequences
 

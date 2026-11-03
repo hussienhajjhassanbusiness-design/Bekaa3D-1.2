@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.engagement.public import NotificationType, create_notification
-from app.identity.public import active_administrator_ids, user_emails
+from app.identity.public import active_administrator_ids, active_user_emails, user_emails
 from app.ordering.public import stl_owned
 from app.platform.public import SqlOutboxWriter
 
@@ -47,13 +47,14 @@ class IdentityCustomerDirectory:
 
 
 class PlatformOfferMailer:
-    """To the customer's current address; an anonymised account (no email) gets none."""
+    """To the customer's current address; a deactivated or anonymised account gets none
+    (ADR-035 d10). In-app notifications are unaffected."""
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
     async def send(self, user_id: UUID, template: str, payload: dict[str, Any]) -> None:
-        email = (await user_emails(self._session, [user_id])).get(user_id)
+        email = (await active_user_emails(self._session, [user_id])).get(user_id)
         if email:
             await SqlOutboxWriter(self._session).add(
                 user_id=user_id, recipient_email=email, template=template, payload=payload

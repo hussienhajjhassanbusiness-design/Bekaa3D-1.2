@@ -31,13 +31,10 @@ from app.negotiation.api.offer_schemas import (
     OfferSummaryRead,
 )
 from app.negotiation.api.wiring import offer_deps, request_context
-from app.negotiation.application.ports import (
-    CartProductReader,
-    CustomerOfferFilters,
-    OfferStore,
-)
+from app.negotiation.application.ports import CartProductReader, CustomerOfferFilters
 from app.negotiation.application.services.offer_queries import customer_offers, offer_detail
 from app.negotiation.application.services.respond_to_offer import (
+    OfferDeps,
     Responder,
     accept_offer,
     counter_offer,
@@ -46,6 +43,7 @@ from app.negotiation.application.services.respond_to_offer import (
 from app.negotiation.application.services.submit_offer import submit_offer
 from app.negotiation.domain.enums import OfferActor, OfferStatus
 from app.negotiation.domain.exceptions import NegotiationDomainError
+from app.negotiation.infrastructure.adapters import OrderingStlOwnership
 from app.negotiation.infrastructure.offers import SqlOfferStore
 
 submit_router = APIRouter(prefix="/offers", tags=["offers"])
@@ -118,9 +116,11 @@ async def _action_rate_limit(
 
 
 async def _detail(
-    offers: OfferStore, products: CartProductReader, offer_id: UUID, user: User, now: datetime
+    deps: OfferDeps, products: CartProductReader, offer_id: UUID, user: User, now: datetime
 ) -> OfferDetailRead:
-    view = await offer_detail(offers, products, offer_id=offer_id, user_id=user.id, now=now)
+    view = await offer_detail(
+        deps.offers, products, deps.ownership, offer_id=offer_id, user_id=user.id, now=now
+    )
     if view is None:  # pragma: no cover - written above in this transaction
         raise not_found_error()
     return OfferDetailRead.of(view, get_settings().media_public_url)
@@ -159,7 +159,7 @@ async def create_offer(
         )
     except NegotiationDomainError as exc:
         raise translate(exc) from exc
-    return await _detail(deps.offers, products, offer.id, user, now)
+    return await _detail(deps, products, offer.id, user, now)
 
 
 @router.get(
@@ -206,7 +206,12 @@ async def get_my_offer(
     products: CartProductReader = Depends(cart_product_reader),
 ) -> OfferDetailRead:
     view = await offer_detail(
-        SqlOfferStore(session), products, offer_id=offer_id, user_id=user.id, now=datetime.now(UTC)
+        SqlOfferStore(session),
+        products,
+        OrderingStlOwnership(session),
+        offer_id=offer_id,
+        user_id=user.id,
+        now=datetime.now(UTC),
     )
     if view is None:
         raise not_found_error()
@@ -240,7 +245,7 @@ async def counter_my_offer(
         )
     except NegotiationDomainError as exc:
         raise translate(exc) from exc
-    return await _detail(deps.offers, products, offer_id, user, datetime.now(UTC))
+    return await _detail(deps, products, offer_id, user, datetime.now(UTC))
 
 
 @router.post(
@@ -266,7 +271,7 @@ async def accept_my_offer(
         )
     except NegotiationDomainError as exc:
         raise translate(exc) from exc
-    return await _detail(deps.offers, products, offer_id, user, datetime.now(UTC))
+    return await _detail(deps, products, offer_id, user, datetime.now(UTC))
 
 
 @router.post(
@@ -291,4 +296,4 @@ async def withdraw_my_offer(
         await withdraw_offer(deps, who, offer_id=offer_id, reason=reason)
     except NegotiationDomainError as exc:
         raise translate(exc) from exc
-    return await _detail(deps.offers, products, offer_id, user, datetime.now(UTC))
+    return await _detail(deps, products, offer_id, user, datetime.now(UTC))

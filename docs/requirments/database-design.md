@@ -2325,6 +2325,7 @@ On a cash order `ready_for_pickup -> picked_up` happens only via the cash handov
 ```text
 awaiting_admin
   -> rejected
+  -> withdrawn
   -> accepted -> paid
               -> checkout_expired
               -> auto_closed
