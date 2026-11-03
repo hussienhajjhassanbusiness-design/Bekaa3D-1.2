@@ -193,6 +193,15 @@ async def test_a_stale_accept_writes_nothing(who: Responder) -> None:
     assert world.untouched(offer)
 
 
+@pytest.mark.parametrize("who", [ADMIN, CUSTOMER], ids=["admin", "customer"])
+async def test_counter_refuses_an_stl_owned_meanwhile(who: Responder) -> None:
+    world = World(ownership=FakeOwnership(owned=True))
+    offer = world.seed() if who is ADMIN else world.customer_turn()
+    with pytest.raises(OfferProductOwnedError):
+        await counter_offer(world.deps, who, offer_id=offer.id, amount_cents=900, message=None)
+    assert world.untouched(offer)
+
+
 async def test_accept_refuses_an_stl_owned_meanwhile() -> None:
     world = World(ownership=FakeOwnership(owned=True))
     offer = world.seed()

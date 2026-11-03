@@ -96,7 +96,7 @@ Each returns `200` with the offer detail (`AdminOfferDetail` on admin routes).
 | `awaiting_customer` | `["counter", "accept", "withdraw"]` | `[]` |
 | Any other status, or the deadline reached | `[]` | `[]` |
 
-`counter` and `accept` are also left out when the product is unlisted, unavailable or priced at 0, or the customer already owns the STL. The customer then sees `["withdraw"]` on their turn and an administrator `["reject"]` on theirs. The routes refuse all of these, except a counter on an owned STL: only accept rechecks ownership ([ADR-035](adr/ADR-035-offer-negotiation.md) d8).
+`counter` and `accept` are also left out whenever the route would refuse them: the product is unlisted, unavailable or priced at 0, or the customer already owns the STL. The customer then sees `["withdraw"]` on their turn and an administrator `["reject"]` on theirs.
 
 | Refusal (checked in this order) | Status and code |
 |---|---|
@@ -106,7 +106,7 @@ Each returns `200` with the offer detail (`AdminOfferDetail` on admin routes).
 | The other party's turn | `409 OFFER_NOT_YOUR_TURN` |
 | Accept whose `expected_amount_cents` is not `current_amount` | `409 OFFER_AMOUNT_CHANGED`, with `current_amount: {amount_cents, currency}` |
 | Counter or accept on an unlisted, unavailable or zero-priced product | `422 PRODUCT_NOT_PURCHASABLE`, with `reason` |
-| Accept when the customer already owns the STL | `409 PRODUCT_ALREADY_OWNED` |
+| Counter or accept when the customer already owns the STL | `409 PRODUCT_ALREADY_OWNED` |
 | Customer counter below the floor | `422 OFFER_BELOW_MINIMUM`, with `minimum` |
 | Counter above today's list price; bad body, including an accept without `expected_amount_cents` | `422 VALIDATION_ERROR` |
 
@@ -122,7 +122,7 @@ A refused action writes nothing. The kill switch never blocks an answer.
 | Rejected | email `offer_rejected` + in-app `offer.rejected` | none |
 | Withdrawn | none | in-app `offer.withdrawn` |
 
-A deactivated customer gets no offer email, the reminder included. The in-app notifications are still written, the administrator can still answer, and the offer expires normally ([ADR-035](adr/ADR-035-offer-negotiation.md) d10).
+A deactivated customer gets no offer email, the reminder included. The in-app notifications are still written, the administrator can still answer, and the offer expires normally. Nothing is resent if the account is reactivated ([ADR-035](adr/ADR-035-offer-negotiation.md) d10).
 
 ## Offer checkout (VS-041)
 

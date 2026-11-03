@@ -357,10 +357,15 @@ async def test_a_submission_racing_a_cart_payment_never_leaves_a_live_offer_on_a
     assert state["status"] == "auto_closed", state["rounds"]
 
 
-async def test_an_accept_racing_a_cart_payment_ends_auto_closed(
-    app: FastAPI, db_engine: AsyncEngine, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+async def _answer_racing_a_cart_payment(
+    app: FastAPI,
+    db_engine: AsyncEngine,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    action: str,
+    body: dict[str, Any],
 ) -> None:
-    """Accept holds the offer row and has read "not owned"; the payment waits for that row."""
+    """The answer holds the offer row and has read "not owned"; the payment waits for it."""
     user = await create_user(db_session)
     product = await stl(db_session)
     offer = await seed_offer(
@@ -370,7 +375,7 @@ async def test_an_accept_racing_a_cart_payment_ends_auto_closed(
     barrier = asyncio.Barrier(2)
     real_owns, real_settle = OrderingStlOwnership.owns, _SETTLE_REAL
 
-    async def accept_side(self: OrderingStlOwnership, *args: Any) -> bool:
+    async def answer_side(self: OrderingStlOwnership, *args: Any) -> bool:
         owned = await real_owns(self, *args)
         await meet_or_fail(barrier)
         await asyncio.sleep(STAGGER)
@@ -380,22 +385,38 @@ async def test_an_accept_racing_a_cart_payment_ends_auto_closed(
         await meet_or_fail(barrier)
         await real_settle(*args, **kwargs)
 
-    monkeypatch.setattr(OrderingStlOwnership, "owns", accept_side)
+    monkeypatch.setattr(OrderingStlOwnership, "owns", answer_side)
     monkeypatch.setattr(ordering_side, "settle_offers_on_stl_purchase", payment_side)
     client = await _client(app, user.email)
     try:
-        accepted, outcome = await asyncio.gather(
+        answered, outcome = await asyncio.gather(
             client.post(
-                f"/api/v1/me/offers/{offer}/accept",
-                json={"expected_amount_cents": 800},
+                f"/api/v1/me/offers/{offer}/{action}",
+                json=body,
                 headers=_csrf(client, False),
             ),
             pay(db_engine, payment),
         )
     finally:
         await client.aclose()
-    assert (accepted.status_code, outcome) == (200, Outcome.APPLY_PAID), accepted.text
+    assert (answered.status_code, outcome) == (200, Outcome.APPLY_PAID), answered.text
     assert (await offer_state(db_engine, offer))["status"] == "auto_closed"
+
+
+async def test_an_accept_racing_a_cart_payment_ends_auto_closed(
+    app: FastAPI, db_engine: AsyncEngine, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await _answer_racing_a_cart_payment(
+        app, db_engine, db_session, monkeypatch, "accept", {"expected_amount_cents": 800}
+    )
+
+
+async def test_a_counter_racing_a_cart_payment_ends_auto_closed(
+    app: FastAPI, db_engine: AsyncEngine, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await _answer_racing_a_cart_payment(
+        app, db_engine, db_session, monkeypatch, "counter", {"amount_cents": 850, "currency": "USD"}
+    )
 
 
 async def test_an_offer_checkout_racing_a_cart_payment_of_the_same_stl_does_not_deadlock(

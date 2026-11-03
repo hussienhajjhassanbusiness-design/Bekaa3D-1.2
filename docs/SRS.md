@@ -1016,6 +1016,8 @@ There is no inventory dashboard, as products are made on demand.
 | Offer rejected              | Customer  |
 | Offer expiring soon         | Customer  |
 
+A deactivated customer gets none of the four offer emails: the in-app notification is still written, and the offer expires normally (ADR-035 d10).
+
 WhatsApp-only orders generate no system email — those conversations happen entirely off-platform. "Start printing" sends nothing; it is internal. Every email about a delivery order says "delivery fee paid to the courier on delivery".
 
 ### 16.2 Delivery Architecture
@@ -1250,7 +1252,8 @@ For a cash order, `ready_for_pickup → picked_up` happens only through the hand
                   ├──> withdrawn
 awaiting_admin ───┴──> accepted ──┬──> paid
    ↑    │                 ↑       ├──> checkout_expired
-   │    │                 │       └──> auto_closed
+   │    │                 │       ├──> auto_closed
+   │    │                 │       └──> withdrawn (account deletion only)
    │    │                 │ customer accepts on their own turn
    │    └──> awaiting_customer ──┐
    └─────────────────────────────┤ customer counters
@@ -1261,6 +1264,8 @@ awaiting_admin ───┴──> accepted ──┬──> paid
 Either party accepts on its own turn: the administrator from `awaiting_admin`, the customer from `awaiting_customer` (F-092, FR-13). Once accepted, only the checkout window applies.
 
 `auto_closed` is reachable from every live state (`awaiting_admin`, `awaiting_customer`, `accepted`): buying the STL by another route closes any live offer (BR-088, §11.4; ADR-037).
+
+`accepted → withdrawn` happens only when the customer deletes their account (ADR-047); a customer cannot otherwise withdraw an accepted offer.
 
 ### 20.7 Custom Request
 

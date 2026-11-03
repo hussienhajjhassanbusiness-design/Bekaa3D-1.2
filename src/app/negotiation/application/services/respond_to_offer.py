@@ -75,6 +75,7 @@ async def counter_offer(
 ) -> Offer:
     offer, now = await _locked(deps, who, offer_id, OfferMove.COUNTER)
     product = await _negotiable(deps, offer)
+    await _check_unowned(deps, offer)
     countered, round_ = counter(
         offer,
         actor=who.actor,
@@ -104,9 +105,7 @@ async def accept_offer(
     offer, now = await _locked(deps, who, offer_id, OfferMove.ACCEPT)
     check_amount_seen(offer, expected_amount_cents)
     product = await _negotiable(deps, offer)
-    # FR-13: acquisition racing acceptance is re-checked here; VS-041 closes the offer.
-    if await deps.ownership.owns(offer.user_id, offer.product_id):
-        raise OfferProductOwnedError()
+    await _check_unowned(deps, offer)
     accepted, round_ = accept(
         offer,
         actor=who.actor,
@@ -181,6 +180,12 @@ async def _locked(
 async def _negotiable(deps: OfferDeps, offer: Offer) -> CartProduct:
     found = await deps.products.get_many([offer.product_id])
     return check_negotiable(found.get(offer.product_id), offer.product_id)
+
+
+async def _check_unowned(deps: OfferDeps, offer: Offer) -> None:
+    """FR-13: an acquisition racing an answer is re-checked here; VS-041 closes the offer."""
+    if await deps.ownership.owns(offer.user_id, offer.product_id):
+        raise OfferProductOwnedError()
 
 
 async def _product_name(deps: OfferDeps, offer: Offer) -> str | None:

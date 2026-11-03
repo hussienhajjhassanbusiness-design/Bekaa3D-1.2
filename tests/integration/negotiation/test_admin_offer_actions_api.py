@@ -386,7 +386,7 @@ async def test_a_bad_reject_reason_is_422_and_writes_nothing(
 async def test_allowed_actions_leave_the_administrator_only_reject(
     client: TestClient, db_session: AsyncSession, refused: str
 ) -> None:
-    """A-01: counter and accept are hidden; reject always works (ADR-035 d4)."""
+    """A-01: counter and accept are hidden and refused; reject always works (ADR-035 d4)."""
     user = await create_user(db_session)
     product = await stl(db_session)
     offer = await seed_offer(db_session, user_id=user.id, product_id=product)
@@ -469,4 +469,21 @@ async def test_an_anonymised_or_deleted_account_gets_no_offer_email(
     await db_session.commit()
     await mfa_admin(client, db_session)
     assert act(client, offer, "counter", COUNTER, admin=True).status_code == 200
+    assert (await side_effects(db_engine, offer))["emails"] == []
+
+
+async def test_countering_an_stl_bought_meanwhile_is_409_and_writes_nothing(
+    client: TestClient, db_session: AsyncSession, db_engine: AsyncEngine
+) -> None:
+    user = await create_user(db_session)
+    product = await stl(db_session)
+    offer = await seed_offer(db_session, user_id=user.id, product_id=product)
+    await seed_online_order(
+        db_session, user_id=user.id, stl_id=product, line_status="awaiting_delivery"
+    )
+    await mfa_admin(client, db_session)
+    before = await offer_state(db_engine, offer)
+    response = act(client, offer, "counter", COUNTER, admin=True)
+    assert_problem(response, 409, "PRODUCT_ALREADY_OWNED")
+    assert await offer_state(db_engine, offer) == before
     assert (await side_effects(db_engine, offer))["emails"] == []

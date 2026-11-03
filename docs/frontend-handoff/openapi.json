@@ -16403,7 +16403,7 @@
                 }
               }
             },
-            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED (accept)."
+            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED."
           },
           "410": {
             "content": {
@@ -16543,7 +16543,7 @@
                 }
               }
             },
-            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED (accept)."
+            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED."
           },
           "410": {
             "content": {
@@ -16690,7 +16690,7 @@
                 }
               }
             },
-            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED (accept)."
+            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED."
           },
           "410": {
             "content": {
@@ -26088,7 +26088,7 @@
                 }
               }
             },
-            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED (accept)."
+            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED."
           },
           "410": {
             "content": {
@@ -26409,7 +26409,7 @@
                 }
               }
             },
-            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED (accept)."
+            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED."
           },
           "410": {
             "content": {
@@ -26565,7 +26565,7 @@
                 }
               }
             },
-            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED (accept)."
+            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED."
           },
           "410": {
             "content": {

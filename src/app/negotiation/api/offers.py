@@ -77,7 +77,7 @@ _ACTION_RESPONSES: dict[int | str, dict[str, Any]] = {
     404: {"description": "No such offer among the caller's own."},
     409: {
         "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), "
-        "OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED (accept)."
+        "OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED."
     },
     410: {"description": "OFFER_EXPIRED: the response deadline has passed."},
     422: {
