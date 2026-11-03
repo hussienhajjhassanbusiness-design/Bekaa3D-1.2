@@ -37,7 +37,7 @@ ADR-024 lets a physical-only order be paid in cash, limited per customer **or** 
 14. **The SRS 7.4 matrix is one pure function over the kept lines** (D9), after owned STLs are dropped.
 15. **Contact phones are normalised in `CheckoutRequest`** (D10), so the idempotency hash covers the E.164 form and two spellings of one number are one body.
 16. **Dispatch** (D11): `estimated_dispatch_at = placed_at + max(lead × ceil(qty ÷ batch))` calendar days over the physical lines; none for an STL-only order. Lead time and batch size are snapshotted on each physical line.
-17. **The amount due is one pure function** (D12), `amount_due_cents(lines)`: the line totals not cancelled. VS-029's handover reuses it. The API shows it as `amount_due` (decision 21).
+17. **The amount due is the line totals not cancelled, computed in three copies** (D12; corrected after the VS-028 audit, A-02). The pure `amount_due_cents(lines)` serves the checkout response, the `order_cash_placed` email, VS-029's handover and the cancel notices. Two identical SQL subqueries, `live_total_cents` in `ordering/infrastructure/order_history.py` and `admin_orders.py`, serve the customer order list and detail, the data export and the admin queue. `tests/integration/ordering/test_amount_due_copies.py` keeps the three equal over cash, cancelled, refunded and mixed orders; a rule change must touch all three. The API shows it as `amount_due` (decision 21).
 18. **Snapshots are immutable by construction** (D13): no `UPDATE orders` writes a snapshot column, enforced by a static writer test. No database trigger.
 
 ## PR B as built (2026-10-22): deviations from the plan

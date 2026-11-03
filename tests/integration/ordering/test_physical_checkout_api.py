@@ -579,16 +579,16 @@ async def test_block_and_open_order_refusals_by_account_or_phone_are_byte_identi
         assert bodies[other].content == first.content, other
 
 
-async def test_one_phone_in_three_spellings_matches_one_block_and_one_open_count(
+async def test_one_phone_in_four_spellings_matches_one_block_and_one_open_count(
     db_engine: AsyncEngine, db_session: AsyncSession
 ) -> None:
     lamp = await physical(db_session)
     phone = random_phone()
-    national = "0" + phone[4:]
+    national, bare = "0" + phone[4:], phone[1:]  # bare: the plan's `9613123456` form
     holder = await create_user(db_session)
     await seed_cash_order(db_session, holder.id, phone)
     refusals = []
-    for spelling in (phone, spaced(phone), national):
+    for spelling in (phone, spaced(phone), national, bare):
         with client_for(main_app) as client:
             user_id = await signed_in_buyer(client, db_session, lamp)
             refusals.append(await refused_cash(client, db_engine, user_id, pickup_body(spelling)))
