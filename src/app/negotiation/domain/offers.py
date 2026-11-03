@@ -224,7 +224,7 @@ def check_negotiable(product: CartProduct | None, product_id: UUID) -> CartProdu
 def allowed_moves(
     offer: Offer, actor: OfferActor, now: datetime, *, product: CartProduct | None, owned: bool
 ) -> list[OfferMove]:
-    """What the viewer may do now: counter and accept also need a negotiable, unowned STL
+    """What the page offers now: counter and accept also need a negotiable, unowned STL
     (ADR-035 d8); reject and withdraw never do, so nobody is stuck with the offer."""
     allowed = []
     for move in MOVES[actor]:

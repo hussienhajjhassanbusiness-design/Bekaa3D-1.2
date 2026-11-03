@@ -415,7 +415,7 @@ async def test_the_reason_limit_counts_the_trimmed_text(
 async def test_allowed_actions_never_list_what_the_rechecks_refuse(
     client: TestClient, db_session: AsyncSession, refused: str
 ) -> None:
-    """A-01: what the customer's page offers is what the routes would accept."""
+    """A-01: the page offers neither counter nor accept; accept is refused outright."""
     user = await _customer(client, db_session)
     product = await stl(db_session)
     offer = await seed_offer(
@@ -437,7 +437,10 @@ async def test_allowed_actions_never_list_what_the_rechecks_refuse(
         )
         await db_session.commit()
     assert client.get(f"{MY_OFFERS}/{offer}").json()["allowed_actions"] == ["withdraw"]
-    assert act(client, offer, "accept", ACCEPT).status_code in {409, 422}
+    if refused == "owned":
+        assert_problem(act(client, offer, "accept", ACCEPT), 409, "PRODUCT_ALREADY_OWNED")
+    else:
+        assert_problem(act(client, offer, "accept", ACCEPT), 422, "PRODUCT_NOT_PURCHASABLE")
     assert act(client, offer, "withdraw").status_code == 200
 
 
@@ -449,6 +452,7 @@ async def test_a_failing_side_effect_rolls_the_whole_action_back(
     action: str,
 ) -> None:
     """FR-13 failure behaviour: the turn, the round and the audit row all stay unwritten."""
+    await create_user(db_session, role=UserRole.ADMIN)
     user = await create_user(db_session)
     offer = await seed_offer(
         db_session, user_id=user.id, product_id=await stl(db_session), status="awaiting_customer"
@@ -469,3 +473,20 @@ async def test_a_failing_side_effect_rolls_the_whole_action_back(
         "notifications": [],
         "emails": [],
     }
+
+
+async def test_a_counter_on_an_owned_stl_is_hidden_but_not_refused(
+    client: TestClient, db_session: AsyncSession
+) -> None:
+    """ADR-035 d8: only accept rechecks ownership. VS-041's auto-close means a live offer on
+    an owned STL should not exist, and a counter there cannot lead to a sale."""
+    user = await _customer(client, db_session)
+    product = await stl(db_session)
+    offer = await seed_offer(
+        db_session, user_id=user, product_id=product, status="awaiting_customer"
+    )
+    await seed_online_order(
+        db_session, user_id=user, stl_id=product, line_status="awaiting_delivery"
+    )
+    assert "counter" not in client.get(f"{MY_OFFERS}/{offer}").json()["allowed_actions"]
+    assert act(client, offer, "counter", COUNTER).status_code == 200

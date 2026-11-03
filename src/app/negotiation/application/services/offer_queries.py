@@ -15,7 +15,7 @@ from app.negotiation.application.ports import (
     QueueKey,
     StlOwnership,
 )
-from app.negotiation.domain.enums import AWAITING_STATUSES, OfferActor
+from app.negotiation.domain.enums import OfferActor
 from app.negotiation.domain.offers import Offer, OfferRound, allowed_moves
 
 
@@ -60,9 +60,9 @@ async def offer_detail(
     product = (await products.get_many([offer.product_id])).get(offer.product_id)
     email = (await customers.emails([offer.user_id])).get(offer.user_id) if customers else None
     viewer = OfferActor.CUSTOMER if user_id is not None else OfferActor.ADMIN
-    owned = offer.status in AWAITING_STATUSES and await ownership.owns(
-        offer.user_id, offer.product_id
-    )
+    # Ownership only limits counter and accept, which only the party on turn can do.
+    on_turn = offer.turn is not None and offer.turn.value == viewer.value
+    owned = on_turn and await ownership.owns(offer.user_id, offer.product_id)
     moves = allowed_moves(offer, viewer, now, product=product, owned=owned)
     rounds = tuple(await offers.rounds(offer.id))
     return OfferView(offer, product, rounds, email, tuple(move.value for move in moves))

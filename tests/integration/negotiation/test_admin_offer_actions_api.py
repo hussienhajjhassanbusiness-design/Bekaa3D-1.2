@@ -386,7 +386,7 @@ async def test_a_bad_reject_reason_is_422_and_writes_nothing(
 async def test_allowed_actions_leave_the_administrator_only_reject(
     client: TestClient, db_session: AsyncSession, refused: str
 ) -> None:
-    """A-01: counter and accept would be refused; reject always works (ADR-035 d4)."""
+    """A-01: counter and accept are hidden; reject always works (ADR-035 d4)."""
     user = await create_user(db_session)
     product = await stl(db_session)
     offer = await seed_offer(db_session, user_id=user.id, product_id=product)
@@ -454,3 +454,19 @@ async def test_a_deactivated_customer_gets_no_offer_email(
     assert response.status_code == 200, response.text
     effects = await side_effects(db_engine, offer)
     assert (effects["emails"], effects["notifications"]) == ([], [event])
+
+
+@pytest.mark.parametrize("column", ["anonymized_at", "deleted_at"])
+async def test_an_anonymised_or_deleted_account_gets_no_offer_email(
+    client: TestClient, db_session: AsyncSession, db_engine: AsyncEngine, column: str
+) -> None:
+    """The mailer's filter covers every account that can no longer be mailed (ADR-035 d10)."""
+    customer = await create_user(db_session)
+    offer = await seed_offer(db_session, user_id=customer.id, product_id=await stl(db_session))
+    await db_session.execute(
+        text(f"UPDATE users SET {column} = now() WHERE id = :u"), {"u": customer.id}
+    )
+    await db_session.commit()
+    await mfa_admin(client, db_session)
+    assert act(client, offer, "counter", COUNTER, admin=True).status_code == 200
+    assert (await side_effects(db_engine, offer))["emails"] == []

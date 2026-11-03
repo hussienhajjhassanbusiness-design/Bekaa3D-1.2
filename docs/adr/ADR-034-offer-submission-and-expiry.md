@@ -63,7 +63,7 @@ It also has two races the specification does not spell out.
 
      It filters by `status`, `product_id`, `user_id` and `responds_before`, which matches pending offers only, because a closed offer keeps its old deadline. Each row names the customer's id and email; reading the queue is not audited, as with the VS-009 user list.
    - Both details carry every round.
-   - `allowed_actions` is `[]` until VS-040 adds the actions. VS-040 then allows withdrawal from both awaiting states (BR-092 "pending offer"), where database-design.md §17.6 shows only `awaiting_customer`.
+   - `allowed_actions` is `[]` until VS-040 adds the actions. VS-040 then allows withdrawal from both awaiting states (BR-092 "pending offer"), where database-design.md §17.6 then showed only `awaiting_customer` (it and SRS §20.6 gained the arrow on 2026-11-03).
 9. **Limits.**
    - Submission: 20 per user per hour (SEC-11), counted only for verified users.
    - Message: optional, trimmed, at most 1 000 characters after trimming; line breaks allowed, other control characters refused.

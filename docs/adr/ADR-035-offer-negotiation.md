@@ -51,13 +51,13 @@ VS-040 adds counter, accept and withdraw for the customer, and counter, accept a
    - The agreed price and the deadline stay on the row.
    - Each offer runs in its own transaction. A failing one is rolled back, logged and skipped, so one bad row cannot stall the other passes. A lost database connection still fails the run.
 7. **Who is told.**
-   - The customer gets an email and an in-app notification on an administrator's counter, on any accept (the email carries the checkout deadline), on a rejection (with `cooldown_until`) and on the reminder.
+   - The customer gets an email and an in-app notification on an administrator's counter, on any accept (the email carries the checkout deadline), on a rejection (with `cooldown_until`) and on the reminder. A deactivated customer gets only the in-app notification (decision 10).
    - Administrators get only in-app notifications for a customer counter, accept or withdrawal (§16.1 lists no administrator email).
    - All of them are written in the action's transaction.
 8. **Limits and bodies.**
    - Customer actions share a bucket of 60 per user per hour, separate from submission's 20 (SEC-11). Administrator actions need CSRF and sit behind the admin boundary.
    - Reject and withdraw take an optional `reason`, and a counter an optional `message`. Each is kept as the round's message under the 1 000-character rule.
-   - `allowed_actions` lists what the viewer may do now. It leaves out counter and accept whenever the route would refuse them under decision 4 (an unlisted, unavailable or zero-priced product, or an STL the customer owns), so a page never offers a button that always fails. Reject and withdraw stay (VS-040 audit A-01).
+   - `allowed_actions` lists what the viewer may do now. It leaves out counter and accept on an unlisted, unavailable or zero-priced product and on an STL the customer owns, so a page never offers an action that fails or cannot lead to a sale. The routes refuse all of these under decision 4, except a counter on an owned STL: only accept rechecks ownership, and VS-041's auto-close means that state should not exist. Reject and withdraw stay (VS-040 audit A-01).
 9. **Accept names the amount it accepts** (owner decision, VS-040 follow-up).
    - Both accept routes require `{"expected_amount_cents": …}`: the `current_amount` the caller's page showed. A missing or malformed value is `422 VALIDATION_ERROR`.
    - If it is not the offer's `current_amount_cents`, the answer is `409 OFFER_AMOUNT_CHANGED` with `current_amount`, and nothing is written. Without it, an administrator accepting from a stale page after the customer countered lower would bind the shop to the lower amount, and a customer's stale tab could do the same to them.
@@ -81,6 +81,6 @@ VS-040 adds counter, accept and withdraw for the customer, and counter, accept a
   - `expire_offers` will expire an accepted offer whose payment is in flight. VS-041 must exempt an offer with a live payment from the checkout-expiry pass, as its slice says ("a payment already in flight completes").
   - VS-041 also owns the auto-close that decision 4's ownership refusal leaves to it.
   - The `accepting_orders` kill switch blocks offer checkout like any new checkout (`503 ORDERS_PAUSED`). Decision 4 keeps answers open while paused, so an offer may be accepted then and its checkout refused until the shop reopens. Whether the checkout window should stretch over a pause is VS-041's question, not decided here.
-- **SRS conflict, resolved.** SRS §20.6 and database-design.md §17.6 drew `accepted` only from `awaiting_admin`, while FR-13, F-092 and api-endpoints.md §13 let the customer accept on their own turn. Both diagrams now carry the `awaiting_customer → accepted` arrow.
+- **SRS conflict, resolved.** SRS §20.6 and database-design.md §17.6 drew `accepted` only from `awaiting_admin`, while FR-13, F-092 and api-endpoints.md §13 let the customer accept on their own turn. Both diagrams now carry the `awaiting_customer → accepted` arrow. They gained `awaiting_admin → withdrawn` on 2026-11-03 (VS-040 audit A-02).
 - The customer's turn has a reminder and the administrator's does not. If the shop later wants admin reminders, that needs a second column or a wider CHECK, not a reinterpretation of this one.
 - Each two-party integration test opens one test client at a time. A client's lifespan rebinds the app's engine to its own event loop, so two clients used alternately mix loops and hang.

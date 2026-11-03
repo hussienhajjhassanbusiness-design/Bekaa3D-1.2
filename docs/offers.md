@@ -96,7 +96,7 @@ Each returns `200` with the offer detail (`AdminOfferDetail` on admin routes).
 | `awaiting_customer` | `["counter", "accept", "withdraw"]` | `[]` |
 | Any other status, or the deadline reached | `[]` | `[]` |
 
-`counter` and `accept` are also left out whenever the route would refuse them: the product is unlisted, unavailable or priced at 0, or the customer already owns the STL. The customer then sees `["withdraw"]` on their turn and an administrator `["reject"]` on theirs.
+`counter` and `accept` are also left out when the product is unlisted, unavailable or priced at 0, or the customer already owns the STL. The customer then sees `["withdraw"]` on their turn and an administrator `["reject"]` on theirs. The routes refuse all of these, except a counter on an owned STL: only accept rechecks ownership ([ADR-035](adr/ADR-035-offer-negotiation.md) d8).
 
 | Refusal (checked in this order) | Status and code |
 |---|---|
