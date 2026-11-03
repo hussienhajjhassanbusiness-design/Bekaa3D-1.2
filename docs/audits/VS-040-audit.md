@@ -229,7 +229,7 @@ Every test-gap fix was proven by re-applying the surviving mutation on a copy of
 | A-13 | `offers` and `offer_rounds` added to the parity list | M3: `test_models_match_the_migration` |
 | A-14 | A failing notification (customer) and a failing email (administrator) each roll the action back | No mutation: `test_a_failing_side_effect_rolls_the_whole_action_back`, `test_a_failing_email_rolls_the_whole_answer_back` |
 | A-01 | `allowed_moves` also takes the product and ownership. Counter and accept are hidden on an unlisted, unavailable or zero-priced product and on an owned STL, and the routes refuse both. New mutations N1, N2, N3 are killed by `test_allowed_actions_never_list_a_move_the_rechecks_refuse` and `test_allowed_actions_never_list_what_the_rechecks_refuse` | |
-| A-02 | SRS §20.6 and `database-design.md` §17.6 now draw `awaiting_admin → withdrawn`. SRS §20.6 also draws erasure's `accepted → withdrawn`, at the owner's request; `database-design.md` §17.6 does not | |
+| A-02 | SRS §20.6 and `database-design.md` §17.6 now draw `awaiting_admin → withdrawn`. Both also draw erasure's `accepted → withdrawn`, at the owner's request | |
 | A-03 | The test opens one client at a time; `test_offers_api.py` runs in full with no hang | |
 | A-04 | `api-endpoints.md` names one `OfferReasonRequest` and lists `422` on withdraw and reject | |
 | A-05 | The offer lifecycle shows `AUTO_CLOSED` from both awaiting states | |
