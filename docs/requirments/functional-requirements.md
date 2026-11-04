@@ -723,8 +723,8 @@ State transitions touched:
 
 No offer → awaiting_admin
 Awaiting_admin ↔ awaiting_customer
-Awaiting state → accepted, rejected, expired, or withdrawn
-Accepted → paid, checkout_expired, or auto_closed
+Awaiting state → accepted, rejected, expired, withdrawn, or auto_closed
+Accepted → paid, checkout_expired, auto_closed, or withdrawn (account deletion only)
 
 Concurrent access:
 

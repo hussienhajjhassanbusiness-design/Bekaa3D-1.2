@@ -32,7 +32,7 @@ VS-040 adds counter, accept and withdraw for the customer, and counter, accept a
    - `ck_offers_remind_at_awaiting_customer` allows the field only on the customer's turn, because SRS §16.1 reminds only the customer.
    - Every transition out of that turn clears it.
 4. **What an answer rechecks.**
-   - Counter and accept recheck ownership (counter since the VS-040 audit, owner decision). An STL bought meanwhile gives `409 PRODUCT_ALREADY_OWNED` and nothing is written; closing the offer is VS-041's auto-close (BR-088).
+   - Counter and accept recheck ownership (counter since the VS-040 audit, owner decision). This is a backstop. Buying the STL auto-closes every live offer in the payment's own transaction (VS-041, BR-088), so the normal answer to a stale page is `409 INVALID_STATE_TRANSITION` with `offer_status: auto_closed`, from decision 5's checks. `409 PRODUCT_ALREADY_OWNED` answers only a live offer on an owned STL, which no known path produces. Either way nothing is written.
    - Counter and accept recheck the product. If it is unlisted, unavailable or priced at 0, the answer is `422 PRODUCT_NOT_PURCHASABLE` with the usual `reason`.
    - Reject and withdraw always work, so the customer is never stuck with an offer on a hidden product.
    - The kill switch blocks none of them (BR-040).
@@ -82,6 +82,6 @@ VS-040 adds counter, accept and withdraw for the customer, and counter, accept a
   - `expire_offers` will expire an accepted offer whose payment is in flight. VS-041 must exempt an offer with a live payment from the checkout-expiry pass, as its slice says ("a payment already in flight completes").
   - VS-041 also owns the auto-close that decision 4's ownership refusal leaves to it.
   - The `accepting_orders` kill switch blocks offer checkout like any new checkout (`503 ORDERS_PAUSED`). Decision 4 keeps answers open while paused, so an offer may be accepted then and its checkout refused until the shop reopens. Whether the checkout window should stretch over a pause is VS-041's question, not decided here.
-- **SRS conflict, resolved.** SRS §20.6 and database-design.md §17.6 drew `accepted` only from `awaiting_admin`, while FR-13, F-092 and api-endpoints.md §13 let the customer accept on their own turn. Both diagrams now carry the `awaiting_customer → accepted` arrow. They gained `awaiting_admin → withdrawn` on 2026-11-03 (VS-040 audit A-02).
+- **SRS conflict, resolved.** SRS §20.6 and database-design.md §17.6 drew `accepted` only from `awaiting_admin`, while FR-13, F-092 and api-endpoints.md §13 let the customer accept on their own turn. Both diagrams now carry the `awaiting_customer → accepted` arrow. They gained `awaiting_admin → withdrawn` and erasure's `accepted → withdrawn` on 2026-11-03 (VS-040 audit A-02).
 - The customer's turn has a reminder and the administrator's does not. If the shop later wants admin reminders, that needs a second column or a wider CHECK, not a reinterpretation of this one.
 - Each two-party integration test opens one test client at a time. A client's lifespan rebinds the app's engine to its own event loop, so two clients used alternately mix loops and hang.

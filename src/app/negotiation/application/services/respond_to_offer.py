@@ -183,7 +183,8 @@ async def _negotiable(deps: OfferDeps, offer: Offer) -> CartProduct:
 
 
 async def _check_unowned(deps: OfferDeps, offer: Offer) -> None:
-    """FR-13: an acquisition racing an answer is re-checked here; VS-041 closes the offer."""
+    """A backstop (ADR-035 d4): a real purchase closes the offer first, so `check_move` has
+    already refused a stale page by the time this runs."""
     if await deps.ownership.owns(offer.user_id, offer.product_id):
         raise OfferProductOwnedError()
 

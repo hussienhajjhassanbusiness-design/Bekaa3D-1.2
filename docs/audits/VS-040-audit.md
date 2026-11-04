@@ -235,7 +235,7 @@ Every test-gap fix was proven by re-applying the surviving mutation on a copy of
 | A-05 | The offer lifecycle shows `AUTO_CLOSED` from both awaiting states | |
 | A-15 | The test asserts its own offer's state, not the job's global count; it passes after `test_admin_offers_api.py` | |
 
-**A counter on an owned STL is now refused too** (owner decision, beyond the audit): `409 PRODUCT_ALREADY_OWNED`, the error accept uses, for both parties (ADR-035 d4). `test_countering_an_stl_bought_meanwhile_is_409_and_writes_nothing`, `test_counter_refuses_an_stl_owned_meanwhile` and `test_a_counter_racing_a_cart_payment_ends_auto_closed` cover it.
+**A counter on an owned STL is now refused too** (owner decision, beyond the audit): `409 PRODUCT_ALREADY_OWNED`, the error accept uses, for both parties (ADR-035 d4). `test_countering_an_owned_stl_is_409_and_writes_nothing`, `test_counter_refuses_an_stl_owned_meanwhile` and `test_a_counter_racing_a_cart_payment_ends_auto_closed` cover it. It is a backstop: a real purchase closes the offer first, so a stale page normally gets `409 INVALID_STATE_TRANSITION` with `offer_status: auto_closed` (`test_a_stale_page_after_a_purchase_is_told_the_offer_closed`, `test_an_answer_waiting_on_a_payment_is_told_the_offer_closed`). The frontend handoff says so.
 
 Also checked, no issue found: malformed bodies on every route (probe P4), the real admin-counter-then-withdraw flow (probe P1), rollback when a side effect fails (probe P3), audit rows carrying the actor, request id and IP hash with no free text (probe P6), and an accept racing a cart payment (`test_an_accept_racing_a_cart_payment_ends_auto_closed`).
 

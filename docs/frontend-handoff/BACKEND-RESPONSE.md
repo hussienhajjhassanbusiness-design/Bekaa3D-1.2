@@ -1842,8 +1842,19 @@ Set-Cookie: csrf_token=<redacted>; Max-Age=2592000; Path=/; SameSite=lax
 - The login lockout (10th failed attempt for one email and IP) is also `429 RATE_LIMITED` with `Retry-After: 900`.
 - Current limits per IP: register 5/hour, resend 5/hour, verify-email 20/hour, login 20/hour, refresh 60/hour, reset request 5/hour, reset confirm 20/hour, public reads 600/hour per route (the public review list included), suggestions 3,000/hour. Review writes: 10/hour per user. Admin: 300/minute per administrator.
 - Contact form: 60 attempts/hour, then 5/hour per IP and per email. Bring Your Idea: 20 attempts/hour, then 5/hour per IP and per email ([P2-2](#domain--item-p2-2--bring-your-idea-submission)). Both use the same limiter and headers.
-- **Provisional:** offer routes are not built. They are planned to use the same limiter.
+- Offers use the same limiter, per user: submission 20/hour, and counter, accept and withdraw share 60/hour.
 - Until VS-020, a server-rendering frontend sends every visitor's request from one IP and all visitors share one budget. VS-020 adds a trusted forwarded-IP header.
+
+### Domain / item: Offers — answering an offer
+
+**Status:** **built** (VS-039 to VS-041).
+
+**Authoritative source/OpenAPI file:** [`../offers.md`](../offers.md); `POST /api/v1/me/offers/{offer_id}/counter`, `/accept` and `/withdraw` in `openapi.json`.
+
+**Notes:**
+- **A stale page after a purchase gets `409 INVALID_STATE_TRANSITION` with `offer_status: "auto_closed"`.** Buying the STL closes every live offer, so this is the answer to a counter, accept or withdraw from a page opened before the purchase, including one sent while the payment is being applied. Build for this one: refresh the offer and tell the customer they already own the STL.
+- **`409 PRODUCT_ALREADY_OWNED` on counter and accept is only a backstop.** It answers a live offer on an owned STL, which no known path produces. A generic error message is enough; it needs no screen of its own.
+- **Render the buttons from `allowed_actions`.** It leaves out `counter` and `accept` when the product is unlisted, unavailable or priced at 0, or the customer owns the STL, so the customer then sees only `withdraw` and an administrator only `reject`. The list is only as fresh as the page, so still handle the `409` above.
 
 ---
 

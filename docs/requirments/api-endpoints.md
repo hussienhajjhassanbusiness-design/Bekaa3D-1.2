@@ -627,7 +627,7 @@ A callback alone never authorizes these state changes.
 |---|---|---|---|---|---|
 | `GET /api/v1/admin/offers` | query params | `200 AdminOfferPage` | 401/404 | Cursor; `status`, `product_id`, customer, deadlines; pending deadline first | Pending offers queue |
 | `GET /api/v1/admin/offers/{offer_id}` | — | `200 AdminOfferDetail` | 401/404 | — | Complete negotiation rounds |
-| `POST /api/v1/admin/offers/{offer_id}/counter` | `OfferCounterRequest` | `200 AdminOfferDetail` | 401/404, 409 `OFFER_NOT_YOUR_TURN` / `PRODUCT_ALREADY_OWNED`, 410, 422 | — | Append round; switch turn; reset deadline; notification/outbox |
+| `POST /api/v1/admin/offers/{offer_id}/counter` | `OfferCounterRequest` | `200 AdminOfferDetail` | 401/404, 409 `OFFER_NOT_YOUR_TURN` / `INVALID_STATE_TRANSITION` / `PRODUCT_ALREADY_OWNED`, 410, 422 | — | Append round; switch turn; reset deadline; notification/outbox |
 | `POST /api/v1/admin/offers/{offer_id}/accept` | `OfferAcceptRequest` | `200 AdminOfferDetail` | 401/404, 409 (incl. `OFFER_AMOUNT_CHANGED`), 410, 422 | — | Freeze current amount; start checkout window; notification/outbox; `expected_amount_cents` must equal `current_amount` (ADR-035 d9) |
 | `POST /api/v1/admin/offers/{offer_id}/reject` | `OfferReasonRequest` (optional) | `200 AdminOfferDetail` | 401/404, 409, 410, 422 | — | Append rejection; arm cooldown; notification/outbox |
 

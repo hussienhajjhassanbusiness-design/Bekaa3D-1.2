@@ -476,10 +476,11 @@ async def test_a_failing_side_effect_rolls_the_whole_action_back(
     }
 
 
-async def test_countering_an_stl_bought_meanwhile_is_409_and_writes_nothing(
+async def test_countering_an_owned_stl_is_409_and_writes_nothing(
     client: TestClient, db_session: AsyncSession, db_engine: AsyncEngine
 ) -> None:
-    """Refused as accept is (ADR-035 d4); a counter there could never lead to a sale."""
+    """The backstop, refused as accept is (ADR-035 d4). A real purchase never gets here: see
+    `test_a_stale_page_after_a_purchase_is_told_the_offer_closed`."""
     user = await _customer(client, db_session)
     product = await stl(db_session)
     offer = await seed_offer(

@@ -472,7 +472,7 @@ async def test_an_anonymised_or_deleted_account_gets_no_offer_email(
     assert (await side_effects(db_engine, offer))["emails"] == []
 
 
-async def test_countering_an_stl_bought_meanwhile_is_409_and_writes_nothing(
+async def test_countering_an_owned_stl_is_409_and_writes_nothing(
     client: TestClient, db_session: AsyncSession, db_engine: AsyncEngine
 ) -> None:
     user = await create_user(db_session)

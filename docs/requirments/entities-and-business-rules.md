@@ -890,7 +890,8 @@ AWAITING_CUSTOMER
 ACCEPTED
   ├── PAID
   ├── CHECKOUT_EXPIRED
-  └── AUTO_CLOSED
+  ├── AUTO_CLOSED
+  └── WITHDRAWN
 ```
 
 **Relationships:**
@@ -938,6 +939,9 @@ ACCEPTED
 
 - `AWAITING_*` or `ACCEPTED → AUTO_CLOSED`
   - Triggered when the customer acquires the Product through another route.
+
+- `ACCEPTED → WITHDRAWN`
+  - Only when the customer deletes their account (ADR-047).
 
 **Deletion strategy:**
 **Status only.** Offers and OfferRounds are retained permanently.
