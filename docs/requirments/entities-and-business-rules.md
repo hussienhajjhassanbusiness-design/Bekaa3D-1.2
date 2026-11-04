@@ -877,18 +877,21 @@ AWAITING_ADMIN
   ├── ACCEPTED
   ├── REJECTED
   ├── WITHDRAWN
-  └── EXPIRED
+  ├── EXPIRED
+  └── AUTO_CLOSED
 
 AWAITING_CUSTOMER
   ├── AWAITING_ADMIN
   ├── ACCEPTED
   ├── WITHDRAWN
-  └── EXPIRED
+  ├── EXPIRED
+  └── AUTO_CLOSED
 
 ACCEPTED
   ├── PAID
   ├── CHECKOUT_EXPIRED
-  └── AUTO_CLOSED
+  ├── AUTO_CLOSED
+  └── WITHDRAWN
 ```
 
 **Relationships:**
@@ -934,8 +937,11 @@ ACCEPTED
 - `ACCEPTED → CHECKOUT_EXPIRED`
   - Performed when the one-time checkout period passes.
 
-- `ACCEPTED → AUTO_CLOSED`
+- `AWAITING_*` or `ACCEPTED → AUTO_CLOSED`
   - Triggered when the customer acquires the Product through another route.
+
+- `ACCEPTED → WITHDRAWN`
+  - Only when the customer deletes their account (ADR-047).
 
 **Deletion strategy:**
 **Status only.** Offers and OfferRounds are retained permanently.

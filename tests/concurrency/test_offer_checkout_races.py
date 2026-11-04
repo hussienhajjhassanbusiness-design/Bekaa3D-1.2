@@ -43,6 +43,7 @@ pytestmark = [
     pytest.mark.usefixtures("configured_app", "shop_open"),
 ]
 STAGGER = 0.3
+LOCK_WAIT_TIMEOUT = 10.0
 OFFER_BODY = {"accept_terms": True, "accept_digital_final_sale": True}
 _delay: contextvars.ContextVar[float] = contextvars.ContextVar("delay", default=0.0)
 # The name the payment's apply path calls, patched per test (re-exported, not defined, there).
@@ -357,10 +358,33 @@ async def test_a_submission_racing_a_cart_payment_never_leaves_a_live_offer_on_a
     assert state["status"] == "auto_closed", state["rounds"]
 
 
-async def test_an_accept_racing_a_cart_payment_ends_auto_closed(
-    app: FastAPI, db_engine: AsyncEngine, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+async def _a_session_waits_on_an_offer_row(engine: AsyncEngine) -> bool:
+    """Polls for a real lock wait, so a race test proves it raced instead of assuming it."""
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + LOCK_WAIT_TIMEOUT
+    while loop.time() < deadline:
+        async with engine.connect() as conn:
+            waiting = await conn.scalar(
+                text(
+                    "SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock' "
+                    "AND datname = current_database() AND query ILIKE '%FROM offers%'"
+                )
+            )
+        if waiting:
+            return True
+        await asyncio.sleep(0.02)
+    return False
+
+
+async def _answer_racing_a_cart_payment(
+    app: FastAPI,
+    db_engine: AsyncEngine,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    action: str,
+    body: dict[str, Any],
 ) -> None:
-    """Accept holds the offer row and has read "not owned"; the payment waits for that row."""
+    """The answer holds the offer row and has read "not owned"; the payment waits for it."""
     user = await create_user(db_session)
     product = await stl(db_session)
     offer = await seed_offer(
@@ -369,33 +393,51 @@ async def test_an_accept_racing_a_cart_payment_ends_auto_closed(
     _, payment = await seed_order_with_attempt(db_session, user_id=user.id, product_id=product)
     barrier = asyncio.Barrier(2)
     real_owns, real_settle = OrderingStlOwnership.owns, _SETTLE_REAL
+    payment_blocked: list[bool] = []
 
-    async def accept_side(self: OrderingStlOwnership, *args: Any) -> bool:
+    async def answer_side(self: OrderingStlOwnership, *args: Any) -> bool:
         owned = await real_owns(self, *args)
         await meet_or_fail(barrier)
-        await asyncio.sleep(STAGGER)
+        payment_blocked.append(await _a_session_waits_on_an_offer_row(db_engine))
         return owned
 
     async def payment_side(*args: Any, **kwargs: Any) -> None:
         await meet_or_fail(barrier)
         await real_settle(*args, **kwargs)
 
-    monkeypatch.setattr(OrderingStlOwnership, "owns", accept_side)
+    monkeypatch.setattr(OrderingStlOwnership, "owns", answer_side)
     monkeypatch.setattr(ordering_side, "settle_offers_on_stl_purchase", payment_side)
     client = await _client(app, user.email)
     try:
-        accepted, outcome = await asyncio.gather(
+        answered, outcome = await asyncio.gather(
             client.post(
-                f"/api/v1/me/offers/{offer}/accept",
-                json={"expected_amount_cents": 800},
+                f"/api/v1/me/offers/{offer}/{action}",
+                json=body,
                 headers=_csrf(client, False),
             ),
             pay(db_engine, payment),
         )
     finally:
         await client.aclose()
-    assert (accepted.status_code, outcome) == (200, Outcome.APPLY_PAID), accepted.text
+    assert payment_blocked == [True]
+    assert (answered.status_code, outcome) == (200, Outcome.APPLY_PAID), answered.text
     assert (await offer_state(db_engine, offer))["status"] == "auto_closed"
+
+
+async def test_an_accept_racing_a_cart_payment_ends_auto_closed(
+    app: FastAPI, db_engine: AsyncEngine, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await _answer_racing_a_cart_payment(
+        app, db_engine, db_session, monkeypatch, "accept", {"expected_amount_cents": 800}
+    )
+
+
+async def test_a_counter_racing_a_cart_payment_ends_auto_closed(
+    app: FastAPI, db_engine: AsyncEngine, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await _answer_racing_a_cart_payment(
+        app, db_engine, db_session, monkeypatch, "counter", {"amount_cents": 850, "currency": "USD"}
+    )
 
 
 async def test_an_offer_checkout_racing_a_cart_payment_of_the_same_stl_does_not_deadlock(
@@ -433,3 +475,88 @@ async def test_an_offer_checkout_racing_a_cart_payment_of_the_same_stl_does_not_
     assert response.status_code == 409, response.text
     assert response.json()["code"] == "PRODUCT_ALREADY_OWNED"
     assert (await offer_state(db_engine, offer))["status"] == "auto_closed"
+
+
+_ANSWERS = [
+    ("counter", {"amount_cents": 850, "currency": "USD"}),
+    ("accept", {"expected_amount_cents": 800}),
+    ("withdraw", None),
+]
+
+
+def _assert_told_the_offer_closed(response: httpx.Response) -> None:
+    assert response.status_code == 409, response.text
+    assert response.json()["code"] == "INVALID_STATE_TRANSITION"
+    assert response.json()["offer_status"] == "auto_closed"
+
+
+@pytest.mark.parametrize(("action", "body"), _ANSWERS, ids=[a for a, _ in _ANSWERS])
+async def test_an_answer_waiting_on_a_payment_is_told_the_offer_closed(
+    app: FastAPI,
+    db_engine: AsyncEngine,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    action: str,
+    body: dict[str, Any] | None,
+) -> None:
+    """The reverse order: the payment holds the row, closed but uncommitted, and the answer
+    waits for it, then sees `auto_closed` under its own lock (ADR-035 d4)."""
+    user = await create_user(db_session)
+    product = await stl(db_session)
+    offer = await seed_offer(
+        db_session, user_id=user.id, product_id=product, status="awaiting_customer"
+    )
+    _, payment = await seed_order_with_attempt(db_session, user_id=user.id, product_id=product)
+    closed_uncommitted = asyncio.Event()
+    answer_blocked: list[bool] = []
+
+    async def payment_side(*args: Any, **kwargs: Any) -> None:
+        await _SETTLE_REAL(*args, **kwargs)
+        closed_uncommitted.set()
+        answer_blocked.append(await _a_session_waits_on_an_offer_row(db_engine))
+
+    monkeypatch.setattr(ordering_side, "settle_offers_on_stl_purchase", payment_side)
+    client = await _client(app, user.email)
+
+    async def answer() -> httpx.Response:
+        await closed_uncommitted.wait()
+        return await client.post(
+            f"/api/v1/me/offers/{offer}/{action}", json=body, headers=_csrf(client, False)
+        )
+
+    try:
+        answered, outcome = await asyncio.gather(answer(), pay(db_engine, payment))
+    finally:
+        await client.aclose()
+    assert answer_blocked == [True]
+    assert outcome is Outcome.APPLY_PAID
+    _assert_told_the_offer_closed(answered)
+    state = await offer_state(db_engine, offer)
+    assert state["status"] == "auto_closed"
+    assert state["rounds"][-1] == "2:system:auto_closed:-"
+
+
+@pytest.mark.parametrize(("action", "body"), _ANSWERS, ids=[a for a, _ in _ANSWERS])
+async def test_a_stale_page_after_a_purchase_is_told_the_offer_closed(
+    app: FastAPI,
+    db_engine: AsyncEngine,
+    db_session: AsyncSession,
+    action: str,
+    body: dict[str, Any] | None,
+) -> None:
+    """The normal answer the frontend handles (docs/offers.md), not PRODUCT_ALREADY_OWNED."""
+    user = await create_user(db_session)
+    product = await stl(db_session)
+    offer = await seed_offer(
+        db_session, user_id=user.id, product_id=product, status="awaiting_customer"
+    )
+    _, payment = await seed_order_with_attempt(db_session, user_id=user.id, product_id=product)
+    assert await pay(db_engine, payment) is Outcome.APPLY_PAID
+    client = await _client(app, user.email)
+    try:
+        answered = await client.post(
+            f"/api/v1/me/offers/{offer}/{action}", json=body, headers=_csrf(client, False)
+        )
+    finally:
+        await client.aclose()
+    _assert_told_the_offer_closed(answered)

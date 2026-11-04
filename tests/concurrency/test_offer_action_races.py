@@ -14,10 +14,12 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.catalog.infrastructure.cart_product_reader import SqlCartProductReader
 from app.identity.domain.enums import UserRole
+from app.jobs.expire_offers import expire_offers
 from app.negotiation.api.wiring import offer_deps
 from app.negotiation.application.services.expire_offers import (
     expire_checkout_offer,
     expire_offer,
+    remind_offer,
 )
 from app.negotiation.application.services.respond_to_offer import (
     OfferDeps,
@@ -59,6 +61,10 @@ class _SyncedStore(SqlOfferStore):
     async def lock_unless_locked(self, offer_id: uuid.UUID) -> Offer | None:
         await meet_or_fail(self._barrier)
         return await super().lock_unless_locked(offer_id)
+
+    async def get(self, offer_id: uuid.UUID, *, user_id: uuid.UUID | None = None) -> Offer | None:
+        await meet_or_fail(self._barrier)
+        return await super().get(offer_id, user_id=user_id)
 
 
 async def _seed(engine: AsyncEngine, **over: Any) -> tuple[uuid.UUID, Responder, uuid.UUID]:
@@ -213,3 +219,88 @@ async def test_overlapping_checkout_expiry_runs_close_once(db_engine: AsyncEngin
 
     assert sorted(map(bool, await _race(db_engine, run, run))) == [False, True]
     assert await _rounds_and_audits(db_engine, offer) == (2, 1)
+
+
+async def _reminder_emails(engine: AsyncEngine, offer: uuid.UUID) -> int:
+    async with engine.connect() as conn:
+        sent = await conn.scalar(
+            text(
+                "SELECT count(*) FROM email_outbox WHERE payload->>'offer_id' = :s "
+                "AND template = 'offer_expiring_soon'"
+            ),
+            {"s": str(offer)},
+        )
+    return int(sent or 0)
+
+
+def _remind(offer: uuid.UUID, now: datetime) -> Action:
+    def run(deps: OfferDeps) -> Awaitable[object]:
+        return remind_offer(
+            deps.offers, deps.products, deps.notifier, deps.mailer, offer_id=offer, now=now
+        )
+
+    return run
+
+
+async def test_two_reminder_runs_at_once_send_one_email(db_engine: AsyncEngine) -> None:
+    """ADR-035 d3: clearing `remind_at` under the row lock is the receipt."""
+    now = datetime.now(UTC)
+    _, _, offer = await _seed(
+        db_engine, status="awaiting_customer", remind_at=now - timedelta(minutes=1)
+    )
+    results = await _race(db_engine, _remind(offer, now), _remind(offer, now))
+    assert sorted(map(bool, results)) == [False, True]
+    assert await _reminder_emails(db_engine, offer) == 1
+
+
+async def test_a_reminder_racing_an_accept_never_undoes_it(db_engine: AsyncEngine) -> None:
+    """The reminder writes the row back, so it must never do so from a stale read."""
+    now = datetime.now(UTC)
+    user, _, offer = await _seed(
+        db_engine, status="awaiting_customer", remind_at=now - timedelta(minutes=1)
+    )
+    customer = Responder(OfferActor.CUSTOMER, user)
+    _, answered = await _race(
+        db_engine,
+        _remind(offer, now),
+        lambda d: accept_offer(d, customer, offer_id=offer, expected_amount_cents=800),
+    )
+    assert isinstance(answered, Offer)
+    async with db_engine.connect() as conn:
+        row = (
+            await conn.execute(
+                text("SELECT status::text, remind_at FROM offers WHERE id = :o"), {"o": offer}
+            )
+        ).one()
+    assert tuple(row) == ("accepted", None)
+
+
+@pytest.mark.parametrize(
+    "seed",
+    [
+        {"responds_by": -60},
+        {"status": "accepted", "checkout_expires_at": -60},
+        {"status": "awaiting_customer", "remind_at": -60},
+    ],
+    ids=["overdue", "checkout_window", "reminder"],
+)
+async def test_the_job_skips_a_locked_offer_instead_of_waiting(
+    db_engine: AsyncEngine, seed: dict[str, Any]
+) -> None:
+    """ADR-035 d5: one row held by an answer must not stall the job; the next run takes it."""
+    now = datetime.now(UTC)
+    over = {k: now + timedelta(seconds=v) if isinstance(v, int) else v for k, v in seed.items()}
+    _, _, offer = await _seed(db_engine, **over)
+    factory = async_sessionmaker(db_engine, expire_on_commit=False)
+    ctx = {"session_factory": factory}
+
+    async def written() -> tuple[int, int, int]:
+        rounds, audits = await _rounds_and_audits(db_engine, offer)
+        return rounds, audits, await _reminder_emails(db_engine, offer)
+
+    async with factory() as holder, holder.begin():
+        await holder.execute(text("SELECT 1 FROM offers WHERE id = :o FOR UPDATE"), {"o": offer})
+        await asyncio.wait_for(expire_offers(ctx, now=now), timeout=20)
+        assert await written() == (1, 0, 0)
+    await expire_offers(ctx, now=now)
+    assert await written() != (1, 0, 0)

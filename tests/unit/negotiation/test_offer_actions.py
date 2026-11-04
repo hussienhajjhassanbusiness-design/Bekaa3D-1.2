@@ -193,6 +193,36 @@ async def test_a_stale_accept_writes_nothing(who: Responder) -> None:
     assert world.untouched(offer)
 
 
+@pytest.mark.parametrize("who", [ADMIN, CUSTOMER], ids=["admin", "customer"])
+async def test_counter_refuses_an_stl_owned_meanwhile(who: Responder) -> None:
+    world = World(ownership=FakeOwnership(owned=True))
+    offer = world.seed() if who is ADMIN else world.customer_turn()
+    with pytest.raises(OfferProductOwnedError):
+        await counter_offer(world.deps, who, offer_id=offer.id, amount_cents=900, message=None)
+    assert world.untouched(offer)
+
+
+@pytest.mark.parametrize("who", [ADMIN, CUSTOMER], ids=["admin", "customer"])
+async def test_counter_refuses_the_product_before_ownership(who: Responder) -> None:
+    """docs/offers.md: the refusals are checked in order, so an unlisted owned STL is 422."""
+    world = World(ownership=FakeOwnership(owned=True), products=FakeProducts({}))
+    offer = world.seed() if who is ADMIN else world.customer_turn()
+    with pytest.raises(OfferNotAllowedError):
+        await counter_offer(world.deps, who, offer_id=offer.id, amount_cents=900, message=None)
+    assert world.untouched(offer)
+
+
+@pytest.mark.parametrize("amount", [1, 1001], ids=["below_the_floor", "above_the_list_price"])
+async def test_counter_refuses_ownership_before_the_amount(amount: int) -> None:
+    world = World(ownership=FakeOwnership(owned=True))
+    offer = world.customer_turn()
+    with pytest.raises(OfferProductOwnedError):
+        await counter_offer(
+            world.deps, CUSTOMER, offer_id=offer.id, amount_cents=amount, message=None
+        )
+    assert world.untouched(offer)
+
+
 async def test_accept_refuses_an_stl_owned_meanwhile() -> None:
     world = World(ownership=FakeOwnership(owned=True))
     offer = world.seed()

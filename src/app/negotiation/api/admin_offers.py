@@ -39,7 +39,10 @@ from app.negotiation.application.services.respond_to_offer import (
 )
 from app.negotiation.domain.enums import OfferActor, OfferStatus
 from app.negotiation.domain.exceptions import NegotiationDomainError
-from app.negotiation.infrastructure.adapters import IdentityCustomerDirectory
+from app.negotiation.infrastructure.adapters import (
+    IdentityCustomerDirectory,
+    OrderingStlOwnership,
+)
 from app.negotiation.infrastructure.offers import SqlOfferStore
 
 admin_router = APIRouter(prefix="/offers", tags=["admin"], route_class=AdminBoundaryRoute)
@@ -55,7 +58,8 @@ _ACTION_RESPONSES: dict[int | str, dict[str, Any]] = {
     403: {"description": "CSRF token missing or invalid."},
     409: {
         "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), "
-        "OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED (accept)."
+        "OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED "
+        "(counter, accept)."
     },
     410: {"description": "OFFER_EXPIRED: the response deadline has passed."},
     422: {
@@ -126,7 +130,12 @@ async def _detail(
     now: datetime,
 ) -> AdminOfferDetailRead:
     view = await offer_detail(
-        offers, products, offer_id=offer_id, customers=IdentityCustomerDirectory(session), now=now
+        offers,
+        products,
+        OrderingStlOwnership(session),
+        offer_id=offer_id,
+        customers=IdentityCustomerDirectory(session),
+        now=now,
     )
     if view is None:
         raise not_found_error()

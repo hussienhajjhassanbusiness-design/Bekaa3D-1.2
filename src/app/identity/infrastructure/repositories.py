@@ -322,6 +322,18 @@ class UserRepository:
         stmt = select(UserModel.id, UserModel.email).where(UserModel.id.in_(user_ids))
         return {row.id: str(row.email) for row in (await self._session.execute(stmt)).all()}
 
+    async def active_emails_by_id(self, user_ids: list[UUID]) -> dict[UUID, str]:
+        """Only accounts that can still be mailed: not deactivated, anonymised or deleted."""
+        if not user_ids:
+            return {}
+        stmt = select(UserModel.id, UserModel.email).where(
+            UserModel.id.in_(user_ids),
+            UserModel.is_active.is_(True),
+            UserModel.anonymized_at.is_(None),
+            UserModel.deleted_at.is_(None),
+        )
+        return {row.id: str(row.email) for row in (await self._session.execute(stmt)).all()}
+
     async def lock_for_anonymisation(self, user_id: UUID) -> User | None:
         """FOR NO KEY UPDATE (ADR-047): the email index is partial, so it is no key column, and
         an order or report INSERT's KEY SHARE on this row never waits on the deletion."""

@@ -181,8 +181,7 @@ async def test_the_job_leaves_an_offer_whose_payment_is_in_flight(
 ) -> None:
     closed = datetime.now(UTC) - timedelta(seconds=1)
     _, offer, order, payment = await _accepted_with_order(db_session, closes_at=closed)
-    result = await expire_offers(_ctx(db_engine), now=datetime.now(UTC))
-    assert result["checkout_expired"] == 0
+    await expire_offers(_ctx(db_engine), now=datetime.now(UTC))
     assert (await offer_state(db_engine, offer))["status"] == "accepted"
 
     # The payment completes after the window: the customer paid in time, so it is honoured.

@@ -448,9 +448,9 @@ Removed by ADR-019: there is no STL library, entitlement or download endpoint, b
 | `POST /api/v1/offers` | Verified Customer | `OfferCreate` | `201 OfferDetail` | 401, 403, 409 `PRODUCT_ALREADY_OWNED` / `OFFER_ALREADY_ACTIVE`, 422 `OFFER_BELOW_MINIMUM` / `OFFER_COOLDOWN_ACTIVE` / `PRODUCT_NOT_PURCHASABLE`, 429, 503 `ORDERS_PAUSED` | — | STL only; first round appended; admin in-app notification (no email, SRS §16.1; ADR-034) |
 | `GET /api/v1/me/offers` | Authenticated | query params | `200 OfferPage` | 401 | Cursor; optional `status`, `product_id`; default `-created_at` | Own offer history |
 | `GET /api/v1/me/offers/{offer_id}` | Authenticated; owner | — | `200 OfferDetail` | 401, 404 | — | Includes append-only rounds and current deadline |
-| `POST /api/v1/me/offers/{offer_id}/counter` | Verified Customer; owner; customer turn | `OfferCounterRequest` | `200 OfferDetail` | 401, 403, 404, 409 `OFFER_NOT_YOUR_TURN` / `INVALID_STATE_TRANSITION`, 410, 422, 429 | — | Adds round; switches turn; resets `responds_by`; notification/outbox |
+| `POST /api/v1/me/offers/{offer_id}/counter` | Verified Customer; owner; customer turn | `OfferCounterRequest` | `200 OfferDetail` | 401, 403, 404, 409 `OFFER_NOT_YOUR_TURN` / `INVALID_STATE_TRANSITION` / `PRODUCT_ALREADY_OWNED`, 410, 422, 429 | — | Adds round; switches turn; resets `responds_by`; notification/outbox |
 | `POST /api/v1/me/offers/{offer_id}/accept` | Verified Customer; owner; customer turn | `OfferAcceptRequest` | `200 OfferDetail` | 401, 403, 404, 409 (incl. `OFFER_AMOUNT_CHANGED`), 410, 422, 429 | — | Freezes agreed price; creates checkout window; notification/outbox; `expected_amount_cents` must equal `current_amount` (ADR-035 d9) |
-| `POST /api/v1/me/offers/{offer_id}/withdraw` | Verified Customer; owner | `OfferWithdrawRequest` (optional) | `200 OfferDetail` | 401, 403, 404, 409, 410, 429 | — | Legal in both awaiting states, whoever's turn (ADR-034, ADR-035); append history |
+| `POST /api/v1/me/offers/{offer_id}/withdraw` | Verified Customer; owner | `OfferReasonRequest` (optional) | `200 OfferDetail` | 401, 403, 404, 409, 410, 422, 429 | — | Legal in both awaiting states, whoever's turn (ADR-034, ADR-035); append history |
 | `POST /api/v1/me/offers/{offer_id}/checkout` | Verified Customer; owner; accepted offer | `OfferCheckoutRequest` + `Idempotency-Key` | `201 CheckoutRead` | 401, 403, 404, 409 `INVALID_STATE_TRANSITION` / `PAYMENT_ALREADY_ACTIVE` / `PRODUCT_ALREADY_OWNED` / `IDEMPOTENCY_KEY_CONFLICT` / `IDEMPOTENCY_REQUEST_IN_PROGRESS`, 410 `OFFER_CHECKOUT_EXPIRED`, 422 `PRODUCT_NOT_PURCHASABLE` / `PAYMENT_METHOD_NOT_ALLOWED` / `CONTACT_PHONE_REQUIRED` / `MANUAL_ORDER_LIMIT_REACHED` / `INVALID_FULFILLMENT` / `VALIDATION_ERROR`, 429, 502, 503 `ORDERS_PAUSED` / `ONLINE_PAYMENT_UNAVAILABLE` | — | One-time agreed-price checkout; creates order/payment; price comes from immutable accepted offer. `contact_phone` is required for the `manual` provider and refused for any other (VS-050). **As built (VS-041, ADR-037):** cart checkout's two transactions, replay and 30/hour bucket; the order is inserted before the offer is locked and re-checked; the window does not stretch over a pause. Contract: [`docs/offers.md`](../offers.md) |
 
 ---
@@ -627,9 +627,9 @@ A callback alone never authorizes these state changes.
 |---|---|---|---|---|---|
 | `GET /api/v1/admin/offers` | query params | `200 AdminOfferPage` | 401/404 | Cursor; `status`, `product_id`, customer, deadlines; pending deadline first | Pending offers queue |
 | `GET /api/v1/admin/offers/{offer_id}` | — | `200 AdminOfferDetail` | 401/404 | — | Complete negotiation rounds |
-| `POST /api/v1/admin/offers/{offer_id}/counter` | `OfferCounterRequest` | `200 AdminOfferDetail` | 401/404, 409 `OFFER_NOT_YOUR_TURN`, 410, 422 | — | Append round; switch turn; reset deadline; notification/outbox |
+| `POST /api/v1/admin/offers/{offer_id}/counter` | `OfferCounterRequest` | `200 AdminOfferDetail` | 401/404, 409 `OFFER_NOT_YOUR_TURN` / `INVALID_STATE_TRANSITION` / `PRODUCT_ALREADY_OWNED`, 410, 422 | — | Append round; switch turn; reset deadline; notification/outbox |
 | `POST /api/v1/admin/offers/{offer_id}/accept` | `OfferAcceptRequest` | `200 AdminOfferDetail` | 401/404, 409 (incl. `OFFER_AMOUNT_CHANGED`), 410, 422 | — | Freeze current amount; start checkout window; notification/outbox; `expected_amount_cents` must equal `current_amount` (ADR-035 d9) |
-| `POST /api/v1/admin/offers/{offer_id}/reject` | `OfferRejectRequest` | `200 AdminOfferDetail` | 401/404, 409, 410 | — | Append rejection; arm cooldown; notification/outbox |
+| `POST /api/v1/admin/offers/{offer_id}/reject` | `OfferReasonRequest` (optional) | `200 AdminOfferDetail` | 401/404, 409, 410, 422 | — | Append rejection; arm cooldown; notification/outbox |
 
 ---
 
@@ -1001,13 +1001,9 @@ message?: str
 expected_amount_cents: int  # the current_amount the caller saw (ADR-035 d9)
 ```
 
-### `OfferWithdrawRequest`
+### `OfferReasonRequest`
 
-```text
-reason?: str
-```
-
-### `OfferRejectRequest`
+The body of withdraw and reject.
 
 ```text
 reason?: str

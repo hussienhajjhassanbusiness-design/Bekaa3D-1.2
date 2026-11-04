@@ -2325,9 +2325,11 @@ On a cash order `ready_for_pickup -> picked_up` happens only via the cash handov
 ```text
 awaiting_admin
   -> rejected
+  -> withdrawn
   -> accepted -> paid
               -> checkout_expired
               -> auto_closed
+              -> withdrawn (account deletion only)
   -> awaiting_customer
        -> awaiting_admin
        -> accepted (the customer accepts on their own turn)
@@ -2340,6 +2342,8 @@ awaiting_customer -> auto_closed
 ```
 
 Buying the STL by any other route closes a live offer from any of its three live states (BR-088, SRS 11.4; ADR-037).
+
+`accepted -> withdrawn` happens only when the customer deletes their account (ADR-047); a customer cannot otherwise withdraw an accepted offer.
 
 Once accepted, the inactivity timer no longer controls the offer; only checkout expiry applies.
 

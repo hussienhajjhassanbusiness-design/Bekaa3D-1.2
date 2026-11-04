@@ -96,6 +96,8 @@ Each returns `200` with the offer detail (`AdminOfferDetail` on admin routes).
 | `awaiting_customer` | `["counter", "accept", "withdraw"]` | `[]` |
 | Any other status, or the deadline reached | `[]` | `[]` |
 
+`counter` and `accept` are also left out whenever the route would refuse them: the product is unlisted, unavailable or priced at 0, or the customer already owns the STL. The customer then sees `["withdraw"]` on their turn and an administrator `["reject"]` on theirs.
+
 | Refusal (checked in this order) | Status and code |
 |---|---|
 | Unknown, or another customer's | `404` |
@@ -104,11 +106,13 @@ Each returns `200` with the offer detail (`AdminOfferDetail` on admin routes).
 | The other party's turn | `409 OFFER_NOT_YOUR_TURN` |
 | Accept whose `expected_amount_cents` is not `current_amount` | `409 OFFER_AMOUNT_CHANGED`, with `current_amount: {amount_cents, currency}` |
 | Counter or accept on an unlisted, unavailable or zero-priced product | `422 PRODUCT_NOT_PURCHASABLE`, with `reason` |
-| Accept when the customer already owns the STL | `409 PRODUCT_ALREADY_OWNED` |
+| Counter or accept when the customer already owns the STL | `409 PRODUCT_ALREADY_OWNED` (a backstop, see below) |
 | Customer counter below the floor | `422 OFFER_BELOW_MINIMUM`, with `minimum` |
 | Counter above today's list price; bad body, including an accept without `expected_amount_cents` | `422 VALIDATION_ERROR` |
 
 A refused action writes nothing. The kill switch never blocks an answer.
+
+**A stale page after a purchase.** Buying the STL closes every live offer in the payment's own transaction (VS-041). So the normal answer to a counter, accept or withdraw from a stale page is `409 INVALID_STATE_TRANSITION` with `offer_status: "auto_closed"`. An answer that arrives while the payment is being applied waits for it and gets the same. `PRODUCT_ALREADY_OWNED` is only a backstop for a live offer on an owned STL, which no known path produces.
 
 **Who is told.**
 
@@ -119,6 +123,8 @@ A refused action writes nothing. The kill switch never blocks an answer.
 | Accepted (either side) | email `offer_accepted` + in-app `offer.accepted` | in-app `offer.accepted` if the customer accepted |
 | Rejected | email `offer_rejected` + in-app `offer.rejected` | none |
 | Withdrawn | none | in-app `offer.withdrawn` |
+
+A deactivated customer gets no offer email, the reminder included. The in-app notifications are still written, the administrator can still answer, and the offer expires normally. Nothing is resent if the account is reactivated ([ADR-035](adr/ADR-035-offer-negotiation.md) d10).
 
 ## Offer checkout (VS-041)
 

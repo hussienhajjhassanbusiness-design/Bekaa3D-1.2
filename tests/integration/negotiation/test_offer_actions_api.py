@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.identity.domain.enums import UserRole
 from app.main import app as main_app
+from app.negotiation.infrastructure import adapters
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
 from tests.integration.deep_support import assert_problem, client_for, create_user, login
 from tests.integration.negotiation.offer_support import (
@@ -277,6 +278,8 @@ async def test_counter_amount_rules(client: TestClient, db_session: AsyncSession
         {"amount_cents": 900, "currency": "EUR"},
         {"amount_cents": 900, "currency": "USD", "message": "x" * 1001},
         {"amount_cents": 900, "currency": "USD", "agreed_amount_cents": 1},
+        {"amount_cents": 900, "currency": "USD", "message": "a" + chr(0) + "b"},
+        {"amount_cents": 900, "currency": "USD", "message": "a" + chr(7) + "b"},
     ):
         assert_problem(act(client, offer, "counter", bad), 422, "VALIDATION_ERROR")
     assert act(client, offer, "counter", COUNTER | {"amount_cents": 1000}).status_code == 200
@@ -326,14 +329,15 @@ async def test_accepting_an_stl_bought_meanwhile_is_409(
     }
 
 
+@pytest.mark.parametrize("action", ACTIONS)
 async def test_the_kill_switch_never_blocks_an_answer(
-    client: TestClient, db_session: AsyncSession, db_engine: AsyncEngine
+    client: TestClient, db_session: AsyncSession, db_engine: AsyncEngine, action: str
 ) -> None:
     """BR-040 / INV-10."""
     _, offer = await _offer(client, db_session)
     before = await set_setting(db_engine, "accepting_orders", "false")
     try:
-        assert act(client, offer, "accept", ACCEPT).status_code == 200
+        assert act(client, offer, action, _body(action)).status_code == 200
     finally:
         await set_setting(db_engine, "accepting_orders", before)
 
@@ -364,13 +368,132 @@ async def test_guards(client: TestClient, db_session: AsyncSession, action: str)
     assert_problem(response, 403, "EMAIL_VERIFICATION_REQUIRED")
 
 
+@pytest.mark.parametrize("action", ACTIONS)
 async def test_actions_are_rate_limited_per_user(
-    client: TestClient, db_session: AsyncSession
+    client: TestClient, db_session: AsyncSession, action: str
 ) -> None:
+    """Every action spends the one bucket: the 60th is served, the next is refused."""
     user, offer = await _offer(client, db_session)
     store = redis_asyncio.from_url(os.environ["REDIS_URL"])  # type: ignore[no-untyped-call]
     await store.set(f"ratelimit:offer_actions:{user}", 59, ex=3600)
     await store.aclose()
-    assert act(client, offer, "counter", COUNTER).status_code == 200
+    assert act(client, offer, action, _body(action)).status_code == 200
     assert_problem(act(client, offer, "withdraw"), 429, "RATE_LIMITED")
     assert client.get(f"{MY_OFFERS}/{offer}").status_code == 200
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"reason": "x" * 1001},
+        {"reason": "a" + chr(0) + "b"},
+        {"reason": "a" + chr(7) + "b"},
+        {"reason": 5},
+        {"note": "extra field"},
+    ],
+)
+async def test_a_bad_withdraw_reason_is_422_and_writes_nothing(
+    client: TestClient, db_session: AsyncSession, db_engine: AsyncEngine, body: dict[str, Any]
+) -> None:
+    _, offer = await _offer(client, db_session)
+    before = await offer_state(db_engine, offer)
+    assert_problem(act(client, offer, "withdraw", body), 422, "VALIDATION_ERROR")
+    assert await offer_state(db_engine, offer) == before
+
+
+async def test_the_reason_limit_counts_the_trimmed_text(
+    client: TestClient, db_session: AsyncSession
+) -> None:
+    _, offer = await _offer(client, db_session)
+    response = act(client, offer, "withdraw", {"reason": "  " + "x" * 1000 + "  "})
+    assert response.status_code == 200, response.text
+
+
+@pytest.mark.parametrize(
+    "refused", ["hidden", "unavailable", "free", "owned"], ids=lambda value: str(value)
+)
+async def test_allowed_actions_never_list_what_the_rechecks_refuse(
+    client: TestClient, db_session: AsyncSession, refused: str
+) -> None:
+    """A-01: the page offers neither counter nor accept, and the routes refuse both."""
+    user = await _customer(client, db_session)
+    product = await stl(db_session)
+    offer = await seed_offer(
+        db_session, user_id=user, product_id=product, status="awaiting_customer"
+    )
+    assert client.get(f"{MY_OFFERS}/{offer}").json()["allowed_actions"] == ACTIONS
+    if refused == "owned":
+        await seed_online_order(
+            db_session, user_id=user, stl_id=product, line_status="awaiting_delivery"
+        )
+    else:
+        change = {
+            "hidden": "deleted_at = now()",
+            "unavailable": "is_available = false",
+            "free": "price_cents = 0",
+        }[refused]
+        await db_session.execute(
+            text(f"UPDATE products SET {change} WHERE id = :p"), {"p": product}
+        )
+        await db_session.commit()
+    assert client.get(f"{MY_OFFERS}/{offer}").json()["allowed_actions"] == ["withdraw"]
+    status, code = (
+        (409, "PRODUCT_ALREADY_OWNED") if refused == "owned" else (422, "PRODUCT_NOT_PURCHASABLE")
+    )
+    assert_problem(act(client, offer, "accept", ACCEPT), status, code)
+    assert_problem(act(client, offer, "counter", COUNTER), status, code)
+    assert act(client, offer, "withdraw").status_code == 200
+
+
+@pytest.mark.parametrize("action", ACTIONS)
+async def test_a_failing_side_effect_rolls_the_whole_action_back(
+    db_session: AsyncSession,
+    db_engine: AsyncEngine,
+    monkeypatch: pytest.MonkeyPatch,
+    action: str,
+) -> None:
+    """FR-13 failure behaviour: the turn, the round and the audit row all stay unwritten."""
+    await create_user(db_session, role=UserRole.ADMIN)
+    user = await create_user(db_session)
+    offer = await seed_offer(
+        db_session, user_id=user.id, product_id=await stl(db_session), status="awaiting_customer"
+    )
+    before = await offer_state(db_engine, offer)
+
+    async def broken(*_: Any, **__: Any) -> None:
+        raise RuntimeError("the notification store is down")
+
+    with client_for(main_app, raise_server_exceptions=False) as shopper:
+        login(shopper, user.email)
+        monkeypatch.setattr(adapters, "create_notification", broken)
+        response = act(shopper, offer, action, _body(action))
+    assert response.status_code == 500
+    assert await offer_state(db_engine, offer) == before
+    assert await side_effects(db_engine, offer) == {
+        "audits": [],
+        "notifications": [],
+        "emails": [],
+    }
+
+
+async def test_countering_an_owned_stl_is_409_and_writes_nothing(
+    client: TestClient, db_session: AsyncSession, db_engine: AsyncEngine
+) -> None:
+    """The backstop, refused as accept is (ADR-035 d4). A real purchase never gets here: see
+    `test_a_stale_page_after_a_purchase_is_told_the_offer_closed`."""
+    user = await _customer(client, db_session)
+    product = await stl(db_session)
+    offer = await seed_offer(
+        db_session, user_id=user, product_id=product, status="awaiting_customer"
+    )
+    await seed_online_order(
+        db_session, user_id=user, stl_id=product, line_status="awaiting_delivery"
+    )
+    before = await offer_state(db_engine, offer)
+    assert_problem(act(client, offer, "counter", COUNTER), 409, "PRODUCT_ALREADY_OWNED")
+    assert await offer_state(db_engine, offer) == before
+    assert await side_effects(db_engine, offer) == {
+        "audits": [],
+        "notifications": [],
+        "emails": [],
+    }
