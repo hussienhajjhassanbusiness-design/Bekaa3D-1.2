@@ -33,6 +33,7 @@ class DeliveryOrders(Protocol):
         admin_id: UUID,
         at: datetime,
         refunds: RefundFacts,
+        note: str | None,
     ) -> tuple[OrderLine, OrderStatus]: ...
 
 

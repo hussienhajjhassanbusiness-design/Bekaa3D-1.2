@@ -50,14 +50,17 @@ async def transition_line(
             ctx=CancelContext(admin_id, at, note, request_id, ip_hash),
         )
         return outcome.order_status
-    if cancel_reason is not None:
-        raise InvalidLineTransitionError(TransitionRefusal.CANCEL_REASON_NOT_ALLOWED.value)
     locked = await orders.lock(order_id)
     if locked is None:
         raise LineNotFoundError(f"order {order_id} does not exist")
     line = next((item for item in locked.lines if item.id == item_id), None)
     if line is None:
         raise LineNotFoundError(f"line {item_id} is not on order {order_id}")
+    if cancel_reason is not None:
+        raise InvalidLineTransitionError(
+            TransitionRefusal.CANCEL_REASON_NOT_ALLOWED.value,
+            current_status=line.fulfillment_status.value,
+        )
     # Every payment and refund writer locks the order first, so neither changes under us.
     refunds = await payments.refund_facts(order_id)
     if line.product_type is ProductType.STL:
@@ -75,6 +78,7 @@ async def transition_line(
             item_id=item_id,
             admin_id=admin_id,
             at=at,
+            note=note,
             request_id=request_id,
             ip_hash=ip_hash,
         )

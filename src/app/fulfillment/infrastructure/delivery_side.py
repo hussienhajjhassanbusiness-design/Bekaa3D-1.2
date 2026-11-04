@@ -69,9 +69,16 @@ class SqlDeliveryOrders:
         admin_id: UUID,
         at: datetime,
         refunds: RefundFacts,
+        note: str | None,
     ) -> tuple[OrderLine, OrderStatus]:
         return await mark_stl_line_delivered(
-            self._session, locked, line_id=line_id, admin_id=admin_id, at=at, refunds=refunds
+            self._session,
+            locked,
+            line_id=line_id,
+            admin_id=admin_id,
+            at=at,
+            refunds=refunds,
+            note=note,
         )
 
     async def transition(

@@ -406,6 +406,7 @@ async def mark_stl_line_delivered(
     admin_id: UUID,
     at: datetime,
     refunds: RefundFacts,
+    note: str | None,
 ) -> tuple[OrderLine, OrderStatus]:
     """Admin sent the file: STL `awaiting_delivery -> delivered`, history, recomputed status.
     The caller holds the orders and lines locks; the state is read from `locked`."""
@@ -416,10 +417,16 @@ async def mark_stl_line_delivered(
         OrderItemStatus.DELIVERED,
     )
     if refusal is not None:
-        raise InvalidLineTransitionError(refusal.value, fulfilled_at=line.fulfilled_at)
+        raise InvalidLineTransitionError(
+            refusal.value,
+            fulfilled_at=line.fulfilled_at,
+            current_status=line.fulfillment_status.value,
+        )
     store = SqlOrderStore(session)
     if not await store.set_line_delivered(line_id, at=at, delivered_by=admin_id):
-        raise InvalidLineTransitionError("not_awaiting_delivery")
+        raise InvalidLineTransitionError(
+            "not_awaiting_delivery", current_status=line.fulfillment_status.value
+        )
     await store.add_history(
         [
             StatusChange(
@@ -428,6 +435,7 @@ async def mark_stl_line_delivered(
                 OrderItemStatus.DELIVERED.value,
                 order_item_id=line_id,
                 actor_user_id=admin_id,
+                reason=note,
             )
         ]
     )

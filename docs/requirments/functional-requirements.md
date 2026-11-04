@@ -671,7 +671,7 @@ Awaiting_delivery or delivered → refunded
 
 Concurrent access:
 
-Marking delivered and refunding the same line both lock the order row, then that line; exactly one succeeds
+Marking delivered and refunding the same line both lock the order row, then that line, so the two are serialised: a line refunded in full first cannot then be marked delivered; a line delivered first can still be refunded, and the file cannot be recalled
 Two administrators marking the same line delivered produce one delivery record and one notification
 Two parallel checkouts for the same STL by one customer: the ownership constraint lets only one hold a live line
 

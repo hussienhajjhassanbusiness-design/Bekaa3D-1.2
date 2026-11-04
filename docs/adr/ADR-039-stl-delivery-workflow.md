@@ -1,7 +1,7 @@
 # ADR-039: STL delivery workflow - Fulfillment owns the use case, Ordering keeps every `order_items` write, one transaction writes the delivery and its notices, the queue is keyset-paged by placement time (VS-023b)
 
 **Status:** Accepted
-**Date:** 2026-10-21
+**Date:** 2026-10-21; amended 2026-11-04 (decisions 11 and 12, VS-023b audit)
 **Source basis:** Owner decisions of 2026-10-21 on the [VS-023b plan](../plans/VS-023b-stl-delivery-queue-plan.md) (Q1-Q10); SRS §10.2-§10.4, §20.1; [ADR-019](ADR-019-manual-stl-delivery.md); [ADR-024](ADR-024-cash-on-delivery-and-courier-priced-shipping.md) d9; [ADR-032](ADR-032-checkout-idempotency-and-payment-verification.md) d6, d19
 **Applies first to:** `GET /api/v1/admin/stl-deliveries`; `POST /api/v1/admin/orders/{order_id}/items/{item_id}/transition`; migration `7a1c3e9b5d24`.
 
@@ -21,6 +21,8 @@ ADR-019 d4 has the administrator mark an STL line delivered from a queue, and d8
 8. **The legal line edges are a pure table** (`ordering/domain/line_transitions.py`). VS-029 adds the physical edges and builds `available_actions` from it.
 9. **The transition response is provisional** (`OrderItemTransitionRead`); VS-029 replaces it with `AdminOrderDetail`.
 10. **`daily_download_cap` is deleted** (ADR-019): registry entry and seeded row; the downgrade re-seeds it.
+11. **A deactivated buyer keeps the "file sent" email** (VS-023b audit Q-2, owner 2026-11-04). The line stays in the queue, and marking it sent writes the notification and the email as for any buyer, because the file was paid for and is owed. This differs on purpose from the offer emails ([ADR-035](ADR-035-offer-negotiation.md) d10), which invite a further action the account can no longer take.
+12. **An STL delivery keeps the administrator's note** (VS-023b audit A-03, owner 2026-11-04), on the history row and the audit row, as a physical step does; no customer schema shows it. Every refusal also carries the line's `fulfillment_status` (A-02).
 
 ## Consequences
 
