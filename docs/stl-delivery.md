@@ -24,13 +24,13 @@ A refunded or cancelled line is not listed; a partly refunded line still is.
 
 ### `POST /api/v1/admin/orders/{order_id}/items/{item_id}/transition`
 
-Body `{ "target_status": "delivered", "reason": "an optional note" }`. `200` with the whole `AdminOrderDetail` (since VS-029; the same endpoint moves physical lines, see [`fulfillment.md`](fulfillment.md)). The note, up to 500 characters, goes on the line's history row and the audit row. The administrator sees it in `AdminOrderDetail`; the customer never does.
+Body `{ "target_status": "delivered", "reason": "an optional note" }`. `200` with the whole `AdminOrderDetail` (since VS-029; the same endpoint moves physical lines, see [`fulfillment.md`](fulfillment.md)). The note, up to 500 characters, goes on the line's history row and the audit row. The administrator sees it in `AdminOrderDetail`; the customer never does. It survives the customer's account deletion, so keep contact details out of it.
 
 | Status | When |
 |---|---|
 | `404` | no such order, no such item, or the item is on another order (one body for all three) |
 | `409 INVALID_STATE_TRANSITION` | `reason`: `already_delivered` (with `fulfilled_at`), `line_closed`, `not_awaiting_delivery`, `not_a_legal_edge` for any other `target_status`, or `cancel_reason_not_allowed` for a `cancel_reason` on any target but `cancelled`; always with the line's `fulfillment_status` |
-| `422` | an unknown `target_status` |
+| `422` | an invalid body: an unknown `target_status` or field, or a note over 500 characters |
 
 There is no `Idempotency-Key`: a second call gets `409 already_delivered`.
 

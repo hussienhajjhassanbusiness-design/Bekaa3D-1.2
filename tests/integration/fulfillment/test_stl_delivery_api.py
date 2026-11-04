@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
-from app.fulfillment.domain.limits import STL_DELIVERY_RATE_LIMIT
+from app.fulfillment.domain.limits import STL_DELIVERY_RATE_LIMIT, STL_DELIVERY_WINDOW_SECONDS
 from app.identity.domain.enums import UserRole
 from app.main import app as main_app
 from app.ordering.infrastructure.orders import stl_delivery_query
@@ -138,7 +138,8 @@ _ITEM = "00000000-0000-0000-0000-000000000001"
         _cursor("x|y"),
         pytest.param(_cursor(f"2031-01-01T00:00:00|{_ITEM}"), id="naive"),
         pytest.param(_cursor(f"0001-01-01T00:00:00+14:00|{_ITEM}"), id="before_year_1_in_utc"),
-        pytest.param("A" * 201, id="too_long"),
+        # `UUID()` ignores hyphens, so only the length cap can refuse this well-formed one.
+        pytest.param(_cursor(f"2031-01-01T00:00:00+00:00|{_ITEM}{'-' * 130}"), id="too_long"),
     ],
 )
 async def test_a_bad_cursor_is_a_422(cursor: str, db_session: AsyncSession) -> None:
@@ -185,6 +186,33 @@ async def test_the_queue_query_uses_the_partial_index(db_engine: AsyncEngine) ->
         plan = "\n".join(str(row[0]) for row in rows)
         await conn.rollback()
     assert "ix_order_items_stl_awaiting" in plan, plan
+
+
+async def test_paging_tied_lines_holds_when_the_planner_sorts_instead_of_using_the_index(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """A-01: the index hands ties over in id order, so only a sort exposes a lost tie-break.
+    Rewriting the rows in reverse id order also lays them out that way on the heap."""
+    buyer = (await create_user(db_session)).id
+    seeded = [await seed_stl_order(db_session, user_id=buyer, queued_at=EPOCH) for _ in range(3)]
+    lines = sorted((line for _, line in seeded), key=str)
+    seen: list[uuid.UUID] = []
+    after = None
+    async with db_engine.connect() as conn:
+        for line in reversed(lines):
+            await conn.execute(
+                text("UPDATE order_items SET updated_at = updated_at WHERE id = :i"), {"i": line}
+            )
+        await conn.commit()
+        for setting in ("enable_indexscan", "enable_indexonlyscan", "enable_bitmapscan"):
+            await conn.execute(text(f"SET LOCAL {setting} = off"))
+        for _ in lines:
+            query = stl_delivery_query(after=after, limit=1, product_id=None, user_id=buyer)
+            row = (await conn.execute(query)).one()
+            seen.append(uuid.UUID(str(row.id)))
+            after = (row.created_at, row.id)
+        await conn.rollback()
+    assert seen == lines
 
 
 # --- authorization --------------------------------------------------------------------------
@@ -511,6 +539,20 @@ async def test_a_cancel_reason_is_refused_with_the_state_and_an_unknown_line_sta
     assert await effects(db_engine, line) == (0, 0, 0, 0)
 
 
+@pytest.mark.parametrize("extra", [{"reason": "x" * 501}, {"note": "an unknown field"}])
+async def test_an_oversized_note_or_an_unknown_field_is_a_422(
+    extra: dict[str, str], db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    order, line = await seed_stl_order(db_session)
+    with client_for(main_app) as client:
+        await mfa_admin(client, db_session)
+        response = client.post(
+            transition_path(order.order_id, line), json=BODY | extra, headers=csrf(client)
+        )
+    assert_problem(response, 422, "VALIDATION_ERROR")
+    assert await effects(db_engine, line) == (0, 0, 0, 0)
+
+
 async def test_a_delivery_keeps_the_administrators_note_and_hides_it_from_the_customer(
     db_engine: AsyncEngine, db_session: AsyncSession
 ) -> None:
@@ -551,7 +593,7 @@ async def test_a_delivery_keeps_the_administrators_note_and_hides_it_from_the_cu
 async def test_the_transition_answers_429_at_the_documented_limit(
     db_engine: AsyncEngine, db_session: AsyncSession
 ) -> None:
-    assert STL_DELIVERY_RATE_LIMIT == 300
+    assert (STL_DELIVERY_RATE_LIMIT, STL_DELIVERY_WINDOW_SECONDS) == (300, 3600)
     order, line = await seed_stl_order(db_session)
     with client_for(main_app) as client:
         admin, _, _ = await mfa_admin(client, db_session)

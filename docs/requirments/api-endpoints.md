@@ -1955,7 +1955,7 @@ This section verifies that every V1 feature in the SRS has an API or an intentio
 
 - no STL file is stored or served (ADR-019);
 - only an administrator marks an STL line delivered, from `awaiting_delivery` only;
-- marking delivered and refunding lock the order row, then the same line (ADR-024 lock order), so exactly one wins.
+- marking delivered and refunding lock the order row, then the same line (ADR-024 lock order), so the two are serialised: a line refunded in full first cannot then be marked delivered; a line delivered first can still be refunded.
 
 ## Admin
 

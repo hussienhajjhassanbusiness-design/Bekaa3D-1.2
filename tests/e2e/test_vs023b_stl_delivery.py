@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.catalog.domain.enums import ProductType
 from app.integrations.captcha.fake import FAKE_CAPTCHA_PASS
+from app.integrations.email.console import ConsoleEmailProvider
 from app.jobs.outbox import dispatch_outbox
 from app.jobs.verify_payments import verify_payments
 from app.main import app as main_app
@@ -106,10 +107,10 @@ async def _user_id(db: AsyncSession, email: str) -> uuid.UUID:
     return uuid.UUID(str(found))
 
 
-def _stl_emails(provider: AsyncMock, email: str) -> list[dict[str, Any]]:
+def _stl_emails(send: AsyncMock, email: str) -> list[dict[str, Any]]:
     return [
-        call.kwargs
-        for call in provider.send.await_args_list
+        dict(call.kwargs)
+        for call in send.await_args_list
         if call.kwargs["template"] == "order_stl_delivered" and call.kwargs["to"] == email
     ]
 
@@ -121,8 +122,9 @@ async def test_register_buy_queue_mark_sent_customer_notified(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("app.payments.api.webhooks.verify_in_background", _dropped)
-    provider = AsyncMock()
-    monkeypatch.setattr("app.jobs.outbox.get_email_provider", lambda _settings: provider)
+    # On the class, so a send from anywhere is seen, not only the job's.
+    send = AsyncMock()
+    monkeypatch.setattr(ConsoleEmailProvider, "send", send)
     stl = (
         await seed_product(
             db_session, await seed_refs(db_session), type=ProductType.STL, price_cents=1250
@@ -165,11 +167,11 @@ async def test_register_buy_queue_mark_sent_customer_notified(
         )
     assert notes == 1
 
-    assert _stl_emails(provider, email) == [], "nothing is sent before the job runs"
+    assert _stl_emails(send, email) == [], "nothing is sent before the job runs"
     factory = async_sessionmaker(db_engine, expire_on_commit=False)
     while await dispatch_outbox({"session_factory": factory}):
         pass
-    assert _stl_emails(provider, email) == [
+    assert _stl_emails(send, email) == [
         {
             "to": email,
             "template": "order_stl_delivered",

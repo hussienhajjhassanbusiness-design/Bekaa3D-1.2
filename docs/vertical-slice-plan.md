@@ -826,7 +826,7 @@ Slices are ordered by **dependency first** (a slice never relies on something th
   - Marking delivered on an STL line that has been partly refunded still works; a fully refunded line gives 409 (moved from VS-023b).
   - A full-amount refund of a `pending`, `in_production`, `ready_to_ship`, `shipped` or `ready_for_pickup` physical line gives 422 `REFUND_REQUIRES_CANCELLATION`; a partial one succeeds.
   - A refunded STL line awaiting delivery disappears from the delivery queue.
-  - A refund racing mark-delivered on one STL line: exactly one wins.
+  - A refund racing mark-delivered on one STL line: serialised. A full refund first refuses the delivery; a delivery first can still be refunded.
   - A customer whose STL line was refunded in full can buy it again.
   - An unpaid order gives 409, including an unpaid cash order.
   - A refund racing a cash handover on the same order: before the handover it gives 409 (unpaid), after it succeeds; never both a refund and an unpaid order.
