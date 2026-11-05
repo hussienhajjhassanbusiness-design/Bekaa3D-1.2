@@ -43,9 +43,8 @@ async def wishlist_analytics(
     session: AsyncSession = Depends(get_session),
     products: ProductStore = Depends(product_store),
 ) -> WishlistAnalytics:
-    """Totals and most-wishlisted both include non-public products:
-    `wishlist_count` tracks total interest, not current storefront
-    eligibility (plan §10 Q6)."""
+    """`total_active` counts every live wishlist row, hidden products included; the list has
+    only products the storefront shows, each wishlisted at least once."""
     total_active = await SqlWishlistRepository(session).count_active()
     top = await products.top_by_wishlist_count(limit)
     return WishlistAnalytics(

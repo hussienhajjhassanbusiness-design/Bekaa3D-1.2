@@ -785,7 +785,7 @@ Refunds may cover any subset of paid lines (BR-149); there is no shipping compon
 
 The record remains a **tracked pending obligation** until settled — exactly the kind of task that gets forgotten without a queue driving it. The obligations queue lists pending refunds and owed (failed, not reissued) refunds. A cash payment is refunded up to the cash recorded. A line's or payment's refundable amount always counts what owed refunds reserve, so a failed amount is paid again only through its reissue.
 
-**Voiding closes an obligation unpaid.** A pending or owed refund created by mistake is `voided` by the administrator, with a reason, audited (ADR-042 d2). A settled refund is never voided, a voided one is never reissued, and a refund whose line is already `refunded` or `cancelled` cannot be voided: such a line has no balance left, so its money would be stranded. Recording a chargeback voids the payment's open refunds itself (§9.7).
+**Voiding closes an obligation unpaid.** A pending or owed refund created by mistake is `voided` by the administrator, with a reason, audited (ADR-042 d2). A customer who was told the refund was issued is told it was cancelled, by email and in-app, without the reason. A settled refund is never voided, a voided one is never reissued, and a refund whose line is already `refunded` or `cancelled` cannot be voided: such a line has no balance left, so its money would be stranded. Recording a chargeback voids the payment's open refunds itself (§9.7).
 
 ### 9.7 Chargeback Handling
 
@@ -1011,6 +1011,7 @@ There is no inventory dashboard, as products are made on demand.
 | Order delivered / picked up, with the cash receipt for a cash order and "I got it" / "Report a problem" buttons | Customer |
 | Order cancelled (for a cash order with lines left, restating the new amount due) | Customer |
 | Refund issued               | Customer  |
+| Refund cancelled (a refund already announced is voided) | Customer  |
 | Offer countered             | Customer  |
 | Offer accepted              | Customer  |
 | Offer rejected              | Customer  |

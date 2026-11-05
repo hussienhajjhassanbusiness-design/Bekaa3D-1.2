@@ -17,8 +17,9 @@ from app.catalog.domain.product import (
     ProductDraft,
 )
 from app.catalog.domain.storefront import CursorKey
-from app.catalog.infrastructure.models import ProductModel
+from app.catalog.infrastructure.models import CategoryModel, ProductModel
 from app.catalog.infrastructure.repositories import _violates
+from app.catalog.infrastructure.visibility import listed_predicate
 
 LIVE_SLUG_INDEX = frozenset({"ix_products_live_slug"})
 
@@ -142,10 +143,12 @@ class ProductRepository:
         return [_to_domain(m) for m in models]
 
     async def top_by_wishlist_count(self, limit: int) -> list[Product]:
-        """Highest `wishlist_count` first, id tie-broken; no visibility filter -
-        admin analytics counts interest in non-public products too (plan §10 Q6)."""
+        """Highest `wishlist_count` first, id tie-broken; only products the storefront lists,
+        with at least one wishlist (owner, 2026-11-05, replacing VS-038 plan §10 Q6)."""
         stmt = (
             select(ProductModel)
+            .join(CategoryModel, CategoryModel.id == ProductModel.category_id)
+            .where(listed_predicate(), ProductModel.wishlist_count > 0)
             .order_by(ProductModel.wishlist_count.desc(), ProductModel.id)
             .limit(limit)
         )

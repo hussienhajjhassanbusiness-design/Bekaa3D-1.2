@@ -59,6 +59,16 @@ async def test_i17_a_pending_goodwill_refund_is_absorbed_and_payout_stays_within
         voided = ok(client.get(f"{REFUNDS}/{goodwill}"))
     assert voided["status"] == "voided"
     assert voided["void_reason"] == f"absorbed by chargeback {body['id']}"
+    # The bank moved the money, so telling the customer it was cancelled would be false.
+    assert (
+        await count(
+            db_engine,
+            "SELECT count(*) FROM email_outbox WHERE template = 'order_refund_cancelled'"
+            " AND payload->>'refund_id' = :r",
+            r=str(goodwill),
+        )
+        == 0
+    )
     assert await line_state(db_engine, line) == "refunded"
     assert await statuses(db_engine, order.order_id) == ("refunded", "refunded")
     (audit,) = await audit_rows(db_engine, "chargeback.recorded", body["id"])

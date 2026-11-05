@@ -1,6 +1,6 @@
 # ADR-042: Refunds, voids and chargebacks - an owed refund is checked first, a voided status closes an obligation unpaid, chargebacks are their own record that absorbs open refunds (VS-030)
 
-**Status:** Accepted (2026-10-24, VS-030 PR C). PR A (schema, migration `c01e53ab3e0f`), PR B (refund core) and PR C (late capture, backfill `80e56abf0969`, chargebacks, record-capture) are built on it.
+**Status:** Amended 2026-11-05, see [Amendment](#amendment-2026-11-05-a-voided-refund-tells-the-customer). Accepted (2026-10-24, VS-030 PR C). PR A (schema, migration `c01e53ab3e0f`), PR B (refund core) and PR C (late capture, backfill `80e56abf0969`, chargebacks, record-capture) are built on it.
 **Date:** 2026-10-23
 **Source basis:** [VS-030 plan](../plans/VS-030-refunds-settlement-plan.md) (Revisions 1 and 2, owner answers Q1-Q12); [VS-030 slice](../vertical-slice-plan.md#vs-030--refunds-and-settlement) and its six "Must resolve before build" items; SRS §9.5-9.7, §20.1-20.2; database-design.md §9.3-9.6; [ADR-024](ADR-024-cash-on-delivery-and-courier-priced-shipping.md) d9, d11, d12, d15, d16 and its appendix; [ADR-036](ADR-036-payment-recovery.md) d7, d12, d16; [ADR-038](ADR-038-physical-checkout-and-cash-eligibility.md) d13; VS-041 audit Q-1 and Q-2.
 **Amends:** SRS §20.1 (the payment's back edges), §20.2 and database-design §17.2 (the order-status order); ADR-024 d12 (settle is recorded after paying, in the dashboard); ADR-024 d16 and SRS §9.7 (a chargeback is not a refund kind, and absorbs open refunds); ADR-036 d7 (a mismatched capture can be recorded, d21 below).
@@ -85,3 +85,12 @@ The VS-041 audit added two more:
 - SRS §9.6, §9.7, §10.4, BR-064, §20.1, §20.2 and §21.3, FR-10, database-design §9.3, §9.5, §17.1 and §17.2, api-endpoints §19 and §29.13, the entities documents and the glossary were aligned in PR C. The as-built reference is [`docs/refunds.md`](../refunds.md).
 - Under d16 the administrator must name the chargeback's items knowing the open refunds it absorbs; the 422 returns `chargeable_cents`, the total they must make. A refund racing a chargeback makes whichever commits second refuse (plan R13).
 - VS-032 depends on VS-031 (a chargeback test cancels a line), and only wires provider disputes into `record_chargeback`.
+
+## Amendment (2026-11-05): a voided refund tells the customer
+
+The VS-030 plan's Q7 said no notice on void. The end-to-end rehearsal showed the result: the customer is told "refund issued", then the refund silently disappears from their order. The owner decided on 2026-11-05 that they are told.
+
+- Voiding an `admin` or `cancellation` refund sends the `order_refund_cancelled` email and the `refund.cancelled` notification, in the void's transaction, with the amount and never the reason. Only a void that changes the row sends them, so a repeat tells no one.
+- A `late_capture` refund's void sends nothing: its "issued" notice waits for settlement, so the customer never heard of it.
+- A refund absorbed by a chargeback sends nothing: the bank has returned that money, so "cancelled" would be false.
+- A reissue still sends nothing, and fail still sends nothing: the money is still owed.

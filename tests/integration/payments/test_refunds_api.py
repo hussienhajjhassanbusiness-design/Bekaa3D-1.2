@@ -703,3 +703,73 @@ async def test_the_admin_order_detail_lists_refunds_and_balances(db_session: Asy
 def test_s3_the_provider_port_has_no_refund_method() -> None:
     names = {name for name in dir(PaymentProviderPort) if not name.startswith("_")}
     assert names and not {name for name in names if "refund" in name.lower()}, names
+
+
+# --------------------------------------------------------------------------
+# A voided refund: the customer was told it was coming, so they are told it is not
+# --------------------------------------------------------------------------
+
+
+async def _cancel_notices(engine: AsyncEngine, refund: str | uuid.UUID) -> tuple[int, int]:
+    mail = await count(
+        engine,
+        "SELECT count(*) FROM email_outbox WHERE template = 'order_refund_cancelled'"
+        " AND payload->>'refund_id' = :r",
+        r=str(refund),
+    )
+    note = await count(
+        engine,
+        "SELECT count(*) FROM notifications WHERE type = 'refund'"
+        " AND payload->>'event' = 'refund.cancelled' AND payload->>'refund_id' = :r",
+        r=str(refund),
+    )
+    return mail, note
+
+
+async def test_a_voided_refund_tells_the_customer_once(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    order = await paid_online(db_session, stl=None)
+    with client_for(main_app) as client:
+        await _admin(client, db_session)
+        refund = ok(create(client, order.order_id, [(order.physical[0], 400)]), 201)["id"]
+        assert await _cancel_notices(db_engine, refund) == (0, 0)
+        ok(act(client, refund, "void", {"reason": "Internal: wrong order, see ticket 12."}))
+        ok(act(client, refund, "void", {"reason": "A repeat."}))
+    assert await _cancel_notices(db_engine, refund) == (1, 1)
+    async with db_engine.connect() as conn:
+        payload: dict[str, Any] = (
+            await conn.execute(
+                text(
+                    "SELECT payload FROM email_outbox WHERE template = 'order_refund_cancelled'"
+                    " AND payload->>'refund_id' = :r"
+                ),
+                {"r": refund},
+            )
+        ).scalar_one()
+    assert payload["amount_cents"] == 400 and payload["currency"] == "USD"
+    assert "ticket 12" not in json.dumps(payload)  # the reason is the administrator's
+
+
+async def test_voiding_a_failed_refund_tells_the_customer(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    order = await paid_online(db_session, stl=None)
+    with client_for(main_app) as client:
+        await _admin(client, db_session)
+        refund = ok(create(client, order.order_id, [(order.physical[0], 400)]), 201)["id"]
+        ok(act(client, refund, "fail", {"reason": "Transfer bounced."}))
+        ok(act(client, refund, "void", {"reason": "Customer no longer wants it."}))
+    assert await _cancel_notices(db_engine, refund) == (1, 1)
+
+
+async def test_a_refused_void_tells_no_one(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    order = await paid_online(db_session, stl=None)
+    with client_for(main_app) as client:
+        await _admin(client, db_session)
+        refund = ok(create(client, order.order_id, [(order.physical[0], 400)]), 201)["id"]
+        ok(act(client, refund, "settle", {}))
+        assert_problem(act(client, refund, "void", {"reason": "Oops."}), 409)
+    assert await _cancel_notices(db_engine, refund) == (0, 0)

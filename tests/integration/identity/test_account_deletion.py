@@ -685,3 +685,27 @@ async def test_a_form_message_is_scrubbed_with_its_typed_subject(
         None,
         "[deleted]",
     )
+
+
+async def test_a_deleted_customers_review_stays_public_and_anonymous(
+    db_session: AsyncSession,
+) -> None:
+    c = await seed_customer(db_session)
+    product = c.products[0]
+    with client_for(main_app) as client:
+        login(client, c.email)
+        posted = client.post(
+            "/api/v1/reviews",
+            json={"product_id": str(product), "rating": 4, "body": "Solid print."},
+            headers=csrf(client),
+        )
+        assert posted.status_code == 201, posted.text
+        slug = posted.json()["product_slug"]
+    assert _delete_as(c.email).status_code == 204
+    with client_for(main_app) as visitor:
+        page = visitor.get(f"/api/v1/products/{slug}/reviews")
+    assert page.status_code == 200, page.text
+    (review,) = page.json()["items"]
+    assert (review["rating"], review["body"]) == (4, "Solid print.")
+    assert set(review) == {"id", "rating", "body", "is_verified_purchase", "created_at", "edited"}
+    assert c.email not in page.text

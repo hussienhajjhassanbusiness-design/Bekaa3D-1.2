@@ -28,6 +28,7 @@ from app.payments.infrastructure.refunds import SqlRefundStore
 from app.platform.public import SqlAuditWriter, SqlOutboxWriter
 
 REFUND_TEMPLATE = "order_refund_issued"
+REFUND_CANCELLED_TEMPLATE = "order_refund_cancelled"
 LINE_REFUNDED_REASON = "refund"
 LINE_CHARGEBACK_REASON = "chargeback"
 
@@ -104,6 +105,26 @@ class SqlRefundNotices:
     async def refund_issued(
         self, locked: LockedOrder, *, refund_id: UUID, amount_cents: int, currency: str
     ) -> None:
+        await self._notify(
+            locked, REFUND_TEMPLATE, "refund.issued", refund_id, amount_cents, currency
+        )
+
+    async def refund_cancelled(
+        self, locked: LockedOrder, *, refund_id: UUID, amount_cents: int, currency: str
+    ) -> None:
+        await self._notify(
+            locked, REFUND_CANCELLED_TEMPLATE, "refund.cancelled", refund_id, amount_cents, currency
+        )
+
+    async def _notify(
+        self,
+        locked: LockedOrder,
+        template: str,
+        event: str,
+        refund_id: UUID,
+        amount_cents: int,
+        currency: str,
+    ) -> None:
         order = locked.order
         payload = {
             "order_id": str(order.id),
@@ -115,14 +136,14 @@ class SqlRefundNotices:
         await SqlOutboxWriter(self._session).add(
             user_id=order.user_id,
             recipient_email=order.customer_email_snapshot,
-            template=REFUND_TEMPLATE,
+            template=template,
             payload=payload,
         )
         await create_notification(
             self._session,
             user_id=order.user_id,
             notification_type=NotificationType.REFUND,
-            payload={"event": "refund.issued"} | payload,
+            payload={"event": event} | payload,
         )
 
 
