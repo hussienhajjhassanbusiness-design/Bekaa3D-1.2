@@ -5,7 +5,8 @@ from uuid import UUID
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
 from app.catalog.domain.entities import Category, Colour, Material
-from app.core.text import reject_control_characters
+from app.catalog.domain.slug import MAX_SLUG_LENGTH
+from app.core.text import reject_control_characters, strip_invisible
 
 # 200 characters, matching the longest existing string bound in the project
 # (`pickup_hours` in the settings registry). The columns are TEXT and impose no
@@ -15,25 +16,35 @@ MAX_NAME_LENGTH = 200
 
 
 def _clean_name(value: str) -> str:
-    """Trim, and reject a name that is only whitespace.
-
-    Normalisation rather than mere validation: otherwise `" Resin "` and
-    `"Resin"` are two different stored values of one material.
-    """
-    trimmed = value.strip()
+    """Control characters first (BUG-03: a NUL once answered 500), then trimmed, so `" Resin "`
+    and `"Resin"` are one value; then a visible character and the length (VS-010 audit A-14)."""
+    trimmed = reject_control_characters(value).strip()
     if not trimmed:
         raise ValueError("name must not be empty")
+    if not strip_invisible(trimmed).strip():
+        raise ValueError("name must contain a visible character")
+    if len(trimmed) > MAX_NAME_LENGTH:
+        raise ValueError(f"name must be at most {MAX_NAME_LENGTH} characters")
     return trimmed
 
 
-# Control characters are refused before trimming (BUG-03): a NUL used to reach
-# PostgreSQL and answer 500. Slugs need no such check - the domain pattern
-# admits only [a-z0-9-].
+def _slug_length(value: str) -> str:
+    """Only the length, after trimming: the domain owns every other slug rule."""
+    if len(value.strip()) > MAX_SLUG_LENGTH:
+        raise ValueError(f"slug must be at most {MAX_SLUG_LENGTH} characters")
+    return value
+
+
+# The bounds stay in OpenAPI; they are checked in the validators, after trimming.
 ReferenceName = Annotated[
     str,
-    Field(min_length=1, max_length=MAX_NAME_LENGTH),
-    AfterValidator(reject_control_characters),
+    Field(min_length=1, json_schema_extra={"maxLength": MAX_NAME_LENGTH}),
     AfterValidator(_clean_name),
+]
+ReferenceSlug = Annotated[
+    str,
+    Field(min_length=1, json_schema_extra={"maxLength": MAX_SLUG_LENGTH}),
+    AfterValidator(_slug_length),
 ]
 
 
@@ -105,7 +116,7 @@ class CategoryCreate(BaseModel):
     # Validated and normalised by the domain, not here: the rules live in
     # `catalog.domain.slug` so the API and any future importer share one
     # definition of what a slug is.
-    slug: str = Field(min_length=1, max_length=200)
+    slug: ReferenceSlug
     is_active: bool = True
 
 
@@ -129,7 +140,7 @@ class _RejectEmptyPatch(BaseModel):
 
 class CategoryUpdate(_RejectEmptyPatch):
     name: ReferenceName | None = None
-    slug: str | None = Field(default=None, min_length=1, max_length=200)
+    slug: ReferenceSlug | None = None
     is_active: bool | None = None
 
 

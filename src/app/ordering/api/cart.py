@@ -146,7 +146,7 @@ async def get_cart(
 @router.post(
     "/items",
     response_model=CartRead,
-    dependencies=[Depends(_cart_rate_limit), Depends(require_csrf)],
+    dependencies=[Depends(require_csrf), Depends(_cart_rate_limit)],
     summary="Add a product to the cart; an existing line merges quantities",
     responses={**_WRITE_RESPONSES, **_CONFLICT, **_UNPROCESSABLE},
 )
@@ -173,7 +173,7 @@ async def add_cart_item(
 @router.patch(
     "/items/{product_id}",
     response_model=CartRead,
-    dependencies=[Depends(_cart_rate_limit), Depends(require_csrf)],
+    dependencies=[Depends(require_csrf), Depends(_cart_rate_limit)],
     summary="Set the absolute quantity of a cart line",
     responses={**_WRITE_RESPONSES, **_UNPROCESSABLE, **_NOT_FOUND},
 )
@@ -201,7 +201,7 @@ async def update_cart_item(
     "/items/{product_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     response_class=Response,
-    dependencies=[Depends(_cart_rate_limit), Depends(require_csrf)],
+    dependencies=[Depends(require_csrf), Depends(_cart_rate_limit)],
     summary="Remove a line from the cart",
     responses={**_WRITE_RESPONSES, **_NOT_FOUND},
 )

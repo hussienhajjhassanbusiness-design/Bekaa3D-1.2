@@ -193,7 +193,7 @@ async def list_my_reviews(
     "",
     status_code=status.HTTP_201_CREATED,
     response_model=MyReviewRead,
-    dependencies=[Depends(_write_rate_limit), Depends(require_csrf)],
+    dependencies=[Depends(require_csrf), Depends(_write_rate_limit)],
     summary="Review a product (one live review per product)",
     responses={
         **_WRITE_RESPONSES,
@@ -228,7 +228,7 @@ async def post_review(
 @router.patch(
     "/{review_id}",
     response_model=MyReviewRead,
-    dependencies=[Depends(_write_rate_limit), Depends(require_csrf)],
+    dependencies=[Depends(require_csrf), Depends(_write_rate_limit)],
     summary="Edit your own review (a hidden review stays hidden)",
     responses={**_WRITE_RESPONSES, **_NOT_FOUND},
 )
@@ -258,7 +258,7 @@ async def patch_review(
     "/{review_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     response_class=Response,
-    dependencies=[Depends(_write_rate_limit), Depends(require_csrf)],
+    dependencies=[Depends(require_csrf), Depends(_write_rate_limit)],
     summary="Delete your own review (soft delete)",
     responses={**_WRITE_RESPONSES, **_NOT_FOUND},
 )

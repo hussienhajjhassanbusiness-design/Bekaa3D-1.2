@@ -145,7 +145,7 @@ async def list_wishlist(
     "/{product_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     response_class=Response,
-    dependencies=[Depends(_wishlist_rate_limit), Depends(require_csrf)],
+    dependencies=[Depends(require_csrf), Depends(_wishlist_rate_limit)],
     summary="Add a product to the wishlist (idempotent)",
     responses={**_WRITE_RESPONSES, 404: {"description": "Unknown or non-public product."}},
 )
@@ -172,7 +172,7 @@ async def add_wishlist_item(
     "/{product_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     response_class=Response,
-    dependencies=[Depends(_wishlist_rate_limit), Depends(require_csrf)],
+    dependencies=[Depends(require_csrf), Depends(_wishlist_rate_limit)],
     summary="Remove a product from the wishlist (idempotent)",
     responses=_WRITE_RESPONSES,
 )

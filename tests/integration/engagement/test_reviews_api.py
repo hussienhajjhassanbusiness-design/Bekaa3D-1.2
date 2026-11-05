@@ -270,6 +270,54 @@ async def test_an_edit_needs_a_field_and_the_client_cannot_set_moderation_or_bad
     assert (row.is_verified_purchase, row.is_hidden) == (False, False)
 
 
+async def test_an_edit_that_changes_nothing_does_not_mark_the_review_edited(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    product = await _product(db_session)
+    with client_for(main_app) as client:
+        await _signed_in(client, db_session)
+        review = post_review(client, product.id, 4, body="Nice finish.").json()
+        stamp = (await review_row(db_engine, review["id"])).updated_at
+        for same in (
+            {"rating": 4},
+            {"body": "  Nice finish. "},
+            {"rating": 4, "body": "Nice finish."},
+        ):
+            unchanged = patch_review(client, review["id"], **same)
+            assert unchanged.status_code == 200 and unchanged.json()["edited"] is False
+        assert (await review_row(db_engine, review["id"])).updated_at == stamp
+        changed = patch_review(client, review["id"], rating=5)
+    assert changed.status_code == 200 and changed.json()["edited"] is True
+    await _assert_exact(db_engine, product.id)
+
+
+@pytest.mark.parametrize(
+    "hide",
+    [
+        "UPDATE products SET is_visible = false WHERE id = :p",
+        "UPDATE products SET deleted_at = now() WHERE id = :p",
+    ],
+    ids=["hidden", "archived"],
+)
+async def test_the_author_may_edit_and_delete_a_review_after_its_product_is_hidden(
+    hide: str, db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """ADR-044 amendment (VS-036 audit Q-2): create needs a visible product, an edit does not."""
+    product = await _product(db_session)
+    with client_for(main_app) as client:
+        await _signed_in(client, db_session)
+        review = post_review(client, product.id, 2).json()
+        await execute(db_engine, hide, p=product.id)
+        edited = patch_review(client, review["id"], rating=4, body="Better after a reprint.")
+        assert edited.status_code == 200, edited.text
+        assert (edited.json()["rating"], edited.json()["edited"]) == (4, True)
+        await _assert_exact(db_engine, product.id)
+        deleted = delete_review(client, review["id"])
+    assert deleted.status_code == 204, deleted.text
+    assert (await review_row(db_engine, review["id"])).deleted_at is not None
+    await _assert_exact(db_engine, product.id)
+
+
 async def test_a_hidden_review_stays_hidden_after_an_edit(
     db_engine: AsyncEngine, db_session: AsyncSession
 ) -> None:

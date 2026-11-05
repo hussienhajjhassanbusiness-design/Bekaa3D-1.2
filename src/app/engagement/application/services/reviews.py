@@ -100,6 +100,8 @@ async def edit_review(
     current = await _lock_own(store, products, user_id=user_id, review_id=review_id)
     new_rating = current.rating if rating is None else rating
     new_body = normalise_body(body) if body_given else current.body
+    if (new_rating, new_body) == (current.rating, current.body):
+        return current  # nothing changed: not `edited`, no write (VS-036 audit A-09)
     verified = current.product_id in await evidence(user_id, [current.product_id])
     review = await store.update(review_id, rating=new_rating, body=new_body, verified=verified)
     await recompute_rating(store, products, current.product_id)

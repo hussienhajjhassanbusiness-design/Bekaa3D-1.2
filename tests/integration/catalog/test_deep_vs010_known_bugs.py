@@ -1,8 +1,5 @@
-"""VS-010 issues found by the slice audit, locked in as strict xfails.
-
-VS-010 is outside the deep-test range (VS-001..009); these exist only so the
-audit's known catalogue bugs flip to passing when fixed.
-"""
+"""VS-010 bugs found by the slice audit (a NUL in a name or a cursor), now fixed: these
+regression tests were strict xfails until then (VS-010 audit A-16)."""
 
 import base64
 import json

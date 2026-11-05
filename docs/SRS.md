@@ -342,7 +342,7 @@ Every rule is numbered for traceability. `BR-` prefix.
 | BR-146 | The platform never charges, zones or refunds shipping. Checkout and emails say "delivery fee paid to the courier on delivery".               |
 | BR-147 | After delivery or pickup the customer may confirm receipt or report a problem. Both are optional; the order completes without them.          |
 | BR-148 | No physical work on an unpaid online order: every physical line transition requires a cash order or an online payment that reached paid (paid, partially refunded or refunded). The only exception is the system hold release cancelling an unpaid online order's pending lines. Unpaid online orders never appear in the fulfillment queue. |
-| BR-149 | A paid line is a line of an order whose payment reached paid, unless it was cancelled without a refund obligation. A cancelled line of a cash order was never paid: nothing is refundable on it, and it earns no revenue and no Verified Purchase badge. A line cancelled by a chargeback is still a paid line; its chargeback nets it to 0 (ADR-045). |
+| BR-149 | A paid line is a line of an order whose payment reached paid, unless it was cancelled without a refund obligation. A cancelled line of a cash order was never paid: nothing is refundable on it, and it earns no revenue and no Verified Purchase badge. A line cancelled by a chargeback is still a paid line; its chargeback nets it to 0 (ADR-045). For the Verified Purchase badge a chargeback counts like a refund: one that empties a received line removes the badge (ADR-044 amendment, 2026-11-06). |
 | BR-150 | An online checkout on the `manual` provider (cart or accepted offer) is refused while the customer already holds `manual_max_open_orders` (admin-editable, default 3) unpaid orders whose latest attempt is `manual`. The count is taken under a per-customer lock, so two checkouts racing at the limit place one. A payment retry adds no order and is not limited; paying an order, or its release, frees its place ([ADR-049](adr/ADR-049-manual-payment.md) d14). |
 
 ---
@@ -883,9 +883,9 @@ Every round is an append-only record: sequence, actor, action, amount, message, 
 
 Any verified user may review any product without purchasing. This is a deliberate decision that accepts some fake-review risk in exchange for review volume, mitigated by guardrails rather than by gating.
 
-**Guardrails:** one review per user per product (editable), Verified Purchase badge where a real paid, unrefunded purchase exists, admin hide/restore, rate limiting, link and profanity filtering.
+**Guardrails:** one review per user per product (editable), Verified Purchase badge where a real paid, unrefunded purchase exists, admin hide/restore, rate limiting, link and profanity filtering. A link is a URL, `www.`, an e-mail address, or a word followed by a dot and any real domain ending from IANA's list (`x.shop` as well as `x.com`). Only a new review needs a visible product: the author may edit or delete theirs after the product is hidden or archived, and an edit that changes nothing does not mark it edited (ADR-044 amendment, 2026-11-06).
 
-The badge is **recomputed** from current line facts whenever a line changes state — a cached flag written once would leave a refunded buyer displaying credibility they no longer hold. A physical line counts once it is received (`delivered` / `picked_up`); a paid line still in production does not. A partial refund keeps the badge; a full refund, a return or a cancellation removes it. A cash purchase is paid when its cash is recorded at handover; an unpaid or refused cash line never earns the badge, even in an order whose other lines were paid (BR-149). (Amended by ADR-044.)
+The badge is **recomputed** from current line facts whenever a line changes state — a cached flag written once would leave a refunded buyer displaying credibility they no longer hold. A physical line counts once it is received (`delivered` / `picked_up`); a paid line still in production does not. A partial refund keeps the badge; a full refund, a return or a cancellation removes it. A chargeback counts like a refund. A cash purchase is paid when its cash is recorded at handover; an unpaid or refused cash line never earns the badge, even in an order whose other lines were paid (BR-149). (Amended by ADR-044.)
 
 WhatsApp-only products never show the badge. A product switched to WhatsApp-only after online sales keeps its purchase data, but the badge is hidden on every read while it stays WhatsApp-only. This is a known and accepted bias. (Amended by ADR-044.)
 
@@ -1370,7 +1370,7 @@ A generated `tsvector` column uses the `english` text-search configuration. Name
 | Errors         | RFC 9457 `application/problem+json`                         |
 | Pagination     | Cursor-based with `next_cursor`                             |
 | Sorting        | Comma-separated field list with `-` prefix for descending   |
-| Idempotency    | `Idempotency-Key` header on checkout and refunds            |
+| Idempotency    | `Idempotency-Key` header on checkout (cart and offer), payment retry, refunds and their reissue, chargebacks and record-capture. A cancel takes none: it is protected by the line state, so a repeat finds the lines already cancelled and is a `409` that writes nothing, and the client treats an already-cancelled line as success (ADR-043 d9) |
 | Rate limits    | Standard `RateLimit-*` response headers                     |
 | Money in JSON  | `{"amount_cents": int, "currency": string}` — never a float |
 

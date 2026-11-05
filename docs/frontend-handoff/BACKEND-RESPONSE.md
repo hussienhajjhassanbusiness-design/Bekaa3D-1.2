@@ -1219,6 +1219,8 @@ Set-Cookie: csrf_token=<redacted>; Max-Age=2592000; Path=/; SameSite=lax
 
 ### Domain / item: P1-5 — Admin reference data (categories/materials/colours)
 
+> **2026-11-06 (VS-010 audit A-11, A-14):** a name is trimmed before its 200-character limit is checked, and a name made only of invisible characters (zero-width spaces, joiners, a byte-order mark) is `422 VALIDATION_ERROR`. A name over 200 characters is still a `422`, but its `errors[0].type` is now `value_error`, not `string_too_long`: map on `loc`, not on `type`. A slug is also trimmed before its limit. `POST` and `PATCH` now list their `409` in `openapi.json` (`SLUG_CONFLICT`, and `INVALID_STATE_TRANSITION` on an archived row), as the routes already answered.
+
 **Status:** built.
 
 **Confirmed endpoint:** for each of `categories`, `materials`, `colours`:
@@ -1601,6 +1603,13 @@ Set-Cookie: csrf_token=<redacted>; Max-Age=2592000; Path=/; SameSite=lax
 
 ### Domain / item: VS-036 — Reviews and the Verified Purchase badge
 
+> **2026-11-06 ([ADR-044](../adr/ADR-044-reviews-and-verified-purchase-badge.md#amendment-2026-11-06-links-no-op-edits-hidden-products-chargebacks) amendment): five changes.**
+> - **Any real domain ending is a link.** `cheap3d.shop` or `prints.store` is now `422 REVIEW_CONTENT_REJECTED` with `reason: "link"`, like `x.com`. Many endings are ordinary words or file extensions, so a missing space after a full stop (`Great print.It works`) or a file name (`model.zip`, `readme.md`) is refused too. Suggested message: "Reviews can't contain links or web addresses. Check for a missing space after a full stop, or leave out file names."
+> - **An edit that changes nothing** answers `200` with the review as stored: `edited` does not change.
+> - **The author may edit or delete a review after its product is hidden or archived.** `/me/reviews` already lists it (`product_slug` is `null` once the product is deleted); keep its edit and delete actions.
+> - **A chargeback counts like a refund for the badge:** one that empties the line removes it.
+> - **The write limit no longer counts a request refused for a missing `X-CSRF-Token`.** The same holds for the cart, the wishlist and offers.
+
 **Status:** built (VS-036, [ADR-044](../adr/ADR-044-reviews-and-verified-purchase-badge.md)). Moderation (hide/restore) is [VS-037](#domain--item-vs-037--review-moderation-admin).
 
 **Confirmed endpoint:**
@@ -1625,11 +1634,11 @@ Set-Cookie: csrf_token=<redacted>; Max-Age=2592000; Path=/; SameSite=lax
 **Rate limits:** public list 600/hour per IP. Writes 10/hour per user, one budget shared by POST, PATCH and DELETE.
 
 **Notes:**
-- **The badge is computed by the server and can change at any time.** It turns on when a purchase is owned (STL paid) or received (physical `delivered` / `picked_up`, cash after the handover), and off after a full refund, a return or a cancellation. A partial refund keeps it. Never cache it client-side.
+- **The badge is computed by the server and can change at any time.** It turns on when a purchase is owned (STL paid) or received (physical `delivered` / `picked_up`, cash after the handover), and off after a full refund, a return, a cancellation, or a chargeback that empties the line. A partial refund or chargeback keeps it. Never cache it client-side.
 - **WhatsApp-only products never show the badge:** `is_verified_purchase` is always `false` there, and `verified_purchase=true` returns an empty page. If the product goes back to online sale, the badge reappears by itself.
 - **Hidden and soft-deleted rows:** the public list never shows them, and they do not count in `average_rating` / `review_count`. `/me/reviews` shows your hidden reviews with `is_hidden: true` (edit them as usual; they stay hidden), and never your deleted ones.
 - Sorting is fixed, newest first. Pagination is [C2](#domain--item-c2--cursor-pagination-response-shape).
-- `edited` is `true` once the author changed the review.
+- `edited` is `true` once the author changed the rating or the text; an edit that changes nothing leaves it as it was.
 - The profanity list is a first draft pending the product owner's review before go-live; expect it to change.
 
 ### Domain / item: VS-037 — Review moderation (admin)
@@ -2438,6 +2447,7 @@ There is no total: compute one for display if you need it; checkout recomputes i
 - **Reuse after a timeout or network error:** resend with the **same** key.
 - **Reuse after a `409` or after the user changes anything** (accepted prices, payment method): use a **new** key.
 - `useCheckoutAttempt` and `useIdempotencyAttempt` already match this.
+- **Cancels take no key** (SRS §22.1). A repeat is a `409` that writes nothing; handle it as [P1-12](#domain--item-p1-12--cancellation-and-returns) says.
 
 ### Domain / item: P1-10 — Admin payments
 
@@ -2538,7 +2548,7 @@ There is no total: compute one for display if you need it; checkout recomputes i
 
 **Auth/CSRF/MFA:** customer: verified owner plus `X-CSRF-Token`. Admin: administrator with MFA plus `X-CSRF-Token`.
 
-**Concurrency/idempotency:** no idempotency key. The order is locked, so a cancel racing "start printing" has exactly one winner, and a repeated cancel is a `409`, never a second refund.
+**Concurrency/idempotency:** no idempotency key. The order is locked, so a cancel racing "start printing" has exactly one winner, and a repeated cancel is a `409`, never a second refund (see the last note).
 
 **Example success JSON:** see `OrderDetailRead` and `AdminOrderDetail` in `openapi.json`.
 
@@ -2556,6 +2566,10 @@ There is no total: compute one for display if you need it; checkout recomputes i
 - **Notices:** the customer gets an `order_cancelled` email and an `order.cancelled` notification; a paid cancel also sends the refund notice.
 - **Cash block:** a cash order left with no live line after a `refused` or `no_show` cancel blocks that customer and phone from paying cash. The administrator can clear the block ([P1-11](#domain--item-p1-11--admin-order-fulfillment)). A cash order the customer cancels counts toward the open cash-order limit for 24 hours.
 - **Returns:** `shipped → returned`, then re-ship (`→ shipped`), reprint (`→ in_production`), refund the remaining balance, or (unpaid cash line) cancel.
+- **A repeated cancel is safe, and is not an error to show** (SRS §22.1, ADR-043 d9). There is no `Idempotency-Key`: the line state protects a cancel, so a retry after a lost response finds the lines already cancelled and gets a `409` that writes nothing and never refunds twice. Treat it as success once the lines read `cancelled`:
+  - customer: `409 ORDER_NOT_CANCELLABLE`, then `GET /api/v1/me/orders/{order_id}` shows every physical line it cancelled as `cancelled`;
+  - administrator's order cancel: `409 INVALID_STATE_TRANSITION` with `reason: no_cancellable_line`, then the admin order detail shows the lines `cancelled`;
+  - one line through the transition endpoint: `409 INVALID_STATE_TRANSITION` with `reason: line_closed` and `fulfillment_status: "cancelled"` in the body itself.
 
 ### Domain / item: P1-13 — Refunds
 

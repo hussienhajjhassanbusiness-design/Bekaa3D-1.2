@@ -7,6 +7,7 @@ import pytest
 from app.catalog.api.reference_data import PUBLIC_RATE_LIMIT, PUBLIC_RATE_WINDOW_SECONDS
 from app.catalog.application.ports import PurchaseMode
 from app.engagement.domain import review_limits
+from app.engagement.domain.iana_tlds import IANA_TLDS
 from app.engagement.domain.profanity import PROFANITY_WORDS
 from app.engagement.domain.reviews import (
     BODY_MAX,
@@ -37,10 +38,65 @@ def test_links_are_refused(body: str) -> None:
 
 @pytest.mark.parametrize(
     "body",
-    ["5.0 stars", "e.g. the finish", "a 3.5mm jack", "Great print!", "came 2 days early."],
+    [
+        "order at cheap3d.shop",
+        "PRINTS.STORE has it",
+        "see my gallery.art",
+        "ask printfarm.online for a quote",
+        "best deals on lamps.today",
+        "موقع.شبكة",  # an IDN ending, in Unicode (xn--ngbc5azd)
+        "visit shop.xn--ngbc5azd",
+        "a.b.co.uk",
+        "visit foo.com-it is cheap",  # only an xn-- label holds a hyphen
+        "prints.com--best",
+        "shop.भारत",
+        "दुका.com",
+    ],
+)
+def test_any_iana_ending_is_a_link(body: str) -> None:
+    assert content_refusal(body) is ContentRefusal.LINK
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "5.0 stars",
+        "e.g. the finish",
+        "i.e. perfect",
+        "a 3.5mm jack",
+        "Great print!",
+        "came 2 days early.",
+        "Arrived in 2 days. Love it, so happy!",
+        "Printed at 0.2 mm layers; v1.2 of the design is better.",
+        "Mr. Smith recommended it... and it is great.",
+        "Size: 10.5 x 4 cm. Shop owner was kind.",
+        "It works. Me and my son love it. Today it is on the shelf.",
+        "رائع جدا. شكرا",
+    ],
 )
 def test_ordinary_text_is_not_a_link(body: str) -> None:
     assert content_refusal(body) is None
+
+
+def test_a_missing_space_after_a_full_stop_can_read_as_a_domain() -> None:
+    """The accepted cost of a full ending list (ADR-044 amendment): `print.it` is a domain."""
+    assert content_refusal("Great print.It works") is ContentRefusal.LINK
+
+
+def test_the_model_zip_file_name_reads_as_a_domain_too() -> None:
+    """`zip`, `md`, `py` and `app` are TLDs as well as file extensions (ADR-044 amendment)."""
+    assert content_refusal("The STL came as model.zip") is ContentRefusal.LINK
+
+
+def test_every_listed_ending_is_reached_by_the_matcher() -> None:
+    """Combining marks are label characters, or `भारत` would stop at its first vowel sign."""
+    missed = sorted(t for t in IANA_TLDS if content_refusal(f"shop.{t}") is not ContentRefusal.LINK)
+    assert missed == []
+
+
+def test_the_ending_list_is_ianas_folded_with_each_idn_in_unicode_too() -> None:
+    assert {"com", "shop", "lb", "xn--ngbc5azd", "شبكة"} <= IANA_TLDS
+    assert len(IANA_TLDS) > 1500 and all(tld == tld.casefold() for tld in IANA_TLDS)
 
 
 FULLWIDTH_FUCK = "".join(chr(ord(c) + 0xFEE0) for c in "fuck")

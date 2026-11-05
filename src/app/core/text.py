@@ -14,7 +14,12 @@ Pure: no framework imports, so the domain layer may use it too.
 """
 
 import re
+import unicodedata
 
+# Unicode default-ignorable characters outside category Cf, which `strip_invisible` drops too.
+_IGNORABLE = re.compile(
+    "[\u034f\u115f\u1160\u17b4\u17b5\u180b-\u180f\u3164\ufe00-\ufe0f\uffa0\U000e0100-\U000e01ef]"
+)
 # C0 controls (U+0000-U+001F) and DEL (U+007F).
 _CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 # The same, minus tab, line feed and carriage return.
@@ -33,6 +38,12 @@ def reject_control_characters(value: str) -> str:
     if has_control_characters(value):
         raise ValueError(CONTROL_CHARACTER_MESSAGE)
     return value
+
+
+def strip_invisible(text: str) -> str:
+    """Without the characters that render as nothing: they could hide a link or a word."""
+    visible = "".join(c for c in text if unicodedata.category(c) != "Cf")
+    return _IGNORABLE.sub("", visible)
 
 
 def json_contains_nul(value: object) -> bool:
