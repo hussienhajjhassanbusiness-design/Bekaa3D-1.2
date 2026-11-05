@@ -74,8 +74,10 @@ pinned in the cursor:
   are just text to it.
 - **Fuzzy** (when fewer than **5** full-text hits match the facets): full-text
   hits **or** names with `word_similarity(q, name) >= 0.5`. That threshold finds
-  one deleted, substituted or inserted letter (`dragn`, `dragom`, `plnter`). A
-  transposition (`dargon`) is out of reach for trigrams. Fuzzy mode needs a term
+  most single-letter typos (`dragn`, `dragom`, `plnter`), but not all: a letter
+  lost near the start of a short word can score below it (`drgon` is 0.44 against
+  "Articulated Dragon", and finds nothing). A transposition (`dargon`) is
+  out of reach for trigrams too. Fuzzy mode needs a term
   with **a word of at least 3 letters or digits** that **excludes no word**: `s`,
   `sp`, `s s` and `(s)` stay full text (a short term would match every name with a
   word starting with it), and so

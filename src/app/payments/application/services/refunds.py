@@ -487,6 +487,10 @@ async def void_refund(
             "amount_cents": row.amount_cents,
         },
     )
+    # Every kind: even an unannounced late capture shows as `processing` on the order page.
+    await deps.notices.refund_cancelled(
+        h.order, refund_id=refund_id, amount_cents=row.amount_cents, currency=row.currency
+    )
     return RefundOutcome(refund_id, True, status)
 
 

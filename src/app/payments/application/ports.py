@@ -342,3 +342,9 @@ class RefundNotices(Protocol):
     ) -> None:
         """The customer's "refund issued" email and `refund` notification (Q7)."""
         ...
+
+    async def refund_cancelled(
+        self, locked: LockedOrder, *, refund_id: UUID, amount_cents: int, currency: str
+    ) -> None:
+        """Takes back a "refund issued" notice when the refund is voided (ADR-042 amendment)."""
+        ...

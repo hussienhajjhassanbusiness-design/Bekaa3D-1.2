@@ -50,7 +50,7 @@ class ProductStore(Protocol):
         ...
 
     async def top_by_wishlist_count(self, limit: int) -> list[Product]:
-        """Highest `wishlist_count` first, id tie-broken; no visibility filter."""
+        """Highest `wishlist_count` first, id tie-broken; listed products with a count only."""
         ...
 
 

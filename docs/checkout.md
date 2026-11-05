@@ -102,7 +102,7 @@ FROM payments WHERE late_captured_at IS NOT NULL ORDER BY late_captured_at;
 
 Each late capture also has an audit row (`payment.late_capture`, with its reason).
 
-**Go-live gate:** no real online provider is configured in production before VS-024 and VS-030 are merged, unless an operational alert on late captures and stuck payments exists (ADR-032). VS-024's alerts meet that clause only if someone reads them ([ADR-036](adr/ADR-036-payment-recovery.md)). Production accepts only `PAYMENT_PROVIDER=none` until VS-032 adds a real adapter.
+**Go-live gate:** no real online provider is configured in production before VS-024 and VS-030 are merged, unless an operational alert on late captures and stuck payments exists (ADR-032). VS-024's alerts meet that clause only if someone reads them ([ADR-036](adr/ADR-036-payment-recovery.md)). Production runs `PAYMENT_PROVIDER=manual` ([ADR-049](adr/ADR-049-manual-payment.md)), with both slices merged; an API provider later is VS-032.
 
 ## The mock provider (development)
 

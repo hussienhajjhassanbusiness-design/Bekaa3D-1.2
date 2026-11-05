@@ -8,7 +8,7 @@ from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -305,25 +305,75 @@ async def test_admin_analytics_rejects_a_limit_above_the_max(db_session: AsyncSe
     assert response.status_code == 422
 
 
-async def test_admin_analytics_counts_a_non_public_product(db_session: AsyncSession) -> None:
-    refs = await seed_refs(db_session)
-    product = await _product(db_session, refs)
+async def _admin_report(db: AsyncSession) -> dict[str, Any]:
+    with client_for(main_app) as admin:
+        await mfa_admin(admin, db)
+        response = admin.get(ADMIN_PATH, params={"limit": 100})
+    assert response.status_code == 200, response.text
+    body: dict[str, Any] = response.json()
+    return body
+
+
+async def _wishlisted(db: AsyncSession, product: ProductModel) -> None:
     with client_for(main_app) as customer:
-        await _signed_in(customer, db_session)
+        await _signed_in(customer, db)
         customer.put(f"{PATH}/{product.id}", headers=csrf(customer))
 
+
+async def test_most_wishlisted_lists_a_public_product_with_its_count(
+    db_session: AsyncSession,
+) -> None:
+    refs = await seed_refs(db_session)
+    product = await _product(db_session, refs)
+    await _wishlisted(db_session, product)
+    body = await _admin_report(db_session)
+    row = [r for r in body["most_wishlisted"] if r["product_id"] == str(product.id)]
+    assert [r["wishlist_count"] for r in row] == [1]
+
+
+async def test_most_wishlisted_leaves_out_a_zero_count(db_session: AsyncSession) -> None:
+    refs = await seed_refs(db_session)
+    await _product(db_session, refs)
+    body = await _admin_report(db_session)
+    assert [r for r in body["most_wishlisted"] if r["wishlist_count"] == 0] == []
+
+
+async def test_most_wishlisted_leaves_out_a_hidden_product_but_the_total_counts_it(
+    db_session: AsyncSession,
+) -> None:
+    refs = await seed_refs(db_session)
+    product = await _product(db_session, refs)
+    product_id = str(product.id)
+    await _wishlisted(db_session, product)
     product.is_visible = False
     db_session.add(product)
     await db_session.commit()
-
-    with client_for(main_app) as admin:
-        await mfa_admin(admin, db_session)
-        response = admin.get(ADMIN_PATH, params={"limit": 100})
-
-    body = response.json()
+    body = await _admin_report(db_session)
+    assert product_id not in [r["product_id"] for r in body["most_wishlisted"]]
     assert body["total_active"] >= 1
-    matching = [row for row in body["most_wishlisted"] if row["product_id"] == str(product.id)]
-    assert matching and matching[0]["wishlist_count"] >= 1
+
+
+async def test_most_wishlisted_leaves_out_a_product_in_a_disabled_category(
+    db_session: AsyncSession,
+) -> None:
+    refs = await seed_refs(db_session)
+    product = await _product(db_session, refs)
+    product_id = str(product.id)
+    await _wishlisted(db_session, product)
+    await db_session.execute(
+        text("UPDATE categories SET is_active = false WHERE id = :c"),
+        {"c": product.category_id},
+    )
+    await db_session.commit()
+    try:
+        body = await _admin_report(db_session)
+    finally:
+        await db_session.execute(
+            text("UPDATE categories SET is_active = true WHERE id = :c"),
+            {"c": product.category_id},
+        )
+        await db_session.commit()
+    assert product_id not in [r["product_id"] for r in body["most_wishlisted"]]
 
 
 # --------------------------------------------------------------------------

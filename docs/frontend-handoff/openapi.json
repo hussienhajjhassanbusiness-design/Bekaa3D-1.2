@@ -12549,7 +12549,7 @@
     },
     "/api/v1/admin/analytics/wishlist": {
       "get": {
-        "description": "Totals and most-wishlisted both include non-public products:\n`wishlist_count` tracks total interest, not current storefront\neligibility (plan §10 Q6).",
+        "description": "`total_active` counts every live wishlist row, hidden products included; the list has\nonly products the storefront shows, each wishlisted at least once.",
         "operationId": "wishlist_analytics_api_v1_admin_analytics_wishlist_get",
         "parameters": [
           {

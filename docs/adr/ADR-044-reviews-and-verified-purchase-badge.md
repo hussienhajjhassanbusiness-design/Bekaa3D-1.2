@@ -1,6 +1,6 @@
 # ADR-044: Reviews and the Verified Purchase badge - the badge is a projection of current line facts, recomputed in Ordering's line writers; ratings are exact aggregates under the product lock (VS-036)
 
-**Status:** Accepted (2026-10-27, VS-036 PR B). Proposed 2026-10-25 with PR A (schema); PR B built the behaviour and recorded decisions 11-20 below. VS-037 (2026-10-27) recorded decisions 21-27, the moderation path.
+**Status:** Amended 2026-11-05, see [Amendment](#amendment-2026-11-05-a-deleted-customers-reviews). Accepted (2026-10-27, VS-036 PR B). Proposed 2026-10-25 with PR A (schema); PR B built the behaviour and recorded decisions 11-20 below. VS-037 (2026-10-27) recorded decisions 21-27, the moderation path.
 **Date:** 2026-10-25
 **Source basis:** [VS-036 slice](../vertical-slice-plan.md#vs-036--reviews-and-verified-purchase-badge); [plan](../plans/VS-036-reviews-plan.md) (Revision 1, owner answers Q1-Q10 of 2026-10-25); SRS §3.8 BR-100 to BR-105, BR-149, §12.1, §12.2, INV-17; database-design §12.1; [ADR-019](ADR-019-manual-stl-delivery.md) d5; [ADR-020](ADR-020-optimistic-versioning-for-admin-edits.md) d5; [ADR-042](ADR-042-refunds-voids-and-chargebacks.md); [ADR-043](ADR-043-cancellation-and-returns.md); [VS-037 plan](../plans/VS-037-review-moderation-plan.md) (owner answers Q1-Q7 of 2026-10-27).
 **Amends:**
@@ -123,3 +123,7 @@ and reissue never change a line.
   mask. VS-045 has nothing to blank while no author identity is shown.
 - Accepted with PR B (decisions 11-20). Any later change to the badge states is one constant,
   `ordering/domain/badge.py:BADGE_STATES`, plus its tests.
+
+## Amendment (2026-11-05): a deleted customer's reviews
+
+A deleted customer's reviews stay public and anonymous (owner decision, after the end-to-end rehearsal raised it; ADR-047 did not say). Account deletion leaves the rating, the text and the Verified Purchase badge, so product ratings and their aggregates do not move. Anonymous here means no public or customer-facing read names an author: `PublicReviewRead` has no author field, and `reviews.user_id` stays for the administrator's review queue, where it now leads to an anonymised account. The customer can delete a review before closing the account if they want its text gone; deletion does not do that for them. `test_a_deleted_customers_review_stays_public_and_anonymous` holds this.

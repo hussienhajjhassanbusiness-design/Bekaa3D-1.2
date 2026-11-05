@@ -13,7 +13,7 @@ _WISHLIST = "tests/integration/engagement/test_wishlist_api.py"
 SMOKE_ELSEWHERE: dict[str, list[str]] = {
     "add, list, remove, list round trip": [f"{_WISHLIST}::test_add_list_remove_list_round_trip"],
     "admin analytics reads totals and most-wishlisted": [
-        f"{_WISHLIST}::test_admin_analytics_counts_a_non_public_product"
+        f"{_WISHLIST}::test_most_wishlisted_leaves_out_a_hidden_product_but_the_total_counts_it"
     ],
 }
 

@@ -13,7 +13,7 @@ The backend's answer to the three frontend request files in [`../frontend-reques
 
 1. **Field lists are in `openapi.json`, not in the prose.** A response block names a schema; look it up under `components.schemas`.
 2. **Two decisions removed parts of what you asked about.** ADR-019: the platform stores and serves no STL files, so there are no entitlements, library, downloads or asset uploads. ADR-024: the platform charges no shipping, so there are no shipping zones or free-shipping threshold. See [section 3 of the response](BACKEND-RESPONSE.md#3-removed-by-adr-019-and-adr-024).
-3. **The backend is built up to the public catalogue.** Checkout, payments, orders, refunds and Bring Your Idea do not exist yet (the contact form, the address book and the cart do: VS-033, VS-026, VS-022). Their answers are marked **provisional** in [section 4](BACKEND-RESPONSE.md#4-not-built-yet-provisional).
+3. **Every item below is built, apart from the five that were removed.** [Section 4](BACKEND-RESPONSE.md#4-built-since-the-first-version) of the response was brought up to date with the code on 2026-11-06. Where anything in the response disagrees with `openapi.json` or the contract files in [`docs/`](..), they win.
 4. **Some items the request calls "confirmed" are not.** The list is in [section 6](BACKEND-RESPONSE.md#6-corrections-to-confirmed-items-in-the-request).
 
 ## Start the backend
@@ -31,7 +31,7 @@ The last command prints the seed accounts' credentials **once**. Keep them in a 
 
 ## Status of every item
 
-**Built**: answered from running code, with real examples. **Removed**: will never exist. **Not built**: provisional answer from the specification.
+**Built**: answered from running code, with real examples. **Removed**: will never exist.
 
 | ID | Item | Status | Backend slice |
 |---|---|---|---|
@@ -48,13 +48,13 @@ The last command prints the seed accounts' credentials **once**. Keep them in a 
 | C3 | Address book | Built | VS-026 |
 | C4 | Shipping zones | **Removed (ADR-024)** | — |
 | C5 | Cart | Built (incl. `over_cap`, `purchasable`, `payment_methods`) | VS-022, VS-049 |
-| C6 | Checkout | Not built | VS-023, VS-028 |
-| C7 | Payment verification | Not built; parts undecided | VS-023 to VS-025 |
-| C8 | Order status and actions | Not built; admin `available_actions` decided (ADR-025) | VS-023, VS-025, VS-029 |
+| C6 | Checkout | Built | VS-023, VS-028 |
+| C7 | Payment verification | Built; V1 provider is `manual` (ADR-049) | VS-023 to VS-025, VS-050 |
+| C8 | Order status and actions | Built | VS-023, VS-025, VS-029 |
 | C9 | Entitlements / library | **Removed (ADR-019)** | — |
 | C10 | STL download | **Removed (ADR-019)** | — |
-| C11 | Ownership check | Product-level built; per-customer check decided (ADR-025), not built | VS-015; VS-023 |
-| C12 | Idempotency-Key | Not built | VS-023 |
+| C11 | Ownership check | Built | VS-015, VS-023 |
+| C12 | Idempotency-Key | Built | VS-023 |
 | P1-1 | Admin authorization source | Built | VS-005, VS-006 |
 | P1-2 | Admin MFA | Built | VS-005 |
 | P1-3 | Admin settings | Built | VS-007 |
@@ -64,20 +64,20 @@ The last command prints the seed accounts' credentials **once**. Keep them in a 
 | P1-7 | Admin image upload | Built | VS-014 |
 | P1-8 | Admin STL asset upload | **Removed (ADR-019)** | — |
 | P1-9 | Admin entitlement grant | **Removed (ADR-019)** | — |
-| P1-10 | Admin payments | Not built | VS-024 |
+| P1-10 | Admin payments | Built | VS-024 |
 | P1-11 | Admin order fulfillment | Built | VS-023b, VS-029 |
-| P1-12 | Cancellation and returns | Not built | VS-031 |
-| P1-13 | Refunds | Not built | VS-030 |
-| P2-1 | Captcha provider | Not built; Turnstile decided (ADR-025) | VS-033 |
-| P2-2 | Bring Your Idea | Not built | VS-034 |
-| P2-3 | Contact form | Not built | VS-033 |
-| P2-4 | Admin contact queue | Not built | VS-033 |
+| P1-12 | Cancellation and returns | Built | VS-031 |
+| P1-13 | Refunds | Built | VS-030 |
+| P2-1 | Captcha provider | Built (Turnstile, ADR-025) | VS-033 |
+| P2-2 | Bring Your Idea | Built | VS-034 |
+| P2-3 | Contact form | Built | VS-033 |
+| P2-4 | Admin contact queue | Built | VS-033 |
 | P2-5 | Notifications | Built | VS-008 |
 | P2-6 | Password reset | Built | VS-004 |
-| P2-7 | Turnstile on register | Not built; decided (ADR-025) | VS-033 |
+| P2-7 | Turnstile on register | Built | VS-033 |
 | P2-8 | Rate-limit shape | Built | VS-002 |
 
-Totals: 20 built, 5 removed, 16 not built.
+Totals: 36 built, 5 removed.
 
 ## Keeping this pack true
 

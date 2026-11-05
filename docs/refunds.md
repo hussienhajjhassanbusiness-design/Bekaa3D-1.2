@@ -14,7 +14,7 @@ As built. Decisions: [ADR-042](adr/ADR-042-refunds-voids-and-chargebacks.md) (am
 | `POST /api/v1/admin/refunds/{refund_id}/settle` | `200 RefundDetail` | `pending → settled`; a repeat is 200 unchanged |
 | `POST /api/v1/admin/refunds/{refund_id}/fail` | `200 RefundDetail` | `pending → failed`: still owed |
 | `POST /api/v1/admin/refunds/{refund_id}/reissue` | `201 RefundDetail` | `Idempotency-Key` required; a new pending twin |
-| `POST /api/v1/admin/refunds/{refund_id}/void` | `200 RefundDetail` | closes a mistake unpaid; a repeat keeps the first reason |
+| `POST /api/v1/admin/refunds/{refund_id}/void` | `200 RefundDetail` | closes a mistake unpaid and tells the customer; a repeat keeps the first reason and tells no one |
 | `POST /api/v1/admin/orders/{order_id}/chargebacks` | `201 ChargebackDetail` | `Idempotency-Key` required |
 | `GET /api/v1/admin/orders/{order_id}/chargebacks`, `GET /api/v1/admin/chargebacks/{id}` | `200` | never in the queue |
 | `POST /api/v1/admin/payments/{payment_id}/record-capture` | `201 RecordCaptureRead` | `Idempotency-Key` required; see below |
@@ -50,7 +50,7 @@ The order and payment statuses are recomputed on create, fail, reissue, void and
 - **One alert per chargeback,** of kind `chargeback`, or `chargeback_excess` when there is excess. An audit row `chargeback.recorded` lists the voided and remainder refund ids.
 - **On a late-captured attempt:** no items; its open `late_capture` refund is absorbed the same way. If that refund is not in USD, nothing is absorbed and the charge is all excess. No status changes.
 - **Refusals:** online payments only (422 `CHARGEBACK_NOT_ONLINE`); one record per provider dispute reference (409 `CHARGEBACK_DUPLICATE`); 409 `ORDER_NOT_PAID` for an attempt that never took money.
-- **Production** stays on `PAYMENT_PROVIDER=none` until VS-032, so there is nothing to charge back there yet.
+- **Production** runs `PAYMENT_PROVIDER=manual` (ADR-049), and no provider reports a reversal: the administrator records a reversed transfer here by hand.
 
 ## Lock order
 
@@ -62,7 +62,7 @@ Claim, then `orders`, every line by id, the order's payments by id, the refund(s
 2. **Pay it** in the provider's dashboard, or in cash.
 3. **Settle it** with the dashboard reference. The queue no longer shows it.
 4. **It bounced:** mark it failed. It stays in the queue as owed; reissue it when you pay again, then settle the reissue.
-5. **It was a mistake:** void it with the reason, unless it is settled or its line is already `refunded` or `cancelled` (settle or fail it instead).
+5. **It was a mistake:** void it with the reason, unless it is settled or its line is already `refunded` or `cancelled` (settle or fail it instead). The customer gets a "refund cancelled" email and notification, without your reason, for any kind of refund. There is none when a chargeback absorbs the refund, because the bank moved the money.
 6. **The queue shows a `late_capture` refund:** the provider took money that paid nothing. Check the dashboard (the reason says if the amount or currency was a guess), refund it there, then settle it here. A wrong one is voided.
 7. **The bank charged back:** record the chargeback with the dispute reference and the lines it covers beyond the open refunds; a 422 tells you the exact total to name (`chargeable_cents`). Read any excess alert.
 8. **A `refund_integrity` alert, or 409 `ORDER_TOTAL_MISMATCH`** (logged as `refund_integrity_error`): stop. Do not retry, and do not record that order's refunds, failures, voids or chargebacks another way. Contact the developer. The order's data is repaired only by a reviewed fix (a pull request), never by hand in the database, and there is no repair tool. You can still settle a payout you already made.
