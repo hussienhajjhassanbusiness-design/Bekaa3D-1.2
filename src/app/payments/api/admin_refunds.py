@@ -293,7 +293,7 @@ async def _integrity_alert(
     await logger.aerror(
         "refund_integrity_error",
         order_id=str(order_id) if order_id else None,
-        payment_id=str(exc.payment_id) if exc.payment_id else None,
+        payment_id=str(exc.payment_id),
     )
     async with request.app.state.db_session_factory() as session, session.begin():
         await SqlPaymentAlerts(session).raise_alert(

@@ -74,7 +74,7 @@ class OrderTotalMismatchError(PaymentsDomainError):
         order_total_cents: int,
         line_total_cents: int,
         payment_amount_cents: int,
-        payment_id: UUID | None = None,
+        payment_id: UUID,
     ) -> None:
         super().__init__("order total does not match its lines or its payment")
         self.order_total_cents, self.line_total_cents = order_total_cents, line_total_cents

@@ -249,6 +249,7 @@ def test_the_order_total_must_equal_its_lines() -> None:
     with pytest.raises(OrderTotalMismatchError) as refused:
         check_order_totals(Ledger(1001, (a,), book.payment), order_currency="USD")
     assert (refused.value.order_total_cents, refused.value.line_total_cents) == (1001, 1000)
+    assert refused.value.payment_id == book.payment.id
 
 
 def test_a_cash_order_total_must_equal_its_lines_too() -> None:
