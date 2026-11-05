@@ -178,6 +178,16 @@ async def _short_of_its_lines(db: AsyncSession, user_id: uuid.UUID) -> PhysicalO
     return order
 
 
+async def _over_balance_alerts_on_its_payment(engine: AsyncEngine, order_id: uuid.UUID) -> int:
+    return await count(
+        engine,
+        "SELECT count(*) FROM audit_logs a JOIN payments p ON a.entity_id = p.id"
+        " WHERE a.action = 'payment.alert_raised' AND a.after_data->>'kind' = 'refund_integrity'"
+        " AND a.after_data->>'reason' = 'refund_exceeds_available' AND p.order_id = :o",
+        o=order_id,
+    )
+
+
 @pytest.mark.parametrize("route", ["customer", "admin_order", "transition"])
 async def test_a_refused_refund_alerts_once_per_payment_not_once_for_all_orders(
     route: str, db_engine: AsyncEngine, db_session: AsyncSession
@@ -204,8 +214,9 @@ async def test_a_refused_refund_alerts_once_per_payment_not_once_for_all_orders(
                 responses = [move(client, o, "cancelled") for o in refused]
         assert {r.json()["reason"] for r in responses} == {"refund_exceeds_available"}
     assert {r.status_code for r in responses} == {409}
-    assert await _alerts(db_engine, first.order_id) == 1
-    assert await _alerts(db_engine, second.order_id) == 1
+    for order_id in (first.order_id, second.order_id):
+        assert await _alerts(db_engine, order_id) == 1
+        assert await _over_balance_alerts_on_its_payment(db_engine, order_id) == 1
 
 
 async def test_the_forward_writer_never_cancels_a_line(
