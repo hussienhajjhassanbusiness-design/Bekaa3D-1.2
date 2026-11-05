@@ -34,6 +34,7 @@ from app.platform.infrastructure.repositories import (
 __all__ = [
     "IDEMPOTENCY_TTL",
     "AuditLogEntry",
+    "AuditLogRepository",
     "Claim",
     "Conflict",
     "InProgress",

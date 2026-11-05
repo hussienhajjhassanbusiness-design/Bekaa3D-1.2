@@ -4962,7 +4962,7 @@
                 "type": "null"
               }
             ],
-            "description": "Set for a customer's problem report only.",
+            "description": "The account, when the sender was signed in.",
             "title": "User Id"
           }
         },
@@ -24496,7 +24496,7 @@
                 }
               }
             },
-            "description": "AUTH_REQUIRED: no valid session."
+            "description": "AUTH_REQUIRED: the account was deleted during this request."
           },
           "403": {
             "content": {
@@ -24506,7 +24506,7 @@
                 }
               }
             },
-            "description": "CSRF_INVALID, or a role/verification requirement unmet."
+            "description": "CSRF_INVALID: signed in, without this session's CSRF header."
           },
           "422": {
             "content": {
@@ -24549,12 +24549,6 @@
             "description": "`SERVICE_UNAVAILABLE` - captcha could not be verified; nothing done."
           }
         },
-        "security": [
-          {
-            "csrfToken": [],
-            "sessionCookie": []
-          }
-        ],
         "summary": "Send a message to the business",
         "tags": [
           "contact"

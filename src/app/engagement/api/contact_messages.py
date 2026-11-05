@@ -1,5 +1,5 @@
-"""Contact form and admin queue (VS-033, FR-16). Public POST order: attempt limit, body,
-captcha, then per-IP and per-email limits, so a refused captcha spends neither quota."""
+"""Contact form and admin queue (VS-033, FR-16). Public POST order: attempt limit, session,
+body, captcha, then per-IP and per-email limits, so a refused captcha spends neither quota."""
 
 import hashlib
 from datetime import datetime
@@ -37,9 +37,12 @@ from app.engagement.infrastructure.contact_messages import SqlContactMessageRepo
 from app.identity.public import (
     AccessTokenClaims,
     AdminBoundaryRoute,
+    lock_live_account,
     not_found_error,
+    optional_user_id,
     require_admin,
     require_csrf,
+    unauthenticated_error,
 )
 from app.integrations.captcha.factory import get_captcha_verifier
 from app.integrations.captcha.ports import CaptchaPort
@@ -75,6 +78,8 @@ _ADMIN_RESPONSES: dict[int | str, dict[str, Any]] = {
     summary="Send a message to the business",
     responses={
         **CAPTCHA_RESPONSES,
+        401: {"description": "AUTH_REQUIRED: the account was deleted during this request."},
+        403: {"description": "CSRF_INVALID: signed in, without this session's CSRF header."},
         422: {"description": "A field is missing or invalid; nothing is stored."},
         429: {"description": "Rate limit exceeded."},
     },
@@ -85,6 +90,7 @@ async def submit_contact_message(
     response: Response,
     session: AsyncSession = Depends(get_session),
     captcha: CaptchaPort = Depends(get_captcha_verifier),
+    user_id: UUID | None = Depends(optional_user_id),
 ) -> ContactMessageReceipt:
     await require_captcha(body.captcha_token, captcha)
     details = body.details()
@@ -105,7 +111,12 @@ async def submit_contact_message(
         limit=EMAIL_LIMIT,
         window_seconds=WINDOW_SECONDS,
     )
-    message = await SubmitContactMessage(SqlContactMessageRepository(session)).execute(details)
+    # Last, so no row lock waits on Cloudflare; a deletion that got there first refuses this.
+    if user_id is not None and not await lock_live_account(session, user_id):
+        raise unauthenticated_error()
+    message = await SubmitContactMessage(SqlContactMessageRepository(session)).execute(
+        details, user_id=user_id
+    )
     # The id only: the sender and body are PII and are never logged (VS-033).
     await logger.ainfo("contact_message_received", contact_message_id=str(message.id))
     return ContactMessageReceipt(id=message.id, created_at=message.created_at)

@@ -1,9 +1,9 @@
 from collections.abc import Sequence
-from datetime import datetime
-from typing import Any
+from datetime import datetime, timedelta
+from typing import Any, Final
 from uuid import UUID
 
-from sqlalchemy import delete, select, text, tuple_, update
+from sqlalchemy import delete, func, select, text, tuple_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.platform.domain.entities import (
@@ -21,6 +21,9 @@ from app.platform.infrastructure.models import (
     IpHashSaltModel,
     SettingModel,
 )
+
+# int4 namespace of the two-int advisory lock on one audit window (ADR-050): "AUDW".
+AUDIT_WINDOW_LOCK_NS: Final = 0x41554457
 
 
 def _outbox_to_domain(model: EmailOutboxModel) -> EmailOutboxMessage:
@@ -162,6 +165,66 @@ class AuditLogRepository:
         await self._session.flush()
         await self._session.refresh(model)
         return _audit_to_domain(model)
+
+    async def count_in_window(
+        self,
+        *,
+        action: str,
+        entity_type: str,
+        entity_id: UUID | None,
+        ip_hash: str | None,
+        request_id: str | None,
+        reason: str,
+        window: timedelta,
+    ) -> None:
+        """The one audit write that updates a row (ADR-050): failures of one action, entity
+        and IP share a row per window. The lock stops racers inserting one row each."""
+        key = f"{action}|{entity_id}|{ip_hash}"
+        await self._session.execute(
+            select(func.pg_advisory_xact_lock(AUDIT_WINDOW_LOCK_NS, func.hashtext(key)))
+        )
+        now: datetime = (await self._session.execute(select(func.clock_timestamp()))).scalar_one()
+        row: AuditLogModel | None = await self._session.scalar(
+            select(AuditLogModel)
+            .where(
+                AuditLogModel.action == action,
+                AuditLogModel.entity_type == entity_type,
+                AuditLogModel.entity_id.is_(None)
+                if entity_id is None
+                else AuditLogModel.entity_id == entity_id,
+                AuditLogModel.ip_hash.is_(None)
+                if ip_hash is None
+                else AuditLogModel.ip_hash == ip_hash,
+                AuditLogModel.created_at > now - window,
+            )
+            .order_by(AuditLogModel.created_at.desc())
+            .limit(1)
+        )
+        last_failed_at = now.isoformat()
+        if row is None:
+            await self.add(
+                actor_user_id=None,
+                action=action,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                after_data={
+                    "count": 1,
+                    "reasons": {reason: 1},
+                    "last_failed_at": last_failed_at,
+                },
+                request_id=request_id,
+                ip_hash=ip_hash,
+            )
+            return
+        seen = row.after_data or {}
+        reasons = dict(seen.get("reasons", {}))
+        reasons[reason] = reasons.get(reason, 0) + 1
+        row.after_data = {
+            "count": seen.get("count", 0) + 1,
+            "reasons": reasons,
+            "last_failed_at": last_failed_at,
+        }
+        await self._session.flush()
 
     async def exists(
         self,

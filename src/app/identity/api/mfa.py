@@ -32,6 +32,7 @@ from app.identity.api.dependencies import (
     require_csrf,
     user_agent,
 )
+from app.identity.api.failed_login import audit_refused_login
 from app.identity.api.schemas import (
     MfaRecoveryCodesRead,
     MfaRecoveryRegenerateRequest,
@@ -342,11 +343,13 @@ async def verify_mfa(
         # caller learns nothing about why.
         raise _invalid_mfa_error() from exc
     except (InvalidMfaCodeError, InvalidRecoveryCodeError) as exc:
+        await audit_refused_login(request, session, reason="mfa_invalid", user_id=pending.user_id)
         raise _invalid_mfa_error() from exc
     except MfaNotEnrolledError as exc:
         # Only reachable if the credential was disabled inside the challenge
         # window. Same answer as a wrong code - there is no caller who is
         # entitled to learn the difference at this point.
+        await audit_refused_login(request, session, reason="mfa_invalid", user_id=pending.user_id)
         raise _invalid_mfa_error() from exc
 
     complete = CompleteMfaLogin(
@@ -366,8 +369,12 @@ async def verify_mfa(
             request_id=request_id,
         )
     except InvalidCredentialsError as exc:
+        await audit_refused_login(request, session, reason="mfa_invalid", user_id=pending.user_id)
         raise _invalid_mfa_error() from exc
     except AccountDisabledError as exc:
+        await audit_refused_login(
+            request, session, reason="account_disabled", user_id=pending.user_id
+        )
         # Same wording VS-003's login uses, so an account deactivated between
         # the two halves of a login is reported identically either way.
         raise ApiError(

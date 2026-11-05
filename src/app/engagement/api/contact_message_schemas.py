@@ -62,7 +62,7 @@ class ContactMessageDetail(BaseModel):
     status: ContactMessageStatus
     created_at: datetime
     updated_at: datetime
-    user_id: UUID | None = Field(description="Set for a customer's problem report only.")
+    user_id: UUID | None = Field(description="The account, when the sender was signed in.")
     order_id: UUID | None = Field(description="The order a problem report is about.")
 
     @classmethod

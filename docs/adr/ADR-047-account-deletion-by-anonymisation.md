@@ -1,6 +1,6 @@
 # ADR-047: Account deletion by anonymisation - one transaction under a fixed lock order, every personal field stripped, records kept, requests queued behind it refused (VS-045)
 
-**Status:** Accepted (2026-10-28, VS-045).
+**Status:** Accepted (2026-10-28, VS-045). Amended 2026-11-05, see [Amendment](#amendment-2026-11-05-messages-sent-while-signed-in).
 **Date:** 2026-10-28
 **Source basis:** [VS-045 slice](../vertical-slice-plan.md#vs-045--account-deletion-by-anonymisation); owner answers to plan questions Q1-Q10 of 2026-10-28 (Q1 and Q2 extended by the owner, the rest as recommended), and later owner decisions on addresses and on three review findings (phone hash, customer free text, chargeback window); SRS §14.5, BR-125, BR-126, F-035; FR-03; api-endpoints §9.1; [ADR-024](ADR-024-cash-on-delivery-and-courier-priced-shipping.md) d9 and its VS-045 note; [ADR-027](ADR-027-address-book-decisions.md); [ADR-038](ADR-038-physical-checkout-and-cash-eligibility.md); [ADR-041](ADR-041-receipt-confirmation-and-problem-report.md); [ADR-042](ADR-042-refunds-voids-and-chargebacks.md); [ADR-046](ADR-046-customer-data-export.md).
 **Amends:** the slice's "Model / migration: None" (migration `0b349a492461`, d2 and d3) and its "lock the user, then re-check" (d6, ADR-041's order wins).
@@ -43,7 +43,7 @@ SRS §14.5 keeps financial and delivery records "in anonymised form", and the sl
 - VS-047's outbox-failure alert must leave out `account_deleted` rows, or every deletion will raise a false alarm.
 - With `users` locked `FOR NO KEY UPDATE`, Postgres may grant an address write and the deletion in either order: the deletion's cart INSERT already holds `KEY SHARE` on the row, so it loses its place in the queue. Both outcomes store no personal data, and the race test checks both.
 - Accepted (Q9): a wishlist add, a review or an offer submission authenticated just before the commit can still insert one row for the dead account. Those rows hold no contact data, and nobody can sign in to use them. An offer would expire unanswered.
-- A message the customer sent as a guest (no `user_id`) and Bring Your Idea requests (ADR-030) are not linked to the account and are not anonymised, the boundary ADR-046 drew.
+- A message the customer sent as a guest (no `user_id`) and Bring Your Idea requests (ADR-030) are not linked to the account and are not anonymised, the boundary ADR-046 drew. A message sent while signed in now carries `user_id` and is anonymised (see the amendment).
 - Downgrading `0b349a492461` fails once an anonymised order or address exists: the data is gone for good.
 
 ## Alternatives rejected
@@ -53,3 +53,10 @@ SRS §14.5 keeps financial and delivery records "in anonymised form", and the sl
 - **Keeping the snapshots**: fails the slice's own test and SRS §14.5's "anonymised form".
 - **`users FOR UPDATE`**: deadlocks against offer checkout (d6).
 - **Locking `users` first**, as the slice said: a cycle with a problem report, which holds an order before its `KEY SHARE` on `users` (ADR-041).
+
+## Amendment (2026-11-05): messages sent while signed in
+
+Since [ADR-046's amendment](ADR-046-customer-data-export.md#amendment-2026-11-05-messages-sent-while-signed-in), a signed-in contact form message carries `user_id`, so decision 4's scrub reaches it, as SRS §14.5 requires. Two things follow (owner, 2026-11-05):
+
+- **A typed subject goes too.** Decision 4 kept every message's subject, which was safe while only problem reports had a `user_id`: their subject is generated. A form's subject is free text, so a message with no `order_id` loses its subject; a problem report keeps its own.
+- **A message queued behind the deletion stores nothing (decision 7).** A signed-in send takes the address book's lock on `users` just before its insert. It is refused with `401 AUTH_REQUIRED` if the deletion got there first, and is otherwise committed before the deletion reads it, so it is scrubbed. Without the lock, a message inserted after the scrub ran would keep the name and email (`test_deletion_racing_a_signed_in_contact_message_keeps_no_personal_data`).

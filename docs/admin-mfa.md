@@ -229,6 +229,7 @@ One more is written against `entity_type = "User"`:
 | Action | When | Recorded |
 |---|---|---|
 | `user.mfa_challenge_issued` | a correct admin password reached the challenge at `/auth/login` | — |
+| `user.login_failed` | a wrong TOTP or recovery code at `/verify` (`reasons.mfa_invalid`), or a refused password at `/auth/login` | `count`, `reasons`, `last_failed_at`; one row per account and IP per 15 minutes ([ADR-050](adr/ADR-050-failed-login-audit.md)) |
 
 That row exists because BR-132 requires auth events to be audited and a correct
 administrator password is one. Without it a half-login is invisible: someone
@@ -242,9 +243,10 @@ against the new session. A session reached through MFA is still a login, and
 splitting the audit vocabulary would make "when did this account sign in?" a
 two-query question.
 
-`mfa.replay_rejected` is the one row written on a *failed* request. A wrong
-code is noise and is not recorded; a correct code arriving twice means one was
-captured somewhere, and an operator needs to be able to see that. Because
+`mfa.replay_rejected` gets a row of its own on a *failed* request. A wrong code
+is only counted on the account's `user.login_failed` row; a correct code
+arriving twice means one was captured somewhere, and an operator needs to be
+able to see that exact event. Because
 `get_session` runs one transaction per request, the route commits this row
 before answering — otherwise the evidence would roll back with the rest of the
 failed request. `time_step` names the 30-second bucket and is not redeemable
