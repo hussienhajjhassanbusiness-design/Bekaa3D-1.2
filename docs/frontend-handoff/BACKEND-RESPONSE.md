@@ -1608,7 +1608,7 @@ Set-Cookie: csrf_token=<redacted>; Max-Age=2592000; Path=/; SameSite=lax
 > - **An edit that changes nothing** answers `200` with the review as stored: `edited` does not change.
 > - **The author may edit or delete a review after its product is hidden or archived.** `/me/reviews` already lists it (`product_slug` is `null` once the product is deleted); keep its edit and delete actions.
 > - **A chargeback counts like a refund for the badge:** one that empties the line removes it.
-> - **The write limit no longer counts a request refused for a missing `X-CSRF-Token`.** The same holds for the cart, the wishlist and offers.
+> - **The write limit no longer counts a request refused for a missing `X-CSRF-Token`.** The same holds for the cart, the wishlist, offers and the administrator's recovery-code regenerate.
 
 **Status:** built (VS-036, [ADR-044](../adr/ADR-044-reviews-and-verified-purchase-badge.md)). Moderation (hide/restore) is [VS-037](#domain--item-vs-037--review-moderation-admin).
 

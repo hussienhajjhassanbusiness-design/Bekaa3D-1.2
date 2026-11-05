@@ -399,7 +399,7 @@ async def verify_mfa(
 @router.post(
     "/recovery-codes/regenerate",
     response_model=MfaRecoveryCodesRead,
-    dependencies=[Depends(_MFA_RECOVERY_LIMIT), Depends(require_csrf)],
+    dependencies=[Depends(require_csrf), Depends(_MFA_RECOVERY_LIMIT)],
     summary="Replace the unused recovery-code set",
     responses={
         401: {"description": "No valid session, MFA incomplete, or password mismatch."},

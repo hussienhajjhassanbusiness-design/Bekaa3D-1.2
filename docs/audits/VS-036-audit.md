@@ -4,7 +4,7 @@ Independent, read-only audit. Auditor date: 2026-10-28. Tree audited: `main` @ `
 
 **Follow-up (2026-10-28):** findings A-01 to A-07 are fixed on branch `test/vs036-audit-fixes`; see §9. The nits (A-08, A-09) and the open questions (§7) are left as they are. Sections 1-8 describe the tree as audited.
 
-**Follow-up (2026-11-06, branch `fix/open-findings-batch`):** the nits and the open questions are decided and closed ([ADR-044 amendment](../adr/ADR-044-reviews-and-verified-purchase-badge.md#amendment-2026-11-06-links-no-op-edits-hidden-products-chargebacks)). A-08: `require_csrf` now runs before the write limit on review, cart, wishlist and offer writes. A-09: an edit that changes nothing writes nothing. Q-1: links are any IANA domain ending, and the profanity list's owner review is still due before go-live (decision 20). Q-2: an author may edit a review after its product is hidden or archived. Q-3: a chargeback counts like a refund for the badge.
+**Follow-up (2026-11-06, branch `fix/open-findings-batch`):** the nits and the open questions are decided and closed ([ADR-044 amendment](../adr/ADR-044-reviews-and-verified-purchase-badge.md#amendment-2026-11-06-links-no-op-edits-hidden-products-chargebacks)). A-08: `require_csrf` now runs before the write limit on review, cart, wishlist and offer writes, and on the administrator's recovery-code regenerate. A-09: an edit that changes nothing writes nothing. Q-1: links are any IANA domain ending, and the profanity list's owner review is still due before go-live (decision 20). Q-2: an author may edit a review after its product is hidden or archived. Q-3: a chargeback counts like a refund for the badge.
 
 ## 1. Verdict
 
