@@ -90,7 +90,7 @@ The VS-041 audit added two more:
 
 The VS-030 plan's Q7 said no notice on void. The end-to-end rehearsal showed the result: the customer is told "refund issued", then the refund silently disappears from their order. The owner decided on 2026-11-05 that they are told.
 
-- Voiding an `admin` or `cancellation` refund sends the `order_refund_cancelled` email and the `refund.cancelled` notification, in the void's transaction, with the amount and never the reason. Only a void that changes the row sends them, so a repeat tells no one.
-- A `late_capture` refund's void sends nothing: its "issued" notice waits for settlement, so the customer never heard of it.
+- An administrator's void, of any kind, sends the `order_refund_cancelled` email and the `refund.cancelled` notification, in the void's transaction, with the amount and never the reason. Only a void that changes the row sends them, so a repeat tells no one.
+- That includes a `late_capture` refund. Its "issued" email waits for settlement, but the order page already shows it as `processing`, so silence would repeat the same disappearance.
 - A refund absorbed by a chargeback sends nothing: the bank has returned that money, so "cancelled" would be false.
 - A reissue still sends nothing, and fail still sends nothing: the money is still owed.

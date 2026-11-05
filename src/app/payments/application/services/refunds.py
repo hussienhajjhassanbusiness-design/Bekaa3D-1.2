@@ -487,11 +487,10 @@ async def void_refund(
             "amount_cents": row.amount_cents,
         },
     )
-    # Only a refund the customer was told about (Q7); a late capture's notice waits for settle.
-    if row.kind in NOTICE_KINDS:
-        await deps.notices.refund_cancelled(
-            h.order, refund_id=refund_id, amount_cents=row.amount_cents, currency=row.currency
-        )
+    # Every kind: even an unannounced late capture shows as `processing` on the order page.
+    await deps.notices.refund_cancelled(
+        h.order, refund_id=refund_id, amount_cents=row.amount_cents, currency=row.currency
+    )
     return RefundOutcome(refund_id, True, status)
 
 

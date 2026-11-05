@@ -18,6 +18,7 @@ from app.core.security import hash_phone
 from app.main import app as main_app
 from app.ordering.public import stl_owned
 from app.payments.application.ports import PaymentProviderPort
+from app.payments.infrastructure.refund_side import SqlRefundNotices
 from tests.integration.deep_support import (
     assert_problem,
     client_for,
@@ -747,8 +748,18 @@ async def test_a_voided_refund_tells_the_customer_once(
                 {"r": refund},
             )
         ).scalar_one()
+        note: dict[str, Any] = (
+            await conn.execute(
+                text(
+                    "SELECT payload FROM notifications WHERE payload->>'refund_id' = :r"
+                    " AND payload->>'event' = 'refund.cancelled'"
+                ),
+                {"r": refund},
+            )
+        ).scalar_one()
     assert payload["amount_cents"] == 400 and payload["currency"] == "USD"
-    assert "ticket 12" not in json.dumps(payload)  # the reason is the administrator's
+    # The reason is the administrator's.
+    assert "ticket 12" not in json.dumps(payload) and "ticket 12" not in json.dumps(note)
 
 
 async def test_voiding_a_failed_refund_tells_the_customer(
@@ -772,4 +783,36 @@ async def test_a_refused_void_tells_no_one(
         refund = ok(create(client, order.order_id, [(order.physical[0], 400)]), 201)["id"]
         ok(act(client, refund, "settle", {}))
         assert_problem(act(client, refund, "void", {"reason": "Oops."}), 409)
+    assert await _cancel_notices(db_engine, refund) == (0, 0)
+
+
+async def test_voiding_a_reissue_names_the_reissue(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    order = await paid_online(db_session, stl=None)
+    with client_for(main_app) as client:
+        await _admin(client, db_session)
+        first = ok(create(client, order.order_id, [(order.physical[0], 400)]), 201)["id"]
+        ok(act(client, first, "fail", {"reason": "Transfer bounced."}))
+        twin = ok(act(client, first, "reissue"), 201)["id"]
+        ok(act(client, twin, "void", {"reason": "Customer no longer wants it."}))
+    assert await _cancel_notices(db_engine, twin) == (1, 1)
+    assert await _cancel_notices(db_engine, first) == (0, 0)
+
+
+async def test_a_notice_that_cannot_be_written_undoes_the_void(
+    db_engine: AsyncEngine, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def broken(*_args: Any, **_kwargs: Any) -> None:
+        raise RuntimeError("notification storage is down")
+
+    order = await paid_online(db_session, stl=None)
+    with client_for(main_app, raise_server_exceptions=False) as client:
+        await _admin(client, db_session)
+        refund = ok(create(client, order.order_id, [(order.physical[0], 400)]), 201)["id"]
+        monkeypatch.setattr(SqlRefundNotices, "refund_cancelled", broken)
+        failed = act(client, refund, "void", {"reason": "Wrong order."})
+        monkeypatch.undo()
+        assert failed.status_code == 500
+        assert ok(client.get(f"{REFUNDS}/{refund}"))["status"] == "pending"
     assert await _cancel_notices(db_engine, refund) == (0, 0)

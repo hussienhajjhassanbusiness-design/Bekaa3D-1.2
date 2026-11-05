@@ -178,7 +178,7 @@ async def test_a_mistaken_late_capture_obligation_can_be_voided(
         await mfa_admin(client, db_session)
         voided = ok(act(client, row.id, "void", {"reason": "Provider reversed it."}))
         assert voided["status"] == "voided" and str(row.id) not in queue_ids(client, order_id)
-    # Never told this refund was coming, so there is nothing to take back (Q7).
+    # Their order page showed it as `processing`, so they are told it is gone.
     assert (
         await count(
             db_engine,
@@ -186,7 +186,7 @@ async def test_a_mistaken_late_capture_obligation_can_be_voided(
             " AND payload->>'refund_id' = :r",
             r=str(row.id),
         )
-        == 0
+        == 1
     )
 
 

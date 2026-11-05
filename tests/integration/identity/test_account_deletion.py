@@ -709,3 +709,33 @@ async def test_a_deleted_customers_review_stays_public_and_anonymous(
     assert (review["rating"], review["body"]) == (4, "Solid print.")
     assert set(review) == {"id", "rating", "body", "is_verified_purchase", "created_at", "edited"}
     assert c.email not in page.text
+
+
+async def test_voiding_a_refund_on_an_anonymised_order_sends_no_mail(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """ADR-047 d4 again: the void works, and its email is stored as failed, never sendable."""
+    c = await seed_customer(db_session)
+    assert _delete_as(c.email).status_code == 204
+    line = await scalar(
+        db_engine,
+        "SELECT id FROM order_items WHERE order_id = :o AND product_type = 'physical'",
+        o=c.orders[0],
+    )
+    with client_for(main_app) as admin:
+        await mfa_admin(admin, db_session)
+        refund = ok(create(admin, c.orders[0], [(line, 300)]), 201)["id"]
+        voided = admin.post(
+            f"/api/v1/admin/refunds/{refund}/void",
+            json={"reason": "Wrong order."},
+            headers=csrf(admin),
+        )
+    assert ok(voided)["status"] == "voided"
+    mail = await one(
+        db_engine,
+        "SELECT recipient_email, status, last_error FROM email_outbox"
+        " WHERE template = 'order_refund_cancelled' AND user_id = :u",
+        u=c.user_id,
+    )
+    assert mail.recipient_email == f"deleted+{c.user_id}@invalid"
+    assert (mail.status, mail.last_error) == ("failed", "account_deleted")
