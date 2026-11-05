@@ -239,18 +239,6 @@ async def test_repeated_submissions_are_separate_messages(
 
 @pytest.mark.integration
 @pytest.mark.usefixtures("configured_app")
-async def test_the_form_ignores_auth_cookies_and_needs_no_csrf(
-    db_session: AsyncSession, captcha: FakeCaptcha
-) -> None:
-    customer = await create_user(db_session)
-    with client_for(main_app) as client:
-        login(client, customer.email)
-        response = client.post(CONTACT, json=_form())
-    assert response.status_code == 201, response.text
-
-
-@pytest.mark.integration
-@pytest.mark.usefixtures("configured_app")
 async def test_the_message_body_and_sender_never_reach_the_logs(
     db_session: AsyncSession, captcha: FakeCaptcha, app_logs: io.StringIO
 ) -> None:
@@ -532,3 +520,63 @@ async def test_bad_query_parameters_are_422(
         await mfa_admin(client, db_session)
         response = client.get(ADMIN, params=params)
     assert_problem(response, 422, "VALIDATION_ERROR")
+
+
+# --------------------------------------------------------------------------
+# Signed in (SRS 14.5, FR-03, ADR-046): the message belongs to the account
+# --------------------------------------------------------------------------
+
+
+async def _sent_row(db: AsyncSession, response: Any) -> ContactMessageModel:
+    assert response.status_code == 201, response.text
+    db.expire_all()
+    row = await db.get(ContactMessageModel, uuid.UUID(response.json()["id"]))
+    assert row is not None
+    return row
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("configured_app", "captcha")
+async def test_a_guest_message_has_no_account(db_session: AsyncSession) -> None:
+    with client_for(main_app) as client:
+        response = client.post(CONTACT, json=_form())
+    assert (await _sent_row(db_session, response)).user_id is None
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("configured_app", "captcha")
+async def test_a_signed_in_message_stores_the_account(db_session: AsyncSession) -> None:
+    user = await create_user(db_session)
+    user_id = user.id
+    with client_for(main_app) as client:
+        login(client, user.email)
+        response = client.post(CONTACT, json=_form(), headers=csrf(client))
+    row = await _sent_row(db_session, response)
+    assert (row.user_id, row.order_id) == (user_id, None)
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("configured_app", "captcha")
+async def test_a_signed_in_message_without_csrf_is_refused(db_session: AsyncSession) -> None:
+    user = await create_user(db_session)
+    body = _form()
+    with client_for(main_app) as client:
+        login(client, user.email)
+        assert_problem(client.post(CONTACT, json=body), 403, "CSRF_INVALID")
+    assert await _count(db_session, body["email"]) == 0
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("configured_app", "captcha")
+async def test_a_dead_token_is_a_guest_not_an_error(db_session: AsyncSession) -> None:
+    user = await create_user(db_session)
+    with client_for(main_app) as client:
+        client.cookies.set("access_token", "not-a-token")
+        forged = client.post(CONTACT, json=_form())
+        client.cookies.clear()
+        login(client, user.email)
+        user.auth_epoch += 1
+        await db_session.commit()
+        revoked = client.post(CONTACT, json=_form())
+    assert (await _sent_row(db_session, forged)).user_id is None
+    assert (await _sent_row(db_session, revoked)).user_id is None

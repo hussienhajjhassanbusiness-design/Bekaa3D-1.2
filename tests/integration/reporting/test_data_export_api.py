@@ -10,13 +10,15 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
+from app.integrations.captcha.factory import get_captcha_verifier
+from app.integrations.captcha.fake import FAKE_CAPTCHA_PASS, FakeCaptcha
 from app.main import app as main_app
 from app.reporting.api.export_schemas import DataExportRead
 from app.reporting.application.data_export import ORDER_PAGE_SIZE
 from app.reporting.domain.data_export import SECTIONS
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
 from tests.integration.catalog.storefront_support import seed_product, seed_refs
-from tests.integration.deep_support import assert_problem, client_for, create_user, login
+from tests.integration.deep_support import assert_problem, client_for, create_user, csrf, login
 from tests.integration.fulfillment.order_support import seed_physical_order
 from tests.integration.reporting.export_support import (
     EXPORT,
@@ -347,3 +349,31 @@ async def test_without_the_csrf_header_it_is_the_write_routes_403_and_spends_no_
     assert [r.status_code for r in allowed] == [200, 200, 200]  # four refusals spent nothing
     assert [r.headers["RateLimit-Remaining"] for r in allowed] == ["2", "1", "0"]
     assert_problem(over, 429, "RATE_LIMITED")
+
+
+async def test_a_message_sent_while_signed_in_is_exported(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setitem(main_app.dependency_overrides, get_captcha_verifier, lambda: FakeCaptcha())
+    s = await seed_customer(db_session, "signedin")
+    with client_for(main_app) as client:
+        login(client, s.email)
+        sent = client.post(
+            "/api/v1/contact-messages",
+            json={
+                "name": "Typed Name",
+                "email": s.email,
+                "phone": "+961 3 777 111",
+                "subject": "Printing in blue",
+                "message": "Can you print in blue?",
+                "captcha_token": FAKE_CAPTCHA_PASS,
+            },
+            headers=csrf(client),
+        )
+    assert sent.status_code == 201, sent.text
+    doc, raw = _export_as(s.email)
+    assert [(m["subject"], m["message"]) for m in doc["contact_messages"]][-1] == (
+        "Printing in blue",
+        "Can you print in blue?",
+    )
+    assert "Typed Name" not in raw and "+961 3 777 111" not in raw

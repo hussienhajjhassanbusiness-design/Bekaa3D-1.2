@@ -98,7 +98,8 @@ class NotificationModel(Base):
 
 
 class ContactMessageModel(Base):
-    """database-design.md 12.6; `user_id` and `order_id` set only by a problem report (VS-029b)."""
+    """database-design.md 12.6. `user_id`: the signed-in sender (ADR-046); `order_id`: problem
+    reports only."""
 
     __tablename__ = "contact_messages"
 

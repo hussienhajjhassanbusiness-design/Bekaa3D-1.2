@@ -17,6 +17,7 @@ from app.identity.api.dependencies import (
     current_user,
     current_verified_user,
     not_found_error,
+    optional_user_id,
     require_admin,
     require_csrf,
     unauthenticated_error,
@@ -45,7 +46,9 @@ __all__ = [
     "current_verified_user",
     "customer_counts",
     "lock_checkout_address",
+    "lock_live_account",
     "not_found_error",
+    "optional_user_id",
     "require_admin",
     "require_csrf",
     "unauthenticated_error",
@@ -57,6 +60,12 @@ __all__ = [
 async def account_is_live(session: AsyncSession, user_id: UUID) -> bool:
     """False once deactivated or anonymised; checkout reads it after its lock (ADR-047)."""
     return await UserRepository(session).can_authenticate(user_id)
+
+
+async def lock_live_account(session: AsyncSession, user_id: UUID) -> bool:
+    """The address book lock, for writes of personal data outside it (ADR-047 d7): False
+    once the account is anonymised, so nothing queued behind a deletion escapes its scrub."""
+    return await SqlAddressRepository(session).lock_address_book(user_id)
 
 
 async def active_administrator_ids(session: AsyncSession) -> list[UUID]:

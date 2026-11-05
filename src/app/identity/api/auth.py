@@ -19,6 +19,7 @@ from app.identity.api.dependencies import (
     unauthenticated_error,
     user_agent,
 )
+from app.identity.api.failed_login import audit_refused_login
 from app.identity.api.schemas import (
     LoginRequest,
     MfaChallengeRead,
@@ -206,6 +207,7 @@ async def login(
             request_id=getattr(request.state, "request_id", None),
         )
     except AccountLockedError as exc:
+        await audit_refused_login(request, session, reason="locked_out", email=body.email)
         raise ApiError(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             code="RATE_LIMITED",
@@ -214,6 +216,7 @@ async def login(
             headers={"Retry-After": str(exc.retry_after_seconds)},
         ) from exc
     except InvalidCredentialsError as exc:
+        await audit_refused_login(request, session, reason="invalid_credentials", email=body.email)
         raise ApiError(
             status_code=status.HTTP_401_UNAUTHORIZED,
             code="INVALID_CREDENTIALS",
@@ -221,6 +224,7 @@ async def login(
             detail="Email or password is incorrect.",
         ) from exc
     except AccountDisabledError as exc:
+        await audit_refused_login(request, session, reason="account_disabled", user_id=exc.user_id)
         raise ApiError(
             status_code=status.HTTP_403_FORBIDDEN,
             code="ACCOUNT_DISABLED",

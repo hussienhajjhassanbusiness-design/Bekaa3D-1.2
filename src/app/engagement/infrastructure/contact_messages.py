@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import DateTime, func, literal, select, tuple_, update
+from sqlalchemy import DateTime, case, func, literal, select, tuple_, update
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -34,7 +34,8 @@ _COLUMNS = (
 
 
 async def anonymise_contact_messages(session: AsyncSession, user_id: UUID, *, email: str) -> int:
-    """VS-045: the account's messages keep subject, order link, status and times (ADR-047)."""
+    """VS-045: the account's messages keep order link, status and times (ADR-047). A problem
+    report's subject is generated, so it stays; a form's subject was typed, so it goes."""
     stmt = (
         update(_M)
         .where(_M.user_id == user_id)
@@ -42,6 +43,7 @@ async def anonymise_contact_messages(session: AsyncSession, user_id: UUID, *, em
             name=ANONYMISED_NAME,
             email=email,
             phone=None,
+            subject=case((_M.order_id.is_not(None), _M.subject), else_=None),
             message=ANONYMISED_MESSAGE,
             updated_at=func.now(),
         )
@@ -71,7 +73,7 @@ class SqlContactMessageRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def add(self, details: ContactDetails) -> ContactMessage:
+    async def add(self, details: ContactDetails, *, user_id: UUID | None) -> ContactMessage:
         stmt = (
             postgresql.insert(_M)
             .values(
@@ -80,6 +82,7 @@ class SqlContactMessageRepository:
                 phone=details.phone,
                 subject=details.subject,
                 message=details.message,
+                user_id=user_id,
             )
             .returning(*_COLUMNS)
         )

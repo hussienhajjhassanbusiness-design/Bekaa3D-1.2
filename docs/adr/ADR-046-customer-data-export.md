@@ -1,6 +1,6 @@
 # ADR-046: Customer data export - six data sets from one read-only snapshot, composed in the reporting context, streamed, 3 a day, audited before the first byte (VS-044)
 
-**Status:** Accepted (2026-10-28, VS-044).
+**Status:** Accepted (2026-10-28, VS-044). Amended 2026-11-05, see [Amendment](#amendment-2026-11-05-messages-sent-while-signed-in).
 **Date:** 2026-10-28
 **Source basis:** [VS-044 slice](../vertical-slice-plan.md#vs-044--customer-data-export); owner answers to plan questions Q1-Q9 of 2026-10-28 (Q1 changed by the owner, Q2-Q9 as recommended); SRS §14.5, BR-124, F-034; FR-03; api-endpoints §9.1; [ADR-041](ADR-041-receipt-confirmation-and-problem-report.md) (Consequences); [ADR-045](ADR-045-business-analytics.md) d4, d5; [ADR-033](ADR-033-customer-order-read-model.md); [ADR-019](ADR-019-manual-stl-delivery.md).
 **Confirms:** ADR-041's consequence "VS-044 (data export) … must include the contact messages that carry `user_id`" (decision 1).
@@ -41,3 +41,13 @@ SRS §14.5 and FR-03 listed five data sets (profile, addresses, orders with paym
 - **Composing in Identity or Ordering** - import cycles through `identity.public` and `payments.public`.
 - **Building the whole document before sending it** - the slice requires streaming, and a long order history would be held in memory.
 - **Auditing after the stream ends** - the data would leave before its audit row exists.
+
+## Amendment (2026-11-05): messages sent while signed in
+
+The end-to-end rehearsal found that the export did not match SRS §14.5 and FR-03, which promise "the contact messages they sent while signed in". Decision 1 keys on `user_id`, but only a problem report set it, so a signed-in customer's contact form message was never exported. The SRS wins; decision 1 stands and the form now sets the key (owner, 2026-11-05):
+
+- `POST /api/v1/contact-messages` has optional authentication. A live session stores its `user_id` on the message, and the export then carries it like any other (`subject`, `message`, `created_at` only).
+- A live session must send `X-CSRF-Token`, as on any cookie-authenticated write, or the route answers `403 CSRF_INVALID` and stores nothing. A silent fallback to a guest message would bring this bug back unnoticed, and without the check another site could attach a message to the account. **The frontend must send the header on this route when the customer is signed in.**
+- No session, or a forged, expired or revoked access token, is a guest (`user_id` NULL), never a 401: the form stays public (BR-116).
+- **Accepted limitation:** the access cookie lasts 15 minutes and the refresh cookie never reaches this route, so a customer who stays on the form longer is treated as a guest. The frontend should refresh the session before sending if it believes the customer is signed in.
+- A message sent as a guest stays out of the export, even from the account's address: an email typed into a public form proves nothing.

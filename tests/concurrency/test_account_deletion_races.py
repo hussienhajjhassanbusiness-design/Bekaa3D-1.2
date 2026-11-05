@@ -15,6 +15,8 @@ from fastapi import FastAPI
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession
 
+from app.integrations.captcha.factory import get_captcha_verifier
+from app.integrations.captcha.fake import FAKE_CAPTCHA_PASS, FakeCaptcha
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
 from tests.integration.deep_support import PASSWORD, async_client, create_user, running_app
 from tests.integration.fulfillment.delivery_support import admin_client
@@ -275,6 +277,39 @@ async def test_deletion_racing_an_address_create_leaves_no_live_address(
         u=user.id,
     )
     assert (created.status_code, row.n, row.with_phone) in {(401, 0, 0), (201, 1, 0)}, created.text
+
+
+@pytest.mark.parametrize("deletion_first", [True, False], ids=["deletion_first", "message_first"])
+async def test_deletion_racing_a_signed_in_contact_message_keeps_no_personal_data(
+    app: FastAPI, db_engine: AsyncEngine, db_session: AsyncSession, deletion_first: bool
+) -> None:
+    app.dependency_overrides[get_captcha_verifier] = lambda: FakeCaptcha()
+    user = await create_user(db_session)
+    user_id, email = user.id, user.email
+    client = await _client(app, email)
+    typed = f"Rana {uuid.uuid4().hex}"
+    send = _post(
+        client,
+        "/api/v1/contact-messages",
+        {"name": typed, "email": email, "message": typed, "captcha_token": FAKE_CAPTCHA_PASS},
+    )
+    racers = [_delete(client), send] if deletion_first else [send, _delete(client)]
+    try:
+        first, second = await _queued(db_engine, _USER, racers, u=user_id)
+    finally:
+        await client.aclose()
+    deleted, sent = (first, second) if deletion_first else (second, first)
+    assert deleted.status_code == 204, deleted.text
+    # As with the address book, Postgres may grant either waiter first. Neither order may keep
+    # the typed name or email: refused, or stored and then scrubbed with the account.
+    assert sent.status_code in {401, 201}, sent.text
+    leaked = await scalar(
+        db_engine,
+        "SELECT count(*) FROM contact_messages WHERE name = :n OR message = :n OR email = :e",
+        n=typed,
+        e=email,
+    )
+    assert leaked == 0
 
 
 @pytest.mark.parametrize("deletion_first", [True, False], ids=["deletion_first", "refund_first"])

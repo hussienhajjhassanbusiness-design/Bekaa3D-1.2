@@ -32,6 +32,7 @@ from app.identity.api.dependencies import (
     require_csrf,
     user_agent,
 )
+from app.identity.api.failed_login import audit_refused_login
 from app.identity.api.schemas import (
     MfaRecoveryCodesRead,
     MfaRecoveryRegenerateRequest,
@@ -342,6 +343,7 @@ async def verify_mfa(
         # caller learns nothing about why.
         raise _invalid_mfa_error() from exc
     except (InvalidMfaCodeError, InvalidRecoveryCodeError) as exc:
+        await audit_refused_login(request, session, reason="mfa_invalid", user_id=pending.user_id)
         raise _invalid_mfa_error() from exc
     except MfaNotEnrolledError as exc:
         # Only reachable if the credential was disabled inside the challenge

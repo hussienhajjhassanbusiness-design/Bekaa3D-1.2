@@ -2730,10 +2730,12 @@ Unknown fields are refused.
 
 **Errors:**
 - `400 CAPTCHA_INVALID` and `503 SERVICE_UNAVAILABLE` ([P2-1](#domain--item-p2-1--captcha-provider-byicontact)).
+- `401 AUTH_REQUIRED`: the account was deleted during this request; nothing is stored.
+- `403 CSRF_INVALID`: signed in, without this session's CSRF header; nothing is stored.
 - `422 VALIDATION_ERROR`: a field is invalid. Fields are checked before the captcha, so the token is not spent.
 - `429 RATE_LIMITED` with `Retry-After`: 60 attempts per hour per IP (checked first), then 5 accepted messages per hour per IP and 5 per hour per email address. A refused captcha does not count against the 5.
 
-**Auth/CSRF/MFA:** public; no cookie, no CSRF. A signed-in user may use it too; the message is not linked to their account.
+**Auth/CSRF/MFA:** public; a guest sends no cookie and no CSRF. **When the customer is signed in, send `X-CSRF-Token`**: the message is linked to their account, appears in their data export and is scrubbed if they delete the account. A live session without the header is `403 CSRF_INVALID`; an expired or forged access token is treated as a guest, so refresh the session first if you believe the customer is signed in (ADR-046 amendment).
 
 **Concurrency/idempotency:** none. Sending the same form twice stores two messages.
 

@@ -659,3 +659,29 @@ async def test_an_administrator_can_still_list_and_read_an_anonymised_account(
     assert detail.json()["email"] == f"deleted+{c.user_id}@invalid"
     assert listed.status_code == 200, listed.text
     assert [u["id"] for u in listed.json()["items"]] == [str(c.user_id)]
+
+
+async def test_a_form_message_is_scrubbed_with_its_typed_subject(
+    db_session: AsyncSession, db_engine: AsyncEngine
+) -> None:
+    c = await seed_customer(db_session)
+    await run(
+        db_session,
+        "INSERT INTO contact_messages (name, email, phone, subject, message, user_id)"
+        " VALUES ('Rana Form', 'rana.form@example.com', '+961 3 111', 'Ask Rana on 03 111',"
+        " 'Call me', :u)",
+        u=c.user_id,
+    )
+    assert _delete_as(c.email).status_code == 204
+    form = await one(
+        db_engine,
+        "SELECT * FROM contact_messages WHERE user_id = :u AND order_id IS NULL",
+        u=c.user_id,
+    )
+    assert (form.name, form.email, form.phone, form.subject, form.message) == (
+        "Deleted customer",
+        f"deleted+{c.user_id}@invalid",
+        None,
+        None,
+        "[deleted]",
+    )

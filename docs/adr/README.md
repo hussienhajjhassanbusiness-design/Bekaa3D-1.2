@@ -55,6 +55,7 @@ Only expensive-to-reverse decisions belong here. Folder names and small refactor
 - [ADR-047: Account deletion by anonymisation - one transaction under a fixed lock order, every personal field stripped, records kept, requests queued behind it refused (VS-045) - Accepted](ADR-047-account-deletion-by-anonymisation.md)
 - [ADR-048: Accepted payment methods per product - each physical product accepts online, cash or both, a cart pays only by a method every line accepts, and each order line snapshots what its product accepted (VS-049) - Accepted](ADR-048-accepted-payment-methods-per-product.md)
 - [ADR-049: Manual payment - online orders are paid as arranged by the administrator with the customer, and confirmed by hand; no gateway, no crypto (VS-050) - Accepted](ADR-049-manual-payment.md)
+- [ADR-050: Failed login audit - one counted row per account, IP and 15 minutes, in a transaction of its own - Accepted](ADR-050-failed-login-audit.md)
 
 ## Governance
 

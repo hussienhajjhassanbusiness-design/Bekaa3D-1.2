@@ -1864,7 +1864,7 @@ As built by VS-034 (ADR-030): `scan_status` is the enum `upload_scan_status`, wh
 
 ## 12.6 `contact_messages`
 
-VS-033 built this table without `user_id` and `order_id`; VS-029b adds both (migration `0f43e238eaae`, ADR-041), as its problem reports are their first writer. `CHECK (order_id IS NULL OR user_id IS NOT NULL)`; partial indexes on each `WHERE … IS NOT NULL`; `user_id` `ON DELETE SET NULL` and `order_id` `ON DELETE RESTRICT` (§14).
+VS-033 built this table without `user_id` and `order_id`; VS-029b adds both (migration `0f43e238eaae`, ADR-041), as its problem reports are their first writer. The contact form also stores `user_id` when the sender is signed in (ADR-046 amendment); `order_id` stays problem reports only. `CHECK (order_id IS NULL OR user_id IS NOT NULL)`; partial indexes on each `WHERE … IS NOT NULL`; `user_id` `ON DELETE SET NULL` and `order_id` `ON DELETE RESTRICT` (§14).
 
 | Column | Type | Null | Constraint |
 |---|---|---:|---|
@@ -1929,7 +1929,7 @@ Settings changes are audited.
 
 ## 13.2 `audit_logs`
 
-**Purpose:** Append-only operational/security/business audit history.
+**Purpose:** Append-only operational/security/business audit history. One exception: `user.login_failed` rows count repeats in `after_data` for 15 minutes (ADR-050).
 
 **Partitioning:** monthly range partitions by `created_at`.
 

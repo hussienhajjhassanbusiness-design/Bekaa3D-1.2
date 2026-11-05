@@ -6,6 +6,7 @@ means, and one place decides the error contract for failing it."""
 
 from collections.abc import Callable, Coroutine
 from typing import Any
+from uuid import UUID
 
 import structlog
 from fastapi import Depends, Request, Response, status
@@ -87,6 +88,20 @@ async def current_claims(
     claims = _decoded_claims(request)
     await _require_current_epoch(UserRepository(session), claims)
     return claims
+
+
+async def optional_user_id(
+    request: Request, session: AsyncSession = Depends(get_session)
+) -> UUID | None:
+    """A public form's sender (ADR-046): no live session is a guest, never a 401. A live one
+    must pass CSRF, as on any cookie-authenticated write, so no other site can link a message."""
+    try:
+        claims = _decoded_claims(request)
+        await _require_current_epoch(UserRepository(session), claims)
+    except ApiError:
+        return None
+    _require_csrf_token(request, claims)
+    return claims.user_id
 
 
 async def current_user(

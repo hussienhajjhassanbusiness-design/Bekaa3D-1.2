@@ -1342,7 +1342,7 @@ Retention duration is not specified by the SRS. Use **time-based pruning** only 
 **Lifecycle/status:**
 None.
 
-AuditLog is append-only.
+AuditLog is append-only, with one exception: a `user.login_failed` row counts repeats of one account and IP for 15 minutes (ADR-050).
 
 **Relationships:**
 
