@@ -231,7 +231,7 @@ docker compose exec -T postgres psql -U bekaa3d -d bekaa3d -Atc \
 
 - For a password reset use `template = 'password_reset_email'` and `payload->>'reset_url'`.
 - Links are `<FRONTEND_BASE_URL>/verify-email#token=...` and `<FRONTEND_BASE_URL>/reset-password#token=...`. The token is in the URL **fragment**, so it never reaches a server; read it with `location.hash`.
-- The console email adapter logs only the names of the payload fields, never the token. The repository README still says the log contains the token; that sentence is out of date.
+- The console email adapter logs only the names of the payload fields, never the token, as the repository README also says. The log cannot give you a link.
 - For most testing you can skip email entirely: the seeded customer is already verified.
 
 *(b) Administrator with MFA.* The seed creates `seed-admin@example.com` with TOTP already enabled, the same state `/auth/mfa/setup/confirm` produces.
@@ -2946,6 +2946,6 @@ These are not backend gaps to be filled by reading code. Each needed a decision,
 | 8 | Consent wording: terms, digital final sale, cash terms (C6; SRS section 30.2). | FVS-026 | Open. Product owner; legal text |
 | 9 | STL delivery-time promise shown on product pages and at checkout (C10; SRS section 30.2). | FVS-014, FVS-026 | Open. Product owner |
 | 10 | Can the default address be deleted, and what becomes default afterwards (C3). | FVS-023 | **Answered (VS-026, ADR-027):** yes; no address becomes default afterwards |
-| 11 | Bring Your Idea attachment limits and the wire name of the file field (P2-2). | FVS-015 | Open. Backend, in VS-034 |
+| 11 | Bring Your Idea attachment limits and the wire name of the file field (P2-2). | FVS-015 | **Answered (VS-034):** 0 to 5 images, each a JPEG, PNG or WebP of at most 10 MB; the file part is `attachments`, without brackets, repeated per image ([P2-2](#domain--item-p2-2--bring-your-idea-submission)) |
 | 12 | Should `/me` return an explicit `mfa_completed` flag (P1-1)? Not needed, but the frontend may prefer it. | FVS-005 | Open. Frontend to request if wanted |
 | 13 | An administrator account without MFA, to test the enrolment screens (P1-2). There is no API to create one. | FVS-005 | Open. Backend owner, on request |
