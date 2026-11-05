@@ -4,6 +4,7 @@ hear of it. Also the guards behind the cancel writer and BR-144's literal rule."
 
 import uuid
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -124,6 +125,41 @@ async def test_a_refund_beyond_the_payments_balance_refuses_the_customers_cancel
     assert_problem(response, 409, "ORDER_NOT_CANCELLABLE")
     await _unchanged(db_engine, order, before)
     assert await _alerts(db_engine, order.order_id) == 1
+
+
+@pytest.mark.parametrize(
+    ("route", "shown"), [("transition", {"fulfillment_status": "pending"}), ("admin_order", {})]
+)
+async def test_a_refund_beyond_the_balance_names_the_line_state_only_for_one_line(
+    route: str,
+    shown: dict[str, str],
+    db_engine: AsyncEngine,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """VS-023b audit Q-6: the transition promises the state; a whole-order cancel has no one
+    line to name. Both still refuse everything and call the integrity alert (a spy, so this
+    test does not depend on how alerts without a payment are folded)."""
+    order = await seed_physical_order(db_session, payment_method="online", payment_status="paid")
+
+    def over(*args: Any, **kwargs: Any) -> None:
+        raise RefundExceedsAvailableError(lines={}, payment_cents=0)
+
+    monkeypatch.setattr("app.payments.application.services.refunds.check_request", over)
+    alert = AsyncMock()
+    monkeypatch.setattr("app.fulfillment.api.admin_orders.alert_refund_integrity", alert)
+    before = await effects(db_engine, order.order_id)
+    with client_for(main_app) as client:
+        await mfa_admin(client, db_session)
+        if route == "transition":
+            response = move(client, order, "cancelled")
+        else:
+            response = admin_cancel(client, order.order_id)
+    assert_problem(response, 409, "INVALID_STATE_TRANSITION")
+    assert response.json()["reason"] == "refund_exceeds_available"
+    assert {k: v for k, v in response.json().items() if k == "fulfillment_status"} == shown
+    await _unchanged(db_engine, order, before)
+    alert.assert_awaited_once()
 
 
 async def test_the_forward_writer_never_cancels_a_line(

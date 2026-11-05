@@ -26,10 +26,18 @@ from app.ordering.public import (
     order_facts,
     step_newly_reached,
 )
-from app.payments.public import CancellationRefund
+from app.payments.public import CancellationRefund, RefundExceedsAvailableError
 from app.platform.application.ports import AuditWriter
 
 S = OrderItemStatus
+
+
+class LineRefundExceedsAvailableError(RefundExceedsAvailableError):
+    """The one-line cancel's refund refusal, with the state its 409 promises to name."""
+
+    def __init__(self, cause: RefundExceedsAvailableError, *, current_status: S) -> None:
+        super().__init__(lines=cause.lines, payment_cents=cause.payment_cents)
+        self.current_status = current_status
 
 
 @dataclass(frozen=True)
@@ -92,7 +100,10 @@ async def cancel_line_by_admin(
         raise LineNotFoundError(f"line {item_id} is not on order {order_id}")
     paid = await deps.payments.reached_paid(order_id)
     cancel = line_cancel(line_context(locked, line, reached_paid=paid), line, cancel_reason)
-    return await _cancel(deps, locked, (cancel,), paid, ctx, by_customer=False)
+    try:
+        return await _cancel(deps, locked, (cancel,), paid, ctx, by_customer=False)
+    except RefundExceedsAvailableError as exc:
+        raise LineRefundExceedsAvailableError(exc, current_status=cancel.from_status) from exc
 
 
 async def _lock(deps: CancelDeps, order_id: UUID) -> LockedOrder:

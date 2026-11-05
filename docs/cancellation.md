@@ -8,7 +8,7 @@ As built in VS-031. The decisions and their reasons are in [ADR-043](adr/ADR-043
 |---|---|---|---|---|
 | `POST /api/v1/me/orders/{id}/cancel` | Verified customer, owner; CSRF; 10/hour | `{reason?: str ≤ 500}` | `200 OrderDetail` | 401, 403 (`CSRF_INVALID`, `EMAIL_VERIFICATION_REQUIRED`), 404 (unknown or another customer's), 409 `ORDER_NOT_CANCELLABLE`, 422, 429 |
 | `POST /api/v1/admin/orders/{id}/cancel` | Administrator (MFA); CSRF; the transition limit | `{reason: str 1-500, cancel_reason?: refused \| no_show \| other}` | `200 AdminOrderDetail` | 401/404, 409 `INVALID_STATE_TRANSITION` (`payment_required`, `no_cancellable_line`, `cancel_reason_required`, `cancel_reason_not_allowed`, `refund_exceeds_available`) or `ORDER_TOTAL_MISMATCH`, 422, 429 |
-| `POST /api/v1/admin/orders/{id}/items/{item_id}/transition` | as before | adds `cancel_reason?` | `200 AdminOrderDetail` | adds `cancel_reason_required`, `cancel_reason_not_allowed`, `refund_exceeds_available` |
+| `POST /api/v1/admin/orders/{id}/items/{item_id}/transition` | as before | adds `cancel_reason?` | `200 AdminOrderDetail` | adds `cancel_reason_required`, `cancel_reason_not_allowed`, `refund_exceeds_available`, each with the line's `fulfillment_status` |
 
 No route takes an `Idempotency-Key`. A repeated cancel is a 409, never a second refund.
 

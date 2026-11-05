@@ -31,7 +31,12 @@ from app.fulfillment.api.admin_order_schemas import (
 )
 from app.fulfillment.api.stl_deliveries import decode_cursor, encode_cursor
 from app.fulfillment.application.admin_order_detail import admin_order_detail
-from app.fulfillment.application.cancel_lines import CancelContext, CancelDeps, cancel_by_admin
+from app.fulfillment.application.cancel_lines import (
+    CancelContext,
+    CancelDeps,
+    LineRefundExceedsAvailableError,
+    cancel_by_admin,
+)
 from app.fulfillment.application.record_cash_handover import record_cash_handover
 from app.fulfillment.domain import limits
 from app.fulfillment.infrastructure.delivery_side import (
@@ -341,6 +346,8 @@ async def cancel_refusal(request: Request, exc: CancelRefused, order_id: UUID) -
             detail="The order's total does not match its lines or its payment. Nothing changed.",
         )
     extensions: dict[str, Any] = {"reason": "refund_exceeds_available"}
+    if isinstance(exc, LineRefundExceedsAvailableError):
+        extensions["fulfillment_status"] = exc.current_status.value
     if isinstance(exc, InvalidLineTransitionError):
         extensions = {"reason": exc.reason}
         if exc.current_status is not None:
