@@ -3,7 +3,7 @@
 Answers every item in [`../frontend-requests/BACKEND-UNLOCK-HANDOFF.md`](../frontend-requests/BACKEND-UNLOCK-HANDOFF.md)
 by its ID, in the field order of [`../frontend-requests/BACKEND-RESPONSE-TEMPLATE.md`](../frontend-requests/BACKEND-RESPONSE-TEMPLATE.md).
 
-- **Backend state (2026-11-06):** every item the request asks about is built, apart from the five removed in [section 3](#3-removed-by-adr-019-and-adr-024). Per-slice status is in [`../vertical-slice-plan.md`](../vertical-slice-plan.md). Sections 5 and 6 still describe the backend as it was when this file was first written.
+- **Backend state (2026-11-06):** every item the request asks about is built, apart from the five removed in [section 3](#3-removed-by-adr-019-and-adr-024). Per-slice status is in [`../vertical-slice-plan.md`](../vertical-slice-plan.md). Sections 4 to 6 were brought up to date with the code on 2026-11-06.
 - **Schemas are not retyped here.** Field lists live in [`openapi.json`](openapi.json), generated from the code and checked by a test. A block names the schema; open it at `components.schemas.<Name>`.
 - **Decisions since the first version:** three open questions were decided on 2026-10-14 and recorded in [ADR-025](../adr/ADR-025-frontend-contract-decisions.md): admin `available_actions` (C8, P1-11), the STL ownership check (C11) and Turnstile captcha on five forms (P2-1, P2-6, P2-7). All three are built: ownership in VS-023, `available_actions` in VS-029, captcha in VS-033 ([ADR-026](../adr/ADR-026-captcha-refusal-and-outage.md)).
 - **Every example below is real**, captured from the application running against a database filled by [`scripts/dev_seed.py`](../../scripts/dev_seed.py). IDs and timestamps will differ on your machine.
@@ -2874,36 +2874,39 @@ Unknown fields are refused.
 
 ## 5. Test accounts and fixtures
 
-Your nine items, in order. "Seed" means [`scripts/dev_seed.py`](../../scripts/dev_seed.py); how to run it is in [A2](#domain--item-a2--local-backend-startup).
+Your nine items, in order, as of 2026-11-06. "Seed" means [`scripts/dev_seed.py`](../../scripts/dev_seed.py); how to run it is in [A2](#domain--item-a2--local-backend-startup), and what it creates is in [A3](#domain--item-a3--test-account-and-fixture-provisioning). The seed creates accounts and the catalogue only: every order, payment and refund below is made through the API.
 
 | # | You asked for | Answer |
 |---|---|---|
-| 1 | Working local email delivery | **Workaround confirmed.** The file-based adapter is not built. Read links from `email_outbox` with the worker stopped ([A3](#domain--item-a3--test-account-and-fixture-provisioning)). The seeded customer is already verified, so most flows need no email. |
+| 1 | Working local email delivery | **Workaround confirmed.** The file-based adapter is not built; the console adapter logs only the names of an email's fields. Read links from `email_outbox` with the worker stopped ([A3](#domain--item-a3--test-account-and-fixture-provisioning)). The seeded customer is already verified, so most flows need no email. |
 | 2 | One disposable administrator with MFA enrolled | **Provided by the seed.** `seed-admin@example.com`; the password, TOTP secret and recovery codes are printed once when you run it. |
-| 3 | One physical product, priced | **Provided by the seed**: six physical products. There is no stock quantity anywhere; "in stock" is `is_available: true`. `knight` is seeded unavailable. |
-| 4 | One STL product with a clean, published asset version | **Changed by ADR-019.** Asset versions do not exist. The seed provides three STL products (`dragon-stl`, `phone-stand-stl`, `low-poly-vase-stl`); that is everything an STL product is. |
-| 5 | One STL entitlement granted to the test customer | **Removed by ADR-019.** Entitlements do not exist. Ownership will be a paid STL order line, which cannot exist before VS-023. No fixture is possible today. |
-| 6 | One seeded shipping zone | **Removed by ADR-024.** There are no shipping zones and no free-shipping threshold. |
-| 7 | A way to trigger each mock-payment outcome | **Not possible yet.** No payment code exists. A mock provider covering every verification outcome is part of VS-023; how a tester selects an outcome has not been designed. Provisional. |
-| 8 | A mixed cart (one physical, one STL) | **Possible (VS-022).** Sign in as the seeded verified customer and add `dragon` and `dragon-stl`. Checking it out waits for VS-028. |
-| 9 | Seeded orders in several fulfillment states | **Not possible yet.** There are no order tables until VS-023, so nothing can be seeded even directly in the database. The seed will grow with each slice. |
+| 3 | One physical product, priced | **Provided by the seed**: six storefront physical products; those sold online accept both online and cash payment. There is no stock quantity anywhere; "in stock" is `is_available: true`. `knight` is seeded unavailable, `name-sign` WhatsApp only. |
+| 4 | One STL product with a clean, published asset version | **Changed by ADR-019.** Asset versions do not exist. The seed provides three STL products (`dragon-stl`, `phone-stand-stl`, and `low-poly-vase-stl`, which is unavailable); that is everything an STL product is. |
+| 5 | One STL entitlement granted to the test customer | **Replaced (ADR-019).** Entitlements do not exist. Ownership is a paid STL order line: as the seeded customer, check out `dragon-stl` online, then pay it with `scripts/mock_pay.py`. The line is `awaiting_delivery` and `GET /api/v1/me/stl-ownership` answers `owned: true` ([C11](#domain--item-c11--per-product-ownership-check)). |
+| 6 | One seeded shipping zone | **Removed by ADR-024.** There are no shipping zones and no free-shipping threshold; the courier prices and collects delivery. |
+| 7 | A way to trigger each mock-payment outcome | **Provided.** The local default provider is `mock`. `scripts/mock_pay.py <payment_id> paid`, `processing`, `failed` or `expired` drives an attempt; `--captured-amount-cents N` makes an under- or overpayment (a late capture). An attempt you leave alone stays `pending`. Command: [`../checkout.md`](../checkout.md#the-mock-provider-development). To try production's `manual` flow, set `PAYMENT_PROVIDER=manual` in your `.env` and confirm the payment as the administrator ([P1-10](#domain--item-p1-10--admin-payments)). |
+| 8 | A mixed cart (one physical, one STL) | **Possible.** As the seeded customer, add `dragon` and `dragon-stl`, save an address, and check out online with delivery. A mixed cart cannot pay cash. |
+| 9 | Seeded orders in several fulfillment states | **Not seeded; made through the API.** Place orders as the seeded customer, then move their lines as the seeded administrator with the transition endpoint ([P1-11](#domain--item-p1-11--admin-order-fulfillment)). A cash order with delivery needs no payment step. Pickup needs the `pickup_address` setting, which the seed leaves unset: set it with `PATCH /api/v1/admin/settings/pickup_address`. |
 
-What you can test end to end today, against a real backend: registration, email verification, resend, login, the administrator MFA login, refresh, logout, `/me`, password reset, notifications, the whole public storefront (settings, lists, filters, search, suggestions, product pages), and the admin screens for settings, users, categories, materials, colours, products and product images.
+**What you can test end to end today**, against a real backend: everything in sections 2 and 4. That covers registration, email verification, login with and without MFA, the storefront, the address book, the cart, checkout (online and cash, delivery and pickup), payment verification and retry, order history, cancellation, offers, reviews, the wishlist, the contact form and Bring Your Idea. For administrators it covers the settings, customers, catalogue, the order queue and fulfillment, the cash handover, payments, refunds, chargebacks, the contact and Bring Your Idea queues, and analytics. Two gaps remain:
+
+- **Images:** `/media` is not served locally until VS-020 ([B4](#domain--item-b4--imageasset-url-format)).
+- **Email:** emails are read from `email_outbox`, not delivered (item 1).
 
 Against [`MINIMUM-MANUAL-TEST-UNLOCK.md`](../frontend-requests/MINIMUM-MANUAL-TEST-UNLOCK.md):
 
 | Level | Status |
 |---|---|
-| 1 — Real public storefront | **Unlocked now.** B1 to B4 are answered and the seed provides the catalogue. One gap: images need the `/media` workaround in B4. |
-| 2 — Real customer account | **Unlocked now.** Password reset (FVS-004) is unlocked too: P2-6 is built. |
-| 3 — Real purchase flow | **Blocked on the backend.** C1 and C2 are answered. C3 is built (VS-026). C5, C6, C7, C8 and C12 are not built. C4 is removed. |
-| 4 — Real admin operations | **Partly unlocked.** P1-1 to P1-7 are built: admin login with MFA, settings, customers, reference data, products, images. P1-10 to P1-13 are not built. P1-8 and P1-9 are removed. |
+| 1 — Real public storefront | **Unlocked.** B1 to B5 are built and the seed provides the catalogue. One gap: images need the `/media` workaround in B4. |
+| 2 — Real customer account | **Unlocked**, password reset (P2-6) included. Verification and reset links are read from `email_outbox`. |
+| 3 — Real purchase flow | **Unlocked.** C1 to C3, C5 to C8 and C12 are built; C4 is removed, so no shipping zone is picked. The mock payment outcomes come from `scripts/mock_pay.py` (item 7). |
+| 4 — Real admin operations | **Unlocked.** P1-1 to P1-7 and P1-10 to P1-13 are built; P1-8 and P1-9 are removed. Order-state fixtures come from the transition endpoint, not database seeding (item 9). |
 
 ---
 
 ## 6. Corrections to "confirmed" items in the request
 
-The request lists some things as already confirmed that are not true of the backend. Each is explained in its block; this is the list in one place.
+The request lists some things as already confirmed that are not true of the backend. Each is explained in its block; this is the list in one place, as of 2026-11-06.
 
 | The request says | Actually |
 |---|---|
@@ -2911,18 +2914,18 @@ The request lists some things as already confirmed that are not true of the back
 | `GET /api/v1/me/entitlements` is confirmed (C9) | Removed by ADR-019. It does not exist. |
 | `GET /api/v1/me/downloads` is confirmed (C10) | Removed by ADR-019. It does not exist. |
 | `POST /api/v1/admin/users/{user_id}/entitlements` is confirmed (P1-9) | Removed by ADR-019. It does not exist. |
-| `GET /api/v1/cart`, `POST /api/v1/checkout`, `/api/v1/me/addresses*`, `GET /me/orders/{id}` are confirmed (C3, C5, C6, C7) | The paths are planned and unchanged. `/me/addresses*` is built (VS-026); the others are not, and answer `404` today. |
-| Cart lines are addressed by `{item_id}` (C5) | Planned as `{product_id}`. |
+| `GET /api/v1/cart`, `POST /api/v1/checkout`, `/api/v1/me/addresses*`, `GET /me/orders/{id}` are confirmed (C3, C5, C6, C7) | **Built at those paths:** addresses (VS-026), cart (VS-022), checkout (VS-023, VS-028), the order detail (VS-025). The order detail is `GET /api/v1/me/orders/{order_id}`, under `/api/v1` like every route. |
+| Cart lines are addressed by `{item_id}` (C5) | **Built as `{product_id}`.** A cart holds at most one line per product ([C5](#domain--item-c5--cart-contract)). |
 | URL filter keys `category`, `material`, `colour` are the wire names (B2) | The API takes `category_id`, `material_id`, `colour_id`, as UUIDs, one value each. |
 | Turnstile is confirmed for register and resend (P2-6, P2-7) | **Built** (VS-033): register, resend and the reset request require `captcha_token` ([P2-7](#domain--item-p2-7--turnstile-field-contract)). |
 | Password reset fields are unconfirmed (P2-6) | Built since VS-004 and fully specified. |
 | The admin settings list endpoint is unconfirmed (P1-3) | Built: `GET /api/v1/admin/settings`. |
 | Admin user detail and update paths are unconfirmed (P1-4) | Built. |
 | Admin product and image paths are placeholders (P1-6, P1-7) | Built; the real paths are in the blocks and in `openapi.json`. |
-| A free-shipping threshold exists (B1, C6, fixtures) | Removed by ADR-024. The field is still returned, always `null`, until VS-028 deletes it. |
-| "Digital refund revokes entitlement" is confirmed policy (P1-13) | There is no entitlement. A fully refunded STL line becomes `refunded`; a file already emailed cannot be recalled. |
-| Refunds have a manual-versus-provider distinction and a shipping part (P1-13) | Every refund is manual, and there is no shipping to refund (ADR-024). |
-| Routes `/account/library` and `/account/downloads` | Have nothing to show. Remove them. |
+| A free-shipping threshold exists (B1, C6, fixtures) | Removed by ADR-024. `free_shipping_threshold` left the public and admin settings on 2026-10-20 ([B1](#domain--item-b1--public-settings-response-shape)); there is no shipping charge anywhere. |
+| "Digital refund revokes entitlement" is confirmed policy (P1-13) | There is no entitlement. A fully refunded STL line becomes `refunded` and stops counting as owned; a file already emailed cannot be recalled. |
+| Refunds have a manual-versus-provider distinction and a shipping part (P1-13) | Every refund is manual: record it, pay it in the provider's dashboard or in cash, then settle it ([P1-13](#domain--item-p1-13--refunds)). There is no shipping to refund (ADR-024). |
+| Routes `/account/library` and `/account/downloads` | Have nothing to show. Remove them. A customer's STL purchases are their STL order lines ([C8](#domain--item-c8--orderorder-line-status-enum-and-available-actions)). |
 | Products have stock (B3, fixtures) | No stock exists. Products are made to order; use `is_available`. |
 
 ---
