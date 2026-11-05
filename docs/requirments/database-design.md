@@ -2752,7 +2752,7 @@ The partial unique STL-ownership index on `order_items` is the final race-safe g
 
 ## Mark Delivered vs Refund
 
-Marking an STL line delivered and refunding it both lock the order row, then that line. Exactly one wins, so a refunded line is never marked sent.
+Marking an STL line delivered and refunding it both lock the order row, then that line, so the two are serialised and a fully refunded line is never marked sent. A line delivered first can still be refunded (SRS 10.4).
 
 ## Payment Creation
 

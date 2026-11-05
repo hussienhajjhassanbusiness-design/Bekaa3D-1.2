@@ -96,8 +96,3 @@ In one transaction, locking `orders` and then every line by id (ADR-024 d9):
 - **`in_production` ("start printing") is silent**: no email, no notification; the customer sees the line as `pending` and the step is left out of their history. `can_cancel` turns false once printing starts.
 - Emails are outbox rows sent after commit by `dispatch_outbox`; a provider outage never blocks a transition.
 
-## For VS-030 and VS-031
-
-- VS-031 adds the cancel and return edges (with `cancel_reasons`) to `ordering/domain/line_transitions.py`, and must decide whether a cancel that leaves every remaining line at a step sends that step's notice (ADR-040 consequences).
-- If VS-031 sets `orders.cancelled_at` on a paid online order, `ADMIN_QUEUE_PREDICATE` must still list it.
-- VS-030 still has to replace the `refund_present` stop-gap in `ordering.public.status_inputs_for` (ADR-039 d7).

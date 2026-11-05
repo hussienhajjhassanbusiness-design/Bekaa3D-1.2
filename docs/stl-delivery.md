@@ -24,13 +24,13 @@ A refunded or cancelled line is not listed; a partly refunded line still is.
 
 ### `POST /api/v1/admin/orders/{order_id}/items/{item_id}/transition`
 
-Body `{ "target_status": "delivered" }`. `200` with the whole `AdminOrderDetail` (since VS-029; the same endpoint moves physical lines, see [`fulfillment.md`](fulfillment.md)).
+Body `{ "target_status": "delivered", "reason": "an optional note" }`. `200` with the whole `AdminOrderDetail` (since VS-029; the same endpoint moves physical lines, see [`fulfillment.md`](fulfillment.md)). The note, up to 500 characters, goes on the line's history row and the audit row. The administrator sees it in `AdminOrderDetail`; the customer never does. It survives the customer's account deletion, so keep contact details out of it.
 
 | Status | When |
 |---|---|
 | `404` | no such order, no such item, or the item is on another order (one body for all three) |
-| `409 INVALID_STATE_TRANSITION` | `reason`: `already_delivered` (with `fulfilled_at`), `line_closed`, `not_awaiting_delivery`, or `not_a_legal_edge` for any other `target_status`; with the line's `fulfillment_status` |
-| `422` | an unknown `target_status` |
+| `409 INVALID_STATE_TRANSITION` | `reason`: `already_delivered` (with `fulfilled_at`), `line_closed`, `not_awaiting_delivery`, `not_a_legal_edge` for any other `target_status`, or `cancel_reason_not_allowed` for a `cancel_reason` on any target but `cancelled`; always with the line's `fulfillment_status` |
+| `422` | an invalid body: an unknown `target_status` or field, or a note over 500 characters |
 
 There is no `Idempotency-Key`: a second call gets `409 already_delivered`.
 
@@ -39,14 +39,12 @@ There is no `Idempotency-Key`: a second call gets `409 already_delivered`.
 In one transaction, locking `orders` and then its lines by id:
 
 1. the line: `delivered`, `fulfilled_at`, `delivered_by` (`ck_order_items_stl_delivery_record`);
-2. a line history row (actor = the administrator) and, if it changed, an order history row;
+2. a line history row (actor = the administrator, with the note) and, if it changed, an order history row;
 3. the order status through `derive_order_status` (`completed` when every line is terminal);
-4. an audit row `stl.delivered` on the line;
+4. an audit row `stl.delivered` on the line, with the note;
 5. an in-app notification for the buyer (`download`, `payload.event = "stl.delivered"`);
 6. an outbox email, template `order_stl_delivered`, to `customer_email_snapshot`.
 
 The email is sent after commit by `dispatch_outbox`; it is at-least-once, so it can rarely arrive twice.
 
-## For VS-030
-
-- VS-030 must replace the `refund_present` stop-gap in `ordering.public.status_inputs_for` with the real refund query, and take the `orders` lock before refunding a line.
+A deactivated buyer stays in the queue and still gets the notification and the email: the file was paid for and is owed ([ADR-039](adr/ADR-039-stl-delivery-workflow.md) d11).

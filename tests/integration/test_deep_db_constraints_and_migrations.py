@@ -460,6 +460,42 @@ def test_every_migration_step_goes_down_and_up_with_data_present(
 
 
 @pytest.mark.integration
+def test_the_stl_queue_migration_restores_the_setting_when_it_goes_down(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """VS-023b audit A-07: the downgrade re-seeds `daily_download_cap` exactly and drops the
+    index; going up again undoes both."""
+    config = Config("alembic.ini")
+    read = [
+        "SELECT type::text, value::text, description FROM settings"
+        " WHERE key = 'daily_download_cap'",
+        "SELECT count(*) FROM pg_indexes WHERE indexname = 'ix_order_items_stl_awaiting'",
+    ]
+    with PostgresContainer("postgres:16", driver="asyncpg") as postgres:
+        url = postgres.get_connection_url()
+        monkeypatch.setenv("DATABASE_URL", url)
+        get_settings.cache_clear()
+        try:
+            command.upgrade(config, "7a1c3e9b5d24")
+            assert asyncio.run(_execute(url, read)) == [[], [(1,)]]
+            command.downgrade(config, "fcd589e89e59")
+            assert asyncio.run(_execute(url, read)) == [
+                [
+                    (
+                        "integer",
+                        "20",
+                        "Download attempts allowed per authenticated customer per UTC day.",
+                    )
+                ],
+                [(0,)],
+            ]
+            command.upgrade(config, "7a1c3e9b5d24")
+            assert asyncio.run(_execute(url, read)) == [[], [(1,)]]
+        finally:
+            get_settings.cache_clear()
+
+
+@pytest.mark.integration
 def test_data_survives_a_partial_round_trip(monkeypatch: pytest.MonkeyPatch) -> None:
     """Down to the first identity revision and back up: surviving tables keep
     their rows, and re-added columns take their documented defaults."""

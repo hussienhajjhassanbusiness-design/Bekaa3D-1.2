@@ -66,6 +66,7 @@ Rules enforced by `app.engagement.domain.payload`:
 
 Emails with them (outbox templates; no phone, hash or address ever appears in a payload):
 - `order_payment_confirmed` (VS-023): `order_id`, `order_number`, `total_cents`, `currency`; VS-028 adds `fulfillment_method`, `estimated_dispatch_at` and `delivery_fee_note` (delivery only).
+- `order_stl_delivered` (VS-023b): the `stl.delivered` payload above without `event`: the administrator has emailed the file. A deactivated buyer still gets it ([ADR-039](adr/ADR-039-stl-delivery-workflow.md) d11).
 - `order_cancelled` (VS-031): the `order.cancelled` payload above; a paid cancel also sends VS-030's `order_refund_issued`.
 - `order_cash_placed` (VS-028): `order_id`, `order_number`, `amount_due_cents`, `currency`, `fulfillment_method`, `estimated_dispatch_at`, `delivery_fee_note` (delivery only), `pickup`.
 - `order_awaiting_payment` (VS-050): `order_id`, `order_number`, `total_cents`, `currency`: the order is placed and the administrator will contact the customer to arrange payment.

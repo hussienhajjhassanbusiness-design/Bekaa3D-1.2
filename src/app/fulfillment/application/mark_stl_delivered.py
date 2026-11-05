@@ -5,8 +5,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from app.fulfillment.application.ports import DeliveryNotices, DeliveryOrders, OrderPayments
-from app.ordering.public import LineNotFoundError, LockedOrder, OrderStatus, RefundFacts
+from app.fulfillment.application.ports import DeliveryNotices, DeliveryOrders
+from app.ordering.public import LockedOrder, OrderStatus, RefundFacts
 from app.platform.application.ports import AuditWriter
 
 
@@ -19,36 +19,6 @@ class DeliveryResult:
     order_status: OrderStatus
 
 
-async def mark_stl_delivered(
-    orders: DeliveryOrders,
-    payments: OrderPayments,
-    audit: AuditWriter,
-    notices: DeliveryNotices,
-    *,
-    order_id: UUID,
-    item_id: UUID,
-    admin_id: UUID,
-    at: datetime,
-    request_id: str | None,
-    ip_hash: str | None,
-) -> DeliveryResult:
-    locked = await orders.lock(order_id)
-    if locked is None:
-        raise LineNotFoundError(f"order {order_id} does not exist")
-    return await deliver_stl_line(
-        orders,
-        audit,
-        notices,
-        locked,
-        refunds=await payments.refund_facts(order_id),
-        item_id=item_id,
-        admin_id=admin_id,
-        at=at,
-        request_id=request_id,
-        ip_hash=ip_hash,
-    )
-
-
 async def deliver_stl_line(
     orders: DeliveryOrders,
     audit: AuditWriter,
@@ -59,12 +29,13 @@ async def deliver_stl_line(
     item_id: UUID,
     admin_id: UUID,
     at: datetime,
+    note: str | None,
     request_id: str | None,
     ip_hash: str | None,
 ) -> DeliveryResult:
     """The delivery itself, on an order the caller has locked; `refunds` read after it."""
     line, order_status = await orders.mark_delivered(
-        locked, line_id=item_id, admin_id=admin_id, at=at, refunds=refunds
+        locked, line_id=item_id, admin_id=admin_id, at=at, refunds=refunds, note=note
     )
     await audit.record(
         actor_user_id=admin_id,
@@ -78,6 +49,7 @@ async def deliver_stl_line(
             "delivered_by": str(admin_id),
             "order_id": str(locked.order.id),
             "order_number": locked.order.order_number,
+            "note": note,
         },
         request_id=request_id,
         ip_hash=ip_hash,
