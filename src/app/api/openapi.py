@@ -58,6 +58,8 @@ _UNAUTHENTICATED_PATHS = frozenset(
         # Authenticated by the single-use reset token, or not at all.
         "/api/v1/auth/password-reset/request",
         "/api/v1/auth/password-reset/confirm",
+        # Public; a session is optional and only links the message (ADR-046 amendment).
+        "/api/v1/contact-messages",
         # Public reads. Listed since BUG-42: they were described as needing a
         # session cookie, and would now also be documented as answering 401.
         "/api/v1/settings/public",

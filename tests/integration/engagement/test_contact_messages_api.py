@@ -580,3 +580,28 @@ async def test_a_dead_token_is_a_guest_not_an_error(db_session: AsyncSession) ->
         revoked = client.post(CONTACT, json=_form())
     assert (await _sent_row(db_session, forged)).user_id is None
     assert (await _sent_row(db_session, revoked)).user_id is None
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("configured_app")
+async def test_a_signed_in_send_holds_no_connection_during_the_captcha(
+    db_session: AsyncSession,
+) -> None:
+    """A slow Cloudflare must not pin one pooled connection per signed-in sender."""
+    held: list[int] = []
+
+    class _Probe(FakeCaptcha):
+        async def verify(self, token: str) -> None:
+            held.append(main_app.state.db_engine.pool.checkedout())
+            await super().verify(token)
+
+    main_app.dependency_overrides[get_captcha_verifier] = _Probe
+    user = await create_user(db_session)
+    try:
+        with client_for(main_app) as client:
+            login(client, user.email)
+            response = client.post(CONTACT, json=_form(), headers=csrf(client))
+    finally:
+        main_app.dependency_overrides.pop(get_captcha_verifier, None)
+    assert response.status_code == 201, response.text
+    assert held == [0]

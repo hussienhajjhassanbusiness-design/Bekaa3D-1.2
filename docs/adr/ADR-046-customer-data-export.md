@@ -51,3 +51,5 @@ The end-to-end rehearsal found that the export did not match SRS §14.5 and FR-0
 - No session, or a forged, expired or revoked access token, is a guest (`user_id` NULL), never a 401: the form stays public (BR-116).
 - **Accepted limitation:** the access cookie lasts 15 minutes and the refresh cookie never reaches this route, so a customer who stays on the form longer is treated as a guest. The frontend should refresh the session before sending if it believes the customer is signed in.
 - A message sent as a guest stays out of the export, even from the account's address: an email typed into a public form proves nothing.
+- The session is read in its own short transaction, so a slow captcha provider holds no pooled connection (as `verified_user_short_read` does for checkout).
+- Bring Your Idea keeps ignoring auth cookies (ADR-030, whose remark about `contact_messages` no longer holds): §14.5 does not list it.

@@ -90,14 +90,13 @@ async def current_claims(
     return claims
 
 
-async def optional_user_id(
-    request: Request, session: AsyncSession = Depends(get_session)
-) -> UUID | None:
+async def optional_user_id(request: Request) -> UUID | None:
     """A public form's sender (ADR-046): no live session is a guest, never a 401. A live one
-    must pass CSRF, as on any cookie-authenticated write, so no other site can link a message."""
+    must pass CSRF. Its own short transaction: the form calls Cloudflare holding no connection."""
     try:
         claims = _decoded_claims(request)
-        await _require_current_epoch(UserRepository(session), claims)
+        async with request.app.state.db_session_factory() as session, session.begin():
+            await _require_current_epoch(UserRepository(session), claims)
     except ApiError:
         return None
     _require_csrf_token(request, claims)

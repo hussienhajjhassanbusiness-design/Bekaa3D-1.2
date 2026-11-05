@@ -30,7 +30,7 @@ router.include_router(public_catalogue_router)
 router.include_router(storefront_router)
 # VS-016. Autocomplete: GET /api/v1/search/suggestions (search itself is `q` above).
 router.include_router(search_router)
-# VS-033. Guest contact form: captcha + rate limits, no auth cookies (api-endpoints.md 7.2).
+# VS-033. Contact form: captcha + rate limits, optional session (api-endpoints.md 7.2).
 router.include_router(contact_router)
 # VS-022. The customer's cart: GET /api/v1/cart and /cart/items* (api-endpoints.md 10.1).
 router.include_router(cart_router)

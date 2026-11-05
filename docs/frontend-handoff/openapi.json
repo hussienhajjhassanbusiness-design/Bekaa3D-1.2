@@ -24549,12 +24549,6 @@
             "description": "`SERVICE_UNAVAILABLE` - captcha could not be verified; nothing done."
           }
         },
-        "security": [
-          {
-            "csrfToken": [],
-            "sessionCookie": []
-          }
-        ],
         "summary": "Send a message to the business",
         "tags": [
           "contact"

@@ -167,3 +167,27 @@ async def test_a_failing_audit_write_does_not_change_the_answer(
     response = _fail(fresh_ip(), user.email)
     assert (response.status_code, response.json()["code"]) == (401, "INVALID_CREDENTIALS")
     assert await _rows(db_session, user.id) == []
+
+
+async def test_an_account_disabled_between_the_two_login_steps_is_counted(
+    db_session: AsyncSession,
+) -> None:
+    ip = fresh_ip()
+    with client_for(main_app, ip) as client:
+        admin, _secret, codes = await mfa_admin(client, db_session)
+        admin_id = admin.id
+        client.cookies.clear()
+        challenge = client.post(LOGIN, json={"email": admin.email, "password": PASSWORD})
+        assert challenge.status_code == 202, challenge.text
+        await db_session.execute(
+            text("UPDATE users SET is_active = false WHERE id = :u"), {"u": admin_id}
+        )
+        await db_session.commit()
+        refused = client.post(
+            "/api/v1/auth/mfa/verify",
+            json={"challenge_id": challenge.json()["challenge_id"], "recovery_code": codes[0]},
+        )
+    assert (refused.status_code, refused.json()["code"]) == (403, "ACCOUNT_DISABLED")
+    (row,) = await _rows(db_session, admin_id)
+    assert row.after_data is not None
+    assert row.after_data["reasons"] == {"account_disabled": 1}

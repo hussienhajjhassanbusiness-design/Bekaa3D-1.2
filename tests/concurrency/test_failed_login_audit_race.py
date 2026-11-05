@@ -3,6 +3,9 @@ Without the advisory lock each racer finds no row, inserts its own, and the volu
 
 import asyncio
 import uuid
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from typing import cast
 
 import pytest
 from sqlalchemy import select
@@ -11,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from app.core.database import make_session_factory
 from app.identity.infrastructure.failed_login_audit import ACTION, record_failed_login
 from app.platform.infrastructure.models import AuditLogModel
+from tests.concurrency.barrier import meet_or_fail
 from tests.integration.deep_support import create_user
 
 RACERS = 8
@@ -24,7 +28,16 @@ async def test_parallel_failures_land_on_one_row_with_the_full_count(
     user = await create_user(db_session)
     user_id, email = user.id, user.email
     ip_hash = uuid.uuid4().hex
-    factory: async_sessionmaker[AsyncSession] = make_session_factory(db_engine)
+    plain = make_session_factory(db_engine)
+    barrier = asyncio.Barrier(RACERS)
+
+    @asynccontextmanager
+    async def together() -> AsyncIterator[AsyncSession]:
+        async with plain() as session:
+            await meet_or_fail(barrier)
+            yield session
+
+    factory = cast(async_sessionmaker[AsyncSession], together)
     await asyncio.gather(
         *(
             record_failed_login(

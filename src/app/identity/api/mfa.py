@@ -349,6 +349,7 @@ async def verify_mfa(
         # Only reachable if the credential was disabled inside the challenge
         # window. Same answer as a wrong code - there is no caller who is
         # entitled to learn the difference at this point.
+        await audit_refused_login(request, session, reason="mfa_invalid", user_id=pending.user_id)
         raise _invalid_mfa_error() from exc
 
     complete = CompleteMfaLogin(
@@ -368,8 +369,12 @@ async def verify_mfa(
             request_id=request_id,
         )
     except InvalidCredentialsError as exc:
+        await audit_refused_login(request, session, reason="mfa_invalid", user_id=pending.user_id)
         raise _invalid_mfa_error() from exc
     except AccountDisabledError as exc:
+        await audit_refused_login(
+            request, session, reason="account_disabled", user_id=pending.user_id
+        )
         # Same wording VS-003's login uses, so an account deactivated between
         # the two halves of a login is reported identically either way.
         raise ApiError(

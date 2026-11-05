@@ -47,6 +47,7 @@ def test_the_public_and_challenge_authenticated_routes_require_no_session() -> N
     assert "security" not in paths["/api/v1/auth/login"]["post"]
     assert "security" not in paths["/api/v1/auth/mfa/verify"]["post"]
     assert "security" not in paths["/api/v1/auth/register"]["post"]
+    assert "security" not in paths["/api/v1/contact-messages"]["post"]
 
 
 PUBLIC_READS = [
