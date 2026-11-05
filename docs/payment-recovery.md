@@ -75,7 +75,7 @@ Every active, verified administrator receives each alert as an in-app `payment.a
 
 ## Operator runbook
 
-**A late capture** (`late_capture` alert, or `GET /api/v1/admin/payments?late_captured=true`): money arrived that cannot pay the order (the attempt was no longer live, the order was cancelled, or the amount differed). The order and its lines are untouched. Refund the captured amount (`captured_amount_cents`, `captured_currency`) in the provider's dashboard. VS-030 will make these refund obligations. The SQL listing in [`checkout.md`](checkout.md) still works.
+**A late capture** (`late_capture` alert, or `GET /api/v1/admin/payments?late_captured=true`): money arrived that cannot pay the order (the attempt was no longer live, the order was cancelled, or the amount differed). The order and its lines are untouched. Each one already has a pending `late_capture` refund obligation in the refund queue (VS-030, [`refunds.md`](refunds.md)). Refund the captured amount (`captured_amount_cents`, `captured_currency`) in the provider's dashboard, then settle that refund. The SQL listing in [`checkout.md`](checkout.md) still works.
 
 **A stuck payment** (`stuck`): the provider keeps answering `pending` or `processing`. Check its dashboard. If it shows a capture on a no-status provider, confirm it; on a status provider, reconcile. If it shows nothing after the hold and the 24 h grace, release the order with a reason saying what you checked.
 
