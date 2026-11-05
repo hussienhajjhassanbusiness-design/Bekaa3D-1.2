@@ -273,3 +273,20 @@ async def audit_rows(engine: AsyncEngine, action: str, entity_id: str | uuid.UUI
             {"a": action, "e": uuid.UUID(str(entity_id))},
         )
         return list(rows)
+
+
+async def cancel_notices(engine: AsyncEngine, refund: str | uuid.UUID) -> tuple[int, int]:
+    """The "refund cancelled" email and in-app notification for one refund."""
+    mail = await count(
+        engine,
+        "SELECT count(*) FROM email_outbox WHERE template = 'order_refund_cancelled'"
+        " AND payload->>'refund_id' = :r",
+        r=str(refund),
+    )
+    note = await count(
+        engine,
+        "SELECT count(*) FROM notifications WHERE type = 'refund'"
+        " AND payload->>'event' = 'refund.cancelled' AND payload->>'refund_id' = :r",
+        r=str(refund),
+    )
+    return mail, note

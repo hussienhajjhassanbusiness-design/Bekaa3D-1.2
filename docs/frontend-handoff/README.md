@@ -13,7 +13,7 @@ The backend's answer to the three frontend request files in [`../frontend-reques
 
 1. **Field lists are in `openapi.json`, not in the prose.** A response block names a schema; look it up under `components.schemas`.
 2. **Two decisions removed parts of what you asked about.** ADR-019: the platform stores and serves no STL files, so there are no entitlements, library, downloads or asset uploads. ADR-024: the platform charges no shipping, so there are no shipping zones or free-shipping threshold. See [section 3 of the response](BACKEND-RESPONSE.md#3-removed-by-adr-019-and-adr-024).
-3. **Every item below is built, apart from the five that were removed.** [Section 4](BACKEND-RESPONSE.md#4-not-built-yet-provisional) of the response still holds answers written before some of them existed. Where it disagrees with `openapi.json` or the contract files in [`docs/`](..), they win.
+3. **Every item below is built, apart from the five that were removed.** [Section 4](BACKEND-RESPONSE.md#4-built-since-the-first-version) of the response was brought up to date with the code on 2026-11-06. Where anything in the response disagrees with `openapi.json` or the contract files in [`docs/`](..), they win.
 4. **Some items the request calls "confirmed" are not.** The list is in [section 6](BACKEND-RESPONSE.md#6-corrections-to-confirmed-items-in-the-request).
 
 ## Start the backend

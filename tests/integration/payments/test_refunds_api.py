@@ -38,6 +38,7 @@ from tests.integration.payments.refund_support import (
     REFUNDS,
     act,
     audit_rows,
+    cancel_notices,
     count,
     create,
     key,
@@ -711,22 +712,6 @@ def test_s3_the_provider_port_has_no_refund_method() -> None:
 # --------------------------------------------------------------------------
 
 
-async def _cancel_notices(engine: AsyncEngine, refund: str | uuid.UUID) -> tuple[int, int]:
-    mail = await count(
-        engine,
-        "SELECT count(*) FROM email_outbox WHERE template = 'order_refund_cancelled'"
-        " AND payload->>'refund_id' = :r",
-        r=str(refund),
-    )
-    note = await count(
-        engine,
-        "SELECT count(*) FROM notifications WHERE type = 'refund'"
-        " AND payload->>'event' = 'refund.cancelled' AND payload->>'refund_id' = :r",
-        r=str(refund),
-    )
-    return mail, note
-
-
 async def test_a_voided_refund_tells_the_customer_once(
     db_engine: AsyncEngine, db_session: AsyncSession
 ) -> None:
@@ -734,10 +719,10 @@ async def test_a_voided_refund_tells_the_customer_once(
     with client_for(main_app) as client:
         await _admin(client, db_session)
         refund = ok(create(client, order.order_id, [(order.physical[0], 400)]), 201)["id"]
-        assert await _cancel_notices(db_engine, refund) == (0, 0)
+        assert await cancel_notices(db_engine, refund) == (0, 0)
         ok(act(client, refund, "void", {"reason": "Internal: wrong order, see ticket 12."}))
         ok(act(client, refund, "void", {"reason": "A repeat."}))
-    assert await _cancel_notices(db_engine, refund) == (1, 1)
+    assert await cancel_notices(db_engine, refund) == (1, 1)
     async with db_engine.connect() as conn:
         payload: dict[str, Any] = (
             await conn.execute(
@@ -771,7 +756,7 @@ async def test_voiding_a_failed_refund_tells_the_customer(
         refund = ok(create(client, order.order_id, [(order.physical[0], 400)]), 201)["id"]
         ok(act(client, refund, "fail", {"reason": "Transfer bounced."}))
         ok(act(client, refund, "void", {"reason": "Customer no longer wants it."}))
-    assert await _cancel_notices(db_engine, refund) == (1, 1)
+    assert await cancel_notices(db_engine, refund) == (1, 1)
 
 
 async def test_a_refused_void_tells_no_one(
@@ -783,7 +768,7 @@ async def test_a_refused_void_tells_no_one(
         refund = ok(create(client, order.order_id, [(order.physical[0], 400)]), 201)["id"]
         ok(act(client, refund, "settle", {}))
         assert_problem(act(client, refund, "void", {"reason": "Oops."}), 409)
-    assert await _cancel_notices(db_engine, refund) == (0, 0)
+    assert await cancel_notices(db_engine, refund) == (0, 0)
 
 
 async def test_voiding_a_reissue_names_the_reissue(
@@ -796,8 +781,8 @@ async def test_voiding_a_reissue_names_the_reissue(
         ok(act(client, first, "fail", {"reason": "Transfer bounced."}))
         twin = ok(act(client, first, "reissue"), 201)["id"]
         ok(act(client, twin, "void", {"reason": "Customer no longer wants it."}))
-    assert await _cancel_notices(db_engine, twin) == (1, 1)
-    assert await _cancel_notices(db_engine, first) == (0, 0)
+    assert await cancel_notices(db_engine, twin) == (1, 1)
+    assert await cancel_notices(db_engine, first) == (0, 0)
 
 
 async def test_a_notice_that_cannot_be_written_undoes_the_void(
@@ -815,4 +800,4 @@ async def test_a_notice_that_cannot_be_written_undoes_the_void(
         monkeypatch.undo()
         assert failed.status_code == 500
         assert ok(client.get(f"{REFUNDS}/{refund}"))["status"] == "pending"
-    assert await _cancel_notices(db_engine, refund) == (0, 0)
+    assert await cancel_notices(db_engine, refund) == (0, 0)

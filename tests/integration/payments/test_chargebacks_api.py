@@ -17,6 +17,7 @@ from tests.integration.payments.refund_support import (
     REFUNDS,
     act,
     audit_rows,
+    cancel_notices,
     chargeback,
     count,
     create,
@@ -433,3 +434,48 @@ async def test_a_mixed_order_charged_back_in_full_after_a_partial_stl_refund(
         {"i": order.stl},
     )
     assert owned == 0  # out of the delivery queue, ownership freed
+
+
+async def test_voiding_a_chargebacks_remainder_tells_the_customer_once(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    order = await paid_online(db_session, stl=None)
+    line = order.physical[0]
+    payment = await payment_of(db_engine, order.order_id)
+    with client_for(main_app) as client:
+        await _admin(client, db_session)
+        goodwill = ok(create(client, order.order_id, [(line, 600)]), 201)["id"]
+        ok(chargeback(client, order.order_id, payment, 200), 201)
+        (rest,) = [r for r in await refund_rows(db_engine, order.order_id) if r.status == "pending"]
+        assert rest.amount_cents == 400
+        voided = ok(act(client, rest.id, "void", {"reason": "Settled by store credit."}))
+        assert voided["status"] == "voided" and str(rest.id) not in queue_ids(
+            client, order.order_id
+        )
+    assert await cancel_notices(db_engine, rest.id) == (1, 1)
+    assert await cancel_notices(db_engine, goodwill) == (0, 0)  # absorbed by the bank
+    amount = await count(
+        db_engine,
+        "SELECT (payload->>'amount_cents')::int FROM email_outbox"
+        " WHERE template = 'order_refund_cancelled' AND payload->>'refund_id' = :r",
+        r=str(rest.id),
+    )
+    assert amount == 400
+    assert await line_state(db_engine, line) == "delivered"
+
+
+async def test_a_remainder_on_a_refunded_line_cannot_be_voided_and_tells_no_one(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    order = await paid_online(db_session, stl=None)
+    payment = await payment_of(db_engine, order.order_id)
+    with client_for(main_app) as client:
+        await _admin(client, db_session)
+        ok(create(client, order.order_id, [(order.physical[0], 1000)]), 201)
+        ok(chargeback(client, order.order_id, payment, 600), 201)
+        (rest,) = [r for r in await refund_rows(db_engine, order.order_id) if r.status == "pending"]
+        refused = act(client, rest.id, "void", {"reason": "Oops."})
+        assert_problem(refused, 409, "INVALID_STATE_TRANSITION")
+        assert refused.json()["reason"] == "line_already_refunded"
+        assert str(rest.id) in queue_ids(client, order.order_id)
+    assert await cancel_notices(db_engine, rest.id) == (0, 0)

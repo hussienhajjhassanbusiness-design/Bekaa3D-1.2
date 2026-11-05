@@ -3,9 +3,9 @@
 Answers every item in [`../frontend-requests/BACKEND-UNLOCK-HANDOFF.md`](../frontend-requests/BACKEND-UNLOCK-HANDOFF.md)
 by its ID, in the field order of [`../frontend-requests/BACKEND-RESPONSE-TEMPLATE.md`](../frontend-requests/BACKEND-RESPONSE-TEMPLATE.md).
 
-- **Backend state:** slices VS-001 to VS-016, VS-022 (cart), VS-026 (address book), VS-033 (contact form and captcha), VS-034 (Bring Your Idea submission), VS-035 (the admin Bring Your Idea pipeline, attachment download and funnel; [`../custom-requests.md`](../custom-requests.md#admin-pipeline-vs-035)), VS-038 (wishlist) and VS-046 (security retention) are built. Nothing else exists yet: no checkout, order, payment or refund route.
+- **Backend state (2026-11-06):** every item the request asks about is built, apart from the five removed in [section 3](#3-removed-by-adr-019-and-adr-024). Per-slice status is in [`../vertical-slice-plan.md`](../vertical-slice-plan.md). Sections 5 and 6 still describe the backend as it was when this file was first written.
 - **Schemas are not retyped here.** Field lists live in [`openapi.json`](openapi.json), generated from the code and checked by a test. A block names the schema; open it at `components.schemas.<Name>`.
-- **Decisions since the first version:** three open questions were decided on 2026-10-14 and recorded in [ADR-025](../adr/ADR-025-frontend-contract-decisions.md): admin `available_actions` (C8, P1-11), the STL ownership check (C11) and Turnstile captcha on five forms (P2-1, P2-6, P2-7). Captcha is now built (VS-033, [ADR-026](../adr/ADR-026-captcha-refusal-and-outage.md)); the other two are provisional until their slices are built.
+- **Decisions since the first version:** three open questions were decided on 2026-10-14 and recorded in [ADR-025](../adr/ADR-025-frontend-contract-decisions.md): admin `available_actions` (C8, P1-11), the STL ownership check (C11) and Turnstile captcha on five forms (P2-1, P2-6, P2-7). All three are built: ownership in VS-023, `available_actions` in VS-029, captcha in VS-033 ([ADR-026](../adr/ADR-026-captcha-refusal-and-outage.md)).
 - **Every example below is real**, captured from the application running against a database filled by [`scripts/dev_seed.py`](../../scripts/dev_seed.py). IDs and timestamps will differ on your machine.
 
 ## Contents
@@ -13,7 +13,7 @@ by its ID, in the field order of [`../frontend-requests/BACKEND-RESPONSE-TEMPLAT
 1. [Shared conventions](#1-shared-conventions) — errors, cookies, CSRF, the admin boundary, rate limits
 2. [Built and confirmed](#2-built-and-confirmed) — A1, A2, A3, B1, B2, B3, B4, B5, C1, C2, P1-1 to P1-7, P2-5, P2-6, P2-8, VS-036 (reviews), VS-037 (review moderation)
 3. [Removed by ADR-019 and ADR-024](#3-removed-by-adr-019-and-adr-024) — C4, C9, C10, P1-8, P1-9
-4. [Not built yet (provisional)](#4-not-built-yet-provisional) — C5, C6, C7, C8, C11, C12, P1-10 to P1-13, P2-2; also P2-1, P2-3, P2-4 and P2-7, which VS-033 has since built, C3, which VS-026 has since built, and C5, which VS-022 has since built
+4. [Built since the first version](#4-built-since-the-first-version) — C3, C5 to C8, C11, C12, P1-10 to P1-13, P2-1 to P2-4, P2-7
 5. [Test accounts and fixtures](#5-test-accounts-and-fixtures) — items 1 to 9
 6. [Corrections to "confirmed" items in the request](#6-corrections-to-confirmed-items-in-the-request)
 7. [Open questions](#7-open-questions) — three decided by ADR-025, ten still open
@@ -61,6 +61,7 @@ Set-Cookie: csrf_token=<redacted>; Max-Age=2592000; Path=/; SameSite=lax
 
 - `access_token` and `refresh_token` are `HttpOnly`. `csrf_token` is readable by JavaScript on purpose.
 - Every cookie-authenticated `POST`, `PUT`, `PATCH` or `DELETE` must send header **`X-CSRF-Token`** with the current `csrf_token` cookie value. `GET` never needs it. Missing or wrong: `403 CSRF_INVALID`.
+- **The contact form** (`POST /api/v1/contact-messages`) is public, but a signed-in customer must send `X-CSRF-Token` with it too ([P2-3](#domain--item-p2-3--contact-form)).
 - **Exception: `GET /api/v1/me/export` (the customer data export) also needs `X-CSRF-Token`.** Download it with `fetch` (send the header, read the body as a blob, save it under the `Content-Disposition` filename), never with a plain link, `<a href>` or `window.location`: those cannot send the header and get `403 CSRF_INVALID`. Three exports a day per user; the refused ones do not count (ADR-046 d11).
 - `DELETE /api/v1/me` deletes the account: body `{"current_password": "..."}`, `204` with the auth cookies cleared, so treat the user as signed out. `401 INVALID_CREDENTIALS` is a wrong password, not an expired session. `409 ACCOUNT_DELETION_BLOCKED` carries `reason` `open_order` or `unsettled_refund` (finish or cancel the order, or wait for the refund). Five attempts an hour (ADR-047).
 - `POST /api/v1/auth/refresh` rotates all three cookies, so re-read `csrf_token` after a refresh.
@@ -2039,13 +2040,11 @@ These items will never be built. Remove the frontend work that depends on them.
 
 ---
 
-## 4. Not built yet (provisional)
+## 4. Built since the first version
 
-> **Everything in this section is PROVISIONAL.** No code exists for it. The answers come from the specification ([`../requirments/api-endpoints.md`](../requirments/api-endpoints.md), [`../SRS.md`](../SRS.md), the ADRs and [`../vertical-slice-plan.md`](../vertical-slice-plan.md)) and can change when the slice is built. Build models and screens against them if you want a head start, but do not treat a field name as final until the slice is merged and the route appears in `openapi.json`. Each block names the slice to watch.
+> **Every item in this section is built.** It was first written from the specification before the code existed, and was brought up to date with the code on 2026-11-06. Each block names the contract file in [`docs/`](..) that holds the detail; field lists are in [`openapi.json`](openapi.json). Where a block disagrees with either, they win: tell the backend so the block is fixed.
 
-> **Built since this section was written:** C3 (VS-026), C5 (VS-022), and from VS-023 C6 (STL-only checkout), C11 (ownership check), C12 (idempotency) and the server side of C7. Each block's status line says so; their contracts are in `openapi.json`.
-
-Build order on the backend: VS-020 (staging) or VS-022 (cart) next, then VS-023 (digital checkout), VS-023b, VS-024, VS-025, VS-026, VS-028 (physical checkout and cash), VS-029, VS-030, VS-031, VS-033, VS-034.
+> **Dated notes** at the top of a block (C6, P2-3) announce a change since an earlier version: read those first.
 
 ### Domain / item: C3 — Address book contract
 
@@ -2125,7 +2124,7 @@ Build order on the backend: VS-020 (staging) or VS-022 (cart) next, then VS-023 
 
 **Request schema:** `CartItemAdd` (`product_id`, `quantity` default 1), `CartItemQuantityUpdate` (`quantity`). `quantity` is a JSON integer of at least 1.
 
-**Response schema:** `CartRead` and `CartLineRead` in `openapi.json`. Per line, besides the product summary and the two prices:
+**Response schema:** `CartRead` and `CartLineRead` in `openapi.json`. The cart's `payment_methods` lists the methods every line's product accepts (VS-049), so you can show before checkout that the lines must be ordered separately. Per line, besides the product summary and the two prices:
 - `price_changed` — the current price differs from the snapshot taken when the line was first added.
 - **`over_cap`** — the line's quantity is above the product's *current* `max_quantity_per_line` (an administrator lowered it). Show it as an error on the line; `PATCH` can lower the quantity, and checkout will refuse the line until then.
 - `purchasable` / `unpurchasable_reason` — `not_listed`, `unavailable` or `whatsapp_only` when the product can no longer be bought. The line stays; it can be deleted but not edited, and checkout refuses it.
@@ -2141,7 +2140,7 @@ There is no total: compute one for display if you need it; checkout recomputes i
 - `422 CART_LINE_LIMIT_REACHED` with `limit` (50) — a new product in a full cart.
 - `403 EMAIL_VERIFICATION_REQUIRED`, `403 CSRF_INVALID`, `429 RATE_LIMITED` (300 writes per hour per user).
 - `404 NOT_FOUND` — `PATCH` or `DELETE` of a product not in the cart.
-- `409 PRODUCT_ALREADY_OWNED` arrives with VS-023, not VS-022.
+- `409 PRODUCT_ALREADY_OWNED` (with `product_ids`): an STL the customer already owns (a paid, unrefunded line). Their own unpaid order does not block the add; checkout refuses it instead.
 
 **Auth/CSRF/MFA:** `GET`: any signed-in user (an unverified one gets an empty cart, `id: null`). Writes: verified customer plus `X-CSRF-Token`. There is no anonymous or guest cart on the server.
 
@@ -2244,15 +2243,15 @@ There is no total: compute one for display if you need it; checkout recomputes i
 
 **Confirmed endpoint:** `POST /api/v1/checkout`. Full contract: [`../checkout.md`](../checkout.md).
 
-**Request schema:** `CheckoutRequest` in `openapi.json`: `payment_method` (`"online"`, or `"cash"` when every line is physical), `payment_provider` (online only; defaults to the one configured), `fulfillment_method` (`"delivery"` or `"pickup"`; required with a physical line, absent for STL-only), `address_id` (delivery only, required there), `contact_phone` (pickup only, required there; any Lebanese spelling), `customer_note` (≤ 1000), `accept_terms: true`, `accept_digital_final_sale: true` (required with an STL), `accept_cash_terms: true` (required for cash), `accepted_price_changes[]` (≤ 50). Any other field, including a total or a price, is `422 VALIDATION_ERROR`. The rules apply to the lines left after already-owned STLs are dropped ([`../checkout.md`](../checkout.md) has the matrix).
+**Request schema:** `CheckoutRequest` in `openapi.json`: `payment_method` (`"online"`, or `"cash"` when every line is physical), `payment_provider` (online only; defaults to the one configured), `fulfillment_method` (`"delivery"` or `"pickup"`; required with a physical line, absent for STL-only), `address_id` (delivery only, required there), `contact_phone` (pickup, and STL-only on the `manual` provider; required there; any Lebanese spelling), `customer_note` (≤ 1000), `accept_terms: true`, `accept_digital_final_sale: true` (required with an STL), `accept_cash_terms: true` (required for cash), `accepted_price_changes[]` (≤ 50). Any other field, including a total or a price, is `422 VALIDATION_ERROR`. The rules apply to the lines left after already-owned STLs are dropped ([`../checkout.md`](../checkout.md) has the matrix).
 
-**Response schema:** `201 CheckoutRead`: `order` (live prices, lines `pending`, plus `estimated_dispatch_at`, `delivery_fee_note`, `delivery_address`, `payment_due`, `amount_due`), `payment` and `dropped_lines` (`[{product_id, reason: "already_owned"}]`: STLs bought since they were added, not charged). **Online:** the order is `pending_payment` and `payment` is `{id, status: "pending", provider, redirect_url}`; send the customer to `payment.redirect_url`. **Cash:** the order is `in_progress`, `payment` is `null`, `payment_due` is `true` and `amount_due` is what the courier or the workshop collects. The contact phone is never in this response.
+**Response schema:** `201 CheckoutRead`: `order` (live prices, lines `pending`, plus `estimated_dispatch_at`, `delivery_fee_note`, `delivery_address`, `payment_due`, `amount_due`), `payment` and `dropped_lines` (`[{product_id, reason: "already_owned"}]`: STLs bought since they were added, not charged). **Online:** the order is `pending_payment` and `payment` is `{id, status: "pending", provider, redirect_url, next_step, hold_expires_at}`. Follow `next_step`: `redirect` means send the customer to `redirect_url` (the mock, in development); `await_admin_contact` means there is no redirect (`redirect_url` is `null`) and the administrator will contact the customer (production, `manual`). **Cash:** the order is `in_progress`, `payment` is `null`, `payment_due` is `true` and `amount_due` is what the courier or the workshop collects. The contact phone is never in this response.
 
 **Enums/statuses/actions:** `payment_method`: `"online" | "cash"`; `fulfillment_method`: `"delivery" | "pickup"` (VS-028).
 
 **Errors:**
 - `409 CART_EMPTY` (with `dropped_lines`), `409 CART_PRICE_CHANGED` (with `price_changes: [{product_id, old_amount_cents, new_amount_cents, currency}]`; nothing is charged), `409 PRODUCT_ALREADY_OWNED` (with `product_ids`), `409 IDEMPOTENCY_KEY_CONFLICT`, `409 IDEMPOTENCY_REQUEST_IN_PROGRESS` (with `order_id`, `order_number`, `Retry-After: 2`).
-- `422 PRODUCT_NOT_PURCHASABLE` / `QUANTITY_EXCEEDS_LIMIT` (with `lines: [{product_id, reason, max_quantity?}]`, every offending line), `422 INVALID_FULFILLMENT` (fields that do not fit the cart, an address that is not the customer's live one, or pickup while no pickup address is set), `422 PAYMENT_METHOD_NOT_ALLOWED` (with `reason`: `cash_requires_physical`, `cash_disabled`, `zero_total`, `provider_not_configured`, `provider_required`, `provider_not_applicable`), `422 CASH_PAYMENT_LIMIT_REACHED` (with `reason: order_total`), `422 CASH_NOT_AVAILABLE` (no `reason`: a cash block or an open cash order, for the account or the phone), `422 VALIDATION_ERROR` (a missing `accept_digital_final_sale` or `accept_cash_terms`, or an invalid `contact_phone`, points at that field).
+- `422 PRODUCT_NOT_PURCHASABLE` / `QUANTITY_EXCEEDS_LIMIT` (with `lines: [{product_id, reason, max_quantity?}]`, every offending line), `422 NO_COMMON_PAYMENT_METHOD` (with `lines: [{product_id, accepted_payment_methods}]`: order them separately), `422 INVALID_FULFILLMENT` (fields that do not fit the cart, an address that is not the customer's live one, or pickup while no pickup address is set), `422 CONTACT_PHONE_REQUIRED`, `422 MANUAL_ORDER_LIMIT_REACHED` (with `max_open_orders`), `422 PAYMENT_METHOD_NOT_ALLOWED` (with `reason`: `cash_requires_physical`, `cash_not_accepted` or `online_not_accepted` with `product_ids`, `cash_disabled`, `zero_total`, `provider_not_configured`, `provider_required`, `provider_not_applicable`), `422 CASH_PAYMENT_LIMIT_REACHED` (with `reason: order_total`), `422 CASH_NOT_AVAILABLE` (no `reason`: a cash block or an open cash order, for the account or the phone), `422 VALIDATION_ERROR` (a missing `accept_digital_final_sale` or `accept_cash_terms`, or an invalid `contact_phone`, points at that field).
 - `429 RATE_LIMITED` (30 per user per hour; a replay counts).
 - `502 PAYMENT_PROVIDER_UNAVAILABLE`: **the order exists**, unpaid (`order_id`, `order_number`); retry its payment with `POST /api/v1/me/orders/{order_id}/payments` ([C7](#domain--item-c7--payment-verification)).
 - `503 ORDERS_PAUSED`, `503 ONLINE_PAYMENT_UNAVAILABLE` (an online checkout with no provider configured; cash still works).
@@ -2267,7 +2266,7 @@ There is no total: compute one for display if you need it; checkout recomputes i
 
 **Fixture/test account:** `scripts/dev_seed.py` (a verified customer and STL products), then `scripts/mock_pay.py` to pay ([`../checkout.md`](../checkout.md)).
 
-**Authoritative source/OpenAPI file:** `openapi.json` (`POST /api/v1/checkout`); [ADR-032](../adr/ADR-032-checkout-idempotency-and-payment-verification.md).
+**Authoritative source/OpenAPI file:** `openapi.json` (`POST /api/v1/checkout`); [`../checkout.md`](../checkout.md) (when each error applies); [ADR-032](../adr/ADR-032-checkout-idempotency-and-payment-verification.md), [ADR-048](../adr/ADR-048-accepted-payment-methods-per-product.md), [ADR-049](../adr/ADR-049-manual-payment.md).
 
 **Notes:**
 - **No cart id and no cart version in the body.** The server checks out the signed-in user's own cart.
@@ -2279,88 +2278,92 @@ There is no total: compute one for display if you need it; checkout recomputes i
 
 ### Domain / item: C7 — Payment verification
 
-**Status:** server-side verification **built** in VS-023 (webhook, verification after the 200, the `verify_payments` job). Payment retry **built** in VS-024 (below). The customer-facing read is VS-025: PROVISIONAL.
+**Status:** **built**: verification (VS-023), retry and recovery (VS-024), the customer's order read (VS-025), manual payment (VS-050). Contracts: [`../checkout.md`](../checkout.md#webhook-and-verification), [`../payment-recovery.md`](../payment-recovery.md), [`../order-history.md`](../order-history.md).
 
-**Built in VS-023:** the order becomes paid only when the provider itself confirms the exact amount. Typical delay after the provider's webhook: under a second against the mock; at worst about a minute when a background task is lost. With the mock, the return page is `{frontend}/checkout/return?order=<order_number>`; a real provider's return parameters are still undecided (VS-032).
+**Confirmed endpoint:**
+- `GET /api/v1/me/orders/{order_id}`: the order status and its `payment`. **There is no payment-status endpoint.**
+- `POST /api/v1/me/orders/{order_id}/payments`: a new attempt on an unpaid online order.
 
-**Confirmed endpoint:** none yet. **No dedicated payment-status endpoint is planned.** The planned read is `GET /api/v1/me/orders/{order_id}` (VS-025), which will carry the order status and a payment summary. Planned retry: `POST /api/v1/me/orders/{order_id}/payments` (VS-024).
+**Request schema:** the read takes none. The retry takes `PaymentRetryRequest` (`payment_provider`, optional; no amount: the order's own total is charged) and an `Idempotency-Key` ([C12](#domain--item-c12--idempotency-key-mechanism)).
 
-**Request schema:** provisional: none for the read. The retry needs `Idempotency-Key`.
+**Response schema:** `OrderDetailRead.payment` is `OrderPaymentRead` (`status`, `provider`, `amount`, `next_step`): the live or paid attempt, else the latest; `null` while a cash order is unpaid. The order also carries `can_retry_payment` and `hold_expires_at`. The retry answers `201 PaymentRetryRead` (`order`, and `payment` with `redirect_url`, `next_step` and `hold_expires_at`).
 
-**Response schema:** provisional: `OrderDetail` (api-endpoints.md section 30), including `payment_due`, the derived order `status` and a payment summary. The summary's field names are not written yet.
-
-**Enums/statuses/actions:** provisional.
+**Enums/statuses/actions:**
 - Payment status: `"pending" | "processing" | "paid" | "partially_refunded" | "refunded" | "failed" | "expired"`. **There is no `cancelled` payment status.**
-- Order status: `"pending_payment" | "in_progress" | "completed" | "partially_refunded" | "refunded" | "cancelled"`.
+- `next_step`: `"redirect" | "await_admin_contact"`.
+- Provider: `"mock"` (development and staging only), `"manual"` (production, [ADR-049](../adr/ADR-049-manual-payment.md)), `"cash"`.
+- Order status: as in [C8](#domain--item-c8--orderorder-line-status-enum-and-available-actions).
 
-**Retry (built, VS-024):** `POST /api/v1/me/orders/{order_id}/payments`, body `PaymentRetryRequest` (`payment_provider` optional; no amount is accepted, the order's total is charged), header `Idempotency-Key` (one key per retry of one order). `201 PaymentRetryRead`: `order` (with `hold_expires_at`) and `payment` (with `redirect_url`; send the customer there). Allowed only before the checkout hold ends (30 minutes after placement by default).
+**Errors** (retry):
+- `401 AUTH_REQUIRED`; `403 CSRF_INVALID` or `EMAIL_VERIFICATION_REQUIRED`; `404 NOT_FOUND` for an unknown or another customer's order (one body).
+- `409 PAYMENT_ALREADY_ACTIVE`: the order already has a live attempt. **The body carries `payment_id`, `payment_status` (`"pending"` or `"processing"`) and `redirect_url`** (`null` while `processing`). The field is `payment_status`, not `status`: every problem body's `status` member is the HTTP status, per RFC 9457. Resume with `redirect_url`, or re-read the order.
+- `409 INVALID_STATE_TRANSITION` with `reason`: `cash_order`, `order_cancelled`, `order_not_payable` (already paid, or a line no longer pending), `checkout_hold_expired`, `offer_checkout_expired` (an offer order past its checkout window).
+- `409 IDEMPOTENCY_KEY_CONFLICT`, `409 IDEMPOTENCY_REQUEST_IN_PROGRESS`, `422 PAYMENT_METHOD_NOT_ALLOWED` (with `reason`), `422 CONTACT_PHONE_REQUIRED` (a retry onto `manual` of an order with no phone), `422 VALIDATION_ERROR`, `429 RATE_LIMITED` (10 per user per hour; a replay counts), `502 PAYMENT_PROVIDER_UNAVAILABLE` (the new attempt failed to start; the order is still payable; replayed for the same key), `503 ONLINE_PAYMENT_UNAVAILABLE`.
 
-**Errors:**
-- `404 NOT_FOUND`: no such order, or another user's (identical bodies).
-- `409 PAYMENT_ALREADY_ACTIVE`: the order already has a live attempt. **The body carries `payment_id`, `payment_status` (`"pending"` or `"processing"`) and `redirect_url`** (the live attempt's page while `pending`; `null` while `processing`, when there is nothing to resume). The field is `payment_status`, not `status`: every problem body's `status` member is the HTTP status (409), per RFC 9457. Resume with `redirect_url`, or poll the order while `processing`.
-- `409 INVALID_STATE_TRANSITION` with `reason`: `cash_order`, `order_cancelled`, `order_not_payable` (already paid, or a line is no longer pending), `checkout_hold_expired`.
-- **Resume or retry:** `order.hold_expires_at` in the 201 is when the job may release the order if the provider says `failed` or `expired`; show the retry action only before the hold (30 minutes after placement by default). After a release the order is `cancelled` and the customer gets an `order.checkout_expired` notification.
-- **Admin payments (built, VS-024):** `GET /api/v1/admin/payments` (keyset `cursor`, `late_captured=true` for refunds to make), `GET /api/v1/admin/payments/{id}` (with `available_actions`: `reconcile`, `confirm`, `release_order`), `POST …/{id}/reconcile` (**`202`**: the result arrives later; re-read the detail), `POST …/{id}/confirm` (422 `PAYMENT_AMOUNT_MISMATCH` with `expected_amount_cents`), `POST /api/v1/admin/orders/{id}/release` (409 `grace_not_elapsed` with `release_available_at`). Full contract: [`../payment-recovery.md`](../payment-recovery.md).
-- `409 IDEMPOTENCY_KEY_CONFLICT`, `409 IDEMPOTENCY_REQUEST_IN_PROGRESS`, `422 PAYMENT_METHOD_NOT_ALLOWED` (with `reason`), `422 VALIDATION_ERROR`, `429 RATE_LIMITED` (10 per user per hour; a replay counts), `502 PAYMENT_PROVIDER_UNAVAILABLE` (the new attempt failed; the order is still payable; replayed for the same key), `503 ONLINE_PAYMENT_UNAVAILABLE`.
+**Auth/CSRF/MFA:** read: the signed-in owner, verified or not. Retry: the verified owner, with `X-CSRF-Token` and `Idempotency-Key`.
 
-**Auth/CSRF/MFA:** signed-in owner.
+**Concurrency/idempotency:** one `Idempotency-Key` is one retry of one order. A second live attempt is never started: it is `409 PAYMENT_ALREADY_ACTIVE`.
 
-**Concurrency/idempotency:** not applicable to the read.
+**Example success JSON:** see `OrderDetailRead` and `PaymentRetryRead` in `openapi.json`.
 
-**Example success JSON:** none; not built.
+**Example error JSON:** the RFC 9457 problem shape, with the extension members listed under Errors.
 
-**Example error JSON:** none; not built.
+**Fixture/test account:** in development, place an online order as the seeded customer, then pay, fail or expire its attempt with `scripts/mock_pay.py` ([`../checkout.md`](../checkout.md#the-mock-provider-development)).
 
-**Fixture/test account:** none possible yet. The mock provider is planned to cover every verification outcome; how a tester triggers each one is not designed.
-
-**Authoritative source/OpenAPI file:** none yet. Plan: VS-023, VS-024, VS-025; SRS sections 9 and 20; ADR-012, ADR-024.
+**Authoritative source/OpenAPI file:** `openapi.json`; [ADR-032](../adr/ADR-032-checkout-idempotency-and-payment-verification.md), [ADR-033](../adr/ADR-033-customer-order-read-model.md), [ADR-036](../adr/ADR-036-payment-recovery.md), [ADR-049](../adr/ADR-049-manual-payment.md).
 
 **Notes:**
-- **The rule the frontend already follows is the right one:** the return from the provider proves nothing. Only the server's own verification makes an order paid, and the frontend learns it by reading the order.
-- A customer sees success when the order status leaves `pending_payment` (to `in_progress` or `completed`). A failed or expired attempt leaves the order `pending_payment` and it can be retried, until the checkout hold ends (30 minutes by default) and the order becomes `cancelled`.
-- **Undecided, so no answer exists:** the return URL and its query parameters (order id or payment id, provider parameters to strip), and the recommended polling interval, backoff, maximum duration and request timeout. They depend on the online provider, which is not chosen (SRS section 30.4). Keep `usePaymentStatusPoller` parameterised. See section 7.
-- Whether a `cancelled` variant is needed in `PaymentVerificationState`: map it from the **order** status `cancelled`, not from a payment status.
-- A cash order has nothing to verify: it is placed unpaid with `payment_due`.
+- **The return from the provider proves nothing.** Only the server's own verification makes an order paid, and the frontend learns it by reading the order.
+- **Success** is the order leaving `pending_payment` (to `in_progress` or `completed`). A failed or expired attempt leaves it `pending_payment`: offer a retry while `can_retry_payment` is true. Use the flag; do not recompute it.
+- **Production (`manual`):** there is nothing to poll. Show "we'll contact you" and `hold_expires_at` (7 days after placement by default); the administrator confirms the payment by hand. An order still unpaid at `hold_expires_at` is cancelled, and the customer gets an `order.checkout_expired` notification and email.
+- **Development (mock):** the return page is `{frontend}/checkout/return?order=<order_number>`. Verification usually lands within a second of the webhook, at worst about a minute. The hold is 30 minutes.
+- **Still open:** a real provider's return parameters and a polling policy (VS-032, deferred; [section 7](#7-open-questions), question 3). Keep `usePaymentStatusPoller` parameterised.
+- A `cancelled` state in `PaymentVerificationState` maps from the **order** status `cancelled`, never from a payment status.
+- A cash order has nothing to verify: it is placed `in_progress` with `payment_due`.
 
 ### Domain / item: C8 — Order/order-line status enum and "available actions"
 
-**Status:** not built. PROVISIONAL. Slices: VS-023 (enums), VS-025 (customer reads), VS-029 (admin).
+**Status:** **built**: customer reads (VS-025), "I got it" and problem reports (VS-029b), admin actions (VS-029), cancel (VS-031). Contracts: [`../order-history.md`](../order-history.md), [`../fulfillment.md`](../fulfillment.md), [`../cancellation.md`](../cancellation.md).
 
-**Confirmed endpoint:** none yet. Planned: `GET /api/v1/me/orders`, `GET /api/v1/me/orders/{order_id}`.
+**Confirmed endpoint:**
+- `GET /api/v1/me/orders`, `GET /api/v1/me/orders/{order_id}`
+- `POST /api/v1/me/orders/{order_id}/cancel` ([P1-12](#domain--item-p1-12--cancellation-and-returns)), `…/confirm-receipt`, `…/report-problem`, `…/payments` ([C7](#domain--item-c7--payment-verification))
 
-**Request schema:** provisional: list filters `status`, `placed_after`, `placed_before`; sort `-placed_at`; `cursor`, `limit`.
+**Request schema:** list query `status` (one order status), `placed_after` (inclusive) and `placed_before` (exclusive), both with a timezone, `cursor`, `limit` (1-100, default 20). The sort is fixed: newest first.
 
-**Response schema:** provisional: `OrderPage`, `OrderDetail` (api-endpoints.md section 30).
+**Response schema:** `OrderPage` of `OrderSummaryRead` (`id`, `order_number`, `status`, `payment_method`, `fulfillment_method`, `payment_due`, `amount_due`, `total`, `placed_at`); `OrderDetailRead`, with `lines`, `payment`, `refunds`, `status_history` and the action flags below.
 
-**Enums/statuses/actions:** provisional; source [`../requirments/database-design.md`](../requirments/database-design.md) sections 3.6 and 3.7.
+**Enums/statuses/actions:** source [`../requirments/database-design.md`](../requirments/database-design.md) sections 3.6 and 3.7.
 - **One shared line-status enum** for both product types, field `fulfillment_status`: `"pending" | "awaiting_delivery" | "in_production" | "ready_to_ship" | "shipped" | "delivered" | "returned" | "ready_for_pickup" | "picked_up" | "cancelled" | "refunded"`.
 - Which values a line can take depends on its type and method:
   - STL: `pending`, `awaiting_delivery`, `delivered`, `refunded`, `cancelled`.
   - Physical, delivery: `pending`, `in_production`, `ready_to_ship`, `shipped`, `delivered`, `returned`, `cancelled`, `refunded`.
   - Physical, pickup: `pending`, `in_production`, `ready_for_pickup`, `picked_up`, `cancelled`, `refunded`.
-- **Customers never see `in_production`.** Customer responses show it as `pending` and leave it out of the status history.
+- **Customers never see `in_production`.** A line being printed reads `pending`, and the status history leaves those steps out, though the OpenAPI enum lists the value.
 - Order status: `"pending_payment" | "in_progress" | "completed" | "partially_refunded" | "refunded" | "cancelled"`. It is derived by the server and never set directly.
-- **Available actions, customer side: yes, as booleans on `OrderDetail`:** `can_cancel` and `payment_due`. Use them; do not re-derive them.
-- **Available actions, admin side: decided** ([ADR-025](../adr/ADR-025-frontend-contract-decisions.md), VS-029). Every line of `AdminOrderDetail` carries `available_actions`: a list of `{target_status, cancel_reasons}` the transition endpoint would accept at read time. `cancel_reasons` is empty when no reason is taken; otherwise one of the listed reasons is required. See [P1-11](#domain--item-p1-11--admin-order-fulfillment).
+- **Available actions, customer side:** booleans on `OrderDetailRead`: `can_cancel`, `can_retry_payment` and `payment_due`. Use them; do not re-derive them. They are advisory: each route re-checks under its locks.
+- **Available actions, admin side:** every line of `AdminOrderDetail` carries `available_actions`, a list of `{target_status, cancel_reasons}` the transition endpoint would accept at read time ([ADR-025](../adr/ADR-025-frontend-contract-decisions.md)). See [P1-11](#domain--item-p1-11--admin-order-fulfillment).
 
-**Errors:** provisional: `401`, `404 NOT_FOUND`.
+**Errors:** `401 AUTH_REQUIRED`; `404 NOT_FOUND` for an unknown or another customer's order (one body); `422 VALIDATION_ERROR` for a bad filter or cursor, including a date without a timezone.
 
-**Auth/CSRF/MFA:** signed-in owner.
+**Auth/CSRF/MFA:** reads: the signed-in owner, verified or not; no rate limit. The writes are in their own blocks.
 
-**Concurrency/idempotency:** not applicable (read-only).
+**Concurrency/idempotency:** the list is keyset-paged. An order placed while you page appears on a fresh first page and never repeats or shifts a row in the pages you are reading.
 
-**Example success JSON:** none; not built.
+**Example success JSON:** see `OrderPage` and `OrderDetailRead` in `openapi.json`.
 
-**Example error JSON:** none; not built.
+**Example error JSON:** see [C1](#domain--item-c1--rfc-9457-field-level-validation-error-shape).
 
-**Fixture/test account:** none possible yet.
+**Fixture/test account:** place orders as the seeded customer and move their lines as the seeded administrator ([P1-11](#domain--item-p1-11--admin-order-fulfillment)).
 
-**Authoritative source/OpenAPI file:** none yet. Plan: VS-025; ADR-024 decision 8; SRS section 20.
+**Authoritative source/OpenAPI file:** `openapi.json`; [`../order-history.md`](../order-history.md); [ADR-033](../adr/ADR-033-customer-order-read-model.md), [ADR-041](../adr/ADR-041-receipt-confirmation-and-problem-report.md), ADR-024 decision 8.
 
 **Notes:**
-- A cash order is `in_progress` from the moment it is placed, with `payment_due: true`.
+- A cash order is `in_progress` from the moment it is placed, with `payment_due: true`. While it is, show `amount_due`, not `total`: a cancelled line is no longer due.
 - `can_cancel` is true only while the order has a live (not cancelled) physical line, is paid or is cash, and every live physical line is still `pending`; lines the administrator already cancelled are ignored (ADR-033). STL lines are never cancelled.
-- Your request for a machine-readable list of legal admin transitions is **decided: yes** ([ADR-025](../adr/ADR-025-frontend-contract-decisions.md)). The admin screens should render only the listed actions and never re-encode the state machine. Customer responses do not carry the list; customers use `can_cancel`.
+- `refunds[]` is `{kind, status, amount, created_at}`, with `status` `processing` or `refunded`. Voided refunds and chargebacks are never listed.
+- **"I got it" and "Report a problem"** cover physical lines that are `delivered` or `picked_up`; with none, `409 INVALID_STATE_TRANSITION` with `reason: no_delivered_line`. Neither changes a status. A report (1-5000 characters, 5 an hour) becomes a message in the administrator's contact queue ([P2-4](#domain--item-p2-4--admin-contact-queue)).
+- The admin screens render only the listed `available_actions` and never re-encode the state machine. Customer responses do not carry the list.
 
 ### Domain / item: C11 — Per-product ownership check
 
@@ -2372,25 +2375,25 @@ There is no total: compute one for display if you need it; checkout recomputes i
 
 **Request schema:** ownership check: `product_id` query parameter, UUID, required.
 
-**Response schema:** built: `Capabilities` in `openapi.json`, the same for every visitor. Ownership check, provisional: `200 {"product_id": "<uuid>", "owned": <bool>}` (`StlOwnershipRead` in api-endpoints.md section 30).
+**Response schema:** `Capabilities` in `openapi.json`, the same for every visitor. Ownership check: `200 StlOwnershipRead` (`{"product_id": "<uuid>", "owned": <bool>}`).
 
 **Enums/statuses/actions:** not applicable.
 
-**Errors:** provisional:
+**Errors:**
 - ownership check: `401 AUTH_REQUIRED` when signed out; `422 VALIDATION_ERROR` for a missing or malformed `product_id`;
-- `409 PRODUCT_ALREADY_OWNED` from `POST /api/v1/cart/items` and from checkout.
+- `409 PRODUCT_ALREADY_OWNED` (with `product_ids`) from `POST /api/v1/cart/items`, from checkout, and from the offer routes.
 
 **Auth/CSRF/MFA:** ownership check: any signed-in user, verified or not; `GET`, so no CSRF header.
 
-**Concurrency/idempotency:** the database will allow one live STL line per customer and product, so two parallel checkouts cannot both buy the same STL.
+**Concurrency/idempotency:** the database allows one live STL line per customer and product, so two parallel checkouts cannot both buy the same STL.
 
 **Example success JSON:** see `capabilities` in the B3 example.
 
-**Example error JSON:** none; not built.
+**Example error JSON:** the RFC 9457 problem shape ([C1](#domain--item-c1--rfc-9457-field-level-validation-error-shape)).
 
 **Fixture/test account:** buy an STL with the dev seed's customer and `scripts/mock_pay.py`.
 
-**Authoritative source/OpenAPI file:** ADR-019 decision 5; ADR-022; VS-023.
+**Authoritative source/OpenAPI file:** `openapi.json` (`GET /api/v1/me/stl-ownership`); [`../checkout.md`](../checkout.md); ADR-019 decision 5, [ADR-025](../adr/ADR-025-frontend-contract-decisions.md).
 
 **Notes:**
 - **Decided** ([ADR-025](../adr/ADR-025-frontend-contract-decisions.md)): a signed-in customer asks `GET /api/v1/me/stl-ownership?product_id=` for the product on screen. Call it only when the visitor is signed in and the product is an STL; the public product response stays the same for everyone.
@@ -2400,9 +2403,9 @@ There is no total: compute one for display if you need it; checkout recomputes i
 
 ### Domain / item: C12 — Idempotency-Key mechanism
 
-**Status:** built for checkout in VS-023. VS-024 (payment retry) and VS-030 (refunds) reuse it.
+**Status:** **built** (VS-023), and used by every route below.
 
-**Confirmed endpoint:** `POST /api/v1/checkout`. Planned on `POST /api/v1/me/orders/{order_id}/payments` and `POST /api/v1/admin/orders/{order_id}/refunds`.
+**Confirmed endpoint:** customer: `POST /api/v1/checkout`, `POST /api/v1/me/offers/{offer_id}/checkout`, `POST /api/v1/me/orders/{order_id}/payments`. Administrator: `POST /api/v1/admin/orders/{order_id}/refunds`, `POST /api/v1/admin/refunds/{refund_id}/reissue`, `POST /api/v1/admin/orders/{order_id}/chargebacks`, `POST /api/v1/admin/payments/{payment_id}/record-capture`.
 
 **Request schema:** header **`Idempotency-Key`**, required, **generated by the client**: 8–255 characters of `[A-Za-z0-9._:-]` (a UUID v4 fits).
 
@@ -2413,14 +2416,14 @@ There is no total: compute one for display if you need it; checkout recomputes i
 **Errors:**
 - missing or malformed header: `422 VALIDATION_ERROR`;
 - same key, different body: `409 IDEMPOTENCY_KEY_CONFLICT`;
-- same key and body while the first request is still running (or crashed between placing the order and starting the payment): `409 IDEMPOTENCY_REQUEST_IN_PROGRESS` with `order_id`, `order_number` and `Retry-After: 2`.
+- same key and body while the first request is still running: `409 IDEMPOTENCY_REQUEST_IN_PROGRESS`. On checkout it also covers a crash between placing the order and starting the payment, and carries `order_id`, `order_number` and `Retry-After: 2`.
 
 **Auth/CSRF/MFA:** as the route.
 
 **Concurrency/idempotency:**
-- Same key and same body: the stored response (same status, same body), nothing new created. Only a `201` and the post-commit `502 PAYMENT_PROVIDER_UNAVAILABLE` are stored; any other refusal stores nothing, so a corrected retry with the same key runs fresh.
+- Same key and same body: the stored response (same status, same body), nothing new created. On checkout and payment retry only a `201` and the post-commit `502 PAYMENT_PROVIDER_UNAVAILABLE` are stored; any other refusal stores nothing, so a corrected retry with the same key runs fresh.
 - Keys are scoped per user and per operation, and live 24 hours (purged daily).
-- **A replay counts against the checkout rate limit** (30 per user per hour), like any other checkout request. Retry a timed-out request a few times with backoff, not in a tight loop.
+- **A replay counts against the route's rate limit** (checkout 30 per user per hour, payment retry 10), like any other request. Retry a timed-out request a few times with backoff, not in a tight loop.
 
 **Example success JSON:** see `CheckoutRead` in `openapi.json`.
 
@@ -2428,7 +2431,7 @@ There is no total: compute one for display if you need it; checkout recomputes i
 
 **Fixture/test account:** none.
 
-**Authoritative source/OpenAPI file:** `openapi.json` (`POST /api/v1/checkout`); [ADR-032](../adr/ADR-032-checkout-idempotency-and-payment-verification.md).
+**Authoritative source/OpenAPI file:** `openapi.json`; [`../checkout.md`](../checkout.md), [`../payment-recovery.md`](../payment-recovery.md), [`../refunds.md`](../refunds.md); [ADR-032](../adr/ADR-032-checkout-idempotency-and-payment-verification.md).
 
 **Notes:**
 - **Who generates it:** the client, once per user intent (one "Place order" press and all its automatic retries).
@@ -2438,43 +2441,50 @@ There is no total: compute one for display if you need it; checkout recomputes i
 
 ### Domain / item: P1-10 — Admin payments
 
-**Status:** not built. PROVISIONAL. Slice: VS-024. Two rules in this slice are still marked "must resolve before build".
+**Status:** **built** (VS-024; manual payment VS-050; record-capture VS-030). Contract: [`../payment-recovery.md`](../payment-recovery.md).
 
-**Confirmed endpoint:** none yet. Planned:
-- `GET /api/v1/admin/payments`
+**Confirmed endpoint:**
+- `GET /api/v1/admin/payments`: filters `status`, `provider`, `order_id`, `late_captured`, `awaiting_confirmation`, `initiated_after`, `initiated_before`, `limit`, `cursor`; oldest first.
 - `GET /api/v1/admin/payments/{payment_id}`
-- `POST /api/v1/admin/payments/{payment_id}/reconcile`
-- `POST /api/v1/admin/payments/{payment_id}/confirm`
+- `POST /api/v1/admin/payments/{payment_id}/reconcile`, `POST /api/v1/admin/payments/{payment_id}/confirm`
+- `POST /api/v1/admin/payments/{payment_id}/record-capture` (`Idempotency-Key`; [P1-13](#domain--item-p1-13--refunds))
+- `POST /api/v1/admin/orders/{order_id}/release`
 
-**Request schema:** provisional; see api-endpoints.md section 29.14 (`ManualPaymentConfirmRequest`): `provider_reference`, `verified_amount_cents`, `evidence_note`. Reconcile has no body.
+**Request schema:** `ManualPaymentConfirmRequest`: `verified_amount_cents`, `verified_currency` (`USD`), `reason` (10-1000 characters) and `provider_reference` (optional on `manual` only). `OrderReleaseRequest`: `reason` (10-1000 characters) and `events_reviewed`. Reconcile has no body.
 
-**Response schema:** provisional: `PaymentPage`, `PaymentDetail`. Field lists are not written yet.
+**Response schema:** `AdminPaymentPage` of `AdminPaymentRead`; `AdminPaymentDetail` (`payment`, `order`, `events`, `history`, `available_actions`); `202 ReconcileQueued`; `200 ManualConfirmRead` (`outcome`, `payment`); `200 OrderReleaseRead`. No response carries a redirect URL, a webhook payload or the customer's email.
 
-**Enums/statuses/actions:** provisional: payment status as in [C7](#domain--item-c7--payment-verification). Provider: `mock`, `cash`, and real providers once chosen. No "available actions" list is specified.
+**Enums/statuses/actions:** payment status as in [C7](#domain--item-c7--payment-verification). **`available_actions`** on the detail: any of `reconcile`, `confirm`, `release_order`; offer only those. `outcome`: `apply_paid`, `mark_processing`, `mark_failed`, `mark_expired`, `late_capture`, `late_capture_and_fail`, `noop`.
 
-**Errors:** provisional: `409` (wrong state), `422` (amount does not match), `502 PAYMENT_PROVIDER_ERROR`, `503 PAYMENT_VERIFICATION_UNAVAILABLE`.
+**Errors:**
+- confirm: `409 MANUAL_CONFIRMATION_NOT_ALLOWED` (a provider with a status API: reconcile instead), `422 PAYMENT_REFERENCE_REQUIRED`, `422 PAYMENT_AMOUNT_MISMATCH` with `expected_amount_cents` (nothing written), `409 PAYMENT_REFERENCE_MISMATCH`, `409 PAYMENT_ALREADY_PAID_OTHER_REFERENCE` (see the 2026-11-02 note in [C6](#domain--item-c6--checkout-contract)).
+- reconcile: `409` for a cash payment; `503 PAYMENT_VERIFICATION_UNAVAILABLE` for a provider without a status API (confirm it instead).
+- release: `409 INVALID_STATE_TRANSITION` with `reason`: `grace_not_elapsed` (with `release_available_at`), `unprocessed_events` (with `count`; resend with `events_reviewed: true`), `cash_order`.
+- any: `422 VALIDATION_ERROR`, `429 RATE_LIMITED`.
 
-**Auth/CSRF/MFA:** administrator with MFA plus `X-CSRF-Token`.
+**Auth/CSRF/MFA:** administrator with MFA; writes also need `X-CSRF-Token`. A customer gets `404` on every route.
 
-**Concurrency/idempotency:** no idempotency key on these. A duplicate success for a payment already `paid` is planned to do nothing.
+**Concurrency/idempotency:** no `Idempotency-Key` on confirm, reconcile or release; record-capture takes one. Confirming again answers `200` with `outcome: "noop"`.
 
-**Example success JSON:** none; not built.
+**Example success JSON:** see the schemas in `openapi.json`.
 
-**Example error JSON:** none; not built.
+**Example error JSON:** the RFC 9457 problem shape, with the extension members listed under Errors.
 
-**Fixture/test account:** none possible yet.
+**Fixture/test account:** the seeded administrator, and an unpaid online order placed by the seeded customer.
 
-**Authoritative source/OpenAPI file:** none yet. Plan: VS-024; api-endpoints.md section 20; ADR-024 decision 15.
+**Authoritative source/OpenAPI file:** `openapi.json`; [`../payment-recovery.md`](../payment-recovery.md); [ADR-036](../adr/ADR-036-payment-recovery.md), [ADR-049](../adr/ADR-049-manual-payment.md).
 
-**Notes:** your questions, provisionally.
-- **Reconcile blocks.** It asks the provider and returns `200 PaymentDetail` with the result. It is not queued.
-- **Manual confirm's reason field** is `evidence_note`, with `provider_reference` and `verified_amount_cents`. There is **no acknowledgment field** in the body; a "yes, I checked" tick box is a frontend gate only.
-- **Allowed source states for manual confirm are not final.** The plan says a live attempt (`pending` or `processing`) on an order that is not cancelled is applied, and an attempt that is no longer live records a "late capture" (an automatic refund obligation) instead of being refused. How a wrong amount is handled is one of the two unresolved rules. Do not hard-code a matrix.
-- Cash payments appear in the list but are never confirmed here; they are recorded by the cash handover ([P1-11](#domain--item-p1-11--admin-order-fulfillment)).
+**Notes:**
+- **Reconcile does not block.** It answers `202` once the request is recorded, and the provider is asked afterwards. Re-read the detail for the result.
+- **Production work list:** `GET /api/v1/admin/payments?awaiting_confirmation=true`, oldest first, with each order's `hold_expires_at`. The customer's phone and email are on `GET /api/v1/admin/orders/{order_id}`.
+- **Confirm needs the exact amount.** A different one is refused and nothing becomes a late capture. Record a short or over payment with record-capture instead: a late capture plus its refund obligation.
+- **Release** of a `manual` order is allowed at any time; for any other provider, from the hold deadline plus 24 hours.
+- Cash payments appear in the list but are never confirmed here; the cash handover records them ([P1-11](#domain--item-p1-11--admin-order-fulfillment)).
+- The body has no acknowledgment field: a "yes, I checked" tick box is a frontend gate only.
 
 ### Domain / item: P1-11 — Admin order fulfillment
 
-**Status:** **built** (VS-023b STL delivery, 2026-10-21; VS-029 physical lines, cash handover and cash blocks, 2026-10-23). Cancel and return actions come with VS-031 ([P1-12](#domain--item-p1-12--cancellation-and-returns)).
+**Status:** **built** (VS-023b STL delivery, 2026-10-21; VS-029 physical lines, cash handover and cash blocks, 2026-10-23). Cancel and returns: VS-031 ([P1-12](#domain--item-p1-12--cancellation-and-returns)).
 
 **Confirmed endpoints** (full reference: [`docs/fulfillment.md`](../fulfillment.md), [`docs/stl-delivery.md`](../stl-delivery.md)):
 - `GET /api/v1/admin/orders` — the queue, newest first; filters `status`, `fulfillment_method`, `payment_method`, `payment_due`, `customer_id`, `order_number`, `placed_after`, `placed_before`, `limit`, `cursor`
@@ -2485,11 +2495,11 @@ There is no total: compute one for display if you need it; checkout recomputes i
 - `GET /api/v1/admin/stl-deliveries` — the STL delivery queue
 - `GET /api/v1/admin/cash-blocks`, `POST /api/v1/admin/cash-blocks/search` (`{ "phone", "active"?, "limit"?, "cursor"? }`), `POST /api/v1/admin/cash-blocks/{block_id}/clear`
 
-**Schemas:** `AdminOrderPage`, `AdminOrderSummaryRead`, `AdminOrderDetail`, `AdminOrderLineRead`, `AvailableActionRead`, `AdminOrderPaymentRead`, `AdminHistoryRead`, `AdminOrderUpdate`, `CashHandoverRequest`, `CashPaymentBlockPage`, `CashPaymentBlockRead` in [`openapi.json`](openapi.json). Money is `PriceRead`. `OrderItemTransitionRequest` has no `cancel_reason` until VS-031.
+**Schemas:** `AdminOrderPage`, `AdminOrderSummaryRead`, `AdminOrderDetail`, `AdminOrderLineRead`, `AvailableActionRead`, `AdminOrderPaymentRead`, `AdminHistoryRead`, `AdminOrderUpdate`, `CashHandoverRequest`, `CashPaymentBlockPage`, `CashPaymentBlockRead` in [`openapi.json`](openapi.json). Money is `PriceRead`. `OrderItemTransitionRequest` takes `target_status`, `reason` and `cancel_reason`.
 
-**Enums/statuses/actions:** line status as in [C8](#domain--item-c8--orderorder-line-status-enum-and-available-actions). **Machine-readable actions: yes** ([ADR-025](../adr/ADR-025-frontend-contract-decisions.md)): every line carries `available_actions`, a list of `{target_status, cancel_reasons}`; `cancel_reasons` is always `[]` until VS-031.
+**Enums/statuses/actions:** line status as in [C8](#domain--item-c8--orderorder-line-status-enum-and-available-actions). **Machine-readable actions: yes** ([ADR-025](../adr/ADR-025-frontend-contract-decisions.md)): every line carries `available_actions`, a list of `{target_status, cancel_reasons}`; `cancel_reasons` lists the reasons a step to `cancelled` takes, `[]` when it takes none ([P1-12](#domain--item-p1-12--cancellation-and-returns)).
 
-**Errors:** `409 INVALID_STATE_TRANSITION` with `reason` (transition: `payment_required`, `cash_handover_required`, `not_a_legal_edge`, `line_closed`, `already_delivered`, `not_awaiting_delivery`, plus the line's `fulfillment_status`; handover: `not_a_cash_order`, `no_live_line`, `already_recorded`, `lines_not_ready`), `422 CASH_AMOUNT_MISMATCH` (with `amount_due`), `422 VALIDATION_ERROR`, `429 RATE_LIMITED`.
+**Errors:** `409 INVALID_STATE_TRANSITION` with `reason` (transition: `payment_required`, `cash_handover_required`, `not_a_legal_edge`, `line_closed`, `already_delivered`, `not_awaiting_delivery`, `cancel_reason_required`, `cancel_reason_not_allowed`, `refund_exceeds_available`, plus the line's `fulfillment_status`; handover: `not_a_cash_order`, `no_live_line`, `already_recorded`, `lines_not_ready`), `422 CASH_AMOUNT_MISMATCH` (with `amount_due`), `422 VALIDATION_ERROR`, `429 RATE_LIMITED`.
 
 **Auth/CSRF/MFA:** administrator with MFA; writes also need `X-CSRF-Token`. A customer gets `404` on every route.
 
@@ -2509,42 +2519,43 @@ There is no total: compute one for display if you need it; checkout recomputes i
 
 ### Domain / item: P1-12 — Cancellation and returns
 
-**Status:** not built. PROVISIONAL. Slice: VS-031.
+**Status:** **built** (VS-031). Contract: [`../cancellation.md`](../cancellation.md); decisions: [ADR-043](../adr/ADR-043-cancellation-and-returns.md).
 
-**Confirmed endpoint:** none yet. Planned, and these are the two paths you had no placeholder for:
+**Confirmed endpoint:**
 - `POST /api/v1/me/orders/{order_id}/cancel` — customer
 - `POST /api/v1/admin/orders/{order_id}/cancel` — administrator
-- returns use the line-transition endpoint of [P1-11](#domain--item-p1-11--admin-order-fulfillment)
+- one line, and returns: the transition endpoint of [P1-11](#domain--item-p1-11--admin-order-fulfillment)
 
-**Request schema:** provisional; see api-endpoints.md section 29.6: `CustomerOrderCancelRequest` (`reason`, optional), `AdminOrderCancelRequest` (`reason`, and `cancel_reason` when a line is `ready_to_ship` or `ready_for_pickup`).
+**Request schema:** `CustomerOrderCancelRequest`: `reason` (optional, at most 500 characters). `AdminOrderCancelRequest`: `reason` (1-500 characters, required) and `cancel_reason`, required when a line is `ready_to_ship` or `ready_for_pickup`. The transition takes `cancel_reason` too.
 
-**Response schema:** provisional: `200 OrderDetail` / `200 AdminOrderDetail`.
+**Response schema:** `200 OrderDetailRead` (customer) / `200 AdminOrderDetail` (administrator).
 
-**Enums/statuses/actions:** provisional: `cancel_reason`: `"refused" | "no_show" | "other"`. Customer side: `can_cancel` on `OrderDetail`.
+**Enums/statuses/actions:** `cancel_reason`: `"refused" | "no_show" | "other"`. Each line's `available_actions[].cancel_reasons` lists the ones its step to `cancelled` accepts. Customer side: `can_cancel` on `OrderDetailRead`.
 
-**Errors:** provisional:
-- `409 ORDER_NOT_CANCELLABLE` — customer cancel when it is no longer allowed. Nothing is changed.
-- `409 INVALID_STATE_TRANSITION` — admin cancel on an unpaid online order, or an illegal step.
+**Errors:**
+- customer: `409 ORDER_NOT_CANCELLABLE` (nothing changed; re-read the order), `403 CSRF_INVALID` or `EMAIL_VERIFICATION_REQUIRED`, `404` (unknown or another customer's), `422`, `429` (10 an hour).
+- administrator: `409 INVALID_STATE_TRANSITION` with `reason`: `payment_required`, `no_cancellable_line`, `cancel_reason_required`, `cancel_reason_not_allowed`, `refund_exceeds_available`; `409 ORDER_TOTAL_MISMATCH`; `422`, `429`.
 
 **Auth/CSRF/MFA:** customer: verified owner plus `X-CSRF-Token`. Admin: administrator with MFA plus `X-CSRF-Token`.
 
-**Concurrency/idempotency:** no idempotency key. The order is locked, so a cancel racing "start printing" has exactly one winner.
+**Concurrency/idempotency:** no idempotency key. The order is locked, so a cancel racing "start printing" has exactly one winner, and a repeated cancel is a `409`, never a second refund.
 
-**Example success JSON:** none; not built.
+**Example success JSON:** see `OrderDetailRead` and `AdminOrderDetail` in `openapi.json`.
 
-**Example error JSON:** none; not built.
+**Example error JSON:** the RFC 9457 problem shape, with `reason` where listed.
 
-**Fixture/test account:** none possible yet.
+**Fixture/test account:** a cash or paid order of the seeded customer whose physical lines are still `pending`.
 
-**Authoritative source/OpenAPI file:** none yet. Plan: VS-031; api-endpoints.md sections 11 and 18; ADR-024 decisions 6 and 8.
+**Authoritative source/OpenAPI file:** `openapi.json`; [`../cancellation.md`](../cancellation.md); ADR-024 decisions 6 and 8.
 
-**Notes:** your questions, provisionally.
+**Notes:**
 - **Cutoff:** a customer can cancel only while **every** live (not cancelled) physical line is still `pending`, meaning printing has not started on any of them. The moment the administrator marks one line `in_production`, self-cancel closes. The customer never sees `in_production`; they see `can_cancel` turn false.
 - **Customer cancel is all or nothing:** it cancels every live physical line of the order, never some. STL lines are never cancelled.
-- **Race lost:** `409 ORDER_NOT_CANCELLABLE`, shared problem body, nothing changed. Re-read the order.
-- **Refund after an admin cancel:** cancelling a paid line creates a pending refund of kind `cancellation` for the line's remaining balance, in the same transaction. It then sits in the refund queue ([P1-13](#domain--item-p1-13--refunds)) until the administrator pays it by hand and settles it. Cancelling an unpaid cash line creates no refund.
-- A cash order refused at the door can block that customer and phone from paying cash again. The administrator can clear the block.
-- Returns: `shipped → returned`, then re-ship, reprint, refund, or (unpaid cash line) cancel, all through the transition endpoint.
+- **Administrator's order cancel** takes every physical line in `pending`, `in_production`, `ready_to_ship` or `ready_for_pickup`. Shipped, returned and finished lines stay as they are.
+- **Refund:** cancelling a paid line creates one pending `cancellation` refund for its whole remaining balance, in the same transaction. It waits in the refund queue ([P1-13](#domain--item-p1-13--refunds)) until the administrator pays it by hand and settles it. An unpaid cash line is never refunded.
+- **Notices:** the customer gets an `order_cancelled` email and an `order.cancelled` notification; a paid cancel also sends the refund notice.
+- **Cash block:** a cash order left with no live line after a `refused` or `no_show` cancel blocks that customer and phone from paying cash. The administrator can clear the block ([P1-11](#domain--item-p1-11--admin-order-fulfillment)). A cash order the customer cancels counts toward the open cash-order limit for 24 hours.
+- **Returns:** `shipped → returned`, then re-ship (`→ shipped`), reprint (`→ in_production`), refund the remaining balance, or (unpaid cash line) cancel.
 
 ### Domain / item: P1-13 — Refunds
 
@@ -2571,8 +2582,8 @@ There is no total: compute one for display if you need it; checkout recomputes i
 **Notes:**
 - **Every refund is manual:** record it, pay it in the provider's dashboard or in cash, then settle it. Settling changes no order or payment status.
 - A refund's lines become `refunded` when the refund is created and covers them in full; a partial refund leaves a line as it is. An unfinished physical line cannot be refunded to 0: cancel it (VS-031).
-- **Void** closes a mistaken pending or owed refund unpaid, with a reason. It is refused once settled, or when one of its lines is already `refunded` or `cancelled`.
-- **Chargebacks** absorb the payment's open refunds (they are voided, and anything the bank did not cover stays owed as a new pending refund); the form's items add coverage on top and must total exactly what the 422's `chargeable_cents` says (the charge left, capped by what is still refundable). Production runs `PAYMENT_PROVIDER=manual` (ADR-049), so the administrator records a reversed transfer by hand; until a provider reports one, chargebacks otherwise happen only in dev and staging until then.
+- **Void** closes a mistaken pending or owed refund unpaid, with a reason. It is refused once settled, or when one of its lines is already `refunded` or `cancelled`. The customer gets a "refund cancelled" email and an in-app `refund.cancelled` notification, without the reason; nothing is sent when a chargeback absorbs the refund.
+- **Chargebacks** absorb the payment's open refunds (they are voided, and anything the bank did not cover stays owed as a new pending refund); the form's items add coverage on top and must total exactly what the 422's `chargeable_cents` says (the charge left, capped by what is still refundable). Production runs `PAYMENT_PROVIDER=manual` (ADR-049), which reports no chargebacks: the administrator records a reversed transfer by hand with this form.
 
 ### Domain / item: P2-1 — Captcha provider (BYI/contact)
 
@@ -2591,7 +2602,7 @@ There is no total: compute one for display if you need it; checkout recomputes i
 - `422 VALIDATION_ERROR`: the `captcha_token` field is missing, like any other required field.
 - `503 SERVICE_UNAVAILABLE` with `Retry-After: 30`: Turnstile could not be reached. Nothing was stored or sent; try again later. The backend never lets a request through without a verdict.
 
-**Auth/CSRF/MFA:** public; no cookie, no CSRF.
+**Auth/CSRF/MFA:** public. The three auth routes and Bring Your Idea ignore cookies and take no CSRF header. The contact form takes an optional session: a signed-in customer must send `X-CSRF-Token` ([P2-3](#domain--item-p2-3--contact-form)).
 
 **Concurrency/idempotency:** a token is single-use. Get a new one for every submission, including a retry after an error.
 
@@ -2710,7 +2721,11 @@ An empty text part counts as absent: an empty optional field is stored as none, 
 
 ### Domain / item: P2-3 — Contact form
 
-**Status:** **built** (VS-033).
+> **2026-11-05 ([ADR-046](../adr/ADR-046-customer-data-export.md) amendment): a signed-in customer's message is linked to their account.**
+> - **Send `X-CSRF-Token`** with the form whenever the customer is signed in, or it is refused with `403 CSRF_INVALID` and nothing is stored. A guest sends no cookie and no header, as before.
+> - **Refresh before sending.** The access cookie lasts 15 minutes. With an expired one, the message is stored as a guest's: it is not linked, so it is left out of the customer's data export. Call `POST /api/v1/auth/refresh` first if the session may have expired, then re-read `csrf_token`.
+
+**Status:** **built** (VS-033); a signed-in sender is linked since 2026-11-05.
 
 **Confirmed endpoint:** `POST /api/v1/contact-messages`
 
@@ -2767,7 +2782,7 @@ Unknown fields are refused.
 
 **Request schema:** list query parameters are `status`, `created_after` (inclusive), `created_before` (exclusive; both need a UTC offset), `email` (exact, case-insensitive), `cursor` and `limit` (1-100, default 20). `ContactMessageAdminUpdate` is `{"status": ...}`, and nothing else is accepted.
 
-**Response schema:** `ContactMessagePage` (`items`, `next_cursor`); `ContactMessageDetail`. List rows carry every field, including name, email and message.
+**Response schema:** `ContactMessagePage` (`items`, `next_cursor`); `ContactMessageDetail`. List rows carry every field, including name, email and message, plus `user_id` (the signed-in sender, else `null`) and `order_id` (set on a customer's problem report, [C8](#domain--item-c8--orderorder-line-status-enum-and-available-actions)).
 
 **Enums/statuses/actions:** `"new" | "read" | "replied" | "archived"`. The status only moves forward, and steps may be skipped: `new` can go straight to `archived`. Sending the current status changes nothing and answers `200`.
 
@@ -2822,6 +2837,7 @@ Unknown fields are refused.
 - The default order is `new` first, then `read`, `replied`, `archived`, and oldest first within each status. Use `status=new` for an inbox view.
 - Opening a message does not mark it read; send the `PATCH`.
 - The administrator replies outside the system (email or phone) and then sets the status to `replied`.
+- A deleted customer's linked messages read "Deleted customer", with an anonymised email, no phone and the message `[deleted]`. A contact form's subject is removed too; a problem report keeps its generated subject.
 
 ### Domain / item: P2-7 — Turnstile field contract
 
