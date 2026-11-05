@@ -238,7 +238,9 @@ def check_request(
     available = payment_balance(ledger)
     over_line = any(item.amount_cents > balances[item.order_item_id] for item in items)
     if over_line or sum(item.amount_cents for item in items) > available:
-        raise RefundExceedsAvailableError(lines=balances, payment_cents=available)
+        raise RefundExceedsAvailableError(
+            lines=balances, payment_cents=available, payment_id=ledger.payment.id
+        )
     by_id = {line.id: line for line in ledger.lines}
     blocked = tuple(
         item.order_item_id

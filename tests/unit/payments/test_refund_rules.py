@@ -156,6 +156,7 @@ def test_exactly_the_balance_passes_and_one_cent_more_is_refused() -> None:
     with pytest.raises(RefundExceedsAvailableError) as refused:
         check_request(book, [item(a, 601)])
     assert refused.value.lines == {a.id: 600} and refused.value.payment_cents == 600
+    assert refused.value.payment_id == book.payment.id
 
 
 def test_the_payment_balance_caps_the_sum_even_when_each_line_fits() -> None:
