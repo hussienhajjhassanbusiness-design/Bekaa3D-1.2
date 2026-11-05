@@ -191,13 +191,13 @@ async def alert_refund_integrity(
     exc: OrderTotalMismatchError | RefundExceedsAvailableError,
     order_id: UUID,
 ) -> None:
-    """A cancel's refund refused on integrity (VS-031): an error log and, for Q-2, the
-    `refund_integrity` alert, in their own transaction after the cancel rolled back."""
+    """A cancel's refund refused on integrity (VS-031): an error log and the per-payment
+    `refund_integrity` alert, in their own transaction so the cancel's rollback keeps it."""
     await logger.aerror("cancel_refund_refused", order_id=str(order_id), error=type(exc).__name__)
     async with session_factory() as session, session.begin():
         await SqlPaymentAlerts(session).raise_alert(
             AlertKind.REFUND_INTEGRITY,
-            payment_id=getattr(exc, "payment_id", None),
+            payment_id=exc.payment_id,
             order_id=order_id,
             details={"reason": "order_total_mismatch"}
             if isinstance(exc, OrderTotalMismatchError)

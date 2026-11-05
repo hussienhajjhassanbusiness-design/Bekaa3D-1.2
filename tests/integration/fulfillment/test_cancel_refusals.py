@@ -4,7 +4,6 @@ hear of it. Also the guards behind the cancel writer and BR-144's literal rule."
 
 import uuid
 from typing import Any
-from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -22,6 +21,7 @@ from app.ordering.public import (
     transition_physical_line,
 )
 from app.payments.domain.exceptions import RefundExceedsAvailableError
+from app.payments.domain.refunds import Ledger
 from tests.catalog_seed import retire_seeded_catalog_values  # noqa: F401
 from tests.integration.deep_support import (
     assert_problem,
@@ -83,6 +83,10 @@ async def _unchanged(engine: AsyncEngine, order: PhysicalOrder, before: Any) -> 
     assert await customer_cancelled_at(engine, order.order_id) is None
 
 
+def _over_the_balance(ledger: Ledger, *args: Any, **kwargs: Any) -> None:
+    raise RefundExceedsAvailableError(lines={}, payment_cents=0, payment_id=ledger.payment.id)
+
+
 @pytest.mark.parametrize("route", ["customer", "admin_order", "transition"])
 async def test_a_cancel_whose_refund_fails_q2_changes_nothing_and_alerts(
     route: str, db_engine: AsyncEngine, db_session: AsyncSession
@@ -113,11 +117,9 @@ async def test_a_refund_beyond_the_payments_balance_refuses_the_customers_cancel
     order = await seed_physical_order(
         db_session, user_id=buyer.id, payment_method="online", payment_status="paid"
     )
-
-    def over(*args: Any, **kwargs: Any) -> None:
-        raise RefundExceedsAvailableError(lines={}, payment_cents=0)
-
-    monkeypatch.setattr("app.payments.application.services.refunds.check_request", over)
+    monkeypatch.setattr(
+        "app.payments.application.services.refunds.check_request", _over_the_balance
+    )
     before = await effects(db_engine, order.order_id)
     with client_for(main_app) as client:
         login(client, buyer.email)
@@ -138,16 +140,11 @@ async def test_a_refund_beyond_the_balance_names_the_line_state_only_for_one_lin
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """VS-023b audit Q-6: the transition promises the state; a whole-order cancel has no one
-    line to name. Both still refuse everything and call the integrity alert (a spy, so this
-    test does not depend on how alerts without a payment are folded)."""
+    line to name. Both still refuse everything and raise the integrity alert."""
     order = await seed_physical_order(db_session, payment_method="online", payment_status="paid")
-
-    def over(*args: Any, **kwargs: Any) -> None:
-        raise RefundExceedsAvailableError(lines={}, payment_cents=0)
-
-    monkeypatch.setattr("app.payments.application.services.refunds.check_request", over)
-    alert = AsyncMock()
-    monkeypatch.setattr("app.fulfillment.api.admin_orders.alert_refund_integrity", alert)
+    monkeypatch.setattr(
+        "app.payments.application.services.refunds.check_request", _over_the_balance
+    )
     before = await effects(db_engine, order.order_id)
     with client_for(main_app) as client:
         await mfa_admin(client, db_session)
@@ -159,7 +156,67 @@ async def test_a_refund_beyond_the_balance_names_the_line_state_only_for_one_lin
     assert response.json()["reason"] == "refund_exceeds_available"
     assert {k: v for k, v in response.json().items() if k == "fulfillment_status"} == shown
     await _unchanged(db_engine, order, before)
-    alert.assert_awaited_once()
+    assert await _alerts(db_engine, order.order_id) == 1
+
+
+async def _short_of_its_lines(db: AsyncSession, user_id: uuid.UUID) -> PhysicalOrder:
+    """A refund row with no items: the payment's balance drops and the line's does not, so the
+    real L4 check refuses the cancel's refund while the totals (Q-2) still agree."""
+    order = await seed_physical_order(
+        db, user_id=user_id, payment_method="online", payment_status="paid"
+    )
+    await db.execute(
+        text(
+            "INSERT INTO refunds (order_id, payment_id, payment_provider, kind, amount_cents,"
+            " reason, requested_by, initiated_at)"
+            " SELECT order_id, id, provider, 'admin', 1, 'drift', :u, now() FROM payments"
+            " WHERE order_id = :o"
+        ),
+        {"o": order.order_id, "u": user_id},
+    )
+    await db.commit()
+    return order
+
+
+async def _over_balance_alerts_on_its_payment(engine: AsyncEngine, order_id: uuid.UUID) -> int:
+    return await count(
+        engine,
+        "SELECT count(*) FROM audit_logs a JOIN payments p ON a.entity_id = p.id"
+        " WHERE a.action = 'payment.alert_raised' AND a.after_data->>'kind' = 'refund_integrity'"
+        " AND a.after_data->>'reason' = 'refund_exceeds_available' AND p.order_id = :o",
+        o=order_id,
+    )
+
+
+@pytest.mark.parametrize("route", ["customer", "admin_order", "transition"])
+async def test_a_refused_refund_alerts_once_per_payment_not_once_for_all_orders(
+    route: str, db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """One order's alert never silences another's: the second order still alerts, while a
+    repeat on the first folds into its alert for the window."""
+    buyer = await create_user(db_session)
+    first = await _short_of_its_lines(db_session, buyer.id)
+    second = await _short_of_its_lines(db_session, buyer.id)
+    refused = (first, first, second)
+
+    def by_customer(order_id: uuid.UUID) -> Any:
+        return as_customer(buyer.email, lambda client: customer_cancel(client, order_id))
+
+    if route == "customer":
+        responses = [by_customer(o.order_id) for o in refused]
+        assert {r.json()["code"] for r in responses} == {"ORDER_NOT_CANCELLABLE"}
+    else:
+        with client_for(main_app) as client:
+            await mfa_admin(client, db_session)
+            if route == "admin_order":
+                responses = [admin_cancel(client, o.order_id) for o in refused]
+            else:
+                responses = [move(client, o, "cancelled") for o in refused]
+        assert {r.json()["reason"] for r in responses} == {"refund_exceeds_available"}
+    assert {r.status_code for r in responses} == {409}
+    for order_id in (first.order_id, second.order_id):
+        assert await _alerts(db_engine, order_id) == 1
+        assert await _over_balance_alerts_on_its_payment(db_engine, order_id) == 1
 
 
 async def test_the_forward_writer_never_cancels_a_line(

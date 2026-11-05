@@ -36,7 +36,9 @@ class LineRefundExceedsAvailableError(RefundExceedsAvailableError):
     """The one-line cancel's refund refusal, with the state its 409 promises to name."""
 
     def __init__(self, cause: RefundExceedsAvailableError, *, current_status: S) -> None:
-        super().__init__(lines=cause.lines, payment_cents=cause.payment_cents)
+        super().__init__(
+            lines=cause.lines, payment_cents=cause.payment_cents, payment_id=cause.payment_id
+        )
         self.current_status = current_status
 
 

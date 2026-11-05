@@ -30,7 +30,7 @@ Return edges: `shipped -> returned`, then `returned -> shipped` (re-ship) or `->
 
 ## Money
 
-- A paid line's cancel creates one pending `cancellation` refund for each cancelled line's **whole remaining balance**: its total less earlier refunds and chargebacks. None is created when that is 0. If the refund cannot be created, nothing is cancelled. A paid line is never left cancelled with part of its balance uncovered, so a chargeback for the whole payment always allocates.
+- A paid line's cancel creates one pending `cancellation` refund for each cancelled line's **whole remaining balance**: its total less earlier refunds and chargebacks. None is created when that is 0. If the refund cannot be created, nothing is cancelled and the administrators get a `refund_integrity` alert, repeated at most daily per payment. A paid line is never left cancelled with part of its balance uncovered, so a chargeback for the whole payment always allocates.
 - An unpaid cash line is never refunded.
 - A customer's refund has `requested_by` = the customer and `approved_by` NULL.
 

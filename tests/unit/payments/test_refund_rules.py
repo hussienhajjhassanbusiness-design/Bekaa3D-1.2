@@ -156,6 +156,7 @@ def test_exactly_the_balance_passes_and_one_cent_more_is_refused() -> None:
     with pytest.raises(RefundExceedsAvailableError) as refused:
         check_request(book, [item(a, 601)])
     assert refused.value.lines == {a.id: 600} and refused.value.payment_cents == 600
+    assert refused.value.payment_id == book.payment.id
 
 
 def test_the_payment_balance_caps_the_sum_even_when_each_line_fits() -> None:
@@ -248,6 +249,7 @@ def test_the_order_total_must_equal_its_lines() -> None:
     with pytest.raises(OrderTotalMismatchError) as refused:
         check_order_totals(Ledger(1001, (a,), book.payment), order_currency="USD")
     assert (refused.value.order_total_cents, refused.value.line_total_cents) == (1001, 1000)
+    assert refused.value.payment_id == book.payment.id
 
 
 def test_a_cash_order_total_must_equal_its_lines_too() -> None:

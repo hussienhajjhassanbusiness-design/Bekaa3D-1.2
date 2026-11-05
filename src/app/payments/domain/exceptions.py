@@ -74,7 +74,7 @@ class OrderTotalMismatchError(PaymentsDomainError):
         order_total_cents: int,
         line_total_cents: int,
         payment_amount_cents: int,
-        payment_id: UUID | None = None,
+        payment_id: UUID,
     ) -> None:
         super().__init__("order total does not match its lines or its payment")
         self.order_total_cents, self.line_total_cents = order_total_cents, line_total_cents
@@ -84,9 +84,9 @@ class OrderTotalMismatchError(PaymentsDomainError):
 class RefundExceedsAvailableError(PaymentsDomainError):
     """422 REFUND_EXCEEDS_AVAILABLE with the balance per line and for the payment (L4)."""
 
-    def __init__(self, *, lines: dict[UUID, int], payment_cents: int) -> None:
+    def __init__(self, *, lines: dict[UUID, int], payment_cents: int, payment_id: UUID) -> None:
         super().__init__("refund exceeds the available balance")
-        self.lines, self.payment_cents = lines, payment_cents
+        self.lines, self.payment_cents, self.payment_id = lines, payment_cents, payment_id
 
 
 class RefundRequiresCancellationError(PaymentsDomainError):

@@ -20,7 +20,7 @@ class AlertKind(StrEnum):
     PROVIDER_UNREACHABLE = "provider_unreachable"
     PROVIDER_NOT_CONFIGURED = "provider_not_configured"
     REFERENCE_UNKNOWN = "reference_unknown"
-    REFUND_INTEGRITY = "refund_integrity"  # VS-030 Q-2: order total != its lines
+    REFUND_INTEGRITY = "refund_integrity"  # Q-2, or a cancel's refund over the balance
     CHARGEBACK = "chargeback"  # VS-030: every chargeback recorded
     CHARGEBACK_EXCESS = "chargeback_excess"  # the bank took more than was left to refund
 
