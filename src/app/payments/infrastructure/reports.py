@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import any_, exists, func, literal, select, tuple_
+from sqlalchemy import Row, any_, exists, func, literal, select, tuple_
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -62,7 +62,7 @@ _PAID = select(PaymentModel.id, PaymentModel.order_id, PaymentModel.verified_at)
 )
 
 
-def _rows(found: Sequence[tuple[UUID, UUID, datetime | None]]) -> list[PaidPaymentRow]:
+def _rows(found: Sequence[Row[UUID, UUID, datetime | None]]) -> list[PaidPaymentRow]:
     # `ck_payments_paid_verified`: a payment that reached paid always has `verified_at`.
     return [PaidPaymentRow(pid, oid, at) for pid, oid, at in found if at is not None]
 
@@ -72,7 +72,7 @@ async def paid_payments_between(
 ) -> list[PaidPaymentRow]:
     """Payments that reached paid with `verified_at` in [lower, upper)."""
     query = _PAID.where(PaymentModel.verified_at >= lower, PaymentModel.verified_at < upper)
-    return _rows((await session.execute(query)).tuples().all())
+    return _rows((await session.execute(query)).all())
 
 
 async def paid_payment_page(
@@ -83,7 +83,7 @@ async def paid_payment_page(
     if before is not None:
         query = query.where(tuple_(PaymentModel.verified_at, PaymentModel.id) < tuple_(*before))
     query = query.order_by(PaymentModel.verified_at.desc(), PaymentModel.id.desc()).limit(limit)
-    return _rows((await session.execute(query)).tuples().all())
+    return _rows((await session.execute(query)).all())
 
 
 async def chargeback_excess_cents(session: AsyncSession, payment_ids: Sequence[UUID]) -> int:
@@ -116,7 +116,7 @@ async def refunded_cents_by_line(
             .group_by(ChargebackItemModel.order_item_id)
         )
         for query in (refunded, charged):
-            for line_id, cents in (await session.execute(query)).tuples():
+            for line_id, cents in await session.execute(query):
                 out[line_id] += int(cents)
     return dict(out)
 

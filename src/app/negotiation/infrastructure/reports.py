@@ -16,5 +16,5 @@ async def live_offer_counts(session: AsyncSession) -> dict[str, int]:
         .where(OfferModel.status.in_(LIVE_STATUSES))
         .group_by(OfferModel.status)
     )
-    found = {str(status): int(n) for status, n in (await session.execute(query)).tuples()}
+    found = {str(status): int(n) for status, n in await session.execute(query)}
     return {str(status): found.get(str(status), 0) for status in LIVE_STATUSES}

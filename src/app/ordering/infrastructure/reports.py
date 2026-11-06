@@ -64,7 +64,7 @@ async def report_lines(session: AsyncSession, order_ids: Sequence[UUID]) -> list
             _I.quantity,
             _I.line_total_cents,
         ).where(_any(_I.order_id, chunk))
-        for row in (await session.execute(query)).tuples():
+        for row in await session.execute(query):
             line_id, order_id, user_id, product_id, kind, name, status, quantity, total = row
             out.append(
                 ReportLineRow(
@@ -90,7 +90,7 @@ async def report_orders(
         query = select(_O.id, _O.order_number, _O.payment_method, _O.user_id).where(
             _any(_O.id, chunk)
         )
-        for order_id, number, method, user_id in (await session.execute(query)).tuples():
+        for order_id, number, method, user_id in await session.execute(query):
             out[order_id] = ReportOrderRow(number, str(method), user_id)
     return out
 
@@ -110,4 +110,4 @@ async def stl_awaiting_delivery_counts(session: AsyncSession) -> dict[UUID, int]
         )
         .group_by(_I.product_id)
     )
-    return {product_id: int(n) for product_id, n in (await session.execute(query)).tuples()}
+    return {product_id: int(n) for product_id, n in await session.execute(query)}
