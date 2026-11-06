@@ -131,7 +131,7 @@ async def _detail(
     "",
     response_model=OfferDetailRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(_offer_rate_limit), Depends(require_csrf)],
+    dependencies=[Depends(require_csrf), Depends(_offer_rate_limit)],
     summary="Open a price offer on an STL product",
     responses=_SUBMIT_RESPONSES,
 )
@@ -222,7 +222,7 @@ async def get_my_offer(
 @router.post(
     "/{offer_id}/counter",
     response_model=OfferDetailRead,
-    dependencies=[Depends(_action_rate_limit), Depends(require_csrf)],
+    dependencies=[Depends(require_csrf), Depends(_action_rate_limit)],
     summary="Counter the administrator's amount; the turn passes to them",
     responses=_ACTION_RESPONSES,
 )
@@ -252,7 +252,7 @@ async def counter_my_offer(
 @router.post(
     "/{offer_id}/accept",
     response_model=OfferDetailRead,
-    dependencies=[Depends(_action_rate_limit), Depends(require_csrf)],
+    dependencies=[Depends(require_csrf), Depends(_action_rate_limit)],
     summary="Accept the administrator's amount; opens the one-time checkout window",
     responses=_ACTION_RESPONSES,
 )
@@ -278,7 +278,7 @@ async def accept_my_offer(
 @router.post(
     "/{offer_id}/withdraw",
     response_model=OfferDetailRead,
-    dependencies=[Depends(_action_rate_limit), Depends(require_csrf)],
+    dependencies=[Depends(require_csrf), Depends(_action_rate_limit)],
     summary="Withdraw a pending offer, whoever's turn it is",
     responses=_ACTION_RESPONSES,
 )

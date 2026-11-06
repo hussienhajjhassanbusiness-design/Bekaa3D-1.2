@@ -2,6 +2,8 @@
 
 Independent, read-only audit. Auditor date: 2026-10-01. Tree audited: branch `docs/vs002-frontend-contract` @ `2cd8cda` (clean). No source, test or status file was changed. Mutation experiments ran only on a scratch copy (`git archive HEAD`) outside the repo.
 
+**Follow-up (2026-11-06, branch `fix/open-findings-batch`):** A-11 (the 409s are in OpenAPI), A-14 (names and slugs trimmed before their length; invisible-only names refused) and A-16 (the test docstring) are fixed. A re-check of the current code found A-01 to A-08, A-10, A-12, A-13, A-15 and A-17 already fixed by later work (for example migration `b7e4c1d9a2f6` for A-13). **Still open:** A-09 (the entities accept `archive()` and `apply_update()` on an archived row; only the commands refuse) and A-18 (the material and colour repositories and handlers are copies of each other). Both are design nits with no behaviour bug. Q-1 to Q-3 were answered by VS-013 and that migration.
+
 ## 1. Verdict
 
 **Yes, with minor gaps.** Every VS-010 behaviour I checked works on real PostgreSQL, and every "Done when" line has a test. The gaps are in how strong the tests are. Four realistic regressions leave the whole suite green: dropping the material/colour row lock, dropping the PATCH slug-conflict translation, dropping the archived guard on materials/colours, and dropping material/colour audit writes (A-01 to A-04). Close those before treating this suite as a regression net for VS-013, which reuses these patterns.

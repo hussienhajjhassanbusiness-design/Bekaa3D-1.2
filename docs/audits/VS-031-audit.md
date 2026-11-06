@@ -8,6 +8,8 @@ Independent, read-only audit. Auditor date: 2026-10-25. Tree audited: branch `vs
 
 **Follow-up (2026-10-25, branch `test/vs031-audit-fixes`):** A-01 to A-05 are fixed with tests only; no new test exposed an application bug. Re-applying M01, M02, M03, M39, M40 and M43 on the scratch copy now turns each red. A-06 (Nit) stays open; Q-1 is pending the owner's decision.
 
+**Follow-up (2026-11-06):** Q-1 is decided: SRS §22.1 now says a cancel takes no `Idempotency-Key` because the line state protects it; a repeat is a `409` that writes nothing, and the client treats an already-cancelled line as success (`BACKEND-RESPONSE.md` P1-12). A-06 stays as it is (a redundant pre-check that only picks the `reason`).
+
 ## 2. Repo state
 
 | Item | Finding |

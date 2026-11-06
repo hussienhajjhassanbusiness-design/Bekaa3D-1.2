@@ -13518,6 +13518,16 @@
             },
             "description": "Unknown id, or caller is not an administrator."
           },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SLUG_CONFLICT: a live category already has this slug."
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -13825,6 +13835,16 @@
               }
             },
             "description": "Unknown id, or caller is not an administrator."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SLUG_CONFLICT, or INVALID_STATE_TRANSITION (archived)."
           },
           "422": {
             "content": {
@@ -14148,6 +14168,16 @@
             },
             "description": "Unknown id, or caller is not an administrator."
           },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SLUG_CONFLICT: a live value already has this name, in any case."
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -14455,6 +14485,16 @@
               }
             },
             "description": "Unknown id, or caller is not an administrator."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SLUG_CONFLICT (the name is taken), or INVALID_STATE_TRANSITION (archived)."
           },
           "422": {
             "content": {
@@ -15698,6 +15738,16 @@
             },
             "description": "Unknown id, or caller is not an administrator."
           },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SLUG_CONFLICT: a live value already has this name, in any case."
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -16005,6 +16055,16 @@
               }
             },
             "description": "Unknown id, or caller is not an administrator."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SLUG_CONFLICT (the name is taken), or INVALID_STATE_TRANSITION (archived)."
           },
           "422": {
             "content": {

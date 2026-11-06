@@ -310,6 +310,24 @@ _ADMIN_RESPONSES: dict[int | str, dict[str, Any]] = {
     401: {"description": "No session, or MFA not completed."},
     404: {"description": "Unknown id, or caller is not an administrator."},
 }
+_CATEGORY_CREATE_RESPONSES: dict[int | str, dict[str, Any]] = {
+    **_ADMIN_RESPONSES,
+    409: {"description": "SLUG_CONFLICT: a live category already has this slug."},
+}
+_CATEGORY_UPDATE_RESPONSES: dict[int | str, dict[str, Any]] = {
+    **_ADMIN_RESPONSES,
+    409: {"description": "SLUG_CONFLICT, or INVALID_STATE_TRANSITION (archived)."},
+}
+_VALUE_CREATE_RESPONSES: dict[int | str, dict[str, Any]] = {
+    **_ADMIN_RESPONSES,
+    409: {"description": "SLUG_CONFLICT: a live value already has this name, in any case."},
+}
+_VALUE_UPDATE_RESPONSES: dict[int | str, dict[str, Any]] = {
+    **_ADMIN_RESPONSES,
+    409: {
+        "description": "SLUG_CONFLICT (the name is taken), or INVALID_STATE_TRANSITION (archived)."
+    },
+}
 _ARCHIVE_RESPONSES: dict[int | str, dict[str, Any]] = {
     **_ADMIN_RESPONSES,
     409: {"description": "CATEGORY_IN_USE or INVALID_STATE_TRANSITION (already archived)."},
@@ -340,7 +358,7 @@ async def admin_list_categories(
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_csrf)],
     summary="Create a category",
-    responses=_ADMIN_RESPONSES,
+    responses=_CATEGORY_CREATE_RESPONSES,
 )
 async def admin_create_category(
     body: CategoryCreate,
@@ -387,7 +405,7 @@ async def admin_read_category(
     response_model=CategoryDetail,
     dependencies=[Depends(require_csrf)],
     summary="Update a category",
-    responses=_ADMIN_RESPONSES,
+    responses=_CATEGORY_UPDATE_RESPONSES,
 )
 async def admin_update_category(
     category_id: UUID,
@@ -480,7 +498,7 @@ async def admin_list_materials(
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_csrf)],
     summary="Create a material",
-    responses=_ADMIN_RESPONSES,
+    responses=_VALUE_CREATE_RESPONSES,
 )
 async def admin_create_material(
     body: MaterialCreate,
@@ -524,7 +542,7 @@ async def admin_read_material(
     response_model=MaterialDetail,
     dependencies=[Depends(require_csrf)],
     summary="Update a material",
-    responses=_ADMIN_RESPONSES,
+    responses=_VALUE_UPDATE_RESPONSES,
 )
 async def admin_update_material(
     material_id: UUID,
@@ -609,7 +627,7 @@ async def admin_list_colours(
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_csrf)],
     summary="Create a colour",
-    responses=_ADMIN_RESPONSES,
+    responses=_VALUE_CREATE_RESPONSES,
 )
 async def admin_create_colour(
     body: ColourCreate,
@@ -653,7 +671,7 @@ async def admin_read_colour(
     response_model=ColourDetail,
     dependencies=[Depends(require_csrf)],
     summary="Update a colour",
-    responses=_ADMIN_RESPONSES,
+    responses=_VALUE_UPDATE_RESPONSES,
 )
 async def admin_update_colour(
     colour_id: UUID,

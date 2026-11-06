@@ -207,7 +207,7 @@ Far tighter than the customer auth limits, because a TOTP is only six digits:
 | `/auth/mfa/verify` | 10 / 15 min |
 | `/auth/mfa/recovery-codes/regenerate` | 5 / hour |
 
-Per-IP, on the shared `rate_limiter`, with the usual `RateLimit-*` headers.
+Per-IP, on the shared `rate_limiter`, with the usual `RateLimit-*` headers. On `regenerate`, CSRF is checked first, so a request without `X-CSRF-Token` is `403 CSRF_INVALID` and does not count (ADR-044 amendment, 2026-11-06); an anonymous one is `401` and does not count either.
 These are V1 design assumptions — the SRS fixes no numbers.
 
 ## Audit events

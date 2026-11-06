@@ -293,6 +293,30 @@ async def test_a_chargeback_emptying_a_delivered_line_revokes_and_an_unfinished_
     assert (await badge(db_engine, got), await badge(db_engine, never)) == (False, False)
 
 
+async def test_a_chargeback_counts_like_a_refund_partial_keeps_and_emptying_revokes(
+    db_engine: AsyncEngine, db_session: AsyncSession
+) -> None:
+    """ADR-044 amendment (VS-036 audit Q-3): BR-149's "still a paid line" never keeps a badge."""
+    order = await paid_online(db_session, stl=None)
+    line = order.physical[0]
+    review = await _review_line(db_engine, db_session, order.user_id, line)
+    payment = await payment_of(db_engine, order.order_id)
+    admin = await _as_admin(db_session)
+    try:
+        ok(chargeback(admin, order.order_id, payment, 300, [(line, 300)]), 201)
+        assert (await line_state(db_engine, line), await badge(db_engine, review)) == (
+            "delivered",
+            True,
+        )
+        ok(chargeback(admin, order.order_id, payment, 700, [(line, 700)]), 201)
+    finally:
+        _close(admin)
+    assert (await line_state(db_engine, line), await badge(db_engine, review)) == (
+        "refunded",
+        False,
+    )
+
+
 # --- WhatsApp-only (BR-103, D14) -----------------------------------------------------------
 
 

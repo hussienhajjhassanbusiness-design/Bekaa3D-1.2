@@ -100,6 +100,10 @@ convention:
 - maximum 200 characters (matching the longest existing string bound in the
   project, `pickup_hours` in the settings registry)
 
+The 200-character bound is checked **after** trimming, so a 200-character slug with spaces around it is accepted (VS-010 audit A-14).
+
+**Names** (category, material and colour) follow the same order: a control character is refused first (BUG-03), then the name is trimmed, must keep at least one visible character, and must be at most 200 characters. A name made only of invisible characters (zero-width spaces, joiners, a byte-order mark, a Hangul filler) is a `422 VALIDATION_ERROR`; a joiner inside a visible name is kept.
+
 `normalise_slug` is deliberately **not** a slugifier: it will not turn
 `"Desk Lamps"` into `"desk-lamps"`. `CategoryCreate` carries an explicit `slug`
 alongside `name`, so the administrator chooses the URL; silently rewriting it

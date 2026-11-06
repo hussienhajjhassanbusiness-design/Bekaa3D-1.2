@@ -196,7 +196,7 @@ These codes are implementation additions needed to give the frontend determinist
 | 409 | `REVIEW_ALREADY_EXISTS` | A live review (hidden or not) of this product by this user already exists; a deleted one does not count (VS-036) |
 | 409 | `OFFER_NOT_YOUR_TURN` | Offer action attempted by wrong actor |
 | 409 | `OFFER_AMOUNT_CHANGED` | Accept named an `expected_amount_cents` that is not the offer's `current_amount`; nothing was written. Body carries `current_amount` (ADR-035 d9) |
-| 422 | `REVIEW_CONTENT_REJECTED` | Review body carries a link or a listed word; body carries `reason` = `link` or `profanity` (VS-036, ADR-044) |
+| 422 | `REVIEW_CONTENT_REJECTED` | Review body carries a link (a URL, `www.`, an e-mail address, or any real domain ending from IANA's list) or a listed word; body carries `reason` = `link` or `profanity` (VS-036, ADR-044 and its 2026-11-06 amendment) |
 | 400 | `INVALID_DATE_RANGE` | An analytics range whose `to` is before `from`, spans more than 366 days, or names a year outside 2020-2100; `errors[0].loc` names the field (VS-043, ADR-045) |
 | 410 | `OFFER_EXPIRED` | Offer inactivity lifetime elapsed |
 | 410 | `RESOURCE_EXPIRED` | Single-use/time-limited resource expired |
@@ -463,7 +463,7 @@ Removed by ADR-019: there is no STL library, entitlement or download endpoint, b
 |---|---|---|---|---|---|---|
 | `GET /api/v1/me/reviews` | Authenticated | `cursor`, `limit` | `200 MyReviewPage` | 401 | Cursor; `limit` 1-50 | Own reviews including moderation state. **As built (VS-036):** live rows only (soft-deleted ones never appear), hidden ones included with `is_hidden: true`; `product_slug` is null for a deleted product; the badge is masked on WhatsApp-only products; an unverified account may read |
 | `POST /api/v1/reviews` | Verified Customer | `ReviewCreate` | `201 MyReviewRead` | 401, 403, 404, 409 `REVIEW_ALREADY_EXISTS`, 422 (`REVIEW_CONTENT_REJECTED`), 429 | — | Purchase not required; server computes Verified Purchase; updates product rating aggregate. **As built (VS-036):** 404 for a missing, deleted or non-public product; rating-only reviews allowed; 10 review writes/hour per user shared with PATCH and DELETE |
-| `PATCH /api/v1/reviews/{review_id}` | Verified Customer; owner | `ReviewUpdate` | `200 MyReviewRead` | 401, 403, 404, 422, 429 | — | Revalidates content; recalculates rating aggregate. **As built (VS-036):** 404 for someone else's, missing or deleted review (same body); at least one field; `body: null` clears the text; a hidden review stays hidden; the badge is re-read from current facts |
+| `PATCH /api/v1/reviews/{review_id}` | Verified Customer; owner | `ReviewUpdate` | `200 MyReviewRead` | 401, 403, 404, 422, 429 | — | Revalidates content; recalculates rating aggregate. **As built (VS-036):** 404 for someone else's, missing or deleted review (same body); at least one field; `body: null` clears the text; a hidden review stays hidden; the badge is re-read from current facts. Allowed after the product is hidden or archived; an edit that changes nothing answers `200` and writes nothing, so `edited` does not change (ADR-044 amendment, 2026-11-06) |
 | `DELETE /api/v1/reviews/{review_id}` | Verified Customer; owner | — | `204` | 401, 403, 404, 429 | — | Soft delete; recalculates aggregates. **As built (VS-036):** a repeat is 404; the user may then post a new review of the product |
 
 ## 14.2 Wishlist
@@ -1679,7 +1679,7 @@ created_after
 created_before
 ```
 
-Unknown filter/sort fields produce `400 VALIDATION_ERROR`; they are never interpolated directly into SQL.
+Unknown query parameters, filter or sort names included, are ignored. A known filter with an invalid value, or a `sort` value the route does not list, is `422 VALIDATION_ERROR`. No value is ever interpolated directly into SQL.
 
 ---
 

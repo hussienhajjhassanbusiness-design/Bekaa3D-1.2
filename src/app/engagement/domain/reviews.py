@@ -2,6 +2,7 @@
 
 import re
 import unicodedata
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
@@ -10,6 +11,8 @@ from typing import Final
 from uuid import UUID
 
 from app.catalog.application.ports import PurchaseMode
+from app.core.text import strip_invisible
+from app.engagement.domain.iana_tlds import IANA_TLDS
 from app.engagement.domain.profanity import PROFANITY_WORDS
 
 RATING_MIN: Final = 1
@@ -20,34 +23,8 @@ BODY_TOO_LONG_MESSAGE: Final = f"must be at most {BODY_MAX} characters"
 MODERATION_REASON_MAX: Final = 500
 MODERATION_REASON_TOO_LONG_MESSAGE: Final = f"must be at most {MODERATION_REASON_MAX} characters"
 
-LINK_TLDS: Final = (
-    "com",
-    "net",
-    "org",
-    "io",
-    "co",
-    "me",
-    "app",
-    "info",
-    "biz",
-    "lb",
-    "xyz",
-    "link",
-    "ly",
-    "gg",
-    "to",
-)
-_LINK = re.compile(
-    r"[a-z][a-z0-9+.-]*://"
-    r"|\bwww\."
-    r"|[^\s@]+@[^\s@]+\.[^\s@]+"
-    rf"|\b[a-z0-9-]+\.(?:{'|'.join(LINK_TLDS)})\b"
-)
+_LINK = re.compile(r"[a-z][a-z0-9+.-]*://|\bwww\.|[^\s@]+@[^\s@]+\.[^\s@]+")
 _WORD = re.compile(r"\w+")
-# Unicode default-ignorable characters outside category Cf, which `_visible` drops as well.
-_IGNORABLE = re.compile(
-    "[\u034f\u115f\u1160\u17b4\u17b5\u180b-\u180f\u3164\ufe00-\ufe0f\uffa0\U000e0100-\U000e01ef]"
-)
 _CENTS: Final = Decimal("0.01")
 
 
@@ -76,9 +53,27 @@ def normalise_reason(raw: str | None) -> str | None:
     return reason or None
 
 
-def _visible(text: str) -> str:
-    """Without zero-width, joiner and bidi characters, which could hide a link or a word."""
-    return _IGNORABLE.sub("", "".join(c for c in text if unicodedata.category(c) != "Cf"))
+def _label_char(c: str) -> bool:
+    """Letters, marks and digits: a regex word character has no marks, so it cuts `भारत`."""
+    return unicodedata.category(c)[0] in "LMN"
+
+
+def _labels(text: str) -> Iterator[str]:
+    """Each label after a dot that follows a label character. Only an `xn--` label holds
+    a hyphen, so `com-it` reads as `com`."""
+    for i, c in enumerate(text):
+        if c != "." or i == 0 or not (_label_char(text[i - 1]) or text[i - 1] in "-_"):
+            continue
+        end = i + 1
+        while end < len(text) and (_label_char(text[end]) or text[end] == "-"):
+            end += 1
+        label = text[i + 1 : end]
+        yield label if label.startswith("xn--") else label.split("-", 1)[0]
+
+
+def _names_a_domain(folded: str) -> bool:
+    """Any real ending (ADR-044 amendment), so `x.shop` is caught as well as `x.com`."""
+    return any(label in IANA_TLDS for label in _labels(folded))
 
 
 def content_refusal(body: str | None) -> ContentRefusal | None:
@@ -86,8 +81,8 @@ def content_refusal(body: str | None) -> ContentRefusal | None:
     casefold."""
     if body is None:
         return None
-    folded = unicodedata.normalize("NFKC", _visible(body)).casefold()
-    if _LINK.search(folded):
+    folded = unicodedata.normalize("NFKC", strip_invisible(body)).casefold()
+    if _LINK.search(folded) or _names_a_domain(folded):
         return ContentRefusal.LINK
     if any(word in PROFANITY_WORDS for word in _WORD.findall(folded)):
         return ContentRefusal.PROFANITY
