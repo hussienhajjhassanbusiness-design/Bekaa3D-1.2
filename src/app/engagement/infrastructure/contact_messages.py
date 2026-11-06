@@ -172,4 +172,4 @@ async def contact_messages_for_export(
         .where(_M.user_id == user_id)
         .order_by(_M.created_at, _M.id)
     )
-    return [ExportContactMessageRow(*row) for row in (await session.execute(stmt)).tuples()]
+    return [ExportContactMessageRow(*row) for row in await session.execute(stmt)]

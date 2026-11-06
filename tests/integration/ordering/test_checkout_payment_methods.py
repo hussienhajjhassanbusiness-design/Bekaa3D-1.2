@@ -66,7 +66,7 @@ async def line_snapshots(engine: AsyncEngine, order_id: str) -> dict[str, str | 
         " FROM order_items WHERE order_id = :o"
     )
     async with engine.connect() as conn:
-        return dict((await conn.execute(text(sql), {"o": order_id})).tuples().all())
+        return dict((await conn.execute(text(sql), {"o": order_id})).all())
 
 
 # ------------------------------------------------------------- no shared method

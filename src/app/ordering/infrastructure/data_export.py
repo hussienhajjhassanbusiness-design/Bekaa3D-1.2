@@ -88,6 +88,6 @@ async def _history(
         .order_by(_H.order_id, _H.created_at, _H.id)
     )
     grouped: dict[UUID, list[HistoryEntry]] = defaultdict(list)
-    for order_id, item_id, from_status, to_status, at in result.tuples():
+    for order_id, item_id, from_status, to_status, at in result:
         grouped[order_id].append(HistoryEntry(item_id, from_status, to_status, at))
     return grouped

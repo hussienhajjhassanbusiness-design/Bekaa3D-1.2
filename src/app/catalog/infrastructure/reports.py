@@ -51,7 +51,7 @@ async def top_rated_products(
     )
     return [
         RatedProductRow(pid, name, slug, str(kind), rating, count, visible)
-        for pid, name, slug, kind, rating, count, visible in (await session.execute(query)).tuples()
+        for pid, name, slug, kind, rating, count, visible in await session.execute(query)
     ]
 
 
@@ -64,5 +64,5 @@ async def product_labels(
     query = select(_P.id, _P.name, _P.slug, _P.deleted_at).where(_P.id.in_(list(product_ids)))
     return {
         pid: ProductLabelRow(name, slug if deleted is None else None)
-        for pid, name, slug, deleted in (await session.execute(query)).tuples()
+        for pid, name, slug, deleted in await session.execute(query)
     }

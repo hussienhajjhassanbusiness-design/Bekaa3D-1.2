@@ -30,5 +30,5 @@ async def customer_counts(
     """Registered customers now, and those of them created in [created_from, created_to)."""
     in_range = (_U.created_at >= created_from) & (_U.created_at < created_to)
     query = select(func.count(), func.count().filter(in_range)).where(*_REGISTERED)
-    registered, new = (await session.execute(query)).tuples().one()
+    registered, new = (await session.execute(query)).one()
     return CustomerCountsRow(int(registered), int(new))

@@ -124,7 +124,7 @@ ruff check . && ruff format --check . && mypy src tests && pytest
 ### Smoke checks
 
 ```
-pytest -m smoke                                 # fast must-work tests (~30s); suite list: tests/smoke/
+pytest -m smoke                                 # must-work tests (~570, about 9 min locally); list: tests/smoke/
 scripts/smoke/vs012_post_deploy.sh              # read-only post-deploy check, local docker compose stack
 READONLY_DATABASE_URL=... API_LOG_CMD="..." WORKER_LOG_CMD="..." \
   scripts/smoke/vs012_post_deploy.sh https://<site>   # the same, against the live site after every deploy
