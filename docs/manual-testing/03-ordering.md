@@ -500,7 +500,7 @@ Each block: `{id, customer_id, order_id, order_number, reason, created_at, activ
 
 | ID | Test | Expected |
 | --- | --- | --- |
-| ORD-63 | After FUL-20 (a refused cash order): `GET /admin/cash-blocks?active=true` | one block, `reason: refused` |
+| ORD-63 | After FUL-24 (a refused cash order): `GET /admin/cash-blocks?active=true` | one block, `reason: refused` |
 | ORD-64 | Search by the order's phone written differently (`+961 71 123 456`) | the same block |
 | ORD-65 | Search with `"phone": "+33612345678"` | `422 VALIDATION_ERROR` |
 | ORD-66 | The blocked customer tries a cash checkout | `422 CASH_NOT_AVAILABLE` |
