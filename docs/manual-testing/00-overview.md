@@ -143,7 +143,7 @@ sequenceDiagram
     C->>API: POST /cart/items (physical product)
     C->>API: POST /checkout {payment_method: cash, fulfillment_method: delivery, address_id, accept_cash_terms}
     API-->>C: 201, order in_progress, payment null, payment_due true
-    Note over API: no payment row, no hold; email order_cash_placed
+    Note over API: no payment row, no hold - email order_cash_placed
     A->>API: POST /admin/orders/{id}/items/{item}/transition in_production
     A->>API: ... ready_to_ship, then shipped
     Note over API: emails order_ready, order_shipped (in_production is silent)
@@ -169,15 +169,15 @@ sequenceDiagram
     C->>API: POST /cart/items {product_id: STL, quantity: 1}
     C->>API: POST /checkout {payment_method: online, contact_phone, accept_terms, accept_digital_final_sale}
     API-->>C: 201, order pending_payment, payment pending, next_step await_admin_contact
-    Note over API: notification order.awaiting_payment; admin alert manual_payment_due
+    Note over API: notification order.awaiting_payment - admin alert manual_payment_due
     A->>API: GET /admin/payments?awaiting_confirmation=true
-    Note over A,C: Admin contacts the customer by WhatsApp or phone; customer pays
+    Note over A,C: Admin contacts the customer by WhatsApp or phone - customer pays
     A->>API: POST /admin/payments/{id}/confirm {verified_amount_cents, verified_currency, reason}
     API-->>A: 200, payment paid, STL line awaiting_delivery
     A->>API: GET /admin/stl-deliveries
     Note over A: Admin emails the files from their own drive
     A->>API: POST /admin/orders/{id}/items/{item}/transition {target_status: delivered}
-    API-->>A: 200, order completed; customer gets order_stl_delivered email
+    API-->>A: 200, order completed - customer gets order_stl_delivered email
 ```
 
 If the customer never pays, `release_stale_checkouts` releases the order at
@@ -262,7 +262,7 @@ flowchart TD
     O -->|no| R{Unsettled refund?}
     R -->|yes| E4[409 reason unsettled_refund]
     R -->|no| OK[Anonymise: email becomes deleted+id@invalid, password unusable,<br/>addresses anonymised, offers withdrawn, wishlist erased,<br/>contact messages and outbox anonymised, sessions revoked]
-    OK --> G[204, cookies cleared; orders, payments, refunds and audit rows kept]
+    OK --> G[204, cookies cleared - orders, payments, refunds and audit rows kept]
 ```
 
 ### 3.8 Background worker jobs

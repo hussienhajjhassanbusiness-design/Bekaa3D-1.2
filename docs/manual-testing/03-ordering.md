@@ -105,7 +105,7 @@ Verified; CSRF; same limit. Response `204`.
 | ORD-10 | `PATCH` `moon-lamp` to `0` | `422 VALIDATION_ERROR` |
 | ORD-11 | `DELETE` a product not in the cart | `404 NOT_FOUND` |
 | ORD-12 | With `moon-lamp` and `dragon-stl` in the cart, `GET /cart` | `contains_physical` and `contains_digital` true; `payment_methods: ["online"]` |
-| ORD-13 | Admin raises `moon-lamp`'s price, then customer `GET /cart` | `price_changed: true`, `current_price` new, `snapshot_price` old |
+| ORD-13 | Admin raises `moon-lamp`'s price, then customer `GET /cart`; then the admin sets it back to 2400 | `price_changed: true`, `current_price` new, `snapshot_price` old; back to `price_changed: false` after the reset |
 | ORD-14 | Unverified account adds to the cart | `403 EMAIL_VERIFICATION_REQUIRED`; `GET /cart` still `200` |
 
 ---
@@ -220,7 +220,7 @@ Code: `ordering/api/checkout.py`, `api/checkout_schemas.py`, `api/idempotent.py`
 
 | ID | Test | Expected |
 | --- | --- | --- |
-| ORD-15 | Cart `moon-lamp` ×2; cash delivery checkout (body above), key `ord15-cash-0001` | `201`; `status: in_progress`, `payment: null`, `amount_due` 4800; cart now empty; `order_cash_placed` in `email_outbox` |
+| ORD-15 | Set the cart to exactly `moon-lamp` ×2 (`PATCH` the quantity, `DELETE` any other line); cash delivery checkout (body above), key `ord15-cash-0001` | `201`; `status: in_progress`, `payment: null`, `amount_due` 4800; cart now empty; `order_cash_placed` in `email_outbox` |
 | ORD-16 | Send ORD-15 again with the same key and body | `201` with `Idempotent-Replayed: true`; same order; no second order |
 | ORD-17 | Same key, change `customer_note` | `409 IDEMPOTENCY_KEY_CONFLICT` |
 | ORD-18 | Checkout without `Idempotency-Key` | `422 VALIDATION_ERROR` |
@@ -235,9 +235,9 @@ Code: `ordering/api/checkout.py`, `api/checkout_schemas.py`, `api/idempotent.py`
 | ORD-27 | Admin raises `moon-lamp` price; checkout | `409 CART_PRICE_CHANGED` with `price_changes`; nothing charged |
 | ORD-28 | Repeat with `accepted_price_changes: [{product_id, amount_cents: <new>, currency: "USD"}]` | `201` at the new price |
 | ORD-29 | Add `"total_cents": 1` to the body | `422 VALIDATION_ERROR` (unknown field) |
-| ORD-30 | After cancelling ORD-15 (ORD-48 style), cash order `moon-lamp` ×5 = 12 000 cents | `422 CASH_PAYMENT_LIMIT_REACHED`, `reason: order_total` |
+| ORD-30 | Cart `moon-lamp` ×5 (12 000 cents, over the 10 000 cap); cash checkout. The total cap is checked before the open-order limit, so ORD-15 being open does not matter | `422 CASH_PAYMENT_LIMIT_REACHED`, `reason: order_total` |
 | ORD-31 | Admin sets `accepting_orders` to false; checkout | `503 ORDERS_PAUSED`; set it back to true |
-| ORD-32 | Cart `name-sign` cannot be added; instead add `moon-lamp`, then admin switches it to `whatsapp_only`; checkout | `422 PRODUCT_NOT_PURCHASABLE`, `reason: whatsapp_only` |
+| ORD-32 | Cart `moon-lamp`; admin switches it to `purchase_mode: whatsapp_only`; checkout; then the admin switches it back to `both` | `422 PRODUCT_NOT_PURCHASABLE`, `reason: whatsapp_only` |
 
 **Paying a mock attempt** (ORD-21): run `scripts/mock_pay.py <payment id> paid --send-to http://api:8000`
 (overview §4.4). The webhook answers `200`, the order becomes `in_progress`, an
@@ -280,7 +280,7 @@ Code: `ordering/api/orders.py`, `api/order_schemas.py`, `application/services/or
 | ORD-37 | `GET /me/orders?status=pending_payment` | only unpaid online orders |
 | ORD-38 | `GET /me/orders?placed_after=2026-11-01` | `422 VALIDATION_ERROR` (no time and offset); `2026-11-01T00:00:00Z` works |
 | ORD-39 | `GET /me/orders/{ORD-15 id}` | `can_cancel: true`, `payment_due: true`, `payment: null`, line `pending` |
-| ORD-40 | Admin moves an ORD-15 line to `in_production`; customer reads the order | the line still reads `pending`; `can_cancel: false`; no history entry for `in_production` |
+| ORD-40 | After FUL-09 moved ORD-15's line to `in_production`, the customer reads the order | the line still reads `pending`; `can_cancel: false`; no history entry for `in_production` |
 | ORD-41 | A second customer reads ORD-15's id | `404 NOT_FOUND` |
 
 ### `GET /api/v1/me/stl-ownership?product_id=…`
@@ -291,8 +291,8 @@ Code: `ordering/api/ownership.py`, `application/services/ownership.py`.
 
 | ID | Test | Expected |
 | --- | --- | --- |
-| ORD-42 | Before paying for `dragon-stl` | `owned: false` |
-| ORD-43 | After its payment is verified (mock or manual confirm) | `owned: true`; adding it to the cart now gives `409 PRODUCT_ALREADY_OWNED` |
+| ORD-42 | `phone-stand-stl`, not bought yet | `owned: false` |
+| ORD-43 | `test-stl-a` after PAY-06 paid it | `owned: true`; adding it to the cart now gives `409 PRODUCT_ALREADY_OWNED` |
 
 ---
 
@@ -476,8 +476,8 @@ Code: `ordering/api/admin_release.py`, `payments/infrastructure/release.py`
 
 | ID | Test | Expected |
 | --- | --- | --- |
-| ORD-59 | `manual` order from ORD-34: release with a 10+ character reason | `200`; order `cancelled`; customer gets `order_checkout_expired`; `phone-stand-stl` can be checked out again |
-| ORD-60 | Release a fresh `mock` order | `409`, `reason: grace_not_elapsed`, `release_available_at` |
+| ORD-59 | The PAY-13 order (still unpaid, `manual`): release with a 10+ character reason | `200`; order `cancelled`; customer gets `order_checkout_expired` |
+| ORD-60 | Release PAY-05's order (unpaid, `mock`) within a day of placing it | `409`, `reason: grace_not_elapsed`, `release_available_at` |
 | ORD-61 | Release a cash order | `409`, `reason: cash_order` |
 | ORD-62 | Reason `"too short"` | `422 VALIDATION_ERROR` |
 

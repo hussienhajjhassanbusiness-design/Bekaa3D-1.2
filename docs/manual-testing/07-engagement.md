@@ -214,7 +214,7 @@ foreign or missing attachment is `404`. Code: `engagement/api/custom_request_adm
 | ENG-25 | Logged out: submit with the dummy captcha, one PNG | `201` `{id, created_at}`; admins get a `custom_request` notification |
 | ENG-26 | Submit with a `.txt` file as `attachments` | `422 UPLOAD_REJECTED`, `loc` `["body","attachments",0]` |
 | ENG-27 | Submit with captcha `wrong` | `400 CAPTCHA_INVALID` |
-| ENG-28 | Submit 6 times in an hour with the same email | the 6th `429 RATE_LIMITED` (clear the counters afterwards) |
+| ENG-28 | Keep submitting valid requests with the same email | `429 RATE_LIMITED` once 5 have passed the captcha in the hour from this IP or email; ENG-25 to ENG-27 may already count (clear the counters afterwards) |
 | ENG-29 | Admin lists requests | ENG-25 first with `status: new`, `attachment_count: 1` |
 | ENG-30 | Transition `new → quoted` | `409 INVALID_STATE_TRANSITION` |
 | ENG-31 | `new → contacted`, then `contacted → quoted` without an amount | `200`; then `422 VALIDATION_ERROR` |

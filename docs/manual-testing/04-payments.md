@@ -55,8 +55,8 @@ Code: `payments/api/webhooks.py`, `application/services/webhooks.py`,
 | PAY-02 | Run the script again with `paid` for the same payment | `200` again; nothing paid twice; still one `paid` payment |
 | PAY-03 | `curl -X POST http://localhost:8000/api/v1/webhooks/payments/mock -H "Content-Type: application/json" -d '{"event_id":"x","type":"payment.updated","payment_reference":"<id>"}'` (no signature) | `401 WEBHOOK_SIGNATURE_INVALID`; nothing stored |
 | PAY-04 | `POST /webhooks/payments/whish` (or `manual`) with any body | `404 NOT_FOUND` |
-| PAY-05 | A new online STL order; `mock_pay.py <id> paid --captured-amount-cents 1 --send-to …` | late capture: order stays `pending_payment`; `GET /admin/payments?late_captured=true` lists it; a `late_capture` refund appears in `GET /admin/refunds` |
-| PAY-06 | A paid STL: `GET /me/stl-ownership?product_id=…` | `owned: true`; the line is `awaiting_delivery` |
+| PAY-05 | Online checkout of `test-stl-b` (CAT-52); `mock_pay.py <id> paid --captured-amount-cents 1 --send-to …` | late capture: order stays `pending_payment`; `GET /admin/payments?late_captured=true` lists it; a `late_capture` refund appears in `GET /admin/refunds` |
+| PAY-06 | Online checkout of `test-stl-a` (CAT-52), pay it with `mock_pay.py … paid`, then `GET /me/stl-ownership?product_id=<test-stl-a>` | `owned: true`; the line is `awaiting_delivery` |
 
 ---
 
@@ -149,9 +149,9 @@ Response `201`: `{"outcome": "late_capture_and_fail", "payment": {…}, "refund_
 | PAY-08 | Confirm it with the exact total and a 10+ character reason | `200`, `outcome: apply_paid`; order `in_progress`; STL line `awaiting_delivery`; customer `order_payment_confirmed` email |
 | PAY-09 | Confirm it again with the same reference | `200`, `outcome: noop` |
 | PAY-10 | Confirm it again with another reference | `409 PAYMENT_ALREADY_PAID_OTHER_REFERENCE` |
-| PAY-11 | A new manual order: confirm with 1 cent less | `422 PAYMENT_AMOUNT_MISMATCH`, `expected_amount_cents`; nothing written |
-| PAY-12 | Same order: record-capture with the smaller amount | `201`, a `refund_id`; payment `failed`, `late_captured_at` set; the refund is in the queue |
-| PAY-13 | Record-capture with the exact amount on a fresh order | `409 INVALID_STATE_TRANSITION`, `reason: use_confirm` |
+| PAY-11 | One of ORD-35's unpaid manual orders: confirm with 1 cent less | `422 PAYMENT_AMOUNT_MISMATCH`, `expected_amount_cents`; nothing written |
+| PAY-12 | Same order: record-capture with the smaller amount (new key) | `201`, a `refund_id`; payment `failed`, `late_captured_at` set; the refund is in the queue |
+| PAY-13 | ORD-35's other unpaid manual order: record-capture with its exact amount | `409 INVALID_STATE_TRANSITION`, `reason: use_confirm` |
 | PAY-14 | (`manual`) Reconcile a manual payment | `503 PAYMENT_VERIFICATION_UNAVAILABLE` |
 | PAY-15 | (`mock`) Confirm a mock payment | `409 MANUAL_CONFIRMATION_NOT_ALLOWED` |
 | PAY-16 | (`mock`) Reconcile a mock payment | `202`, `reconcile: queued`; detail `history` shows `payment.reconcile_requested` |
@@ -254,7 +254,7 @@ Admin. `200 RefundDetail`; `404`.
 
 | ID | Test | Expected |
 | --- | --- | --- |
-| PAY-19 | Paid physical order, line `delivered` (after FUL tests): refund 1200 of a 2400 line, new key | `201`, `pending`; order `partially_refunded`; the customer's `GET /me/orders/{id}` shows `refunds[]` `processing` |
+| PAY-19 | ORD-15 after its cash handover (FUL-20; line `delivered`, 4800): refund 1200 of the line, new key | `201`, `pending`; order `partially_refunded`; the customer's `GET /me/orders/{id}` shows `refunds[]` `processing` |
 | PAY-20 | Same body, same key | `201` replayed (`Idempotent-Replayed: true`); still one refund |
 | PAY-21 | Refund 5000 on that line | `422 REFUND_EXCEEDS_AVAILABLE`, `available` |
 | PAY-22 | A paid order whose line is still `pending`: refund the whole line | `422 REFUND_REQUIRES_CANCELLATION` |
@@ -315,7 +315,7 @@ Admin. The order's chargebacks oldest first (a list), or one. `404` for unknown 
 
 | ID | Test | Expected |
 | --- | --- | --- |
-| PAY-33 | Paid (mock) STL order with one pending refund: record a chargeback for the payment's full amount with items covering the rest | `201`; the pending refund is now `voided` with `void_reason` "absorbed by chargeback …"; order `refunded` |
+| PAY-33 | ORD-21's paid (mock) order, its line delivered in FUL-17: record a refund for part of the line (leave it pending), then a chargeback for the payment's full amount with items covering the rest | `201`; the pending refund is now `voided` with `void_reason` "absorbed by chargeback …"; order `refunded` |
 | PAY-34 | Same dispute reference again (new key) | `409 CHARGEBACK_DUPLICATE` |
 | PAY-35 | Items totalling less than the chargeable amount | `422 CHARGEBACK_ALLOCATION_INVALID` with `chargeable_cents` |
 | PAY-36 | Chargeback on a cash payment | `422 CHARGEBACK_NOT_ONLINE` |

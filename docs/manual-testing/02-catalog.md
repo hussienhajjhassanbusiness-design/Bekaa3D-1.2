@@ -329,3 +329,4 @@ Response `201`:
 | CAT-49 | Upload the EICAR test string saved as a file | `422 MALWARE_DETECTED` (needs ClamAV healthy) |
 | CAT-50 | `PATCH …/{id}` with `{"alt_text": null}` | `200`, `alt_text: null` |
 | CAT-51 | Upload with `docker compose stop clamav` | `503 SERVICE_UNAVAILABLE`; restart ClamAV afterwards |
+| CAT-52 | Create two STL products for the payment tests: `{"type": "stl", "category_id": "<tools-gadgets id>", "name": "Test STL A", "slug": "test-stl-a", "price": {"amount_cents": 500, "currency": "USD"}, "is_visible": true}`, and the same with `test-stl-b` | both `201`; both on the storefront with `can_offer: true` |

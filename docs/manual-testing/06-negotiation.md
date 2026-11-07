@@ -71,15 +71,15 @@ Customer (unverified may read). List newest first; filters `status`, `product_id
 `limit` (1-100, 20); rows are `OfferSummary`. The detail is `OfferDetail`. Another customer's
 offer is `404`.
 
-### `POST /api/v1/me/offers/{offer_id}/counter` · `/accept` · `/withdraw`
+### Customer answers: counter, accept, withdraw
 
 Verified; CSRF; 60 actions per hour per user. Each returns `200 OfferDetail`.
 
 | Route | Allowed from | Body |
 | --- | --- | --- |
-| `counter` | `awaiting_customer` | `{"amount_cents": 650, "currency": "USD", "message": "Meet at 6.50?"}` (≥ minimum, ≤ list price) |
-| `accept` | `awaiting_customer` | `{"expected_amount_cents": <current_amount shown>}` |
-| `withdraw` | either awaiting state | `{"reason": "Changed my mind"}` or no body |
+| `POST /api/v1/me/offers/{offer_id}/counter` | `awaiting_customer` | `{"amount_cents": 650, "currency": "USD", "message": "Meet at 6.50?"}` (≥ minimum, ≤ list price) |
+| `POST /api/v1/me/offers/{offer_id}/accept` | `awaiting_customer` | `{"expected_amount_cents": <current_amount shown>}` |
+| `POST /api/v1/me/offers/{offer_id}/withdraw` | either awaiting state | `{"reason": "Changed my mind"}` or no body |
 
 Accept freezes `agreed_amount` = min(amount on the table, today's list price) (BR-085), sets
 `checkout_expires_at` = now + `offer_checkout_window` and clears `responds_by` (BR-087).

@@ -107,7 +107,7 @@ same transaction. `200 SettingRead`.
 | ADM-08 | Admin `PATCH /admin/settings/pickup_address` `{"value": "Bekaa3D workshop, Zahle main road"}` | `200`; the public endpoint shows it; pickup checkout now works |
 | ADM-09 | `PATCH /admin/settings/minimum_offer_percentage` `{"value": 150}` | `422 SETTING_INVALID` |
 | ADM-10 | `PATCH /admin/settings/accepting_orders` `{"value": "yes"}` | `422 SETTING_INVALID` |
-| ADM-11 | `PATCH /admin/settings/cash_max_order_total` `{"value": {"amount_cents": 20000, "currency": "USD"}}` | `200`; the public endpoint shows 20000 |
+| ADM-11 | `PATCH /admin/settings/cash_max_order_total` `{"value": {"amount_cents": 20000, "currency": "USD"}}` | `200`; the public endpoint shows 20000. **Set it back to 10000**: ORD-30 relies on the default cap |
 | ADM-12 | `PATCH /admin/settings/no_such_key` | `404 NOT_FOUND` |
 | ADM-13 | `GET /admin/settings?prefix=offer_` | only `offer_checkout_window`, `offer_rejection_cooldown`, `offer_response_window` |
 | ADM-14 | After ADM-08, `GET /admin/audit-logs?action=setting.updated` | an audit row with before and after values |
@@ -201,7 +201,7 @@ provider references.
 | --- | --- | --- |
 | ADM-27 | Seed customer with CSRF set in Authorize: `GET /me/export` | `200`; JSON with the customer's addresses, orders, reviews and offers |
 | ADM-28 | Without the CSRF header | `403 CSRF_INVALID` |
-| ADM-29 | Export 4 times | the 4th `429 RATE_LIMITED` (clear the counters afterwards) |
+| ADM-29 | Keep exporting | refused with `429 RATE_LIMITED` once 3 exports are used within 24 hours (clear the counters afterwards) |
 
 ---
 

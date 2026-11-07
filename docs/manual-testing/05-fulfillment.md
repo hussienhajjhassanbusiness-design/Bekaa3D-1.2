@@ -108,7 +108,7 @@ Response `200 AdminOrderDetail`.
 | FUL-14 | Unpaid online order line: `in_production` | `409`, `reason: payment_required` |
 | FUL-15 | A `ready_to_ship` line: `cancelled` without `cancel_reason` | `409`, `reason: cancel_reason_required` |
 | FUL-16 | A `ready_to_ship` line: `cancelled` with `cancel_reason: no_show` | `409`, `reason: cancel_reason_not_allowed` |
-| FUL-17 | Paid (mock) delivery order line through `shipped` → `delivered` | `200`; `order_delivered` email; order `completed` when every line is terminal |
+| FUL-17 | ORD-21's line (paid by PAY-01, delivery) through `in_production`, `ready_to_ship`, `shipped`, `delivered` | `200`; `order_delivered` email; order `completed` when every line is terminal |
 | FUL-18 | A paid `shipped` line: `returned`, then `shipped` again | both `200`; `order_shipped` announced again |
 
 ---
@@ -220,7 +220,7 @@ an in-app notification, and an audit row `stl.delivered`. Code:
 
 | ID | Test | Expected |
 | --- | --- | --- |
-| FUL-29 | After PAY-08 (or PAY-01 for an STL): `GET /admin/stl-deliveries` | the paid STL line is listed with the customer's email |
+| FUL-29 | After PAY-06 and PAY-08: `GET /admin/stl-deliveries` | the paid `test-stl-a` and `phone-stand-stl` lines are listed, oldest first, with the customer's email |
 | FUL-30 | Transition it to `delivered` with `reason: "Sent from Drive"` | `200`; line `delivered` with `fulfilled_at`; order `completed` (if no other live line); `order_stl_delivered` in the outbox; gone from the queue |
 | FUL-31 | Transition it to `delivered` again | `409`, `reason: already_delivered`, `fulfilled_at` |
 | FUL-32 | Transition an STL line to `cancelled` | `409`, `reason: not_a_legal_edge` |
