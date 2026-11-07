@@ -69,6 +69,8 @@ Supporting documents in [`docs/requirments/`](docs/requirments/):
 
 Architecture decisions get recorded in [`docs/adr/`](docs/adr/) as they're made.
 
+To test the API by hand, follow the [manual testing guide](docs/manual-testing/README.md). It covers every endpoint, one file per bounded context, with request examples, error codes and test cases. It also has an ordered checklist of all the tests in [`99-test-checklist.md`](docs/manual-testing/99-test-checklist.md).
+
 ## Stack
 
 | Layer | Technology |
@@ -94,6 +96,7 @@ docs/
   SRS.md               # authoritative specification
   requirments/          # supporting requirements documents
   adr/                 # architecture decision records
+  manual-testing/      # manual API testing guide and checklist
 .env.example           # required environment variables — copy to .env
 ```
 
