@@ -12,6 +12,9 @@ import type { NotificationReadDTO } from "./notificationTypes";
 // plain per-type label, never a crash, and the backend-authored string is
 // shown only as plain text (JSX text interpolation in NotificationItem),
 // never dangerouslySetInnerHTML.
+// Keyed by the current NotificationType enum (openapi.json, backend 2dfb27b).
+// Deliberately a string-keyed lookup, not an exhaustive switch: an unknown
+// future type falls back to UNKNOWN_TYPE_LABEL.
 const TYPE_LABELS: Readonly<Record<string, string>> = {
   account: "Account",
   order: "Order",
@@ -19,6 +22,7 @@ const TYPE_LABELS: Readonly<Record<string, string>> = {
   refund: "Refund",
   offer: "Offer",
   download: "Download",
+  custom_request: "Custom request",
 };
 const UNKNOWN_TYPE_LABEL = "Notification";
 

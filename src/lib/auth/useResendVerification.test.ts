@@ -31,11 +31,11 @@ describe("useResendVerification", () => {
     const { result } = renderHook(() => useResendVerification(), { wrapper: createWrapper() });
 
     await act(async () => {
-      await result.current.mutateAsync({ email: "ada@example.com" });
+      await result.current.mutateAsync({ email: "ada@example.com", captcha_token: "tok-1" });
     });
 
     expect(postSpy).toHaveBeenCalledTimes(1);
-    expect(postSpy).toHaveBeenCalledWith("/api/v1/auth/resend-verification", { email: "ada@example.com" });
+    expect(postSpy).toHaveBeenCalledWith("/api/v1/auth/resend-verification", { email: "ada@example.com", captcha_token: "tok-1" });
   });
 
   it("resolves successfully regardless of whether the mocked response implies the account exists or not", async () => {
@@ -46,12 +46,12 @@ describe("useResendVerification", () => {
 
     const { result: resultA } = renderHook(() => useResendVerification(), { wrapper: createWrapper() });
     await act(async () => {
-      await expect(resultA.current.mutateAsync({ email: "existing@example.com" })).resolves.toBeDefined();
+      await expect(resultA.current.mutateAsync({ email: "existing@example.com", captcha_token: "tok-1" })).resolves.toBeDefined();
     });
 
     const { result: resultB } = renderHook(() => useResendVerification(), { wrapper: createWrapper() });
     await act(async () => {
-      await expect(resultB.current.mutateAsync({ email: "missing@example.com" })).resolves.toBeDefined();
+      await expect(resultB.current.mutateAsync({ email: "missing@example.com", captcha_token: "tok-1" })).resolves.toBeDefined();
     });
 
     expect(postSpy).toHaveBeenCalledTimes(2);
@@ -63,7 +63,7 @@ describe("useResendVerification", () => {
     const { result } = renderHook(() => useResendVerification(), { wrapper: createWrapper() });
 
     await act(async () => {
-      await expect(result.current.mutateAsync({ email: "ada@example.com" })).rejects.toBeDefined();
+      await expect(result.current.mutateAsync({ email: "ada@example.com", captcha_token: "tok-1" })).rejects.toBeDefined();
     });
 
     // Advance past TanStack Query's default backoff window — a dropped

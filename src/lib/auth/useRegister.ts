@@ -4,6 +4,9 @@ import { apiClient } from "@/lib/api/apiClient";
 export interface RegisterRequest {
   email: string;
   password: string;
+  // Current backend contract (openapi.json RegisterRequest, backend 2dfb27b,
+  // ADR-025/026): required Cloudflare Turnstile token, max 2048 chars.
+  captcha_token: string;
 }
 
 export interface RegisterResponse {

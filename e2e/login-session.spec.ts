@@ -77,13 +77,16 @@ test.describe("Login flow (FVS-003 BATCH 4 T12)", () => {
   }) => {
     await mockSuccessfulLogin(page);
 
-    await page.goto("/login?returnTo=%2Faccount");
+    // /about rather than /account: /account is a server redirect to
+    // /account/profile (src/app/account/page.tsx), so asserting /account$
+    // raced that redirect and failed whenever the redirect won.
+    await page.goto("/login?returnTo=%2Fabout");
     await fillValidForm(page);
     await submitAndWaitForMe(page);
 
     // Navigation only happens once /me has genuinely resolved authenticated
     // — proven here against a real browser/real cookie jar, not a mock.
-    await expect(page).toHaveURL(/\/account$/, { timeout: 15_000 });
+    await expect(page).toHaveURL(/\/about$/, { timeout: 15_000 });
     expect(await page.evaluate(() => document.cookie)).toContain("csrf_token=test-value");
 
     // No login failure state is visible. Next.js's own route announcer
@@ -114,11 +117,12 @@ test.describe("returnTo security (FVS-003 BATCH 4 Section E)", () => {
   test("a safe relative returnTo (with its own query string) is honored", async ({ page }) => {
     await mockSuccessfulLogin(page);
 
-    await page.goto("/login?returnTo=%2Faccount%3Ftab%3Dorders");
+    // Non-redirecting destination (see the normal-login test above).
+    await page.goto("/login?returnTo=%2Fabout%3Ftab%3Dteam");
     await fillValidForm(page);
     await submitAndWaitForMe(page);
 
-    await expect(page).toHaveURL(/\/account\?tab=orders$/, { timeout: 15_000 });
+    await expect(page).toHaveURL(/\/about\?tab=team$/, { timeout: 15_000 });
   });
 
   test("an unsafe external returnTo never results in external navigation — falls back to /", async ({ page }) => {

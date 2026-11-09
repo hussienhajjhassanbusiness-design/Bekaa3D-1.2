@@ -96,7 +96,7 @@ describe("ProductDetailView", () => {
   it("renders a physical product's price, material, colour, and dimensions", async () => {
     vi.spyOn(apiClient, "get").mockImplementation(async (path: unknown) => {
       if ((path as string).startsWith("/api/v1/settings/public")) {
-        return { accepting_orders: true, free_shipping_threshold: null, pickup_address: null, pickup_hours: null, whatsapp_number: "+96170000000" };
+        return { accepting_orders: true, cash_payment_enabled: true, cash_max_order_total: { amount_cents: 10000, currency: "USD" }, pickup_address: null, pickup_hours: null, whatsapp_number: "+96170000000" };
       }
       return physicalDetail;
     });
@@ -115,7 +115,7 @@ describe("ProductDetailView", () => {
   it("renders an STL product's null physical-only fields as absent — no empty labels", async () => {
     vi.spyOn(apiClient, "get").mockImplementation(async (path: unknown) => {
       if ((path as string).startsWith("/api/v1/settings/public")) {
-        return { accepting_orders: true, free_shipping_threshold: null, pickup_address: null, pickup_hours: null, whatsapp_number: null };
+        return { accepting_orders: true, cash_payment_enabled: true, cash_max_order_total: { amount_cents: 10000, currency: "USD" }, pickup_address: null, pickup_hours: null, whatsapp_number: null };
       }
       return stlDetail;
     });
@@ -133,7 +133,7 @@ describe("ProductDetailView", () => {
   it("shows UnavailableNotice when the product is unavailable", async () => {
     vi.spyOn(apiClient, "get").mockImplementation(async (path: unknown) => {
       if ((path as string).startsWith("/api/v1/settings/public")) {
-        return { accepting_orders: true, free_shipping_threshold: null, pickup_address: null, pickup_hours: null, whatsapp_number: null };
+        return { accepting_orders: true, cash_payment_enabled: true, cash_max_order_total: { amount_cents: 10000, currency: "USD" }, pickup_address: null, pickup_hours: null, whatsapp_number: null };
       }
       return { ...physicalDetail, is_available: false, capabilities: { can_add_to_cart: false, can_offer: false, whatsapp_available: false } };
     });
@@ -147,7 +147,7 @@ describe("ProductDetailView", () => {
   it("shows the WhatsApp CTA when whatsapp_available is true and a number is configured", async () => {
     vi.spyOn(apiClient, "get").mockImplementation(async (path: unknown) => {
       if ((path as string).startsWith("/api/v1/settings/public")) {
-        return { accepting_orders: true, free_shipping_threshold: null, pickup_address: null, pickup_hours: null, whatsapp_number: "+96170000000" };
+        return { accepting_orders: true, cash_payment_enabled: true, cash_max_order_total: { amount_cents: 10000, currency: "USD" }, pickup_address: null, pickup_hours: null, whatsapp_number: "+96170000000" };
       }
       return physicalDetail;
     });
@@ -161,7 +161,7 @@ describe("ProductDetailView", () => {
   it("never shows the WhatsApp CTA when whatsapp_available is false", async () => {
     vi.spyOn(apiClient, "get").mockImplementation(async (path: unknown) => {
       if ((path as string).startsWith("/api/v1/settings/public")) {
-        return { accepting_orders: true, free_shipping_threshold: null, pickup_address: null, pickup_hours: null, whatsapp_number: "+96170000000" };
+        return { accepting_orders: true, cash_payment_enabled: true, cash_max_order_total: { amount_cents: 10000, currency: "USD" }, pickup_address: null, pickup_hours: null, whatsapp_number: "+96170000000" };
       }
       return stlDetail;
     });

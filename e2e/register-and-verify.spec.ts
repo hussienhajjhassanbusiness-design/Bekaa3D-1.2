@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { E2E_CAPTCHA_TOKEN, routeFakeTurnstile } from "./support/fakeTurnstile";
 
 // FVS002-T12 — one deterministic, backend-independent E2E spec proving the
 // full register -> check-email -> (simulated email link) -> verify ->
@@ -13,6 +14,7 @@ test.describe("Register-to-verify flow (FVS002-T12)", () => {
   test("register -> check-email success -> follow email link -> verify success -> /login reachable", async ({
     page,
   }) => {
+    await routeFakeTurnstile(page);
     let registerRequestBody: unknown;
     await page.route("**/api/v1/auth/register", async (route) => {
       registerRequestBody = route.request().postDataJSON();
@@ -36,7 +38,11 @@ test.describe("Register-to-verify flow (FVS002-T12)", () => {
     // 4-5: intercepted register returns 202; UI shows the enumeration-safe
     // check-email success state.
     await expect(page.getByText(/check your email/i)).toBeVisible();
-    expect(registerRequestBody).toEqual({ email: "ada@example.com", password: "correct-horse-battery" });
+    expect(registerRequestBody).toEqual({
+      email: "ada@example.com",
+      password: "correct-horse-battery",
+      captcha_token: E2E_CAPTCHA_TOKEN,
+    });
 
     // 6: simulate following a real-format frontend email link — a fresh
     // navigation to /verify-email#token=<43-char-test-token>.
@@ -64,9 +70,12 @@ test.describe("Resend flow smoke (FVS002-T12 optional)", () => {
   test("resend -> valid email -> enumeration-safe success -> cooldown visible and button disabled", async ({
     page,
   }) => {
-    await page.route("**/api/v1/auth/resend-verification", (route) =>
-      route.fulfill({ status: 202, body: JSON.stringify({ message: "sent" }) })
-    );
+    await routeFakeTurnstile(page);
+    let resendRequestBody: unknown;
+    await page.route("**/api/v1/auth/resend-verification", (route) => {
+      resendRequestBody = route.request().postDataJSON();
+      return route.fulfill({ status: 202, body: JSON.stringify({ message: "sent" }) });
+    });
 
     await page.goto("/verify-email/resend");
     await page.getByLabel(/email/i).fill("ada@example.com");
@@ -74,5 +83,6 @@ test.describe("Resend flow smoke (FVS002-T12 optional)", () => {
 
     await expect(page.getByText(/if an account exists/i)).toBeVisible();
     await expect(page.getByRole("button", { name: /resend/i })).toBeDisabled();
+    expect(resendRequestBody).toEqual({ email: "ada@example.com", captcha_token: E2E_CAPTCHA_TOKEN });
   });
 });

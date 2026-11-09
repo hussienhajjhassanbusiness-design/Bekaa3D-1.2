@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import Register from "./page";
 import { useRegister } from "@/lib/auth/useRegister";
+import { FAKE_CAPTCHA_TOKEN, fakeCaptcha, resetFakeCaptcha } from "@/test/fakeCaptchaWidget";
 
 // FVS002-T08 — mocks useRegister (the hook, not apiClient/fetch), matching
 // BackendUnreachableBanner.test.tsx's own precedent of mocking the owning
@@ -13,6 +14,11 @@ import { useRegister } from "@/lib/auth/useRegister";
 vi.mock("@/lib/auth/useRegister", () => ({
   useRegister: vi.fn(),
 }));
+
+vi.mock("@/components/forms/CaptchaWidget", async () => {
+  const fake = await import("@/test/fakeCaptchaWidget");
+  return { CaptchaWidget: fake.FakeCaptchaWidget };
+});
 
 const mockedUseRegister = vi.mocked(useRegister);
 
@@ -31,6 +37,7 @@ async function fillValidForm(user: ReturnType<typeof userEvent.setup>) {
 
 beforeEach(() => {
   mockedUseRegister.mockReset();
+  resetFakeCaptcha();
 });
 
 describe("Register (/register)", () => {
@@ -51,7 +58,7 @@ describe("Register (/register)", () => {
     expect(screen.getByRole("button", { name: /create account/i })).toHaveClass("w-full");
   });
 
-  it("submits the exact { email, password } body on a valid submit, preserving email case/content verbatim", async () => {
+  it("submits the exact { email, password, captcha_token } body on a valid submit, preserving email case/content verbatim", async () => {
     const user = userEvent.setup();
     const mutateAsync = vi.fn().mockResolvedValue({ message: "check your email" });
     mockedUseRegister.mockReturnValue({ mutateAsync } as never);
@@ -64,6 +71,7 @@ describe("Register (/register)", () => {
     await waitFor(() => expect(mutateAsync).toHaveBeenCalledWith({
       email: "Ada.Lovelace@Example.com",
       password: "correct-horse-battery",
+      captcha_token: FAKE_CAPTCHA_TOKEN,
     }));
   });
 
@@ -81,6 +89,7 @@ describe("Register (/register)", () => {
     await waitFor(() => expect(mutateAsync).toHaveBeenCalledWith({
       email: "ada@example.com",
       password: " correct horse battery ",
+      captcha_token: FAKE_CAPTCHA_TOKEN,
     }));
   });
 
@@ -140,6 +149,7 @@ describe("Register (/register)", () => {
     await waitFor(() => expect(mutateAsync).toHaveBeenCalledWith({
       email: "ada@example.com",
       password: eightSurrogatePairCharacters,
+      captcha_token: FAKE_CAPTCHA_TOKEN,
     }));
   });
 
@@ -294,5 +304,122 @@ describe("Register (/register)", () => {
 
     await screen.findByRole("alert");
     expect(screen.queryByText(/SECRET_RAW_DIAGNOSTIC_TEXT/)).toBeNull();
+  });
+
+  describe("captcha (current backend contract: captcha_token required)", () => {
+    function captchaHttpError(status: number, code?: string, extra: Record<string, unknown> = {}) {
+      return {
+        kind: "http" as const,
+        status,
+        code,
+        message: "Something went wrong. Please try again.",
+        detail: "RAW_BACKEND_DETAIL_TEXT",
+        raw: { detail: "RAW_BACKEND_DETAIL_TEXT" },
+        ...extra,
+      };
+    }
+
+    it("renders the captcha widget inside the form", () => {
+      mockedUseRegister.mockReturnValue({ mutateAsync: vi.fn() } as never);
+      render(<Register />);
+      expect(screen.getByTestId("captcha-widget")).toBeInTheDocument();
+    });
+
+    it("does not submit and asks the user to complete verification when no token was issued", async () => {
+      fakeCaptcha.autoIssue = false;
+      const user = userEvent.setup();
+      const mutateAsync = vi.fn();
+      mockedUseRegister.mockReturnValue({ mutateAsync } as never);
+      render(<Register />);
+
+      await fillValidForm(user);
+      await user.click(screen.getByRole("button", { name: /create account/i }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(/complete the verification/i);
+      expect(mutateAsync).not.toHaveBeenCalled();
+    });
+
+    it("on 400 CAPTCHA_INVALID shows safe captcha copy and resets the widget for a fresh token", async () => {
+      const user = userEvent.setup();
+      const mutateAsync = vi.fn().mockRejectedValue(captchaHttpError(400, "CAPTCHA_INVALID"));
+      mockedUseRegister.mockReturnValue({ mutateAsync } as never);
+      render(<Register />);
+
+      await fillValidForm(user);
+      await user.click(screen.getByRole("button", { name: /create account/i }));
+
+      const alert = await screen.findByRole("alert");
+      expect(alert).toHaveTextContent(/verification check expired or failed/i);
+      expect(screen.queryByText(/RAW_BACKEND_DETAIL_TEXT/)).toBeNull();
+      expect(fakeCaptcha.resetCount).toBe(1);
+    });
+
+    it("on 503 shows safe 'verification unavailable' copy", async () => {
+      const user = userEvent.setup();
+      const mutateAsync = vi
+        .fn()
+        .mockRejectedValue(captchaHttpError(503, "SERVICE_UNAVAILABLE", { retryAfterSeconds: 30 }));
+      mockedUseRegister.mockReturnValue({ mutateAsync } as never);
+      render(<Register />);
+
+      await fillValidForm(user);
+      await user.click(screen.getByRole("button", { name: /create account/i }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(/temporarily unavailable/i);
+      expect(screen.queryByText(/RAW_BACKEND_DETAIL_TEXT/)).toBeNull();
+    });
+
+    it("on 422 for body.captcha_token shows safe captcha copy, never the raw msg", async () => {
+      const user = userEvent.setup();
+      const mutateAsync = vi.fn().mockRejectedValue(
+        captchaHttpError(422, "VALIDATION_ERROR", {
+          errors: [{ loc: ["body", "captcha_token"], msg: "RAW_PYDANTIC_MSG", type: "missing" }],
+        })
+      );
+      mockedUseRegister.mockReturnValue({ mutateAsync } as never);
+      render(<Register />);
+
+      await fillValidForm(user);
+      await user.click(screen.getByRole("button", { name: /create account/i }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(/complete the verification/i);
+      expect(screen.queryByText(/RAW_PYDANTIC_MSG/)).toBeNull();
+    });
+
+    it("on another 422 shows the generic safe copy", async () => {
+      const user = userEvent.setup();
+      const mutateAsync = vi.fn().mockRejectedValue(
+        captchaHttpError(422, "VALIDATION_ERROR", {
+          errors: [{ loc: ["body", "email"], msg: "RAW_PYDANTIC_MSG", type: "value_error" }],
+        })
+      );
+      mockedUseRegister.mockReturnValue({ mutateAsync } as never);
+      render(<Register />);
+
+      await fillValidForm(user);
+      await user.click(screen.getByRole("button", { name: /create account/i }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(/something went wrong/i);
+      expect(screen.queryByText(/RAW_PYDANTIC_MSG/)).toBeNull();
+    });
+
+    it("resubmits with a fresh token after a failure (tokens are single-use)", async () => {
+      const user = userEvent.setup();
+      const mutateAsync = vi
+        .fn()
+        .mockRejectedValueOnce(captchaHttpError(400, "CAPTCHA_INVALID"))
+        .mockResolvedValueOnce({ message: "ok" });
+      mockedUseRegister.mockReturnValue({ mutateAsync } as never);
+      render(<Register />);
+
+      await fillValidForm(user);
+      await user.click(screen.getByRole("button", { name: /create account/i }));
+      await screen.findByRole("alert");
+      await user.click(screen.getByRole("button", { name: /create account/i }));
+
+      await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(2));
+      expect(mutateAsync.mock.calls[1]?.[0]).toMatchObject({ captcha_token: FAKE_CAPTCHA_TOKEN });
+      expect(fakeCaptcha.issueCount).toBeGreaterThanOrEqual(2);
+    });
   });
 });

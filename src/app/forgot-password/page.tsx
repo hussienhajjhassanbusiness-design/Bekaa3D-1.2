@@ -10,6 +10,10 @@ import { Button } from "@/components/forms/Button";
 import { Alert } from "@/components/feedback/Alert";
 import { usePasswordResetRequest } from "@/lib/auth/usePasswordResetRequest";
 import type { ApiError } from "@/lib/api/ApiError";
+import type { ReactNode } from "react";
+import { CaptchaWidget } from "@/components/forms/CaptchaWidget";
+import { useCaptchaToken } from "@/lib/captcha/useCaptchaToken";
+import { captchaFailureMessage, classifyCaptchaFailure } from "@/lib/captcha/captchaErrors";
 
 // Phase 2 auth/account batch (FVS-004, request half) — same generic,
 // non-authoritative email-shape rule already established by registration/
@@ -36,6 +40,12 @@ function isRecognizedApiError(value: unknown): value is ApiError {
 }
 
 function failureMessage(error: unknown): string {
+  // Captcha refusals (400 CAPTCHA_INVALID, 503, 422 on captcha_token) get
+  // frontend-owned copy; backend detail/msg is never shown.
+  const captchaFailure = classifyCaptchaFailure(error);
+  if (captchaFailure) {
+    return captchaFailureMessage(captchaFailure);
+  }
   if (isRecognizedApiError(error)) {
     if (error.kind === "network") {
       return NETWORK_MESSAGE;
@@ -52,7 +62,7 @@ function failureMessage(error: unknown): string {
   return GENERIC_FAILURE_MESSAGE;
 }
 
-function ForgotPasswordFields() {
+function ForgotPasswordFields({ captcha }: { captcha: ReactNode }) {
   const {
     register,
     formState: { errors },
@@ -68,6 +78,7 @@ function ForgotPasswordFields() {
         error={errors.email?.message}
         {...register("email")}
       />
+      {captcha}
       <Button type="submit" className="mt-4 w-full">
         Send reset link
       </Button>
@@ -77,6 +88,13 @@ function ForgotPasswordFields() {
 
 export default function ForgotPassword() {
   const { mutateAsync } = usePasswordResetRequest();
+  const {
+    siteKey: captchaSiteKey,
+    widgetRef: captchaWidgetRef,
+    token: captchaToken,
+    onToken: onCaptchaToken,
+    reset: resetCaptcha,
+  } = useCaptchaToken();
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -89,11 +107,17 @@ export default function ForgotPassword() {
 
   async function handleSubmit(values: ForgotPasswordFormValues) {
     setFailure(null);
+    if (!captchaToken) {
+      setFailure(captchaFailureMessage("missing"));
+      return;
+    }
     try {
-      await mutateAsync(values);
+      await mutateAsync({ ...values, captcha_token: captchaToken });
       setIsSubmitted(true);
     } catch (error) {
       setFailure(failureMessage(error));
+      // Turnstile tokens are single-use: the next attempt needs a new one.
+      resetCaptcha();
     }
   }
 
@@ -113,7 +137,9 @@ export default function ForgotPassword() {
             onSubmit={handleSubmit}
             className="mt-4 max-w-[420px]"
           >
-            <ForgotPasswordFields />
+            <ForgotPasswordFields
+              captcha={<CaptchaWidget ref={captchaWidgetRef} siteKey={captchaSiteKey} onToken={onCaptchaToken} />}
+            />
           </Form>
         </>
       )}

@@ -31,11 +31,11 @@ describe("usePasswordResetRequest", () => {
     const { result } = renderHook(() => usePasswordResetRequest(), { wrapper: createWrapper() });
 
     await act(async () => {
-      await result.current.mutateAsync({ email: "ada@example.com" });
+      await result.current.mutateAsync({ email: "ada@example.com", captcha_token: "tok-1" });
     });
 
     expect(postSpy).toHaveBeenCalledTimes(1);
-    expect(postSpy).toHaveBeenCalledWith("/api/v1/auth/password-reset/request", { email: "ada@example.com" });
+    expect(postSpy).toHaveBeenCalledWith("/api/v1/auth/password-reset/request", { email: "ada@example.com", captcha_token: "tok-1" });
   });
 
   it("resolves successfully regardless of whether the account exists (enumeration-safety at the transport boundary)", async () => {
@@ -43,7 +43,7 @@ describe("usePasswordResetRequest", () => {
     const { result } = renderHook(() => usePasswordResetRequest(), { wrapper: createWrapper() });
 
     await act(async () => {
-      await expect(result.current.mutateAsync({ email: "unknown@example.com" })).resolves.toBeDefined();
+      await expect(result.current.mutateAsync({ email: "unknown@example.com", captcha_token: "tok-1" })).resolves.toBeDefined();
     });
   });
 
@@ -52,7 +52,7 @@ describe("usePasswordResetRequest", () => {
     const { result } = renderHook(() => usePasswordResetRequest(), { wrapper: createWrapper() });
 
     await act(async () => {
-      await expect(result.current.mutateAsync({ email: "ada@example.com" })).rejects.toMatchObject({
+      await expect(result.current.mutateAsync({ email: "ada@example.com", captcha_token: "tok-1" })).rejects.toMatchObject({
         kind: "network",
       });
     });
@@ -66,7 +66,7 @@ describe("usePasswordResetRequest", () => {
     const { result } = renderHook(() => usePasswordResetRequest(), { wrapper: createWrapper() });
 
     await act(async () => {
-      await expect(result.current.mutateAsync({ email: "ada@example.com" })).rejects.toBeDefined();
+      await expect(result.current.mutateAsync({ email: "ada@example.com", captcha_token: "tok-1" })).rejects.toBeDefined();
     });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(60_000);

@@ -9,6 +9,10 @@ import { PasswordField } from "@/components/forms/PasswordField";
 import { Button } from "@/components/forms/Button";
 import { Alert } from "@/components/feedback/Alert";
 import { useRegister } from "@/lib/auth/useRegister";
+import { CaptchaWidget } from "@/components/forms/CaptchaWidget";
+import { useCaptchaToken } from "@/lib/captcha/useCaptchaToken";
+import { captchaFailureMessage, classifyCaptchaFailure } from "@/lib/captcha/captchaErrors";
+import type { ReactNode } from "react";
 
 // FVS-002-IMPLEMENTATION-PLAN.md §1 row 3 (confirmed at BATCH 2): 8-256
 // Unicode code points, counted via [...password].length (never
@@ -67,6 +71,12 @@ function isRecognizedApiError(value: unknown): value is { kind: string; status?:
 }
 
 function failureMessage(error: unknown): string {
+  // Captcha refusals (400 CAPTCHA_INVALID, 503, 422 on captcha_token) get
+  // their own frontend-owned copy; backend detail/msg is never shown.
+  const captchaFailure = classifyCaptchaFailure(error);
+  if (captchaFailure) {
+    return captchaFailureMessage(captchaFailure);
+  }
   if (isRecognizedApiError(error) && error.kind === "http" && error.status === 429) {
     return RATE_LIMIT_MESSAGE;
   }
@@ -80,7 +90,7 @@ function failureMessage(error: unknown): string {
 // ref reaches the real DOM node via React 19's ref-as-prop support (see
 // TextField.tsx/PasswordField.tsx), which is what lets Form's
 // setFocus-first-invalid-field (§9) actually work here.
-function RegisterFields() {
+function RegisterFields({ captcha }: { captcha: ReactNode }) {
   const {
     register,
     formState: { errors },
@@ -108,6 +118,7 @@ function RegisterFields() {
         error={errors.password?.message}
         {...register("password")}
       />
+      {captcha}
       <Button type="submit" className="mt-4 w-full">
         Create account
       </Button>
@@ -117,6 +128,13 @@ function RegisterFields() {
 
 export default function Register() {
   const { mutateAsync } = useRegister();
+  const {
+    siteKey: captchaSiteKey,
+    widgetRef: captchaWidgetRef,
+    token: captchaToken,
+    onToken: onCaptchaToken,
+    reset: resetCaptcha,
+  } = useCaptchaToken();
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   // FVS-002 BATCH 4 Part C — after the page meaningfully changes to the
@@ -134,11 +152,17 @@ export default function Register() {
 
   async function handleSubmit(values: RegisterFormValues) {
     setFailure(null);
+    if (!captchaToken) {
+      setFailure(captchaFailureMessage("missing"));
+      return;
+    }
     try {
-      await mutateAsync(values);
+      await mutateAsync({ ...values, captcha_token: captchaToken });
       setIsSubmitted(true);
     } catch (error) {
       setFailure(failureMessage(error));
+      // Turnstile tokens are single-use: the next attempt needs a new one.
+      resetCaptcha();
     }
   }
 
@@ -163,7 +187,9 @@ export default function Register() {
         onSubmit={handleSubmit}
         className="mt-4 max-w-[420px]"
       >
-        <RegisterFields />
+        <RegisterFields
+          captcha={<CaptchaWidget ref={captchaWidgetRef} siteKey={captchaSiteKey} onToken={onCaptchaToken} />}
+        />
       </Form>
     </>
   );

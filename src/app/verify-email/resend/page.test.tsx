@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ResendVerification from "./page";
 import { useResendVerification } from "@/lib/auth/useResendVerification";
+import { FAKE_CAPTCHA_TOKEN, fakeCaptcha, resetFakeCaptcha } from "@/test/fakeCaptchaWidget";
 
 // FVS002-T10 — mocks useResendVerification (the hook, not apiClient/fetch),
 // matching the register/verify-email page precedent. The hook's own
@@ -15,6 +16,11 @@ import { useResendVerification } from "@/lib/auth/useResendVerification";
 vi.mock("@/lib/auth/useResendVerification", () => ({
   useResendVerification: vi.fn(),
 }));
+
+vi.mock("@/components/forms/CaptchaWidget", async () => {
+  const fake = await import("@/test/fakeCaptchaWidget");
+  return { CaptchaWidget: fake.FakeCaptchaWidget };
+});
 
 const mockedUseResendVerification = vi.mocked(useResendVerification);
 
@@ -37,6 +43,7 @@ async function submitValidEmail(user: ReturnType<typeof userEvent.setup>, email 
 
 beforeEach(() => {
   mockedUseResendVerification.mockReset();
+  resetFakeCaptcha();
 });
 
 describe("ResendVerification (/verify-email/resend)", () => {
@@ -68,7 +75,7 @@ describe("ResendVerification (/verify-email/resend)", () => {
     expect(mutateAsync).not.toHaveBeenCalled();
   });
 
-  it("submits the exact { email } body on a valid submit, preserving case/content verbatim (not trimmed/rewritten)", async () => {
+  it("submits the exact { email, captcha_token } body on a valid submit, preserving case/content verbatim (not trimmed/rewritten)", async () => {
     const user = userEvent.setup();
     const mutateAsync = vi.fn().mockResolvedValue({ message: "sent" });
     mockedUseResendVerification.mockReturnValue({ mutateAsync } as never);
@@ -76,7 +83,7 @@ describe("ResendVerification (/verify-email/resend)", () => {
 
     await submitValidEmail(user, "Ada.Lovelace@Example.com");
 
-    await waitFor(() => expect(mutateAsync).toHaveBeenCalledWith({ email: "Ada.Lovelace@Example.com" }));
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledWith({ email: "Ada.Lovelace@Example.com", captcha_token: FAKE_CAPTCHA_TOKEN }));
   });
 
   it("prevents a rapid double submission from firing the mutation twice", async () => {
@@ -291,5 +298,90 @@ describe("ResendVerification (/verify-email/resend)", () => {
 
     await screen.findByText(/if an account exists/i);
     expect(screen.queryByText(/not found|not registered|already sent for this user|^email exists$/i)).toBeNull();
+  });
+
+  describe("captcha (current backend contract: captcha_token required)", () => {
+    it("renders the captcha widget", () => {
+      mockedUseResendVerification.mockReturnValue({ mutateAsync: vi.fn() } as never);
+      render(<ResendVerification />);
+      expect(screen.getByTestId("captcha-widget")).toBeInTheDocument();
+    });
+
+    it("does not submit when no captcha token was issued", async () => {
+      fakeCaptcha.autoIssue = false;
+      const user = userEvent.setup();
+      const mutateAsync = vi.fn();
+      mockedUseResendVerification.mockReturnValue({ mutateAsync } as never);
+      render(<ResendVerification />);
+
+      await submitValidEmail(user);
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(/complete the verification/i);
+      expect(mutateAsync).not.toHaveBeenCalled();
+    });
+
+    it("on 400 CAPTCHA_INVALID shows safe captcha copy and resets the widget", async () => {
+      const user = userEvent.setup();
+      const mutateAsync = vi
+        .fn()
+        .mockRejectedValue(httpError(400, { code: "CAPTCHA_INVALID", detail: "RAW_BACKEND_DETAIL_TEXT" }));
+      mockedUseResendVerification.mockReturnValue({ mutateAsync } as never);
+      render(<ResendVerification />);
+
+      await submitValidEmail(user);
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(/verification check expired or failed/i);
+      expect(screen.queryByText(/RAW_BACKEND_DETAIL_TEXT/)).toBeNull();
+      expect(fakeCaptcha.resetCount).toBe(1);
+    });
+
+    it("on 503 shows safe 'verification unavailable' copy", async () => {
+      const user = userEvent.setup();
+      const mutateAsync = vi
+        .fn()
+        .mockRejectedValue(httpError(503, { code: "SERVICE_UNAVAILABLE", retryAfterSeconds: 30, detail: "RAW_BACKEND_DETAIL_TEXT" }));
+      mockedUseResendVerification.mockReturnValue({ mutateAsync } as never);
+      render(<ResendVerification />);
+
+      await submitValidEmail(user);
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(/temporarily unavailable/i);
+      expect(screen.queryByText(/RAW_BACKEND_DETAIL_TEXT/)).toBeNull();
+    });
+
+    it("on 422 for body.captcha_token shows safe captcha copy, never the raw msg", async () => {
+      const user = userEvent.setup();
+      const mutateAsync = vi.fn().mockRejectedValue(
+        httpError(422, {
+          code: "VALIDATION_ERROR",
+          errors: [{ loc: ["body", "captcha_token"], msg: "RAW_PYDANTIC_MSG", type: "missing" }],
+        })
+      );
+      mockedUseResendVerification.mockReturnValue({ mutateAsync } as never);
+      render(<ResendVerification />);
+
+      await submitValidEmail(user);
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(/complete the verification/i);
+      expect(screen.queryByText(/RAW_PYDANTIC_MSG/)).toBeNull();
+    });
+
+    it("resubmits with a fresh token after a captcha failure", async () => {
+      const user = userEvent.setup();
+      const mutateAsync = vi
+        .fn()
+        .mockRejectedValueOnce(httpError(400, { code: "CAPTCHA_INVALID" }))
+        .mockResolvedValueOnce({ message: "ok" });
+      mockedUseResendVerification.mockReturnValue({ mutateAsync } as never);
+      render(<ResendVerification />);
+
+      await submitValidEmail(user);
+      await screen.findByRole("alert");
+      await user.click(screen.getByRole("button", { name: /resend verification email/i }));
+
+      await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(2));
+      expect(mutateAsync.mock.calls[1]?.[0]).toMatchObject({ captcha_token: FAKE_CAPTCHA_TOKEN });
+      expect(fakeCaptcha.issueCount).toBeGreaterThanOrEqual(2);
+    });
   });
 });

@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ForgotPassword from "./page";
 import { usePasswordResetRequest } from "@/lib/auth/usePasswordResetRequest";
+import { FAKE_CAPTCHA_TOKEN, fakeCaptcha, resetFakeCaptcha } from "@/test/fakeCaptchaWidget";
 
 // Phase 2 auth/account batch — mounts FVS-004's request half. Mocks the
 // hook (not apiClient/fetch), matching the register/resend-verification
@@ -12,6 +13,11 @@ import { usePasswordResetRequest } from "@/lib/auth/usePasswordResetRequest";
 vi.mock("@/lib/auth/usePasswordResetRequest", () => ({
   usePasswordResetRequest: vi.fn(),
 }));
+
+vi.mock("@/components/forms/CaptchaWidget", async () => {
+  const fake = await import("@/test/fakeCaptchaWidget");
+  return { CaptchaWidget: fake.FakeCaptchaWidget };
+});
 
 const mockedUsePasswordResetRequest = vi.mocked(usePasswordResetRequest);
 
@@ -34,6 +40,7 @@ async function submitValidEmail(user: ReturnType<typeof userEvent.setup>, email 
 
 beforeEach(() => {
   mockedUsePasswordResetRequest.mockReset();
+  resetFakeCaptcha();
 });
 
 describe("ForgotPassword (/forgot-password)", () => {
@@ -58,7 +65,7 @@ describe("ForgotPassword (/forgot-password)", () => {
     expect(mutateAsync).not.toHaveBeenCalled();
   });
 
-  it("submits the exact { email } body on a valid submit", async () => {
+  it("submits the exact { email, captcha_token } body on a valid submit", async () => {
     const user = userEvent.setup();
     const mutateAsync = vi.fn().mockResolvedValue({ message: "sent" });
     mockedUsePasswordResetRequest.mockReturnValue({ mutateAsync } as never);
@@ -66,7 +73,7 @@ describe("ForgotPassword (/forgot-password)", () => {
 
     await submitValidEmail(user, "Ada.Lovelace@Example.com");
 
-    await waitFor(() => expect(mutateAsync).toHaveBeenCalledWith({ email: "Ada.Lovelace@Example.com" }));
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledWith({ email: "Ada.Lovelace@Example.com", captcha_token: FAKE_CAPTCHA_TOKEN }));
   });
 
   it("shows identical success copy whether the mocked account exists or not (enumeration safety)", async () => {
@@ -161,5 +168,90 @@ describe("ForgotPassword (/forgot-password)", () => {
     render(<ForgotPassword />);
 
     expect(screen.getByRole("link", { name: /log in/i })).toHaveAttribute("href", "/login");
+  });
+
+  describe("captcha (current backend contract: captcha_token required)", () => {
+    it("renders the captcha widget", () => {
+      mockedUsePasswordResetRequest.mockReturnValue({ mutateAsync: vi.fn() } as never);
+      render(<ForgotPassword />);
+      expect(screen.getByTestId("captcha-widget")).toBeInTheDocument();
+    });
+
+    it("does not submit when no captcha token was issued", async () => {
+      fakeCaptcha.autoIssue = false;
+      const user = userEvent.setup();
+      const mutateAsync = vi.fn();
+      mockedUsePasswordResetRequest.mockReturnValue({ mutateAsync } as never);
+      render(<ForgotPassword />);
+
+      await submitValidEmail(user);
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(/complete the verification/i);
+      expect(mutateAsync).not.toHaveBeenCalled();
+    });
+
+    it("on 400 CAPTCHA_INVALID shows safe captcha copy and resets the widget", async () => {
+      const user = userEvent.setup();
+      const mutateAsync = vi
+        .fn()
+        .mockRejectedValue(httpError(400, { code: "CAPTCHA_INVALID", detail: "RAW_BACKEND_DETAIL_TEXT" }));
+      mockedUsePasswordResetRequest.mockReturnValue({ mutateAsync } as never);
+      render(<ForgotPassword />);
+
+      await submitValidEmail(user);
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(/verification check expired or failed/i);
+      expect(screen.queryByText(/RAW_BACKEND_DETAIL_TEXT/)).toBeNull();
+      expect(fakeCaptcha.resetCount).toBe(1);
+    });
+
+    it("on 503 shows safe 'verification unavailable' copy", async () => {
+      const user = userEvent.setup();
+      const mutateAsync = vi
+        .fn()
+        .mockRejectedValue(httpError(503, { code: "SERVICE_UNAVAILABLE", retryAfterSeconds: 30, detail: "RAW_BACKEND_DETAIL_TEXT" }));
+      mockedUsePasswordResetRequest.mockReturnValue({ mutateAsync } as never);
+      render(<ForgotPassword />);
+
+      await submitValidEmail(user);
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(/temporarily unavailable/i);
+      expect(screen.queryByText(/RAW_BACKEND_DETAIL_TEXT/)).toBeNull();
+    });
+
+    it("on 422 for body.captcha_token shows safe captcha copy, never the raw msg", async () => {
+      const user = userEvent.setup();
+      const mutateAsync = vi.fn().mockRejectedValue(
+        httpError(422, {
+          code: "VALIDATION_ERROR",
+          errors: [{ loc: ["body", "captcha_token"], msg: "RAW_PYDANTIC_MSG", type: "missing" }],
+        })
+      );
+      mockedUsePasswordResetRequest.mockReturnValue({ mutateAsync } as never);
+      render(<ForgotPassword />);
+
+      await submitValidEmail(user);
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(/complete the verification/i);
+      expect(screen.queryByText(/RAW_PYDANTIC_MSG/)).toBeNull();
+    });
+
+    it("resubmits with a fresh token after a captcha failure", async () => {
+      const user = userEvent.setup();
+      const mutateAsync = vi
+        .fn()
+        .mockRejectedValueOnce(httpError(400, { code: "CAPTCHA_INVALID" }))
+        .mockResolvedValueOnce({ message: "ok" });
+      mockedUsePasswordResetRequest.mockReturnValue({ mutateAsync } as never);
+      render(<ForgotPassword />);
+
+      await submitValidEmail(user);
+      await screen.findByRole("alert");
+      await user.click(screen.getByRole("button", { name: /send reset link/i }));
+
+      await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(2));
+      expect(mutateAsync.mock.calls[1]?.[0]).toMatchObject({ captcha_token: FAKE_CAPTCHA_TOKEN });
+      expect(fakeCaptcha.issueCount).toBeGreaterThanOrEqual(2);
+    });
   });
 });

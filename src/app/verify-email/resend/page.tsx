@@ -10,6 +10,10 @@ import { Alert } from "@/components/feedback/Alert";
 import { useResendVerification } from "@/lib/auth/useResendVerification";
 import { useCooldown } from "@/lib/auth/useCooldown";
 import type { ApiError } from "@/lib/api/ApiError";
+import { CaptchaWidget } from "@/components/forms/CaptchaWidget";
+import { useCaptchaToken } from "@/lib/captcha/useCaptchaToken";
+import { captchaFailureMessage, classifyCaptchaFailure } from "@/lib/captcha/captchaErrors";
+import type { ReactNode } from "react";
 
 // FVS-002-IMPLEMENTATION-PLAN.md §1 row 14 (confirmed at BATCH 2): a fixed
 // 120-second cooldown starts after EVERY successful 202 — never inferred
@@ -68,7 +72,7 @@ function formatLocalTime(timestampMs: number): string {
 
 type Failure = "network" | "timeout" | "failed" | "rateLimitedNoDuration" | null;
 
-function ResendFields({ disabled }: { disabled: boolean }) {
+function ResendFields({ disabled, captcha }: { disabled: boolean; captcha: ReactNode }) {
   const {
     register,
     formState: { errors },
@@ -87,6 +91,7 @@ function ResendFields({ disabled }: { disabled: boolean }) {
         error={errors.email?.message}
         {...register("email")}
       />
+      {captcha}
       <Button type="submit" className="mt-4 w-full" disabled={disabled}>
         Resend verification email
       </Button>
@@ -96,6 +101,16 @@ function ResendFields({ disabled }: { disabled: boolean }) {
 
 export default function ResendVerification() {
   const { mutateAsync } = useResendVerification();
+  const {
+    siteKey: captchaSiteKey,
+    widgetRef: captchaWidgetRef,
+    token: captchaToken,
+    onToken: onCaptchaToken,
+    reset: resetCaptcha,
+  } = useCaptchaToken();
+  // Frontend-owned captcha copy (400 CAPTCHA_INVALID, 503, 422 on
+  // captcha_token, or no token yet). Never backend detail/msg.
+  const [captchaFailure, setCaptchaFailure] = useState<string | null>(null);
   const [deadline, setDeadline] = useState<number | undefined>(undefined);
   const [deadlineReason, setDeadlineReason] = useState<"success" | "rateLimit" | undefined>(undefined);
   const [failure, setFailure] = useState<Failure>(null);
@@ -146,12 +161,22 @@ export default function ResendVerification() {
 
   async function handleSubmit(values: ResendFormValues) {
     setFailure(null);
+    setCaptchaFailure(null);
+    if (!captchaToken) {
+      setCaptchaFailure(captchaFailureMessage("missing"));
+      return;
+    }
     try {
-      await mutateAsync(values);
+      await mutateAsync({ ...values, captcha_token: captchaToken });
       setShowSuccess(true);
       setDeadlineReason("success");
       setDeadline(Date.now() + SUCCESS_COOLDOWN_MS);
     } catch (error) {
+      const captchaKind = classifyCaptchaFailure(error);
+      if (captchaKind) {
+        setCaptchaFailure(captchaFailureMessage(captchaKind));
+        return;
+      }
       if (isRecognizedApiError(error) && error.kind === "http" && error.status === 429) {
         if (error.retryAfterSeconds !== undefined) {
           setDeadlineReason("rateLimit");
@@ -174,6 +199,10 @@ export default function ResendVerification() {
         return;
       }
       setFailure("failed");
+    } finally {
+      // Turnstile tokens are single-use: every attempt (this page stays on
+      // the form after success) needs a fresh one.
+      resetCaptcha();
     }
   }
 
@@ -189,6 +218,7 @@ export default function ResendVerification() {
       {failure === "network" && <Alert variant="error" message={NETWORK_MESSAGE} />}
       {failure === "timeout" && <Alert variant="error" message={TIMEOUT_MESSAGE} />}
       {failure === "failed" && <Alert variant="error" message={GENERIC_FAILURE_MESSAGE} />}
+      {captchaFailure && <Alert variant="error" message={captchaFailure} />}
       {failure === "rateLimitedNoDuration" && <Alert variant="warning" message={RATE_LIMIT_MESSAGE_GENERIC} />}
       {deadlineReason === "rateLimit" && isActive && rateLimitWaitDescription && (
         <Alert variant="warning" message={`Too many attempts. Please wait about ${rateLimitWaitDescription} and try again.`} />
@@ -201,7 +231,10 @@ export default function ResendVerification() {
       </div>
 
       <Form schema={resendSchema} defaultValues={{ email: "" }} onSubmit={handleSubmit} className="mt-4 max-w-[420px]">
-        <ResendFields disabled={isActive} />
+        <ResendFields
+          disabled={isActive}
+          captcha={<CaptchaWidget ref={captchaWidgetRef} siteKey={captchaSiteKey} onToken={onCaptchaToken} />}
+        />
       </Form>
 
       {isActive && (

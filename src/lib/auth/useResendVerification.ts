@@ -3,6 +3,9 @@ import { apiClient } from "@/lib/api/apiClient";
 
 export interface ResendVerificationRequest {
   email: string;
+  // Current backend contract (openapi.json ResendVerificationRequest, backend
+  // 2dfb27b): required Cloudflare Turnstile token.
+  captcha_token: string;
 }
 
 export interface ResendVerificationResponse {

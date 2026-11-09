@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { E2E_CAPTCHA_TOKEN, routeFakeTurnstile } from "./support/fakeTurnstile";
 
 // REAL CUSTOMER / AUTH / ACCOUNT INTEGRATION — PHASE 2. Three deterministic,
 // backend-independent E2E specs covering the newly mounted routes
@@ -11,6 +12,7 @@ const TEST_TOKEN = "a".repeat(40);
 
 test.describe("Forgot password (Phase 2 / FVS-004 request half)", () => {
   test("request -> enumeration-safe success, identical copy regardless of account existence", async ({ page }) => {
+    await routeFakeTurnstile(page);
     let requestBody: unknown;
     await page.route("**/api/v1/auth/password-reset/request", async (route) => {
       requestBody = route.request().postDataJSON();
@@ -25,7 +27,7 @@ test.describe("Forgot password (Phase 2 / FVS-004 request half)", () => {
     await page.getByRole("button", { name: /send reset link/i }).click();
 
     await expect(page.getByText(/if an account exists/i)).toBeVisible();
-    expect(requestBody).toEqual({ email: "ada@example.com" });
+    expect(requestBody).toEqual({ email: "ada@example.com", captcha_token: E2E_CAPTCHA_TOKEN });
   });
 });
 

@@ -1,5 +1,7 @@
 # Backend response to the frontend unlock request
 
+> **Authority notice (2026-11-09, Phase 5A).** This file is a **historical** snapshot from backend commit `d1c1cf1` (2026-10-12) and is **no longer the primary authority**. Several sections are stale. In particular, its "nothing after VS-016 exists" statements about cart, checkout, orders, payments, refunds, addresses, contact and Bring Your Idea are wrong for the current backend, and so is "no captcha on register/resend". The current authority, in order, is: (1) the running backend `/openapi.json`; (2) [`openapi.json`](openapi.json) in this folder, now synced to backend commit **`2dfb27b`** and verified schema-equal to the running API; (3) backend implementation/runtime evidence. See [`CURRENT-BACKEND-DRIFT-AUDIT.md`](CURRENT-BACKEND-DRIFT-AUDIT.md) and [`REAL-BACKEND-ACCEPTANCE.md`](REAL-BACKEND-ACCEPTANCE.md).
+
 Answers every item in [`../frontend-requests/BACKEND-UNLOCK-HANDOFF.md`](../frontend-requests/BACKEND-UNLOCK-HANDOFF.md)
 by its ID, in the field order of [`../frontend-requests/BACKEND-RESPONSE-TEMPLATE.md`](../frontend-requests/BACKEND-RESPONSE-TEMPLATE.md).
 

@@ -33,13 +33,14 @@ describe("useRegister", () => {
     const { result } = renderHook(() => useRegister(), { wrapper: createWrapper() });
 
     await act(async () => {
-      await result.current.mutateAsync({ email: "ada@example.com", password: "password123" });
+      await result.current.mutateAsync({ email: "ada@example.com", password: "password123", captcha_token: "tok-1" });
     });
 
     expect(postSpy).toHaveBeenCalledTimes(1);
     expect(postSpy).toHaveBeenCalledWith("/api/v1/auth/register", {
       email: "ada@example.com",
       password: "password123",
+      captcha_token: "tok-1",
     });
   });
 
@@ -51,13 +52,13 @@ describe("useRegister", () => {
 
     const { result: resultA } = renderHook(() => useRegister(), { wrapper: createWrapper() });
     await act(async () => {
-      await expect(resultA.current.mutateAsync({ email: "new@example.com", password: "password123" })).resolves.toBeDefined();
+      await expect(resultA.current.mutateAsync({ email: "new@example.com", password: "password123", captcha_token: "tok-1" })).resolves.toBeDefined();
     });
 
     const { result: resultB } = renderHook(() => useRegister(), { wrapper: createWrapper() });
     await act(async () => {
       await expect(
-        resultB.current.mutateAsync({ email: "existing@example.com", password: "password123" })
+        resultB.current.mutateAsync({ email: "existing@example.com", password: "password123", captcha_token: "tok-1" })
       ).resolves.toBeDefined();
     });
 
@@ -69,7 +70,7 @@ describe("useRegister", () => {
     const { result } = renderHook(() => useRegister(), { wrapper: createWrapper() });
 
     await act(async () => {
-      await expect(result.current.mutateAsync({ email: "ada@example.com", password: "password123" })).rejects.toMatchObject({
+      await expect(result.current.mutateAsync({ email: "ada@example.com", password: "password123", captcha_token: "tok-1" })).rejects.toMatchObject({
         kind: "network",
       });
     });
@@ -83,7 +84,7 @@ describe("useRegister", () => {
     const { result } = renderHook(() => useRegister(), { wrapper: createWrapper() });
 
     await act(async () => {
-      await expect(result.current.mutateAsync({ email: "ada@example.com", password: "password123" })).rejects.toBeDefined();
+      await expect(result.current.mutateAsync({ email: "ada@example.com", password: "password123", captcha_token: "tok-1" })).rejects.toBeDefined();
     });
 
     // Advance well past TanStack Query's default exponential-backoff retry

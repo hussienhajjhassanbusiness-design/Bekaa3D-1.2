@@ -11,6 +11,9 @@ import { apiClient } from "@/lib/api/apiClient";
 // auto-retry.
 export interface PasswordResetRequestBody {
   email: string;
+  // Current backend contract (openapi.json PasswordResetRequest, backend
+  // 2dfb27b): required Cloudflare Turnstile token. The confirm step is unchanged.
+  captcha_token: string;
 }
 
 export interface PasswordResetRequestResponse {

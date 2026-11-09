@@ -6,8 +6,8 @@
 // (FVS-022) and FVS-014's product WhatsApp CTA MUST share this one
 // cached key rather than each inventing its own
 // (`whatsappSettingsKey`/`homeSettingsKey`) for the same endpoint.
-// `free_shipping_threshold` is obsolete (ADR-024) and is never a
-// reason to add a consumer here.
+// `free_shipping_threshold` was removed from the contract (VS-028,
+// ADR-024) and must never be reintroduced here.
 //
 // `current()` rather than `list()`/`detail(id)`: unlike a per-id
 // resource (see refundKeys.detail), this is a single shared resource

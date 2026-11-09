@@ -21,7 +21,8 @@ describe("GlobalWhatsAppButton", () => {
   it("renders the floating button once a WhatsApp number is configured", async () => {
     vi.spyOn(apiClient, "get").mockResolvedValue({
       accepting_orders: true,
-      free_shipping_threshold: null,
+      cash_payment_enabled: true,
+      cash_max_order_total: { amount_cents: 10000, currency: "USD" },
       pickup_address: null,
       pickup_hours: null,
       whatsapp_number: "+96170000000",
@@ -35,7 +36,8 @@ describe("GlobalWhatsAppButton", () => {
   it("renders nothing when no WhatsApp number is configured", async () => {
     vi.spyOn(apiClient, "get").mockResolvedValue({
       accepting_orders: true,
-      free_shipping_threshold: null,
+      cash_payment_enabled: true,
+      cash_max_order_total: { amount_cents: 10000, currency: "USD" },
       pickup_address: null,
       pickup_hours: null,
       whatsapp_number: null,

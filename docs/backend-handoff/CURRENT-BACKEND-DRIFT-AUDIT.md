@@ -228,3 +228,10 @@ After that: admin operations (FVS-030, 028, 032), then guest forms (FVS-016, 015
 - **Every drift is backed by evidence:** D1–D8 come from schema-level comparison of A against C (and B = C). D1–D4 and D6 were also confirmed by runtime probes. New routes come from the operation-set difference and match "Done" rows in the backend `vertical-slice-plan.md`.
 - **No provisional feature is called built:** the live payment provider (VS-032), reviews, analytics, export and deletion are listed as not built, with evidence. Online checkout is described as **mock-provider only**.
 - **Probes were non-destructive:** unauthenticated `GET`s, plus two `POST`s that the server rejected at validation (`422`) before any side effect.
+
+---
+
+## Follow-up (Phase 5A, 2026-11-09)
+
+- `openapi.json` in this folder was **replaced** with the backend repo's snapshot at `2dfb27b`, after a sorted-key deep comparison showed it equal to the running `/openapi.json`. Old snapshot commit: `d1c1cf1`. Current tested backend commit: `2dfb27b`. The current OpenAPI supersedes the old contract assumptions.
+- D1–D8 are fixed in the frontend (captcha on the three auth flows, `PublicSettingsRead`, `NotificationType`). Results are in `REAL-BACKEND-ACCEPTANCE.md`.

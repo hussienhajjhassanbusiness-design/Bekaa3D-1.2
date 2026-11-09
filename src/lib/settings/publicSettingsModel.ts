@@ -1,28 +1,38 @@
 // #ARCHITECTURE-PUBLIC-SETTINGS-ADAPTER
 //
-// A frontend-normalized shape — UPDATE (REAL STOREFRONT INTEGRATION PHASE
-// 1): the response shape is now CONFIRMED, not provisional. BACKEND-
-// RESPONSE.md B1 / openapi.json `PublicSettingsRead` is a fixed, flat
-// object with exactly five keys (`accepting_orders`, `whatsapp_number`,
-// `pickup_address`, `pickup_hours`, `free_shipping_threshold`) — not a
-// `{key, value}[]` list as an earlier draft of this comment speculated.
-// This module still holds ONLY the one field this phase's components
-// actually consume (WhatsApp), and deliberately does NOT add a
-// free-shipping-threshold field: B1 states that field is already obsolete
-// (`null` today, slated for removal once VS-028 lands) — building UI
-// around it would be building on a field the backend itself says to
-// ignore.
+// Current backend contract: docs/backend-handoff/openapi.json
+// `PublicSettingsRead` (backend commit 2dfb27b). A fixed, flat object with
+// exactly six REQUIRED keys:
+//   accepting_orders: boolean
+//   cash_payment_enabled: boolean
+//   cash_max_order_total: MoneyRead (required, NOT nullable)
+//   pickup_address / pickup_hours / whatsapp_number: string | null
+//     (null = "not configured"; the UI hides the element)
+// `free_shipping_threshold` was REMOVED by VS-028 (ADR-024: no shipping
+// charge). It is absent from the wire type and the model.
+//
+// This shared model only mirrors the contract. No checkout behaviour reads
+// the cash fields yet — the cash/checkout gating belongs to the checkout
+// slice (FVS-026), and the backend stays authoritative for it there.
+export interface MoneyModel {
+  amountCents: number;
+  currency: string;
+}
+
 export interface PublicSettingsModel {
+  acceptingOrders: boolean;
+  cashPaymentEnabled: boolean;
+  cashMaxOrderTotal: MoneyModel;
+  pickupAddress: string | null;
+  pickupHours: string | null;
   whatsappNumber: string | null;
 }
 
-// Raw wire shape — openapi.json `PublicSettingsRead`, transcribed in
-// full even though this module's model only surfaces one field today, so
-// a future consumer (pickup info, accepting_orders) extends this same
-// raw/adapter pair instead of re-deriving the wire contract.
+// Raw wire shape — openapi.json `PublicSettingsRead`, transcribed in full.
 export interface PublicSettingsRead {
   accepting_orders: boolean;
-  free_shipping_threshold: { amount_cents: number; currency: string } | null;
+  cash_payment_enabled: boolean;
+  cash_max_order_total: { amount_cents: number; currency: string };
   pickup_address: string | null;
   pickup_hours: string | null;
   whatsapp_number: string | null;
@@ -46,5 +56,15 @@ function normalizeWhatsAppNumber(raw: string | null): string | null {
 }
 
 export function toPublicSettingsModel(raw: PublicSettingsRead): PublicSettingsModel {
-  return { whatsappNumber: normalizeWhatsAppNumber(raw.whatsapp_number) };
+  return {
+    acceptingOrders: raw.accepting_orders,
+    cashPaymentEnabled: raw.cash_payment_enabled,
+    cashMaxOrderTotal: {
+      amountCents: raw.cash_max_order_total.amount_cents,
+      currency: raw.cash_max_order_total.currency,
+    },
+    pickupAddress: raw.pickup_address,
+    pickupHours: raw.pickup_hours,
+    whatsappNumber: normalizeWhatsAppNumber(raw.whatsapp_number),
+  };
 }

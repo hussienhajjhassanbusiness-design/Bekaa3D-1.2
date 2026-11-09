@@ -50,7 +50,8 @@ async function mockSettings(page: Page, whatsappNumber: string | null = "+961700
     route.fulfill({
       body: JSON.stringify({
         accepting_orders: true,
-        free_shipping_threshold: null,
+        cash_payment_enabled: true,
+        cash_max_order_total: { amount_cents: 10000, currency: "USD" },
         pickup_address: null,
         pickup_hours: null,
         whatsapp_number: whatsappNumber,
