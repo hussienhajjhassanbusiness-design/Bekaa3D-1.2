@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { canChangeQuantity, cartNeedsAttention, quantityControl } from "./cartInvariants";
+import { canChangeQuantity, cartBlockingLines, cartNeedsAttention, quantityControl } from "./cartInvariants";
 import type { CartLineModel, CartModel } from "./cartModel";
 
 // UX helpers only. The server still refuses an STL quantity above 1, a
@@ -95,5 +95,38 @@ describe("cartNeedsAttention", () => {
     ["price changed", { priceChanged: true }],
   ])("is true when a line is %s", (_label, overrides) => {
     expect(cartNeedsAttention(cart([line(), line({ productId: "p-2", ...overrides })]))).toBe(true);
+  });
+});
+
+// Phase 5D — what blocks checkout as the cart stands. A price change does
+// NOT block: checkout itself answers 409 CART_PRICE_CHANGED and asks the
+// customer to accept the new price explicitly.
+describe("cartBlockingLines", () => {
+  const cart = (lines: CartLineModel[]): CartModel => ({
+    id: "c",
+    lines,
+    containsPhysical: true,
+    containsDigital: false,
+    updatedAt: null,
+  });
+
+  it("lists unpurchasable and over-cap lines only", () => {
+    const blocked = cartBlockingLines(
+      cart([
+        line(),
+        line({
+          productId: "p-2",
+          purchasable: false,
+          unpurchasableReason: "whatsapp_only",
+        }),
+        line({ productId: "p-3", overCap: true }),
+        line({ productId: "p-4", priceChanged: true }),
+      ])
+    );
+    expect(blocked.map((l) => l.productId)).toEqual(["p-2", "p-3"]);
+  });
+
+  it("is empty for a clean cart", () => {
+    expect(cartBlockingLines(cart([line(), line({ productId: "p-2", priceChanged: true })]))).toEqual([]);
   });
 });

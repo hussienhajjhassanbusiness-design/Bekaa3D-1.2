@@ -39,3 +39,12 @@ export function quantityControl(line: CartLineModel): QuantityControlState {
 export function cartNeedsAttention(cart: CartModel): boolean {
   return cart.lines.some((line) => !line.purchasable || line.overCap || line.priceChanged);
 }
+
+// Lines checkout would refuse as the cart stands (422
+// PRODUCT_NOT_PURCHASABLE / QUANTITY_EXCEEDS_LIMIT): unpurchasable or above
+// the current cap. A price change is not here: checkout asks the customer
+// to accept it explicitly (409 CART_PRICE_CHANGED). Display gating only:
+// the server re-checks every line at checkout.
+export function cartBlockingLines(cart: CartModel): readonly CartLineModel[] {
+  return cart.lines.filter((line) => !line.purchasable || line.overCap);
+}
