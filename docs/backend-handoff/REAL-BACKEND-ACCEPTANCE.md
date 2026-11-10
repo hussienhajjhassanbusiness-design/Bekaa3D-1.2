@@ -1,5 +1,116 @@
 # Real Backend Acceptance
 
+## Phase 5D: Checkout (FVS-026), 2026-11-11
+
+| Item | Value |
+|---|---|
+| Frontend commits tested | `1398de1` (POST headers, Problem array reader), `563b0b7` (checkout contract, idempotency, errors), `5a90786` (`/checkout`, `/checkout/return`), `57eb95c` (cart CTA), `2124276` (mocked E2E). All committed before the run; this document is updated in the commit after them |
+| Backend | `C:\My projects\Bekaa3D-backend`, branch `main`, commit **`2dfb27b`** (unchanged, no backend code touched) |
+| Contract check | running `/openapi.json` is identical to `docs/backend-handoff/openapi.json` after key-sorted comparison (211 schemas), including `CheckoutRequest`, `CheckoutRead` and the required `Idempotency-Key` header parameter |
+| Runtime | Docker Compose backend on :8000 (`PAYMENT_PROVIDER=mock`). `npm run dev` on :3000 proxying to :8000, started only for this run and stopped after it. No media server |
+| Method | real Edge browser through Playwright against the real frontend and backend. **No route mocking.** UI requests were recorded from the page; API probes used the context's request client (same cookies, never counted as UI requests). Temporary scripts kept in the session scratchpad, never committed |
+| Customer identity | throwaway `accept-checkout-<ts>@example.com` and `accept-checkout-cash-<ts>@example.com` accounts (real register with the Turnstile test token, real verify-email with the token read only from that account's `email_outbox` row). Random passwords, never printed or stored. A random Lebanese phone per account |
+| Admin | credentials read only from `%USERPROFILE%\.bekaa3d\dev-admin.json` (real login + TOTP), used only for disposable data and two settings |
+| Products | seeded `dragon`, `moon-lamp`, `dragon-stl`, `phone-stand-stl` only **read** and added to throwaway carts. One disposable product `acceptance-checkout-<ts>` (physical, $15.00) was created for the price-change and refused-line cases, then **deleted** (`204`) |
+| Settings | `pickup_address` / `pickup_hours` set for the pickup case, then **restored to `null`** (verified in the DB) |
+| Data left behind | 5 orders on the two throwaway accounts: 3 online `pending_payment` (mock payment `pending`, never paid; the release job will expire them), 2 cash `in_progress` (unpaid). Empty carts. One address per account |
+
+**Overall: PASS, 28/28.** The first run reported 27/28. The one FAIL was an acceptance-script bug, not an app defect: the cash-success check compared the request body with an order-sensitive `JSON.stringify`. That scenario was re-run once on a fresh account with an order-insensitive comparison and evidence read from the page, and passed (one extra order).
+
+### Current contract (as implemented)
+
+`POST /api/v1/checkout`: verified session (`403 EMAIL_VERIFICATION_REQUIRED` otherwise), `X-CSRF-Token`, required header `Idempotency-Key` matching `^[A-Za-z0-9._:-]{8,255}$`. Rate limit 30/hour/user (a replay counts).
+
+Request (`extra="forbid"`, no amount or total ever): `payment_method` (`online`|`cash`), `payment_provider?` (omitted by the frontend: the single configured provider is used), `fulfillment_method?` (`delivery`|`pickup`), `address_id?`, `contact_phone?` (≤ 32, Lebanese, normalised to E.164), `customer_note?` (≤ 1000), `accept_terms: true`, `accept_digital_final_sale?: true` (required while an STL line remains), `accept_cash_terms?: true` (required for cash), `accepted_price_changes?: [{product_id, amount_cents, currency}]` (≤ 50, each the exact live price).
+
+Fulfillment matrix (on the lines kept after already-owned STLs are dropped): STL-only → no fulfillment fields at all; delivery → `address_id` required and `contact_phone` **absent** (the address phone is used); pickup → `contact_phone` required and `address_id` **absent**, and only when `pickup_address` is set. Cash needs every kept line physical. No shipping fee, zone or threshold (ADR-024).
+
+`201 CheckoutRead`: `order` (`id`, `order_number`, `source`, `status`, `payment_method`, `fulfillment_method|null`, `subtotal`, `tax`, `total`, `placed_at`, `estimated_dispatch_at|null`, `delivery_fee_note|null`, `delivery_address|null` snapshot without phone, `payment_due`, `amount_due|null`, `lines[]` with `unit_price`, `quantity`, `line_total`, `fulfillment_status`), `payment` (`id`, `status`, `provider`, `redirect_url|null`; **null for cash**), `dropped_lines[{product_id, reason: "already_owned"}]`. Online: order `pending_payment`, payment `pending`, `redirect_url` = `{FRONTEND_BASE_URL}/checkout/return?order=<number>` for the mock. Cash: order `in_progress`, `payment_due: true`, `amount_due` = total.
+
+Idempotency: same key + same body replays the stored `201` (or the post-commit `502`) with `Idempotent-Replayed: true`; same key + different body → `409 IDEMPOTENCY_KEY_CONFLICT`; a running claim → `409 IDEMPOTENCY_REQUEST_IN_PROGRESS` (`order_id`, `order_number`, `Retry-After: 2`); every other refusal rolls the claim back and leaves cart, orders and key untouched. Kept 24 h. The frontend binds one key to one exact body (in memory only): the same body reuses it, any change mints a new one, and a placed order retires it.
+
+Problem codes: `409 CART_EMPTY` (`dropped_lines`), `409 CART_PRICE_CHANGED` (`price_changes[{product_id, old_amount_cents, new_amount_cents, currency}]`), `409 PRODUCT_ALREADY_OWNED` (`product_ids`), `422 PRODUCT_NOT_PURCHASABLE` / `QUANTITY_EXCEEDS_LIMIT` (`lines[{product_id, reason, max_quantity?}]`), `422 INVALID_FULFILLMENT`, `422 PAYMENT_METHOD_NOT_ALLOWED` (`reason`: `cash_requires_physical`, `cash_disabled`, `zero_total`, `provider_not_configured`, `provider_required`, `provider_not_applicable`), `422 CASH_PAYMENT_LIMIT_REACHED` (`reason: order_total`), `422 CASH_NOT_AVAILABLE` (no reason, by design), `422 VALIDATION_ERROR`, `429 RATE_LIMITED`, `502 PAYMENT_PROVIDER_UNAVAILABLE` (order exists unpaid; `order_id`, `order_number`), `503 ORDERS_PAUSED`, `503 ONLINE_PAYMENT_UNAVAILABLE`, plus `401 AUTH_REQUIRED`, `403 CSRF_INVALID`, `403 EMAIL_VERIFICATION_REQUIRED`.
+
+### Results
+
+| Check | Result | Evidence |
+|---|---|---|
+| Anonymous `/checkout` | **PASS** | → `/login?returnTo=%2Fcheckout` |
+| Unverified account | **PASS** | guidance + "Resend the verification email", no form; real POST → `403 EMAIL_VERIFICATION_REQUIRED` |
+| Empty cart | **PASS** | empty state, no form, no POST |
+| `Idempotency-Key` required + pattern | **PASS** | missing → `422 VALIDATION_ERROR` (`loc ["header","Idempotency-Key"]`); `"short"` → `422` |
+| CSRF (API) | **PASS** | wrong token → `403 CSRF_INVALID` |
+| Request contract | **PASS** | a client `total` → `422 VALIDATION_ERROR`; delivery + `contact_phone` → `422 INVALID_FULFILLMENT`; pickup with no `pickup_address` → `422 INVALID_FULFILLMENT` |
+| Refusals create nothing | **PASS** | orders 0 → 0 after every refusal above; cart unchanged |
+| `CSRF_INVALID` in the UI | **PASS** | stale `csrf_token` cookie → UI POST `403` → "Unable to verify your session…"; cart kept |
+| Refused line (real) | **PASS** | disposable product made unavailable after `/checkout` loaded → UI POST `422 PRODUCT_NOT_PURCHASABLE` → notice names it "is currently unavailable"; cart refetched to its blocked state; line kept |
+| Real `CART_PRICE_CHANGED` | **PASS** | disposable product $15.00 → $17.00 after it was added → `409`; banner shows $15.00 → $17.00; Place order disabled until accepted |
+| Explicit accepted-price retry | **PASS** | "Accept new prices" sent nothing by itself; the next Place order sent `accepted_price_changes: [{product_id, 1700, "USD"}]` under a **new** key → `201` |
+| Mock online checkout | **PASS** | `201`, payment `pending` / `mock`; browser followed `redirect_url` to `/checkout/return?order=…`; the page claims no outcome |
+| Online order state (server) | **PASS** | DB order/payment `pending_payment/pending`; nothing marked paid client-side |
+| Cart cleared (online) | **PASS** | `GET /cart` → `items: []` |
+| Cash refused for a mixed cart | **PASS** | UI cash radio disabled with the reason; real POST → `422 PAYMENT_METHOD_NOT_ALLOWED` `cash_requires_physical` |
+| Mixed cart + pickup + online | **PASS** | body `{online, pickup, contact_phone, accept_terms, accept_digital_final_sale}`, no `address_id` → `201`; pickup address/hours shown from public settings; server stored `pickup` with an E.164 phone and no address |
+| Cash above `cash_max_order_total` | **PASS** | 5 × $18 + $24 = $114 live → real `422 CASH_PAYMENT_LIMIT_REACHED`; copy names the public $100.00 limit; cart kept |
+| Cash checkout (physical, delivery) | **PASS** (re-run) | body exactly `{payment_method: cash, fulfillment_method: delivery, address_id, accept_terms, accept_cash_terms}` → `201`; "Order placed", "Payment due in cash to the courier on delivery: $36.00. This order hasn't been paid yet."; no redirect; server `in_progress/cash/3600/delivery`, 0 payment rows |
+| Cart + header cleared (cash) | **PASS** | `GET /cart` → `[]`; header back to "Cart" with no count; one new order |
+| `Idempotency-Key` on every UI POST | **PASS** | 7 UI POSTs in run 1, each with a pattern-valid key and `X-CSRF-Token` |
+| Real replay | **PASS** | the UI's key + body re-sent → `201`, `Idempotent-Replayed: true`, the same order number; no new order |
+| Same key + different body | **PASS** | → `409 IDEMPOTENCY_KEY_CONFLICT` |
+| Reload after success | **PASS** | `/checkout` shows the empty-cart state; nothing resubmitted; order count unchanged |
+| Cash rejected (open cash order) | **PASS** | dev `cash_max_open_orders = 1`: a second cash order → real `422 CASH_NOT_AVAILABLE` (no reason); safe copy; cart kept; no order |
+| STL-only online | **PASS** | no fulfillment fields; body `{online, accept_terms, accept_digital_final_sale}` → `201` → redirect |
+| Session refresh during checkout | **PASS** | `access_token` removed → POST `401` → refresh → retried once with the **same** key and body → `201` |
+| 375px | **PASS** | no horizontal overflow on `/checkout` |
+| Runtime errors | **PASS** | no page errors |
+
+Not run live, and why (all covered by unit and mocked E2E):
+
+- `dropped_lines` on a successful checkout and `CART_EMPTY` with `dropped_lines`: needs an STL to become **owned** after it was added to the cart. The only way is a paid order of that STL outside this cart (an offer checkout plus a simulated mock payment), which is out of scope and creates more persistent data.
+- `PRODUCT_ALREADY_OWNED` at checkout, `IDEMPOTENCY_REQUEST_IN_PROGRESS`, `502 PAYMENT_PROVIDER_UNAVAILABLE`, `503 ORDERS_PAUSED`, `503 ONLINE_PAYMENT_UNAVAILABLE`, `429 RATE_LIMITED`: need concurrent requests, a provider outage, a backend env change, a kill-switch toggle on a shared dev DB, or 30+ checkouts. Not provoked, to avoid excess orders and environment changes.
+- An unknown outcome (timeout / dropped connection) with a same-key retry: covered by the mocked E2E (the fake places the order, drops the response, and the retry is replayed); the real replay semantics it relies on were verified above.
+- Keyboard-only flow: mocked E2E only.
+- Paying the mock payment: belongs to FVS-027 (payment result).
+
+### Defects found and fixed
+
+13. **The old checkout code predated the backend** (fixed in `563b0b7`, `5a90786`). Audit result:
+    - `checkoutModels.ts`: **contract-drifted**. It had one digital consent per product (the backend has a single boolean) and a speculative conflict shape. Removed.
+    - `useCheckoutAttempt.ts`: **speculative**. One key per mount, not per body, so a changed body could reuse a key (a guaranteed `IDEMPOTENCY_KEY_CONFLICT`). Replaced by `checkoutIdempotency.ts`.
+    - `DeliveryMethodSelector`: **contract-drifted**. Addresses and pickup were in one radio group, with no contact phone and no pickup details. Replaced by `FulfillmentSection`.
+    - `CartConflictNotice`: **speculative** (caller-supplied messages, invented kinds). Replaced by `CheckoutLineIssues`.
+    - `CheckoutStepper`: **obsolete** (single-page checkout). Removed.
+    - `ConsentCheckboxGroup`, `PriceChangeConflictBanner`: **reusable concept, contract-drifted props**. Rewritten.
+    - `OrderSummary`, `CheckoutDisabledBanner`: **reusable**, kept unchanged.
+    - `useIdempotencyAttempt` (shared): left in place for FVS-032, now unused by checkout.
+- The `/cart` CTA said "Online checkout isn't available yet", and a price change alone read as blocking. It now links to `/checkout` only when the cart can proceed (`57eb95c`).
+- `apiClient.post` could not send an `Idempotency-Key` header (`1398de1`).
+- Mocked E2E locator ambiguity (`getByRole("status")` matched two regions on `/checkout/return`): test-only fix before `2124276`.
+- Acceptance-script bug (above): not an app defect.
+
+No integration defect was found in the frontend or the backend.
+
+### Verification (this phase)
+
+| Command | Result |
+|---|---|
+| `npm run lint` | 0 errors, 4 warnings (the known `<img>` warnings) |
+| `npm run typecheck` | clean |
+| `npm run test` | **2078/2078** (228 files) |
+| `npm run build` | pass (`/checkout`, `/checkout/return` prerendered) |
+| `npm run test:e2e` | **97/97** (84 + 13 new in `e2e/checkout.spec.ts`) |
+
+### Remaining gaps
+
+- Consent copy is **PENDING LEGAL REVIEW** (`src/lib/checkout/checkoutCopy.ts`; open item Q8).
+- No order history/detail yet (FVS-029). The cash confirmation is shown once, from the `201` response. After a reload the order is real but only reachable once FVS-029 exists.
+- `/checkout/return` is a minimal handoff: it reads nothing from the URL and shows no payment state. Verified payment status from `GET /me/orders/{id}` is FVS-027.
+- After `502 PAYMENT_PROVIDER_UNAVAILABLE`, the UI says the order exists unpaid, but retrying its payment (`POST /me/orders/{id}/payments`) is FVS-027/029.
+- A mixed cart whose STL is already owned is physical-only to the server (cash allowed). The UI cannot know that before checkout, so it still disables cash for any cart containing an STL. The customer can pay online, or remove the STL.
+- `payment_provider` is never sent. If the backend ever configures more than one provider, checkout gets `422 PAYMENT_METHOD_NOT_ALLOWED provider_required` and the frontend shows "Online payment isn't available right now".
+
+---
+
 ## Phase 5C: Cart (FVS-025), 2026-11-11
 
 | Item | Value |
