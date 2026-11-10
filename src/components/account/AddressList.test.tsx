@@ -2,94 +2,77 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AddressList } from "./AddressList";
-import type { AddressModel } from "@/lib/addresses/addressModel";
+import { adaptAddress } from "@/lib/addresses/addressModel";
+import type { AddressReadDTO } from "@/lib/addresses/addressTypes";
 
-// FVS-023-IMPLEMENTATION-PLAN.md T02 (incl. T06 folded in) —
-// presentational only, no network, no query. Delete confirmation is
-// owned here (mirroring ReferenceDataManager's own inline
-// ConfirmDialog/onArchive pattern) rather than a separate wrapper
-// file. `onDelete` fires only after the user confirms, with the exact
-// target id.
+// Phase 5B — presentational list; the container (AddressBook) owns the
+// delete confirmation so it can stay open while the request is pending.
 
-const ADDRESSES: AddressModel[] = [
-  { id: "addr-1", displayLines: ["Jane Doe", "Main Street, Beirut"], isDefault: true },
-  { id: "addr-2", displayLines: ["John Doe", "Second Street, Tripoli"], isDefault: false },
+const BASE: AddressReadDTO = {
+  id: "addr-1",
+  label: "Home",
+  recipient_name: "Jane Doe",
+  phone: "+9613123456",
+  governorate: "beirut",
+  city: "Beirut",
+  area: null,
+  street: "Bliss Street",
+  landmark_notes: "Blue gate",
+  is_default: true,
+  created_at: "2026-11-01T10:00:00Z",
+  updated_at: "2026-11-01T10:00:00Z",
+};
+
+const ADDRESSES = [
+  adaptAddress(BASE),
+  adaptAddress({ ...BASE, id: "addr-2", label: "Work", recipient_name: "John Doe", is_default: false }),
 ];
+
+function props(overrides: Partial<Parameters<typeof AddressList>[0]> = {}) {
+  return { addresses: ADDRESSES, onEdit: vi.fn(), onDelete: vi.fn(), onSetDefault: vi.fn(), ...overrides };
+}
 
 describe("AddressList", () => {
   it("shows a loading state", () => {
-    render(<AddressList addresses={[]} isLoading onDelete={vi.fn()} />);
-    expect(screen.getByRole("status")).toBeInTheDocument();
+    render(<AddressList {...props({ addresses: [], isLoading: true })} />);
+    expect(screen.getByRole("status")).toHaveTextContent(/loading your addresses/i);
   });
 
   it("shows a safe error message with a retry action", async () => {
     const onRetry = vi.fn();
     const user = userEvent.setup();
-    render(<AddressList addresses={[]} isError errorMessage="Couldn't load your addresses." onRetry={onRetry} onDelete={vi.fn()} />);
-
-    expect(screen.getByText("Couldn't load your addresses.")).toBeInTheDocument();
+    render(<AddressList {...props({ addresses: [], isError: true, onRetry })} />);
+    expect(screen.getByRole("alert")).toHaveTextContent(/couldn't load your addresses/i);
     await user.click(screen.getByRole("button", { name: /retry/i }));
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 
-  it("shows a safe empty-address-book message — no fake addresses", () => {
-    render(<AddressList addresses={[]} onDelete={vi.fn()} />);
+  it("shows an empty state with an add action when there are no addresses", async () => {
+    const onAdd = vi.fn();
+    const user = userEvent.setup();
+    render(<AddressList {...props({ addresses: [], onAdd })} />);
     expect(screen.getByText(/no saved addresses/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /add an address/i }));
+    expect(onAdd).toHaveBeenCalledTimes(1);
   });
 
-  it("renders every address's display lines", () => {
-    render(<AddressList addresses={ADDRESSES} onDelete={vi.fn()} />);
-    expect(screen.getByText("Jane Doe")).toBeInTheDocument();
-    expect(screen.getByText("John Doe")).toBeInTheDocument();
+  it("renders one list item per address, in the server's order", () => {
+    render(<AddressList {...props()} />);
+    const headings = screen.getAllByRole("heading").map((heading) => heading.textContent);
+    expect(headings).toEqual(["Home", "Work"]);
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
   });
 
-  it("indicates the default address as visible text", () => {
-    render(<AddressList addresses={ADDRESSES} onDelete={vi.fn()} />);
-    expect(screen.getByText("Default")).toBeInTheDocument();
-  });
-
-  it("never renders shipping-zone or rate information anywhere", () => {
-    render(<AddressList addresses={ADDRESSES} onDelete={vi.fn()} />);
-    expect(screen.queryByText(/zone/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/rate/i)).not.toBeInTheDocument();
-  });
-
-  it("opens a confirmation dialog before deleting, and calls onDelete with the exact target id only after confirming", async () => {
-    const onDelete = vi.fn();
+  it("forwards delete requests with the id (no confirmation here — the container owns it)", async () => {
     const user = userEvent.setup();
-    render(<AddressList addresses={ADDRESSES} onDelete={onDelete} />);
-
-    await user.click(screen.getAllByRole("button", { name: /delete/i })[0]!);
-    expect(onDelete).not.toHaveBeenCalled();
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Confirm" }));
-    expect(onDelete).toHaveBeenCalledWith("addr-1");
+    const p = props();
+    render(<AddressList {...p} />);
+    await user.click(screen.getByRole("button", { name: "Delete Work" }));
+    expect(p.onDelete).toHaveBeenCalledWith("addr-2");
   });
 
-  it("does not call onDelete when the confirmation is cancelled", async () => {
-    const onDelete = vi.fn();
-    const user = userEvent.setup();
-    render(<AddressList addresses={ADDRESSES} onDelete={onDelete} />);
-
-    await user.click(screen.getAllByRole("button", { name: /delete/i })[0]!);
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
-
-    expect(onDelete).not.toHaveBeenCalled();
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  });
-
-  it("never makes a network/fetch call", () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
-    render(<AddressList addresses={ADDRESSES} onDelete={vi.fn()} />);
-    expect(fetchSpy).not.toHaveBeenCalled();
-    fetchSpy.mockRestore();
-  });
-
-  it("never writes to localStorage or sessionStorage", () => {
-    const spy = vi.spyOn(Storage.prototype, "setItem");
-    render(<AddressList addresses={ADDRESSES} onDelete={vi.fn()} />);
-    expect(spy).not.toHaveBeenCalled();
-    spy.mockRestore();
+  it("marks only the pending card's default button busy", () => {
+    render(<AddressList {...props({ pendingDefaultId: "addr-2" })} />);
+    expect(screen.getByRole("button", { name: "Set as default: Work" })).toHaveAttribute("aria-busy", "true");
   });
 });

@@ -9,8 +9,10 @@ export interface AddressDefaultOptimisticState {
 // (FVS-023-IMPLEMENTATION-PLAN.md §5). No endpoint, request body, or
 // status code is invented here — this only models the lifecycle
 // VS-019's own "server-authoritative, never locally flip two toggles
-// and assume final" rule requires. A real mutation (blocked on the
-// backend contract) wires these to an actual PATCH/refetch later.
+// and assume final" rule requires. Phase 5B: the mounted address book
+// does NOT use these — it shows a pending state and then refetches the
+// server's list after PUT /me/addresses/{id}/default (useAddresses.ts),
+// which is simpler and never shows a guessed default.
 
 // Begin an optimistic default switch: exactly one address becomes the
 // default locally, immediately, while the request is in flight.

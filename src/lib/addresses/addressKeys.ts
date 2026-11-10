@@ -7,9 +7,10 @@
 // mirroring the precedent `publicSettingsKeys` already set for its
 // own resource).
 //
-// `list()` takes no page/cursor argument: whether `/me/addresses` is
-// paginated is unconfirmed (plan §1) — baking a page argument into the
-// key now would invent a pagination contract.
+// `list()` takes no page/cursor argument: the real `GET /me/addresses`
+// is hard-capped (MAX_LIVE_ADDRESSES), not paginated (VS-026 Q6). Every
+// address write invalidates `root` (useAddresses.ts), and the root is
+// dropped on logout (userScopedQueries.ts).
 //
 // #SECURITY-CUSTOMER-ADDRESS — keys carry resource/id only, never
 // address content (name/phone/street/etc.); addresses are personal

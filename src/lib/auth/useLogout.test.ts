@@ -273,13 +273,14 @@ describe("useLogout", () => {
 });
 
 describe("useLogout: user-scoped cache (Phase 5A defect 7)", () => {
-  it("drops cached admin and notification data synchronously, but keeps public catalogue data", async () => {
+  it("drops cached admin, notification and address data synchronously, but keeps public catalogue data", async () => {
     let resolvePost!: () => void;
     vi.spyOn(apiClient, "post").mockReturnValue(new Promise((resolve) => (resolvePost = () => resolve(undefined))));
     const { queryClient, Wrapper } = createWrapper();
     queryClient.setQueryData(["admin", "customers", "list", {}], { items: [{ email: "someone@example.com" }] });
     queryClient.setQueryData(["admin", "products", "detail", "p-1"], { id: "p-1" });
     queryClient.setQueryData(["notifications", "list", {}], { items: [{ id: "n-1" }] });
+    queryClient.setQueryData(["addresses", "list"], { items: [{ id: "addr-1", recipient_name: "Jane" }] });
     queryClient.setQueryData(["products", "list", {}], { items: [] });
     queryClient.setQueryData(["publicSettings", "current"], { accepting_orders: true });
     const { result } = renderHook(() => useLogout(), { wrapper: Wrapper });
@@ -291,6 +292,8 @@ describe("useLogout: user-scoped cache (Phase 5A defect 7)", () => {
     await waitFor(() => expect(queryClient.getQueryData(AUTH_SESSION_QUERY_KEY)).toBeNull());
     expect(queryClient.getQueryCache().findAll({ queryKey: ["admin"] })).toHaveLength(0);
     expect(queryClient.getQueryCache().findAll({ queryKey: ["notifications"] })).toHaveLength(0);
+    // Phase 5B — saved addresses are personal data, scoped to one user.
+    expect(queryClient.getQueryCache().findAll({ queryKey: ["addresses"] })).toHaveLength(0);
     expect(queryClient.getQueryData(["products", "list", {}])).toEqual({ items: [] });
     expect(queryClient.getQueryData(["publicSettings", "current"])).toEqual({ accepting_orders: true });
 

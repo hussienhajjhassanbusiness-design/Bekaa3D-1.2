@@ -2,6 +2,19 @@ import { describe, it, expect } from "vitest";
 import { beginSetDefault, rollbackSetDefault, settleSetDefault } from "./addressDefaultOptimistic";
 import type { AddressModel } from "./addressModel";
 
+// Phase 5B — the real AddressModel fields; only id/displayLines/isDefault
+// matter to these tests.
+const ADDRESS_BASE: Omit<AddressModel, "id" | "displayLines" | "isDefault"> = {
+  label: "Home",
+  recipientName: "Jane Doe",
+  phone: "+9613123456",
+  governorate: "beirut",
+  city: "Beirut",
+  area: null,
+  street: null,
+  landmarkNotes: "Blue gate",
+};
+
 // FVS-023-IMPLEMENTATION-PLAN.md T03 — a pure, contract-independent
 // optimistic-state helper. No endpoint, body, or status code is
 // invented here; this only models the three lifecycle transitions
@@ -10,9 +23,9 @@ import type { AddressModel } from "./addressModel";
 // the backend contract) wires these to an actual PATCH/refetch later.
 
 const ADDRESSES: readonly AddressModel[] = [
-  { id: "addr-1", displayLines: ["Jane Doe"], isDefault: true },
-  { id: "addr-2", displayLines: ["John Doe"], isDefault: false },
-  { id: "addr-3", displayLines: ["Alex Doe"], isDefault: false },
+  { ...ADDRESS_BASE, id: "addr-1", displayLines: ["Jane Doe"], isDefault: true },
+  { ...ADDRESS_BASE, id: "addr-2", displayLines: ["John Doe"], isDefault: false },
+  { ...ADDRESS_BASE, id: "addr-3", displayLines: ["Alex Doe"], isDefault: false },
 ];
 
 describe("beginSetDefault", () => {
@@ -49,9 +62,9 @@ describe("settleSetDefault", () => {
     // concurrent change elsewhere made addr-3 the real default) — the
     // UI must end up matching the server, never the local guess.
     const authoritative: readonly AddressModel[] = [
-      { id: "addr-1", displayLines: ["Jane Doe"], isDefault: false },
-      { id: "addr-2", displayLines: ["John Doe"], isDefault: false },
-      { id: "addr-3", displayLines: ["Alex Doe"], isDefault: true },
+      { ...ADDRESS_BASE, id: "addr-1", displayLines: ["Jane Doe"], isDefault: false },
+      { ...ADDRESS_BASE, id: "addr-2", displayLines: ["John Doe"], isDefault: false },
+      { ...ADDRESS_BASE, id: "addr-3", displayLines: ["Alex Doe"], isDefault: true },
     ];
     const result = settleSetDefault(authoritative);
     expect(result.addresses).toEqual(authoritative);

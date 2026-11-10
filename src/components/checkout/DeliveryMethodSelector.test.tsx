@@ -4,6 +4,19 @@ import userEvent from "@testing-library/user-event";
 import { DeliveryMethodSelector } from "./DeliveryMethodSelector";
 import type { AddressModel } from "@/lib/addresses/addressModel";
 
+// Phase 5B — the real AddressModel fields; only id/displayLines/isDefault
+// matter to these tests.
+const ADDRESS_BASE: Omit<AddressModel, "id" | "displayLines" | "isDefault"> = {
+  label: "Home",
+  recipientName: "Jane Doe",
+  phone: "+9613123456",
+  governorate: "beirut",
+  city: "Beirut",
+  area: null,
+  street: null,
+  landmarkNotes: "Blue gate",
+};
+
 // FVS-026-IMPLEMENTATION-PLAN.md T04 — reuses FVS-023's AddressModel
 // directly, no checkout-specific duplicate. ADR-024 removed shipping
 // charges, so there is no zone step: choosing an address is itself a
@@ -11,8 +24,8 @@ import type { AddressModel } from "@/lib/addresses/addressModel";
 // pickupAvailable is true — no invented default availability.
 
 const ADDRESSES: readonly AddressModel[] = [
-  { id: "addr-1", displayLines: ["Jane Doe", "Main Street, Beirut"], isDefault: true },
-  { id: "addr-2", displayLines: ["John Doe", "Second Street, Tripoli"], isDefault: false },
+  { ...ADDRESS_BASE, id: "addr-1", displayLines: ["Jane Doe", "Main Street, Beirut"], isDefault: true },
+  { ...ADDRESS_BASE, id: "addr-2", displayLines: ["John Doe", "Second Street, Tripoli"], isDefault: false },
 ];
 
 describe("DeliveryMethodSelector", () => {
