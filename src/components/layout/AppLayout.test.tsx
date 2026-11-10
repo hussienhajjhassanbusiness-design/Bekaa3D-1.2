@@ -10,6 +10,9 @@ import { Footer } from "./Footer";
 // next/navigation-hook-using component does (ProtectedRoute.test.tsx,
 // AccountLayout.test.tsx precedent).
 vi.mock("next/navigation", () => ({ usePathname: () => "/" }));
+// The header cart link reads the canonical cart query (needs auth/query
+// providers); a plain link keeps this a landmark/tab-order test.
+vi.mock("./HeaderCartLink", () => ({ HeaderCartLink: () => <a href="/cart">Cart</a> }));
 
 describe("AppLayout", () => {
   it("renders exactly one header, one main, and one footer landmark", () => {

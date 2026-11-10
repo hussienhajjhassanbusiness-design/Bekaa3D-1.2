@@ -5,6 +5,9 @@ import { usePathname } from "next/navigation";
 import { Header } from "./Header";
 
 vi.mock("next/navigation", () => ({ usePathname: vi.fn(() => "/") }));
+// The cart link reads the canonical cart query (HeaderCartLink.test.tsx);
+// stubbed here so Header stays a pure layout test.
+vi.mock("./HeaderCartLink", () => ({ HeaderCartLink: () => <a href="/cart">Cart</a> }));
 const mockedUsePathname = vi.mocked(usePathname);
 
 describe("Header", () => {
