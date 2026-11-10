@@ -48,6 +48,7 @@ export default defineConfig({
         "auth-account-phase2.spec.ts",
         "admin-routes.spec.ts",
         "account-addresses.spec.ts",
+        "cart.spec.ts",
       ],
       // Uses the system-installed Microsoft Edge (Chromium-based) via
       // Playwright's "channel" option instead of Playwright's own bundled

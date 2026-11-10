@@ -1,4 +1,10 @@
 import { test, expect, type Page } from "@playwright/test";
+import { stubEmptyCart } from "./support/stubCart";
+
+// Phase 5C: keep the header cart read inside the browser (no :8000).
+test.beforeEach(async ({ page }) => {
+  await stubEmptyCart(page);
+});
 
 // Phase 3 (P1-1/FVS-005) — the admin guard decision table, proven end to
 // end against a real browser/cookie jar via route interception (never a

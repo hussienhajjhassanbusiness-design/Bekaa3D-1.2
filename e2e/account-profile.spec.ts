@@ -1,4 +1,10 @@
 import { test, expect, type Page } from "@playwright/test";
+import { stubEmptyCart } from "./support/stubCart";
+
+// Phase 5C: keep the header cart read inside the browser (no :8000).
+test.beforeEach(async ({ page }) => {
+  await stubEmptyCart(page);
+});
 
 // FVS-006-IMPLEMENTATION-PLAN.md T05 (real-browser review evidence) + T06
 // (deterministic E2E deliverable) — one file serving both purposes, same

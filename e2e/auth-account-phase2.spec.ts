@@ -1,5 +1,11 @@
 import { test, expect, type Page } from "@playwright/test";
 import { E2E_CAPTCHA_TOKEN, routeFakeTurnstile, waitForCaptchaToken } from "./support/fakeTurnstile";
+import { stubEmptyCart } from "./support/stubCart";
+
+// Phase 5C: keep the header cart read inside the browser (no :8000).
+test.beforeEach(async ({ page }) => {
+  await stubEmptyCart(page);
+});
 
 // REAL CUSTOMER / AUTH / ACCOUNT INTEGRATION — PHASE 2. Three deterministic,
 // backend-independent E2E specs covering the newly mounted routes

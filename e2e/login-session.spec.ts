@@ -1,4 +1,10 @@
 import { test, expect, type Page } from "@playwright/test";
+import { stubEmptyCart } from "./support/stubCart";
+
+// Phase 5C: keep the header cart read inside the browser (no :8000).
+test.beforeEach(async ({ page }) => {
+  await stubEmptyCart(page);
+});
 
 // FVS-003 BATCH 4 (T11 real-browser evidence + T12 deterministic E2E) — one
 // file serving both purposes: it is the permanent, deterministic,
@@ -298,6 +304,9 @@ test.describe("Login real-browser accessibility & responsive check (FVS-003 BATC
     await expect(mainNav.getByRole("link", { name: "Shop" })).toBeFocused();
     await page.keyboard.press("Tab");
     await expect(mainNav.getByRole("link", { name: "About" })).toBeFocused();
+    // Phase 5C — the header cart link follows the main nav.
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("banner").getByRole("link", { name: "Cart" })).toBeFocused();
 
     await page.keyboard.press("Tab");
     const emailInput = page.getByLabel(/email/i);

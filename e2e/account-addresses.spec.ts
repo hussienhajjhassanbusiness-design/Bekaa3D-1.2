@@ -1,4 +1,10 @@
 import { test, expect, type Page, type Route } from "@playwright/test";
+import { stubEmptyCart } from "./support/stubCart";
+
+// Phase 5C: keep the header cart read inside the browser (no :8000).
+test.beforeEach(async ({ page }) => {
+  await stubEmptyCart(page);
+});
 
 // Phase 5B — /account/addresses (FVS-023) against a deterministic,
 // in-memory stand-in for the real contract (openapi.json
