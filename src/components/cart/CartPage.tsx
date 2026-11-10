@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Alert } from "@/components/feedback/Alert";
 import { Button } from "@/components/forms/Button";
 import { EmptyState } from "@/components/feedback/EmptyState";
-import { cartNeedsAttention } from "@/lib/cart/cartInvariants";
+import { cartBlockingLines } from "@/lib/cart/cartInvariants";
 import { cartItemCount, type CartModel } from "@/lib/cart/cartModel";
 import { CartLineItem } from "./CartLineItem";
 
@@ -19,6 +19,8 @@ export interface CartPageProps {
   lineErrors?: Readonly<Record<string, string>>;
   // Page-level, already-safe info copy (e.g. email verification).
   notice?: string;
+  // False when the account cannot check out yet (an unverified email).
+  canCheckout?: boolean;
 }
 
 const NO_PENDING: ReadonlySet<string> = new Set();
@@ -27,8 +29,10 @@ const NO_PENDING: ReadonlySet<string> = new Set();
 //
 // Presentational: loading / error / empty / populated. The summary has a
 // unit count only. CartRead has no total, so none is shown or computed;
-// checkout recomputes it from live prices. There is no checkout link:
-// /checkout does not exist yet (FVS-026), so the CTA area says so plainly.
+// checkout recomputes it from live prices. Phase 5D: the checkout CTA links
+// to /checkout (FVS-026) only when the cart can proceed; otherwise it is a
+// disabled button. A price change alone does not block: checkout asks the
+// customer to accept the new price explicitly.
 export function CartPage({
   cart,
   isLoading = false,
@@ -39,6 +43,7 @@ export function CartPage({
   pendingProductIds = NO_PENDING,
   lineErrors = {},
   notice,
+  canCheckout = true,
 }: CartPageProps) {
   if (isLoading) {
     return (
@@ -105,15 +110,18 @@ export function CartPage({
             ))}
           </ul>
 
-          <CartSummary cart={cart!} />
+          <CartSummary cart={cart!} canCheckout={canCheckout} />
         </div>
       )}
     </div>
   );
 }
 
-function CartSummary({ cart }: { cart: CartModel }) {
+function CartSummary({ cart, canCheckout }: { cart: CartModel; canCheckout: boolean }) {
   const count = cartItemCount(cart);
+  const blocked = cartBlockingLines(cart).length > 0;
+  const priceChanged = cart.lines.some((line) => line.priceChanged);
+  const ready = canCheckout && !blocked;
   return (
     <section
       aria-label="Cart summary"
@@ -123,17 +131,29 @@ function CartSummary({ cart }: { cart: CartModel }) {
       <p className="text-body text-text-primary">
         {count} item{count === 1 ? "" : "s"}
       </p>
-      <p className="text-caption text-text-secondary">
-        Your total is calculated at checkout from current prices.
-      </p>
-      {cartNeedsAttention(cart) && (
+      <p className="text-caption text-text-secondary">Your total is calculated at checkout from current prices.</p>
+      {blocked && (
         <p className="rounded-md border-l-4 border-l-warning bg-warning-bg px-3 py-2 text-caption text-text-primary">
           Some items need your attention before you can check out.
         </p>
       )}
-      <p className="rounded-md bg-neutral-50 px-3 py-2 text-caption text-text-secondary">
-        Online checkout isn&apos;t available yet.
-      </p>
+      {!blocked && priceChanged && (
+        <p className="rounded-md bg-neutral-50 px-3 py-2 text-caption text-text-secondary">
+          Some prices have changed. You&apos;ll confirm the new prices at checkout.
+        </p>
+      )}
+      {ready ? (
+        <Link
+          href="/checkout"
+          className="rounded-md bg-brand-dark-green px-4 py-2 text-center font-semibold text-text-on-brand hover:bg-brand-green"
+        >
+          Proceed to checkout
+        </Link>
+      ) : (
+        <Button type="button" disabled>
+          Proceed to checkout
+        </Button>
+      )}
     </section>
   );
 }

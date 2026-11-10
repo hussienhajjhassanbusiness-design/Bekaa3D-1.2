@@ -86,6 +86,7 @@ export function CartView() {
         pendingProductIds={pending}
         lineErrors={lineErrors}
         notice={auth.user && !auth.user.emailVerified ? CART_MESSAGES.verifyEmail : undefined}
+        canCheckout={Boolean(auth.user?.emailVerified)}
       />
     </div>
   );

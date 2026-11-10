@@ -379,7 +379,8 @@ test.describe("Cart (Phase 5C / FVS-025)", () => {
     await expect(dragon.getByText("$18.00")).toBeVisible();
     await expect(dragon.getByText(/price has changed since you added it/i)).toBeVisible();
     await expect(page.getByText(/some items need your attention/i)).toBeVisible();
-    await expect(page.getByText(/checkout isn't available yet/i)).toBeVisible();
+    // Phase 5D: the checkout CTA exists, but an unpurchasable line blocks it.
+    await expect(page.getByRole("button", { name: "Proceed to checkout" })).toBeDisabled();
     await expect(page.getByRole("link", { name: /checkout/i })).toHaveCount(0);
   });
 

@@ -26,7 +26,7 @@ export const CART_MESSAGES = {
   lineLimit: "Your cart is full. Remove a product to add another.",
   alreadyOwned: "You already own this STL file, so it can't be added again.",
   lineGone: "This item is no longer in your cart. Your cart has been refreshed.",
-  verifyEmail: "Verify your email address to add or change items in your cart.",
+  verifyEmail: "Verify your email address to add or change items in your cart, or to check out.",
   csrf: "Unable to verify your session. Please refresh the page and try again.",
   authRequired: "Your session has expired. Please log in again.",
   rateLimited: "Too many cart changes. Please wait a while and try again.",

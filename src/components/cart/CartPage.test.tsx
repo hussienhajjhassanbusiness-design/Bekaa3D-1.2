@@ -76,15 +76,42 @@ describe("CartPage", () => {
     expect(summary).not.toHaveTextContent(/shipping|tax|discount/i);
   });
 
-  it("checkout: a truthful state, never a link to a route that does not exist", () => {
+  // Phase 5D — /checkout exists, so the CTA is live, but only when the cart
+  // can actually proceed. A price change alone does not block: checkout
+  // asks for explicit acceptance (409 CART_PRICE_CHANGED).
+  it("checkout CTA: a link to /checkout when the cart can proceed", () => {
     renderPage({ cart: cart([line()]) });
-    expect(screen.queryByRole("link", { name: /checkout/i })).not.toBeInTheDocument();
-    expect(screen.getByText(/checkout isn't available yet/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Proceed to checkout" })).toHaveAttribute("href", "/checkout");
+    expect(screen.queryByText(/isn't available yet/i)).not.toBeInTheDocument();
   });
 
-  it("warns when a line needs attention before checkout", () => {
-    renderPage({ cart: cart([line({ purchasable: false, unpurchasableReason: "unavailable" })]) });
+  it("checkout CTA: disabled with the reason when a line is unpurchasable or over its cap", () => {
+    renderPage({
+      cart: cart([line({ purchasable: false, unpurchasableReason: "unavailable" })]),
+    });
     expect(screen.getByText(/some items need your attention/i)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /checkout/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Proceed to checkout" })).toBeDisabled();
+  });
+
+  it("checkout CTA: disabled when the account cannot check out yet (unverified email)", () => {
+    renderPage({ cart: cart([line()]), canCheckout: false });
+    expect(screen.queryByRole("link", { name: /checkout/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Proceed to checkout" })).toBeDisabled();
+  });
+
+  it("a price change alone keeps checkout open and says prices are confirmed there", () => {
+    renderPage({
+      cart: cart([
+        line({
+          priceChanged: true,
+          currentPrice: { amountCents: 2700, currency: "USD" },
+        }),
+      ]),
+    });
+    expect(screen.getByRole("link", { name: "Proceed to checkout" })).toBeInTheDocument();
+    expect(screen.getByText(/you'll confirm the new prices at checkout/i)).toBeInTheDocument();
+    expect(screen.queryByText(/some items need your attention/i)).not.toBeInTheDocument();
   });
 
   it("passes pending state and line errors to the right line", () => {
