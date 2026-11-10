@@ -1,5 +1,86 @@
 # Real Backend Acceptance
 
+## Phase 5B: Address Book (FVS-023), 2026-11-10 to 2026-11-11
+
+| Item | Value |
+|---|---|
+| Frontend commits tested | `87d3454` (dialog focus fix), `dda1bfc` (secondary Button, TextAreaField), `05b0fb3` (address contract layer), `7acb321` (`/account/addresses`). The run used the working tree that became these commits. After the run, only a test-only exact-text matcher in `e2e/account-addresses.spec.ts` changed. This document is updated in the commit after them |
+| Backend | `C:\My projects\Bekaa3D-backend`, branch `main`, commit **`2dfb27b`** (unchanged) |
+| Contract check | running `/openapi.json` == `docs/backend-handoff/openapi.json` == backend repo `docs/frontend-handoff/openapi.json` (deep-equal, all three) |
+| Runtime | Docker Compose api/worker/postgres/redis/clamav `healthy`. At the start, Docker Desktop's engine was stopped (`:8000` accepted TCP but never answered); restarted with `docker desktop restart`. `npm run dev` on :3000 proxying to :8000. No media server needed |
+| Method | real Edge browser through Playwright against the real frontend and backend. **No route mocking.** Temporary script kept in the session scratchpad, never committed |
+| Customer identity | throwaway `accept-addr-<timestamp>@example.com` accounts made through the real register flow (real Turnstile test widget). Random passwords, never printed or stored. Verify token read only from that account's dev-DB `email_outbox` row. No seeded record was read or modified |
+| Data left behind | two throwaway accounts (run 1 was discarded for script bugs, see below), each with **0 live addresses** (deleted through the UI; soft-deleted rows remain by backend design) |
+
+**Overall: PASS, 27/27 in one run.**
+
+### Current contract (as implemented)
+
+| Operation | Route | Auth | Result |
+|---|---|---|---|
+| List | `GET /api/v1/me/addresses` | session | `200 {items: AddressRead[]}`, default first, hard-capped at 20, not paginated |
+| Read one | `GET /api/v1/me/addresses/{id}` | session | `200 AddressRead`; another user's / deleted / unknown id → `404 NOT_FOUND` |
+| Create | `POST /api/v1/me/addresses` | session + CSRF + verified email | `201 AddressRead`; the first live address is always the default; `422 ADDRESS_LIMIT_REACHED` at 20 |
+| Edit | `PATCH /api/v1/me/addresses/{id}` | session + CSRF + verified email | `200 AddressRead`; omitted = unchanged, `null` clears `area`/`street` (null on a required field is a 422), `is_default` true/false sets/clears, empty body is a 422 |
+| Delete | `DELETE /api/v1/me/addresses/{id}` | session + CSRF + verified email | `204`; soft delete; deleting the default leaves **no** default |
+| Make default | `PUT /api/v1/me/addresses/{id}/default` | session + CSRF + verified email | `200 AddressRead`; the previous default is cleared atomically |
+
+`AddressRead`: `id, label, recipient_name, phone (E.164), governorate, city, area|null, street|null, landmark_notes, is_default, created_at, updated_at`. `Governorate`: `akkar, baalbek_hermel, beirut, beqaa, keserwan_jbeil, mount_lebanon, nabatieh, north, south`. Limits: label 50, recipient_name 100, phone 32, city 100, area 100, street 200, landmark_notes 500 (required, multi-line). No zone, fee or threshold field exists (ADR-024).
+
+### Results
+
+| Check | Result | Evidence |
+|---|---|---|
+| Anonymous `/account/addresses` | **PASS** | → `/login?returnTo=%2Faccount%2Faddresses`; again after a mounted logout |
+| Unverified customer write | **PASS** | warning notice + resend link shown; real `POST` → `403 EMAIL_VERIFICATION_REQUIRED`; dialog shows frontend copy; raw `detail` not on the page |
+| Page load, nav | **PASS** | real `GET` `200`; "Addresses" nav link `aria-current="page"`; empty state; notice gone once verified |
+| Client validation | **PASS** | empty submit shows field errors, focuses the first field, sends **no** request |
+| Real `422 VALIDATION_ERROR` | **PASS** | phone `12` → `422`, `loc=body.phone`; shown on the Phone field ("Enter a Lebanese phone number…"), `aria-invalid`, focused; no `ValidationError.msg` on the page; nothing stored |
+| Create (first) | **PASS** | `POST` `201`; body keys exactly the `AddressCreate` set; shown as Default (backend rule); phone `03 123 456` returned and shown as `+9613123456` |
+| Refresh after create | **PASS** | street/area, city + governorate label, landmark notes and Default all persist |
+| Create (second, not default) | **PASS** | `201`, `is_default=false`; blank street sent as `null`; `+961 71 123 456` → `+96171123456` |
+| Edit | **PASS** | city changed + area cleared → `PATCH` body exactly `{"city":"Batroun","area":null}` → `200` |
+| Refresh after edit | **PASS** | "Batroun, North"; area gone |
+| Edit with no changes | **PASS** | no request sent; "No changes to save." |
+| Set as default | **PASS** | `PUT …/default` `200`; badge moves after the refetch; server list default-first; persists across reload |
+| Clear default via edit | **PASS** | untick → `PATCH {"is_default":false}` `200` → no default anywhere (UI + server) |
+| Set default via edit | **PASS** | tick → `PATCH {"is_default":true}` `200` |
+| CSRF on UI writes | **PASS** | the 8 UI writes made before this check (4 POST including the refused 403/422 ones, 3 PATCH, 1 PUT) all carried `X-CSRF-Token` equal to the `csrf_token` cookie. The two later UI `DELETE`s answered `204`, which the backend's CSRF check only allows with a valid token |
+| CSRF enforcement | **PASS** | wrong/missing token on `POST`, `PATCH`, `PUT …/default`, `DELETE` → all `403 CSRF_INVALID`; state unchanged |
+| Unknown id | **PASS** | `GET` and `DELETE` → `404 NOT_FOUND` |
+| Read one | **PASS** | `GET /me/addresses/{id}` equals the list's record |
+| Delete: cancel | **PASS** | Cancel sends nothing |
+| Delete | **PASS** | confirm → `DELETE` `204` → dialog closes → gone after reload |
+| Delete the default | **PASS** | dialog warns "you won't have a default address…"; `204`; empty list after reload (no promotion) |
+| 375px + keyboard | **PASS** | no horizontal overflow (page or dialog); dialog opens focused on Label; Escape closes it and focus returns to the trigger |
+| Runtime errors | **PASS** | no page errors, no hydration errors |
+
+Not exercised against the real backend: `422 ADDRESS_LIMIT_REACHED` (needs 20 addresses; unit + component tested) and a real cross-user `404` (only an unknown id was used; the backend gives one 404 for all three cases).
+
+### Defects found and fixed
+
+11. **Dialog focus not restored after the address form auto-focuses** (fixed in `87d3454`, frontend). Found by the new mocked E2E. `DialogShell` recorded the trigger in a passive effect, after the child had already moved focus to its first field, so the input became the "trigger". It now records in a layout effect, and `AddressForm` focuses its first field in an effect instead of `autoFocus`. Regression test in `DialogShell.test.tsx`.
+- Stale pre-contract address model (`{id, displayLines, isDefault}`, drift audit §5): replaced with the real contract (`05b0fb3`).
+- Acceptance-script bugs in run 1 (not app defects; 25/27): `getByText("Default")` substring-matched "Set as default", and one step read the recorded write before Playwright's `requestfinished` fired. Fixed; the 27/27 result is from a full re-run with a fresh account. The mocked spec's matcher was tightened the same way.
+
+### Verification (this phase)
+
+| Command | Result |
+|---|---|
+| `npm run lint` | 0 errors, 4 warnings (the known `<img>` warnings) |
+| `npm run typecheck` | clean |
+| `npm run test` | **1943/1943** (217 files) |
+| `npm run build` | pass (`/account/addresses` prerendered) |
+| `npm run test:e2e` | **76/76** (66 + 10 new) on three consecutive runs |
+
+### Remaining gaps
+
+- `ADDRESS_LIMIT_REACHED` and cross-user `404` were not provoked at runtime (see above).
+- `DefaultAddressSelector` and `addressDefaultOptimistic` remain unmounted (checkout may use the selector).
+- Checkout (`DeliveryMethodSelector`) still reads only `displayLines`/`isDefault`; it is integrated in FVS-026.
+
+---
+
 ## Phase 5A closure: 2026-11-10 (admin, VERSION_CONFLICT, mounted logout, hydration)
 
 | Item | Value |

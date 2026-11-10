@@ -1,5 +1,7 @@
 # FVS-023 — Customer Address Book — Implementation Plan
 
+> **Superseded by Phase 5B (2026-11-10/11).** This plan predates the real backend contract. Every "unconfirmed" item below is now confirmed by the current `openapi.json` (backend `2dfb27b`): the real fields are `label, recipient_name, phone, governorate (9-value enum), city, area|null, street|null, landmark_notes, is_default`; the default switch is `PUT /me/addresses/{id}/default` (or `PATCH is_default`); delete is a soft delete that promotes no new default; the list is hard-capped (20), not paginated. T04–T10 are done; see `docs/backend-handoff/REAL-BACKEND-ACCEPTANCE.md` (Phase 5B). `DefaultAddressSelector` and `addressDefaultOptimistic` remain unmounted: the address book uses per-card "Set as default" plus a server refetch instead.
+
 > **For agentic workers:** TDD where marked, full verification at every task boundary, one local commit per logical unit of work, STOP after the safe frontend batch.
 
 **Goal:** Give the customer account area the presentation layer for a saved-address book — canonical query-key architecture, a normalized address model that claims nothing about the real backend schema, list/card presentation, and a properly-accessible single-choice "default address" selector — while correctly deferring `AddressForm` and everything downstream of it, since essentially no individual address field is confirmed anywhere in the repository.
