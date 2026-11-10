@@ -80,4 +80,11 @@ describe("Button", () => {
     expect(button).toHaveClass("bg-danger");
     expect(button).not.toHaveClass("bg-brand-dark-green");
   });
+
+  it("variant='secondary' is an outline brand button (bekaa3d-brand-ui: secondary = outline), never solid", () => {
+    render(<Button variant="secondary">Edit</Button>);
+    const button = screen.getByRole("button");
+    expect(button).toHaveClass("border-brand-dark-green", "text-brand-dark-green", "bg-white");
+    expect(button).not.toHaveClass("bg-brand-dark-green");
+  });
 });

@@ -1,6 +1,6 @@
 import type { ButtonHTMLAttributes } from "react";
 
-export type ButtonVariant = "primary" | "destructive";
+export type ButtonVariant = "primary" | "secondary" | "destructive";
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   isLoading?: boolean;
@@ -22,6 +22,10 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 // the base classes are never duplicated for the override to race against.
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   primary: "bg-brand-dark-green text-text-on-brand",
+  // Phase 5B — brand-ui "Secondary = outline brand-dark-green", for views
+  // with several actions per row (address cards) where only one solid
+  // primary button is allowed.
+  secondary: "border border-brand-dark-green bg-white text-brand-dark-green",
   destructive: "bg-danger text-text-on-brand",
 };
 
