@@ -1,5 +1,95 @@
 # Real Backend Acceptance
 
+## Phase 5C: Cart (FVS-025), 2026-11-11
+
+| Item | Value |
+|---|---|
+| Frontend commits tested | `0bbb859` (cart contract layer), `2195e9a` (`/cart`), `b4e9e1e` (product-page Add to cart), `2db5925` (header cart link), `472000c` (mocked E2E). All committed before the run; this document is updated in the commit after them |
+| Backend | `C:\My projects\Bekaa3D-backend`, branch `main`, commit **`2dfb27b`** (unchanged, no backend code touched) |
+| Contract check | running `/openapi.json` has the same 4 cart operations and the same `CartRead`, `CartLineRead`, `CartItemAdd`, `CartItemQuantityUpdate`, `PurchaseRefusal` as `docs/backend-handoff/openapi.json` (129 operations each) |
+| Runtime | Docker Compose backend on :8000. `npm run dev` on :3000 proxying to :8000, started only for this run and stopped after it. No media server (cover images 404 in the browser; irrelevant to cart behaviour) |
+| Method | real Edge browser through Playwright against the real frontend and backend. **No route mocking.** Direct API probes ran inside the page (same cookies) and were tagged so they were never counted as UI requests. Temporary script kept in the session scratchpad, never committed |
+| Customer identity | throwaway `accept-cart-<timestamp>@example.com` accounts made through the real register flow (real Turnstile test widget). Random passwords, never printed or stored. Verify token read only from that account's dev-DB `email_outbox` row |
+| Products | seeded products only **read** and added to the throwaway cart: `dragon` (physical, cap 5), `phone-stand-stl` (STL), `knight` (unavailable), `name-sign` (WhatsApp-only). No product, category or setting was modified |
+| Data left behind | two throwaway accounts (run 1 discarded for a script bug, see below), each with an **empty** cart (non-null `id`, 0 items) |
+
+**Overall: PASS, 30/30 in one run.**
+
+### Current contract (as implemented)
+
+| Operation | Route | Auth | Result |
+|---|---|---|---|
+| Read | `GET /api/v1/cart` | session (unverified allowed) | `200 CartRead`; never creates a cart (`id: null` until the first write) |
+| Add / merge | `POST /api/v1/cart/items` | session + CSRF + verified email | body `{product_id, quantity=1}` (integer ≥ 1, unknown fields refused) → `200 CartRead` |
+| Set quantity | `PATCH /api/v1/cart/items/{product_id}` | session + CSRF + verified email | body `{quantity}` (absolute, ≥ 1) → `200 CartRead` |
+| Remove | `DELETE /api/v1/cart/items/{product_id}` | session + CSRF + verified email | `204`; absent line → `404 NOT_FOUND` |
+
+There is **no clear-cart route** (checkout clears the cart server-side). Lines are addressed by `product_id`; there is no line id.
+
+`CartRead`: `id|null, items[], contains_physical, contains_digital, updated_at|null`. `CartLineRead`: `product_id, product_type, name|null, slug|null, cover_image|null, quantity, snapshot_price {amount_cents, currency}, current_price|null, price_changed, max_quantity|null, over_cap, purchasable, unpurchasable_reason (not_listed|unavailable|whatsapp_only)|null`. **No total, subtotal, line total, shipping, tax, discount or stock field.** `snapshot_price` is display only; checkout charges live prices.
+
+Problem codes on writes: `422 PRODUCT_NOT_PURCHASABLE` (`reason`), `422 QUANTITY_EXCEEDS_LIMIT` (`max_quantity`, `requested`, `current_quantity`), `422 CART_LINE_LIMIT_REACHED` (`limit`, 50), `422 VALIDATION_ERROR`, `409 PRODUCT_ALREADY_OWNED` (`product_ids`, POST only), `404 NOT_FOUND`, `403 CSRF_INVALID` / `EMAIL_VERIFICATION_REQUIRED`, `401 AUTH_REQUIRED`, `429 RATE_LIMITED` (300 writes/hour/user).
+
+### Results
+
+| Check | Result | Evidence |
+|---|---|---|
+| Anonymous `/cart` | **PASS** | → `/login?returnTo=%2Fcart` |
+| Anonymous product page | **PASS** | "Add to cart" is a link to `/login?returnTo=%2Fshop%2Fdragon`; the UI sent **no** cart request; real `GET /cart` without a session → `401` |
+| Unverified customer | **PASS** | product page shows "Verify your email" link, no Add button; `/cart` shows the verification notice; real `GET /cart` → `200` with `id: null`; real `POST` → `403 EMAIL_VERIFICATION_REQUIRED` |
+| Empty cart | **PASS** | real `GET` `200` (`id: null`, no items); empty state + "Browse the shop"; header link "Cart" with no count |
+| Add physical | **PASS** | quantity 2 on `/shop/dragon` → `POST` body exactly `{"product_id":…,"quantity":2}`, `X-CSRF-Token` = `csrf_token` cookie → `200`; header "Cart, 2 items" |
+| Reload after physical add | **PASS** | line quantity 2 persists; server `max_quantity` 5; summary has no money figure, says the total is calculated at checkout |
+| Add STL | **PASS** | no quantity control; `POST` body `{"product_id":…,"quantity":1}` → `200`; header "Cart, 3 items" |
+| Reload after STL add | **PASS** | STL line persists, no stepper, "sold one copy per order"; `contains_physical` and `contains_digital` both true; server order = first-added order |
+| STL rules | **PASS** | re-adding from the product page → `200` no-op (still one line, qty 1); real `POST` quantity 2 and `PATCH` quantity 2 → `422 QUANTITY_EXCEEDS_LIMIT` with `max_quantity: 1` |
+| Physical quantity | **PASS** | `+` → `PATCH /cart/items/{product_id}` body `{"quantity":3}` + CSRF → `200`; UI shows the server's 3; persists across reload; `−` → `{"quantity":2}`; PATCH sequence 3,2,3,4,5 (absolute values only); `+` disabled at 5 with "Maximum 5 per order" |
+| Not optimistic | **PASS** | each line's controls disabled until the server answers (unit + mocked E2E); UI always ended on the server's value |
+| Over-cap PATCH | **PASS** | real `PATCH` quantity 6 → `422 QUANTITY_EXCEEDS_LIMIT` (`max_quantity: 5`); unchanged |
+| Merge over the cap | **PASS** | cart has 2, add 4 from the product page → real `422` (`current_quantity: 2`, `requested: 4`); UI: "You can have at most 5 of this product in your cart. You already have 2."; raw `detail` not on the page; cart unchanged |
+| Validation | **PASS** | real quantity `0` → `422 VALIDATION_ERROR` (`loc ["body","quantity"]`); unknown body field → `422`; `PATCH`/`DELETE` of a product not in the cart → `404 NOT_FOUND` |
+| Unavailable product | **PASS** | `knight`: unavailable notice, no Add button, the UI sent no write; real `POST` → `422 PRODUCT_NOT_PURCHASABLE`, `reason: unavailable` |
+| WhatsApp-only product | **PASS** | `name-sign`: no Add button, the UI sent no write; real `POST` → `422 PRODUCT_NOT_PURCHASABLE`, `reason: whatsapp_only`; cart unchanged. The WhatsApp CTA is hidden because the dev settings have `whatsapp_number: null` (expected; the mocked E2E covers the CTA) |
+| CSRF enforcement | **PASS** | wrong and missing token on `POST`, `PATCH`, `DELETE` → all `403 CSRF_INVALID`; cart unchanged |
+| CSRF failure in the UI | **PASS** | stale `csrf_token` cookie → UI `PATCH` → real `403 CSRF_INVALID` → "Unable to verify your session…" on that line; cart unchanged |
+| Session refresh | **PASS** | `access_token` cookie removed → UI `PATCH` `401` → `/auth/refresh` `204` → retried once → `200`, carrying the current CSRF cookie |
+| Remove a line | **PASS** | `DELETE /cart/items/{product_id}` + CSRF → `204`; line gone; focus moves to the "Your cart" heading; persists across reload |
+| Logout / re-login | **PASS** | mounted logout → header back to "Cart" with no count (cache dropped); `/cart` → login redirect; after re-login the server cart (qty 3) is back with "Cart, 3 items" |
+| 375px + keyboard | **PASS** | no horizontal overflow on `/cart`; Tab from `−` reaches `+`, Enter sends a `PATCH` → `200` |
+| Remove the final line | **PASS** | `204` → empty state; empty after reload; server `items: []` with the cart `id` kept |
+| CSRF on all UI writes | **PASS** | 15 UI writes, every one with `X-CSRF-Token`: POST 200×3, POST 422×1, PATCH 200×7, PATCH 401×1 (then retried), PATCH 403×1 (deliberate stale cookie), DELETE 204×2 |
+| Runtime errors | **PASS** | no page errors, no hydration errors |
+
+Not exercised against the real backend: `409 PRODUCT_ALREADY_OWNED` (needs a paid STL order, i.e. checkout), `422 CART_LINE_LIMIT_REACHED` (needs 50 lines), `429 RATE_LIMITED` (needs 300 writes), a line becoming `over_cap` / unpurchasable / `price_changed` after it was added (needs admin product edits, which this phase does not make). All are unit-tested and the last three are covered by the mocked E2E.
+
+### Defects found and fixed
+
+12. **Mocked E2E were no longer self-contained** (fixed in `472000c`, test-only). The new header cart link reads `GET /api/v1/cart` for a signed-in viewer, so specs that mock a signed-in `/me` would have sent that read through the dev proxy to :8000. They now register `e2e/support/stubCart.ts` (exact `/api/v1/cart` GET only). The full suite also passes with `API_PROXY_TARGET` emptied.
+- Login keyboard-walkthrough E2E: the header now has a Cart tab stop after About (expected change; assertion updated).
+- Stale pre-contract cart code (drift audit §8): the `item_id`-based model, optimistic helpers, and the unmounted `MiniCartDrawer` / `LoggedOutCartPrompt` were replaced or removed (`0bbb859`).
+- Acceptance-script bug in run 1 (not an app defect; 24/30): in-page API probes also fire `requestfinished`, so they were counted as UI writes. Probes are now tagged and excluded. The 30/30 result is from a full re-run with a fresh account.
+
+No integration defect was found in the frontend or the backend.
+
+### Verification (this phase)
+
+| Command | Result |
+|---|---|
+| `npm run lint` | 0 errors, 4 warnings (the known `<img>` warnings) |
+| `npm run typecheck` | clean |
+| `npm run test` | **2000/2000** (221 files) |
+| `npm run build` | pass (`/cart` prerendered) |
+| `npm run test:e2e` | **84/84** (76 + 8 new) on three consecutive runs, plus a fourth run with `API_PROXY_TARGET` emptied |
+
+### Remaining gaps
+
+- No cart total by design: the frontend shows a unit count only and says the total is set at checkout (FVS-026 shows checkout's own figures).
+- The STL ownership check (`GET /me/stl-ownership`) is not used before Add to cart; the backend's `409 PRODUCT_ALREADY_OWNED` is handled with frontend copy instead.
+- Product cards (`ProductListItem`) have no `capabilities`, so there is no Add to cart on the shop grid; it lives on the product page only.
+- No checkout CTA: `/checkout` does not exist yet (FVS-026).
+
+---
+
 ## Phase 5B: Address Book (FVS-023), 2026-11-10 to 2026-11-11
 
 | Item | Value |

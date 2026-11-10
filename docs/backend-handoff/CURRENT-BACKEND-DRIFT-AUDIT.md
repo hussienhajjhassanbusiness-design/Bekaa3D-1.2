@@ -166,7 +166,7 @@ The payment **return URL / polling contract** (old Q3) is still not a dedicated 
 
 - `src/lib/addresses/addressModel.ts`: deliberately carries only `{id, displayLines, isDefault}`, with comments saying no field is confirmed and "no governorate". The real `AddressRead` is `label, recipient_name, phone, governorate (enum), city, area?, street?, landmark_notes, is_default`, and the test asserts `governorate` is absent. Comments referencing zone selection are obsolete. **Resolved in Phase 5B (`05b0fb3`):** the model is now the real AddressRead; see REAL-BACKEND-ACCEPTANCE.md.
 - `src/lib/payment/paymentStatusModel.ts`: `PaymentStatus` lacks `partially_refunded`, `refunded`. `paymentReturnIdentifier.ts` / `usePaymentStatusPoller.ts` assume a return/poll contract that does not exist as a route (see §6).
-- `src/lib/cart/*`, `src/components/cart/*`: compare with `CartRead` / `CartLineRead` (`snapshot_price`, `current_price`, `price_changed`, `over_cap`, `purchasable`, `unpurchasable_reason`).
+- `src/lib/cart/*`, `src/components/cart/*`: compare with `CartRead` / `CartLineRead` (`snapshot_price`, `current_price`, `price_changed`, `over_cap`, `purchasable`, `unpurchasable_reason`). **Resolved in Phase 5C (`0bbb859`):** the cart layer is now the real contract; see REAL-BACKEND-ACCEPTANCE.md.
 - `src/lib/checkout/*`, `src/components/checkout/*`: compare with `CheckoutRequest` (payment_method, fulfillment_method, address_id, contact_phone, consents, accepted_price_changes) and `CheckoutRead.dropped_lines`.
 - `src/lib/orders/*`, `src/components/account/Order*`, `StatusTimeline`, `CancellableOrderLine`, `CancelOrderLineButton`: real `OrderDetailRead` has `can_cancel`, `can_retry_payment`, `status_history`, `refunds`. Customer cancel is order-level (`POST /me/orders/{id}/cancel`), not per line.
 - `src/components/admin/AdminOrderDetail`, `AdminOrderLine`, `TransitionActions`, `AdminCancelDialog`, `InternalNoteEditor`, `AdminPaymentList`, `PaymentDetail`, `ManualConfirmDialog`, `RefundCreateForm`, `RefundDetail`, `RefundQueue`, `SettleRefundDialog`, `MessageDetail`: all have real admin schemas now.
@@ -188,7 +188,7 @@ Old class from `FRONTEND-BACKEND-RECONCILIATION.md` §2. New class follows the s
 | FVS-017 Admin contact queue | C | **A** | VS-033 Done |
 | FVS-022 Home/About/WhatsApp | A | A (note) | `free_shipping_threshold` now absent rather than null |
 | FVS-023 Address book | C | **A** | VS-026 Done. **Integrated and accepted against the real backend in Phase 5B** (`05b0fb3`, `7acb321`) |
-| FVS-025 Cart | C | **A** | VS-022 Done |
+| FVS-025 Cart | C | **A** | VS-022 Done. **Integrated and accepted against the real backend in Phase 5C** (`0bbb859`–`472000c`) |
 | FVS-026 Checkout | C | **B** | VS-023/028 Done. Legal consent copy (Q8) still open; online leg is mock-provider only |
 | FVS-027 Payment result | E | **B** | checkout returns `redirect_url`; state via order detail. Real provider return contract waits on VS-032 |
 | FVS-028 Admin payments | C | **A** | VS-024 Done |
