@@ -118,8 +118,45 @@ test.describe("Shop catalogue (/shop)", () => {
 
   test("search suggestions appear after 3 characters and link to the real product-detail route", async ({ page }) => {
     await mockReferenceData(page);
-    await page.route("**/api/v1/products**", (route) =>
+    // List endpoint ONLY (`/api/v1/products` with or without a query) —
+    // the `**/api/v1/products**` glob also matched the detail request
+    // `/api/v1/products/dragon` made after the suggestion click below,
+    // feeding the detail page a ProductPage body and throwing a browser
+    // TypeError (`price` undefined) that the URL-only assertion hid.
+    await page.route(/\/api\/v1\/products(\?.*)?$/, (route) =>
       route.fulfill({ body: JSON.stringify({ items: [], next_cursor: null }) })
+    );
+    // The destination detail page's own requests, contract-shaped
+    // (openapi.json ProductDetail / PublicSettingsRead), so the navigation
+    // never falls through to a real backend.
+    await page.route("**/api/v1/products/dragon", (route) =>
+      route.fulfill({
+        body: JSON.stringify({
+          ...productItem(),
+          description: null,
+          images: [],
+          seo_title: null,
+          seo_description: null,
+          og_image_url: null,
+          dimensions: null,
+          production_lead_time_days: 2,
+          batch_size: 2,
+          max_quantity_per_line: 5,
+          capabilities: { can_add_to_cart: true, can_offer: false, whatsapp_available: false },
+        }),
+      })
+    );
+    await page.route("**/api/v1/settings/public", (route) =>
+      route.fulfill({
+        body: JSON.stringify({
+          accepting_orders: true,
+          cash_payment_enabled: true,
+          cash_max_order_total: { amount_cents: 10000, currency: "USD" },
+          pickup_address: null,
+          pickup_hours: null,
+          whatsapp_number: null,
+        }),
+      })
     );
     await page.route("**/api/v1/search/suggestions**", (route) =>
       route.fulfill({
@@ -137,6 +174,8 @@ test.describe("Shop catalogue (/shop)", () => {
     await expect(suggestionLink).toBeVisible();
     await suggestionLink.click();
     await expect(page).toHaveURL("/shop/dragon");
+    // The detail page actually renders (not the error boundary).
+    await expect(page.getByRole("heading", { name: "Articulated Dragon" })).toBeVisible();
   });
 
   test("shows a retryable error state when the catalogue fails to load", async ({ page }) => {

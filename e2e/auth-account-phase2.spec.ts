@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { E2E_CAPTCHA_TOKEN, routeFakeTurnstile } from "./support/fakeTurnstile";
+import { E2E_CAPTCHA_TOKEN, routeFakeTurnstile, waitForCaptchaToken } from "./support/fakeTurnstile";
 
 // REAL CUSTOMER / AUTH / ACCOUNT INTEGRATION — PHASE 2. Three deterministic,
 // backend-independent E2E specs covering the newly mounted routes
@@ -23,6 +23,7 @@ test.describe("Forgot password (Phase 2 / FVS-004 request half)", () => {
     });
 
     await page.goto("/forgot-password");
+    await waitForCaptchaToken(page);
     await page.getByLabel(/email/i).fill("ada@example.com");
     await page.getByRole("button", { name: /send reset link/i }).click();
 

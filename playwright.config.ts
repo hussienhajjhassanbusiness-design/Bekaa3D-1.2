@@ -68,5 +68,14 @@ export default defineConfig({
     url: BASE_URL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
+    // Mocked E2E must not depend on the dev-only /media static server
+    // (MEDIA_PROXY_TARGET, normally :8001 via .env.local). An explicit empty
+    // value wins over .env.local (@next/env only fills undefined keys) and
+    // buildProxyRewrites registers no /media rule for it, so /media/*
+    // resolves to Next's own local 404 instead of ECONNREFUSED proxy noise.
+    // No spec asserts on loaded image bytes; production media semantics are
+    // untouched (that rule never exists in a production build). Only
+    // applies when Playwright starts the server itself (not a reused one).
+    env: { MEDIA_PROXY_TARGET: "" },
   },
 });

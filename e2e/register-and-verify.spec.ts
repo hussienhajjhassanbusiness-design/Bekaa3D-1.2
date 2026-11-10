@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { E2E_CAPTCHA_TOKEN, routeFakeTurnstile } from "./support/fakeTurnstile";
+import { E2E_CAPTCHA_TOKEN, routeFakeTurnstile, waitForCaptchaToken } from "./support/fakeTurnstile";
 
 // FVS002-T12 — one deterministic, backend-independent E2E spec proving the
 // full register -> check-email -> (simulated email link) -> verify ->
@@ -31,6 +31,7 @@ test.describe("Register-to-verify flow (FVS002-T12)", () => {
 
     // 1-3: visit /register, fill valid email/password, submit.
     await page.goto("/register");
+    await waitForCaptchaToken(page);
     await page.getByLabel(/email/i).fill("ada@example.com");
     await page.getByLabel(/password/i).fill("correct-horse-battery");
     await page.getByRole("button", { name: /create account/i }).click();
@@ -78,6 +79,7 @@ test.describe("Resend flow smoke (FVS002-T12 optional)", () => {
     });
 
     await page.goto("/verify-email/resend");
+    await waitForCaptchaToken(page);
     await page.getByLabel(/email/i).fill("ada@example.com");
     await page.getByRole("button", { name: /resend/i }).click();
 
