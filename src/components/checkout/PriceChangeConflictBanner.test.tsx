@@ -2,56 +2,52 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PriceChangeConflictBanner } from "./PriceChangeConflictBanner";
-import type { PriceConflictLine } from "@/lib/checkout/checkoutModels";
+import type { PriceChangeLine } from "@/lib/checkout/checkoutErrors";
 
-// FVS-026-IMPLEMENTATION-PLAN.md T06 — #SECURITY-CHECKOUT-PRICE-CONFIRMATION.
-// Blocks progress, needs immediate attention. Never auto-retries --
-// onReconfirm is the only callback this component ever calls, and
-// only on an explicit click.
+// #SECURITY-CHECKOUT-PRICE-CONFIRMATION — built from the 409
+// CART_PRICE_CHANGED `price_changes` extension. Nothing is accepted
+// automatically: onAccept fires only on an explicit click.
 
-const LINES: readonly PriceConflictLine[] = [
-  { lineId: "line-1", productDisplayName: "Garden Gnome", oldPriceCents: 1000, newPriceCents: 1200, currency: "USD" },
+const CHANGES: PriceChangeLine[] = [
+  {
+    productId: "p-1",
+    oldAmountCents: 1000,
+    newAmountCents: 1200,
+    currency: "USD",
+  },
+  {
+    productId: "p-gone",
+    oldAmountCents: 500,
+    newAmountCents: 400,
+    currency: "USD",
+  },
 ];
+const NAMES = { "p-1": "Garden Gnome" };
 
 describe("PriceChangeConflictBanner", () => {
-  it("renders as an assertive alert", () => {
-    render(<PriceChangeConflictBanner lines={LINES} onReconfirm={vi.fn()} />);
-    const alert = screen.getByRole("alert");
-    expect(alert).toHaveAttribute("aria-live", "assertive");
-  });
-
-  it("renders every affected line's old and new price distinctly", () => {
-    render(<PriceChangeConflictBanner lines={LINES} onReconfirm={vi.fn()} />);
+  it("is an assertive alert naming each changed line with its old and new price", () => {
+    render(<PriceChangeConflictBanner changes={CHANGES} names={NAMES} accepted={false} onAccept={vi.fn()} />);
+    expect(screen.getByRole("alert")).toHaveAttribute("aria-live", "assertive");
     expect(screen.getByText("Garden Gnome")).toBeInTheDocument();
     expect(screen.getByText("$10.00")).toBeInTheDocument();
     expect(screen.getByText("$12.00")).toBeInTheDocument();
+    // A product no longer in the cart still gets a readable row.
+    expect(screen.getByText("A product in your cart")).toBeInTheDocument();
   });
 
-  it("never calls onReconfirm automatically on mount", () => {
-    const onReconfirm = vi.fn();
-    render(<PriceChangeConflictBanner lines={LINES} onReconfirm={onReconfirm} />);
-    expect(onReconfirm).not.toHaveBeenCalled();
+  it("never calls onAccept by itself; calls it once on an explicit click", async () => {
+    const onAccept = vi.fn();
+    render(<PriceChangeConflictBanner changes={CHANGES} names={NAMES} accepted={false} onAccept={onAccept} />);
+    expect(onAccept).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Accept new prices" }));
+    expect(onAccept).toHaveBeenCalledTimes(1);
   });
 
-  it("calls onReconfirm only on an explicit click of the Reconfirm button", async () => {
-    const onReconfirm = vi.fn();
-    const user = userEvent.setup();
-    render(<PriceChangeConflictBanner lines={LINES} onReconfirm={onReconfirm} />);
-
-    await user.click(screen.getByRole("button", { name: /reconfirm/i }));
-
-    expect(onReconfirm).toHaveBeenCalledTimes(1);
-  });
-
-  it("renders exactly one Reconfirm button, never a second auto-retry control", () => {
-    render(<PriceChangeConflictBanner lines={LINES} onReconfirm={vi.fn()} />);
-    expect(screen.getAllByRole("button")).toHaveLength(1);
-  });
-
-  it("never makes a network/fetch call", () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
-    render(<PriceChangeConflictBanner lines={LINES} onReconfirm={vi.fn()} />);
-    expect(fetchSpy).not.toHaveBeenCalled();
-    fetchSpy.mockRestore();
+  it("after acceptance it says so and asks the customer to place the order", () => {
+    render(<PriceChangeConflictBanner changes={CHANGES} names={NAMES} accepted onAccept={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: "Accept new prices" })).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "You've accepted the new prices. Place your order to continue."
+    );
   });
 });

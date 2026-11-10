@@ -2,93 +2,53 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ConsentCheckboxGroup } from "./ConsentCheckboxGroup";
+import { CONSENT_COPY } from "@/lib/checkout/checkoutCopy";
 
-// FVS-026-IMPLEMENTATION-PLAN.md T05 — terms and every digital-product
-// consent are independent checkboxes, never one blanket "I agree to
-// everything." No legal copy is hardcoded — every label is
-// caller-supplied, since no approved legal text exists in this
-// repository. Every checkbox defaults to unchecked.
+// Exactly the backend's consent booleans (CheckoutRequest accept_terms,
+// accept_digital_final_sale, accept_cash_terms): no invented extra
+// checkbox. Copy is PENDING LEGAL REVIEW (checkoutCopy.ts).
+
+const NONE = {
+  acceptTerms: false,
+  acceptDigitalFinalSale: false,
+  acceptCashTerms: false,
+};
 
 describe("ConsentCheckboxGroup", () => {
-  it("renders the terms checkbox with the caller-supplied label, unchecked by default", () => {
-    render(<ConsentCheckboxGroup termsLabel="I agree to the Terms of Service." termsAccepted={false} onTermsChange={vi.fn()} />);
-    const checkbox = screen.getByRole("checkbox", { name: "I agree to the Terms of Service." });
-    expect(checkbox).not.toBeChecked();
-  });
-
-  it("toggling the terms checkbox calls onTermsChange with the new value", async () => {
-    const onTermsChange = vi.fn();
-    const user = userEvent.setup();
-    render(<ConsentCheckboxGroup termsLabel="I agree to the Terms." termsAccepted={false} onTermsChange={onTermsChange} />);
-
-    await user.click(screen.getByRole("checkbox", { name: "I agree to the Terms." }));
-
-    expect(onTermsChange).toHaveBeenCalledWith(true);
-  });
-
-  it("renders no digital-consent checkboxes when none are supplied (a cart with no STL lines)", () => {
-    render(<ConsentCheckboxGroup termsLabel="I agree to the Terms." termsAccepted={false} onTermsChange={vi.fn()} />);
+  it("terms only for a physical online order, unticked by default", () => {
+    render(<ConsentCheckboxGroup showDigital={false} showCash={false} values={NONE} onChange={vi.fn()} errors={{}} />);
     expect(screen.getAllByRole("checkbox")).toHaveLength(1);
+    expect(screen.getByRole("checkbox", { name: CONSENT_COPY.terms })).not.toBeChecked();
   });
 
-  it("renders one independent checkbox per supplied digital consent with its own label", () => {
+  it("adds the STL final-sale and cash terms boxes only when they apply", () => {
+    render(<ConsentCheckboxGroup showDigital showCash values={NONE} onChange={vi.fn()} errors={{}} />);
+    expect(screen.getAllByRole("checkbox")).toHaveLength(3);
+    expect(screen.getByRole("checkbox", { name: CONSENT_COPY.digitalFinalSale })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: CONSENT_COPY.cashTerms })).not.toBeChecked();
+  });
+
+  it("reports each change with its own key", async () => {
+    const onChange = vi.fn();
+    render(<ConsentCheckboxGroup showDigital showCash values={NONE} onChange={onChange} errors={{}} />);
+    await userEvent.click(screen.getByRole("checkbox", { name: CONSENT_COPY.digitalFinalSale }));
+    expect(onChange).toHaveBeenCalledWith("acceptDigitalFinalSale", true);
+    await userEvent.click(screen.getByRole("checkbox", { name: CONSENT_COPY.cashTerms }));
+    expect(onChange).toHaveBeenCalledWith("acceptCashTerms", true);
+  });
+
+  it("links an error to its checkbox", () => {
     render(
       <ConsentCheckboxGroup
-        termsLabel="I agree to the Terms."
-        termsAccepted={false}
-        onTermsChange={vi.fn()}
-        digitalConsents={[
-          { productId: "prod-1", label: "I understand Dragon STL is a final digital sale.", accepted: false },
-          { productId: "prod-2", label: "I understand Castle STL is a final digital sale.", accepted: false },
-        ]}
-        onDigitalConsentChange={vi.fn()}
+        showDigital={false}
+        showCash={false}
+        values={NONE}
+        onChange={vi.fn()}
+        errors={{ acceptTerms: "Please accept." }}
       />
     );
-
-    expect(screen.getByRole("checkbox", { name: "I understand Dragon STL is a final digital sale." })).toBeInTheDocument();
-    expect(screen.getByRole("checkbox", { name: "I understand Castle STL is a final digital sale." })).toBeInTheDocument();
-  });
-
-  it("toggling one digital consent never affects another or the terms checkbox", async () => {
-    const onDigitalConsentChange = vi.fn();
-    const onTermsChange = vi.fn();
-    const user = userEvent.setup();
-    render(
-      <ConsentCheckboxGroup
-        termsLabel="I agree to the Terms."
-        termsAccepted={false}
-        onTermsChange={onTermsChange}
-        digitalConsents={[
-          { productId: "prod-1", label: "Consent for Dragon STL.", accepted: false },
-          { productId: "prod-2", label: "Consent for Castle STL.", accepted: false },
-        ]}
-        onDigitalConsentChange={onDigitalConsentChange}
-      />
-    );
-
-    await user.click(screen.getByRole("checkbox", { name: "Consent for Dragon STL." }));
-
-    expect(onDigitalConsentChange).toHaveBeenCalledWith("prod-1", true);
-    expect(onTermsChange).not.toHaveBeenCalled();
-  });
-
-  it("every digital-consent checkbox starts unchecked by default, never pre-checked", () => {
-    render(
-      <ConsentCheckboxGroup
-        termsLabel="I agree to the Terms."
-        termsAccepted={false}
-        onTermsChange={vi.fn()}
-        digitalConsents={[{ productId: "prod-1", label: "Consent for Dragon STL.", accepted: false }]}
-        onDigitalConsentChange={vi.fn()}
-      />
-    );
-    expect(screen.getByRole("checkbox", { name: "Consent for Dragon STL." })).not.toBeChecked();
-  });
-
-  it("never makes a network/fetch call", () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
-    render(<ConsentCheckboxGroup termsLabel="I agree to the Terms." termsAccepted={false} onTermsChange={vi.fn()} />);
-    expect(fetchSpy).not.toHaveBeenCalled();
-    fetchSpy.mockRestore();
+    const box = screen.getByRole("checkbox", { name: CONSENT_COPY.terms });
+    expect(box).toHaveAttribute("aria-invalid", "true");
+    expect(box).toHaveAccessibleDescription("Please accept.");
   });
 });
