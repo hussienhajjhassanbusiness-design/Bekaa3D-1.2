@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readProblemInteger, readProblemString } from "./problemExtensions";
+import { readProblemArray, readProblemInteger, readProblemString } from "./problemExtensions";
 import type { ApiError } from "./ApiError";
 
 // RFC 9457 extension members (e.g. QUANTITY_EXCEEDS_LIMIT's
@@ -33,5 +33,25 @@ describe("readProblemString", () => {
 
   it("treats a non-string as absent", () => {
     expect(readProblemString(error({ reason: 3 }), "reason")).toBeUndefined();
+  });
+});
+
+describe("readProblemArray (Phase 5D)", () => {
+  const err = (raw: unknown) => ({
+    kind: "http" as const,
+    status: 409,
+    message: "x",
+    raw,
+  });
+
+  it("returns an array member as-is; elements are validated by the caller", () => {
+    expect(readProblemArray(err({ price_changes: [{ a: 1 }] }), "price_changes")).toEqual([{ a: 1 }]);
+  });
+
+  it("treats a missing or non-array member as absent", () => {
+    expect(readProblemArray(err({}), "lines")).toBeUndefined();
+    expect(readProblemArray(err({ lines: "nope" }), "lines")).toBeUndefined();
+    expect(readProblemArray(err({ lines: { 0: 1 } }), "lines")).toBeUndefined();
+    expect(readProblemArray(err(null), "lines")).toBeUndefined();
   });
 });

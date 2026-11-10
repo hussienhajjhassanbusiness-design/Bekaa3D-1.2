@@ -27,6 +27,14 @@ export interface ApiClientRequestOptions {
   csrf?: boolean;
 }
 
+// Phase 5D (FVS-026) — POST /api/v1/checkout requires an `Idempotency-Key`
+// request header (openapi.json, backend 2dfb27b). Extra request headers are
+// an explicit per-call opt-in on post() only. They are applied first, so a
+// caller can never override Content-Type or the CSRF header.
+export interface ApiClientPostOptions extends ApiClientRequestOptions {
+  headers?: Readonly<Record<string, string>>;
+}
+
 // Phase 3 — admin DELETE (e.g. product delete) sends its optimistic-
 // concurrency `version` as a query parameter, per the confirmed contract
 // (DELETE /api/v1/admin/products/{id}?version=N). Values are stringified
@@ -177,11 +185,11 @@ async function get<T = unknown>(path: string, options: ApiClientRequestOptions =
 async function post<T = unknown>(
   path: string,
   body?: unknown,
-  options: ApiClientRequestOptions = {}
+  options: ApiClientPostOptions = {}
 ): Promise<T> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { ...options.headers };
   if (body !== undefined) {
     headers["Content-Type"] = "application/json";
   }

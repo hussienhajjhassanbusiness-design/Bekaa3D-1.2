@@ -24,3 +24,11 @@ export function readProblemString(error: ApiError, key: string): string | undefi
   const value = member(error, key);
   return typeof value === "string" ? value : undefined;
 }
+
+// An array member (e.g. `price_changes`, `lines`, `product_ids`,
+// `dropped_lines`). The elements are returned unvalidated: the caller
+// checks each one against its documented shape and drops what does not fit.
+export function readProblemArray(error: ApiError, key: string): readonly unknown[] | undefined {
+  const value = member(error, key);
+  return Array.isArray(value) ? value : undefined;
+}

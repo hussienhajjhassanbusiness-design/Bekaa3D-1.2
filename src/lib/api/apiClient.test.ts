@@ -741,3 +741,53 @@ describe("apiClient.postForm", () => {
     );
   });
 });
+
+// Phase 5D (FVS-026) — POST /api/v1/checkout requires an `Idempotency-Key`
+// request header. `headers` is an explicit per-call opt-in on post() only;
+// it can never override Content-Type or the CSRF header.
+describe("apiClient.post extra headers (Phase 5D)", () => {
+  afterEach(() => {
+    document.cookie = "csrf_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/";
+  });
+
+  it("sends a caller-supplied header alongside Content-Type and X-CSRF-Token", async () => {
+    document.cookie = "csrf_token=tok-1";
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(201, { ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await apiClient.post("/api/v1/checkout", { a: 1 }, { csrf: true, headers: { "Idempotency-Key": "key-12345" } });
+
+    const init = fetchMock.mock.calls[0]![1] as RequestInit;
+    expect(init.headers).toEqual({
+      "Idempotency-Key": "key-12345",
+      "Content-Type": "application/json",
+      "X-CSRF-Token": "tok-1",
+    });
+  });
+
+  it("never lets a caller header override Content-Type or the CSRF token", async () => {
+    document.cookie = "csrf_token=real";
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(201, {}));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await apiClient.post(
+      "/api/v1/checkout",
+      { a: 1 },
+      {
+        csrf: true,
+        headers: { "Content-Type": "text/plain", "X-CSRF-Token": "forged" },
+      }
+    );
+
+    const headers = (fetchMock.mock.calls[0]![1] as RequestInit).headers as Record<string, string>;
+    expect(headers["Content-Type"]).toBe("application/json");
+    expect(headers["X-CSRF-Token"]).toBe("real");
+  });
+
+  it("sends no header object at all when none is needed (unchanged default)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, {}));
+    vi.stubGlobal("fetch", fetchMock);
+    await apiClient.post("/api/v1/thing");
+    expect((fetchMock.mock.calls[0]![1] as RequestInit).headers).toBeUndefined();
+  });
+});
