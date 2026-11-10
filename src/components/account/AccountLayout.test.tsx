@@ -60,7 +60,7 @@ describe("AccountLayout", () => {
     expect(screen.getByTestId("page-content")).toBeInTheDocument();
   });
 
-  it("renders exactly the registered nav items — Profile and Notifications, today", () => {
+  it("renders exactly the registered nav items — Profile, Addresses and Notifications", () => {
     mockedUseAuth.mockReturnValue(authState({ isAuthenticated: true, user: STUB_USER }));
     render(
       <AccountLayout>
@@ -70,11 +70,13 @@ describe("AccountLayout", () => {
 
     const nav = screen.getByRole("navigation", { name: "Account" });
     const links = nav.querySelectorAll("a");
-    expect(links).toHaveLength(2);
+    expect(links).toHaveLength(3);
     expect(links[0]).toHaveTextContent("Profile");
     expect(links[0]).toHaveAttribute("href", "/account/profile");
-    expect(links[1]).toHaveTextContent("Notifications");
-    expect(links[1]).toHaveAttribute("href", "/account/notifications");
+    expect(links[1]).toHaveTextContent("Addresses");
+    expect(links[1]).toHaveAttribute("href", "/account/addresses");
+    expect(links[2]).toHaveTextContent("Notifications");
+    expect(links[2]).toHaveAttribute("href", "/account/notifications");
   });
 
   it("mounts the shared Log out control for a signed-in user (Phase 5A defect 7)", () => {

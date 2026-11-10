@@ -14,5 +14,6 @@ export interface AccountNavItem {
 
 export const ACCOUNT_NAV_ITEMS: readonly AccountNavItem[] = [
   { label: "Profile", href: "/account/profile" },
+  { label: "Addresses", href: "/account/addresses" },
   { label: "Notifications", href: "/account/notifications" },
 ];
