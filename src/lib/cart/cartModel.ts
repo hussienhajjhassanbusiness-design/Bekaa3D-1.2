@@ -1,33 +1,84 @@
+import type { ProductType } from "@/lib/catalog/productTypes";
+import type { CartLineReadDTO, CartReadDTO, PurchaseRefusal } from "./cartTypes";
+
 // #ARCHITECTURE-CART-ADAPTER
 //
-// Frontend-normalized shapes only — never a claim about the real
-// `GET /api/v1/cart` response field names, which are unconfirmed
-// (FVS-025-IMPLEMENTATION-PLAN.md §0/§1). Holds only the concepts
-// VS-020/FVS-025 actually confirm: merge-on-duplicate-add, STL qty
-// locked to 1, server-owned max quantity, and price snapshot vs.
-// current price.
-//
-// Deliberately has NO availability/unavailable field — whether the
-// backend flags an unavailable line in place or removes it entirely
-// with a separate signal is unconfirmed (plan §0/§4 Q14/Q35/Q36); a
-// future adapter/UI layer decides how to surface that once it is.
-export interface CartLineModel {
-  id: string;
-  productId: string;
-  productDisplayName: string;
-  productType: "physical" | "stl";
-  quantity: number;
-  maxQuantity?: number;
-  snapshotPriceCents: number;
-  currentPriceCents?: number;
+// The UI-facing cart shape and the one place that converts the wire
+// contract (cartTypes.ts) into it. Every null in the contract stays null.
+// Server flags (price_changed, over_cap, purchasable) are carried as-is,
+// never recomputed client-side. There is no total: CartRead has none, and
+// checkout recomputes it from live prices (backend docs/cart.md).
+
+export interface CartPrice {
+  amountCents: number;
   currency: string;
-  thumbnailSrc?: string;
 }
 
-// Deliberately has NO totals/subtotal field — no source confirms
-// GET /cart returns one; totals computation belongs to checkout
-// (VS-021), not cart read (plan §0/§1).
+export interface CartLineImage {
+  src: string;
+  alt: string;
+}
+
+export interface CartLineModel {
+  productId: string;
+  productType: ProductType;
+  name: string | null;
+  slug: string | null;
+  coverImage: CartLineImage | null;
+  quantity: number;
+  snapshotPrice: CartPrice;
+  currentPrice: CartPrice | null;
+  priceChanged: boolean;
+  maxQuantity: number | null;
+  overCap: boolean;
+  purchasable: boolean;
+  unpurchasableReason: PurchaseRefusal | null;
+}
+
 export interface CartModel {
-  id: string;
+  id: string | null;
   lines: readonly CartLineModel[];
+  containsPhysical: boolean;
+  containsDigital: boolean;
+  updatedAt: string | null;
+}
+
+// Display fallback for the (never in V1) null product name.
+export const UNNAMED_PRODUCT = "Product no longer available";
+
+export function adaptCartLine(dto: CartLineReadDTO): CartLineModel {
+  return {
+    productId: dto.product_id,
+    productType: dto.product_type,
+    name: dto.name,
+    slug: dto.slug,
+    coverImage: dto.cover_image
+      ? { src: dto.cover_image.url, alt: dto.cover_image.alt_text ?? dto.name ?? UNNAMED_PRODUCT }
+      : null,
+    quantity: dto.quantity,
+    snapshotPrice: { amountCents: dto.snapshot_price.amount_cents, currency: dto.snapshot_price.currency },
+    currentPrice: dto.current_price
+      ? { amountCents: dto.current_price.amount_cents, currency: dto.current_price.currency }
+      : null,
+    priceChanged: dto.price_changed,
+    maxQuantity: dto.max_quantity,
+    overCap: dto.over_cap,
+    purchasable: dto.purchasable,
+    unpurchasableReason: dto.unpurchasable_reason,
+  };
+}
+
+export function adaptCart(dto: CartReadDTO): CartModel {
+  return {
+    id: dto.id,
+    lines: dto.items.map(adaptCartLine),
+    containsPhysical: dto.contains_physical,
+    containsDigital: dto.contains_digital,
+    updatedAt: dto.updated_at,
+  };
+}
+
+// A count of units for the header indicator — never a monetary figure.
+export function cartItemCount(cart: CartModel): number {
+  return cart.lines.reduce((sum, line) => sum + line.quantity, 0);
 }

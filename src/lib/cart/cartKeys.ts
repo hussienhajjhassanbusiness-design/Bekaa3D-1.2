@@ -1,16 +1,15 @@
 // #ARCHITECTURE-CANONICAL-CART-QUERY
 //
-// The ONE canonical query key for the single, user-scoped cart
-// resource. `MiniCartDrawer`, `CartPage`, checkout, and the
-// product-page add-to-cart mutation MUST share this key rather than
-// each inventing a parallel cache for the same cart
-// (FVS-025-IMPLEMENTATION-PLAN.md §0/T01).
+// The ONE canonical query-key family for the cart. /cart, the header
+// indicator and the product-page Add to cart all share `current(userId)`;
+// FVS-026 checkout must reuse it rather than keep its own cart cache.
 //
-// `.current()` rather than `.list()`/`.detail(id)`: there is exactly
-// one cart per user (VS-020's own "one persistent cart per user, no
-// guest cart" rule) — mirrors `publicSettingsKeys`'s precedent for a
-// singleton resource.
+// One cart per user (backend VS-022), so `current` is a singleton per
+// user. The user id is part of the key so a user switch in the same tab
+// can never render the previous user's cached cart, even before logout
+// cleanup runs. Every cart write invalidates `root`, and logout removes
+// `root` (userScopedQueries.ts).
 export const cartKeys = {
   root: ["cart"] as const,
-  current: () => [...cartKeys.root, "current"] as const,
+  current: (userId: string) => [...cartKeys.root, "current", userId] as const,
 };

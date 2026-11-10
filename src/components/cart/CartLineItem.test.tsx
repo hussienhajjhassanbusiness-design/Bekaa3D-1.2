@@ -4,158 +4,128 @@ import userEvent from "@testing-library/user-event";
 import { CartLineItem } from "./CartLineItem";
 import type { CartLineModel } from "@/lib/cart/cartModel";
 
-// FVS-025-IMPLEMENTATION-PLAN.md T03 — presentational only, no
-// network. Required callback seams (onQuantityChange/onRemove) mirror
-// AddressList.onDelete's precedent — wired to a real mutation only
-// once T08 unblocks.
+// Presentational only. Every value shown comes from CartLineRead; the
+// component never computes a price, a line total, or a cap of its own.
 
-function makePhysicalLine(overrides: Partial<CartLineModel> = {}): CartLineModel {
+function line(overrides: Partial<CartLineModel> = {}): CartLineModel {
   return {
-    id: "line-1",
-    productId: "prod-1",
-    productDisplayName: "Garden Gnome",
+    productId: "p-1",
     productType: "physical",
+    name: "Dragon",
+    slug: "dragon",
+    coverImage: { src: "http://media/dragon.webp", alt: "A dragon" },
     quantity: 2,
+    snapshotPrice: { amountCents: 2500, currency: "USD" },
+    currentPrice: { amountCents: 2500, currency: "USD" },
+    priceChanged: false,
     maxQuantity: 5,
-    snapshotPriceCents: 1999,
-    currency: "USD",
+    overCap: false,
+    purchasable: true,
+    unpurchasableReason: null,
     ...overrides,
   };
 }
 
-function makeStlLine(overrides: Partial<CartLineModel> = {}): CartLineModel {
-  return {
-    id: "line-2",
-    productId: "prod-2",
-    productDisplayName: "Dragon STL",
-    productType: "stl",
-    quantity: 1,
-    snapshotPriceCents: 500,
-    currency: "USD",
-    ...overrides,
-  };
+function renderLine(overrides: Partial<CartLineModel> = {}, props: Partial<Parameters<typeof CartLineItem>[0]> = {}) {
+  const onQuantityChange = vi.fn();
+  const onRemove = vi.fn();
+  render(<CartLineItem line={line(overrides)} onQuantityChange={onQuantityChange} onRemove={onRemove} {...props} />);
+  return { onQuantityChange, onRemove };
 }
 
-describe("CartLineItem (physical)", () => {
-  it("renders the product name and a working quantity stepper with accessible names", async () => {
-    const onQuantityChange = vi.fn();
+describe("CartLineItem", () => {
+  it("shows the image, the name linking to the product page, the type and the unit price", () => {
+    renderLine();
+    expect(screen.getByRole("img", { name: "A dragon" })).toHaveAttribute("src", "http://media/dragon.webp");
+    expect(screen.getByRole("link", { name: "Dragon" })).toHaveAttribute("href", "/shop/dragon");
+    expect(screen.getByText("Physical")).toBeInTheDocument();
+    expect(screen.getByText("$25.00")).toBeInTheDocument();
+  });
+
+  it("never renders a line total (CartLineRead has none)", () => {
+    renderLine({ quantity: 2 });
+    expect(screen.queryByText("$50.00")).not.toBeInTheDocument();
+  });
+
+  it("renders a plain name, not a link, when the product is no longer listed (slug null)", () => {
+    renderLine({ slug: null, purchasable: false, unpurchasableReason: "not_listed", currentPrice: null });
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    expect(screen.getByText("Dragon")).toBeInTheDocument();
+  });
+
+  it("physical: + sends quantity+1 and − sends quantity−1, as absolute values, by product id", async () => {
     const user = userEvent.setup();
-    render(<CartLineItem line={makePhysicalLine()} onQuantityChange={onQuantityChange} onRemove={vi.fn()} />);
-
-    expect(screen.getByText("Garden Gnome")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /increase quantity of garden gnome/i }));
-    expect(onQuantityChange).toHaveBeenCalledWith("line-1", 3);
-
-    await user.click(screen.getByRole("button", { name: /decrease quantity of garden gnome/i }));
-    expect(onQuantityChange).toHaveBeenCalledWith("line-1", 1);
+    const { onQuantityChange } = renderLine({ quantity: 2 });
+    await user.click(screen.getByRole("button", { name: "Increase quantity of Dragon" }));
+    await user.click(screen.getByRole("button", { name: "Decrease quantity of Dragon" }));
+    expect(onQuantityChange).toHaveBeenNthCalledWith(1, "p-1", 3);
+    expect(onQuantityChange).toHaveBeenNthCalledWith(2, "p-1", 1);
   });
 
-  it("announces the current quantity in a live region", () => {
-    render(<CartLineItem line={makePhysicalLine({ quantity: 3 })} onQuantityChange={vi.fn()} onRemove={vi.fn()} />);
-    expect(screen.getByRole("status")).toHaveTextContent("3");
+  it("physical: − is disabled at 1 and + is disabled at the server's max_quantity", () => {
+    renderLine({ quantity: 1, maxQuantity: 1 });
+    expect(screen.getByRole("button", { name: "Decrease quantity of Dragon" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Increase quantity of Dragon" })).toBeDisabled();
+    expect(screen.getByText("Maximum 1 per order")).toBeInTheDocument();
   });
 
-  it("disables the increment button once quantity reaches maxQuantity", () => {
-    render(<CartLineItem line={makePhysicalLine({ quantity: 5, maxQuantity: 5 })} onQuantityChange={vi.fn()} onRemove={vi.fn()} />);
-    expect(screen.getByRole("button", { name: /increase quantity/i })).toBeDisabled();
+  it("STL: no stepper at all, quantity fixed at 1 with an explanation", () => {
+    renderLine({ productType: "stl", quantity: 1, maxQuantity: null, name: "Dragon STL" });
+    expect(screen.queryByRole("button", { name: /quantity/i })).not.toBeInTheDocument();
+    expect(screen.getByText("STL")).toBeInTheDocument();
+    expect(screen.getByText(/one copy per order/i)).toBeInTheDocument();
   });
 
-  it("does not disable the increment button when no maxQuantity is supplied", () => {
-    render(<CartLineItem line={makePhysicalLine({ maxQuantity: undefined })} onQuantityChange={vi.fn()} onRemove={vi.fn()} />);
-    expect(screen.getByRole("button", { name: /increase quantity/i })).toBeEnabled();
+  it("price changed: shows both the price when added and the current price, never silently swapping", () => {
+    renderLine({ priceChanged: true, currentPrice: { amountCents: 3000, currency: "USD" } });
+    expect(screen.getByText("$25.00")).toBeInTheDocument();
+    expect(screen.getByText("$30.00")).toBeInTheDocument();
+    expect(screen.getByText(/price has changed since you added it/i)).toBeInTheDocument();
   });
 
-  it("disables the decrement button at quantity 1 — reaching 0 via the stepper is never valid; Remove is the explicit action for that", () => {
-    render(<CartLineItem line={makePhysicalLine({ quantity: 1 })} onQuantityChange={vi.fn()} onRemove={vi.fn()} />);
-    expect(screen.getByRole("button", { name: /decrease quantity/i })).toBeDisabled();
+  it.each([
+    ["unavailable", /currently unavailable/i],
+    ["whatsapp_only", /only be ordered through WhatsApp/i],
+    ["not_listed", /no longer available/i],
+  ] as const)("unpurchasable (%s): explains why, offers no stepper, keeps Remove", (reason, copy) => {
+    renderLine({ purchasable: false, unpurchasableReason: reason });
+    expect(screen.getByText(copy)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /quantity/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove Dragon from cart" })).toBeEnabled();
   });
 
-  it("does not call onQuantityChange with 0 even if the disabled decrement button were somehow activated", () => {
-    const onQuantityChange = vi.fn();
-    render(<CartLineItem line={makePhysicalLine({ quantity: 1 })} onQuantityChange={onQuantityChange} onRemove={vi.fn()} />);
-    screen.getByRole("button", { name: /decrease quantity/i }).click();
-    expect(onQuantityChange).not.toHaveBeenCalled();
-  });
-});
-
-describe("CartLineItem (STL)", () => {
-  it("renders a fixed quantity with no stepper controls at all", () => {
-    render(<CartLineItem line={makeStlLine()} onQuantityChange={vi.fn()} onRemove={vi.fn()} />);
-    expect(screen.getByText(/qty.*1/i)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /increase quantity/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /decrease quantity/i })).not.toBeInTheDocument();
-  });
-});
-
-describe("CartLineItem (price change)", () => {
-  it("shows both the original and current price plus a note when they differ", () => {
-    render(
-      <CartLineItem
-        line={makePhysicalLine({ snapshotPriceCents: 1000, currentPriceCents: 1200 })}
-        onQuantityChange={vi.fn()}
-        onRemove={vi.fn()}
-      />
-    );
-    expect(screen.getByText("$10.00")).toBeInTheDocument();
-    expect(screen.getByText("$12.00")).toBeInTheDocument();
-    expect(screen.getByText(/price updated/i)).toBeInTheDocument();
-  });
-
-  it("shows no price-updated note when prices match", () => {
-    render(
-      <CartLineItem
-        line={makePhysicalLine({ snapshotPriceCents: 1000, currentPriceCents: 1000 })}
-        onQuantityChange={vi.fn()}
-        onRemove={vi.fn()}
-      />
-    );
-    expect(screen.queryByText(/price updated/i)).not.toBeInTheDocument();
-  });
-
-  it("shows no price-updated note when currentPriceCents is absent", () => {
-    render(<CartLineItem line={makePhysicalLine({ currentPriceCents: undefined })} onQuantityChange={vi.fn()} onRemove={vi.fn()} />);
-    expect(screen.queryByText(/price updated/i)).not.toBeInTheDocument();
-  });
-});
-
-describe("CartLineItem (unavailable notice)", () => {
-  it("renders a caller-supplied unavailable notice as an alert", () => {
-    render(
-      <CartLineItem line={makePhysicalLine()} onQuantityChange={vi.fn()} onRemove={vi.fn()} unavailableNotice="This item is no longer available." />
-    );
-    expect(screen.getByRole("alert")).toHaveTextContent("This item is no longer available.");
-  });
-
-  it("renders no alert when no notice is supplied", () => {
-    render(<CartLineItem line={makePhysicalLine()} onQuantityChange={vi.fn()} onRemove={vi.fn()} />);
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-  });
-});
-
-describe("CartLineItem (remove)", () => {
-  it("always renders a Remove button that calls onRemove with the exact line id", async () => {
-    const onRemove = vi.fn();
+  it("over cap: explains the new cap, disables +, and offers reduce-to-cap", async () => {
     const user = userEvent.setup();
-    render(<CartLineItem line={makeStlLine()} onQuantityChange={vi.fn()} onRemove={onRemove} />);
-
-    await user.click(screen.getByRole("button", { name: /remove/i }));
-
-    expect(onRemove).toHaveBeenCalledWith("line-2");
-  });
-});
-
-describe("CartLineItem (safety)", () => {
-  it("never makes a network/fetch call", () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
-    render(<CartLineItem line={makePhysicalLine()} onQuantityChange={vi.fn()} onRemove={vi.fn()} />);
-    expect(fetchSpy).not.toHaveBeenCalled();
-    fetchSpy.mockRestore();
+    const { onQuantityChange } = renderLine({ quantity: 8, maxQuantity: 3, overCap: true });
+    expect(screen.getByText(/at most 3 of this product per order now/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Increase quantity of Dragon" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Reduce Dragon to 3" }));
+    expect(onQuantityChange).toHaveBeenCalledWith("p-1", 3);
   });
 
-  it("never writes to localStorage or sessionStorage", () => {
-    const spy = vi.spyOn(Storage.prototype, "setItem");
-    render(<CartLineItem line={makePhysicalLine()} onQuantityChange={vi.fn()} onRemove={vi.fn()} />);
-    expect(spy).not.toHaveBeenCalled();
-    spy.mockRestore();
+  it("Remove sends the product id", async () => {
+    const user = userEvent.setup();
+    const { onRemove } = renderLine();
+    await user.click(screen.getByRole("button", { name: "Remove Dragon from cart" }));
+    expect(onRemove).toHaveBeenCalledWith("p-1");
+  });
+
+  it("while pending: every control is disabled and the line is marked busy", () => {
+    renderLine({}, { pending: true });
+    for (const button of screen.getAllByRole("button")) {
+      expect(button).toBeDisabled();
+    }
+    expect(screen.getByRole("article")).toHaveAttribute("aria-busy", "true");
+  });
+
+  it("shows a line error as an alert", () => {
+    renderLine({}, { errorMessage: "That quantity is above the limit for this product." });
+    expect(screen.getByRole("alert")).toHaveTextContent("That quantity is above the limit for this product.");
+  });
+
+  it("uses a neutral placeholder and fallback name when the product row is gone", () => {
+    renderLine({ name: null, coverImage: null, slug: null, purchasable: false, unpurchasableReason: "not_listed" });
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+    expect(screen.getByText("Product no longer available")).toBeInTheDocument();
   });
 });

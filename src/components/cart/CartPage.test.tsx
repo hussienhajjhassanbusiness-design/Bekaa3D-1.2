@@ -1,75 +1,111 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { CartPage } from "./CartPage";
-import type { CartModel } from "@/lib/cart/cartModel";
+import { CartPage, type CartPageProps } from "./CartPage";
+import type { CartLineModel, CartModel } from "@/lib/cart/cartModel";
 
-// FVS-025-IMPLEMENTATION-PLAN.md T05 — presentational only, not
-// mounted to a route (T09 blocked). No summary/totals area is built
-// (no confirmed cart-read totals concept); no Checkout link/button
-// anywhere (/checkout doesn't exist yet — the dead-link rule applies
-// exactly as in FVS-022).
+function line(overrides: Partial<CartLineModel> = {}): CartLineModel {
+  return {
+    productId: "p-1",
+    productType: "physical",
+    name: "Dragon",
+    slug: "dragon",
+    coverImage: null,
+    quantity: 2,
+    snapshotPrice: { amountCents: 2500, currency: "USD" },
+    currentPrice: { amountCents: 2500, currency: "USD" },
+    priceChanged: false,
+    maxQuantity: 5,
+    overCap: false,
+    purchasable: true,
+    unpurchasableReason: null,
+    ...overrides,
+  };
+}
 
-const CART: CartModel = {
-  id: "cart-1",
-  lines: [
-    { id: "line-1", productId: "prod-1", productDisplayName: "Garden Gnome", productType: "physical", quantity: 2, snapshotPriceCents: 1999, currency: "USD" },
-    { id: "line-2", productId: "prod-2", productDisplayName: "Dragon STL", productType: "stl", quantity: 1, snapshotPriceCents: 500, currency: "USD" },
-  ],
-};
+function cart(lines: CartLineModel[]): CartModel {
+  return {
+    id: lines.length ? "c-1" : null,
+    lines,
+    containsPhysical: lines.some((l) => l.productType === "physical"),
+    containsDigital: lines.some((l) => l.productType === "stl"),
+    updatedAt: null,
+  };
+}
+
+function renderPage(props: Partial<CartPageProps> = {}) {
+  const handlers = { onQuantityChange: vi.fn(), onRemove: vi.fn(), onRetry: vi.fn() };
+  render(<CartPage cart={null} {...handlers} {...props} />);
+  return handlers;
+}
 
 describe("CartPage", () => {
-  it("shows a loading state", () => {
-    render(<CartPage cart={null} isLoading onQuantityChange={vi.fn()} onRemove={vi.fn()} />);
-    expect(screen.getByRole("status")).toBeInTheDocument();
+  it("loading: an accessible status with skeleton blocks", () => {
+    renderPage({ isLoading: true });
+    expect(screen.getByRole("status")).toHaveTextContent("Loading your cart");
   });
 
-  it("shows a safe error message with a retry action", async () => {
-    const onRetry = vi.fn();
+  it("error: a retryable alert", async () => {
     const user = userEvent.setup();
-    render(
-      <CartPage cart={null} isError errorMessage="Couldn't load your cart." onRetry={onRetry} onQuantityChange={vi.fn()} onRemove={vi.fn()} />
-    );
-
-    expect(screen.getByText("Couldn't load your cart.")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /retry/i }));
-    expect(onRetry).toHaveBeenCalledTimes(1);
+    const { onRetry } = renderPage({ isError: true });
+    expect(screen.getByRole("alert")).toHaveTextContent("We couldn't load your cart");
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+    expect(onRetry).toHaveBeenCalled();
   });
 
-  it("shows a safe empty-cart message — no fake recommendations", () => {
-    render(<CartPage cart={{ id: "cart-1", lines: [] }} onQuantityChange={vi.fn()} onRemove={vi.fn()} />);
-    expect(screen.getByText(/cart is empty/i)).toBeInTheDocument();
+  it("empty (never-written cart): explains and links to the shop", () => {
+    renderPage({ cart: cart([]) });
+    expect(screen.getByText("Your cart is empty.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Browse the shop" })).toHaveAttribute("href", "/shop");
   });
 
-  it("renders every line", () => {
-    render(<CartPage cart={CART} onQuantityChange={vi.fn()} onRemove={vi.fn()} />);
-    expect(screen.getByText("Garden Gnome")).toBeInTheDocument();
-    expect(screen.getByText("Dragon STL")).toBeInTheDocument();
+  it("populated: one list item per line in the server's order", () => {
+    renderPage({ cart: cart([line(), line({ productId: "p-2", name: "Knight", productType: "stl", quantity: 1, maxQuantity: null })]) });
+    const items = within(screen.getByRole("list", { name: "Cart items" })).getAllByRole("listitem");
+    expect(items).toHaveLength(2);
+    expect(items[0]).toHaveTextContent("Dragon");
+    expect(items[1]).toHaveTextContent("Knight");
   });
 
-  it("renders no Checkout link or button anywhere — /checkout doesn't exist yet", () => {
-    render(<CartPage cart={CART} onQuantityChange={vi.fn()} onRemove={vi.fn()} />);
+  it("summary: an item count, an honest note that totals are set at checkout, and no invented money", () => {
+    renderPage({ cart: cart([line({ quantity: 2 }), line({ productId: "p-2", quantity: 1 })]) });
+    const summary = screen.getByRole("region", { name: "Cart summary" });
+    expect(summary).toHaveTextContent("3 items");
+    expect(summary).toHaveTextContent(/total is calculated at checkout from current prices/i);
+    expect(summary).not.toHaveTextContent("$");
+    expect(summary).not.toHaveTextContent(/shipping|tax|discount/i);
+  });
+
+  it("checkout: a truthful state, never a link to a route that does not exist", () => {
+    renderPage({ cart: cart([line()]) });
     expect(screen.queryByRole("link", { name: /checkout/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /checkout/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/checkout isn't available yet/i)).toBeInTheDocument();
   });
 
-  it("renders no summary/totals area — no confirmed cart-read totals concept", () => {
-    render(<CartPage cart={CART} onQuantityChange={vi.fn()} onRemove={vi.fn()} />);
-    expect(screen.queryByText(/subtotal/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/^total$/i)).not.toBeInTheDocument();
+  it("warns when a line needs attention before checkout", () => {
+    renderPage({ cart: cart([line({ purchasable: false, unpurchasableReason: "unavailable" })]) });
+    expect(screen.getByText(/some items need your attention/i)).toBeInTheDocument();
   });
 
-  it("never makes a network/fetch call", () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
-    render(<CartPage cart={CART} onQuantityChange={vi.fn()} onRemove={vi.fn()} />);
-    expect(fetchSpy).not.toHaveBeenCalled();
-    fetchSpy.mockRestore();
+  it("passes pending state and line errors to the right line", () => {
+    renderPage({
+      cart: cart([line(), line({ productId: "p-2", name: "Knight" })]),
+      pendingProductIds: new Set(["p-2"]),
+      lineErrors: { "p-1": "Too many cart changes." },
+    });
+    const [first, second] = screen.getAllByRole("article");
+    expect(first).toHaveAttribute("aria-busy", "false");
+    expect(within(first!).getByRole("alert")).toHaveTextContent("Too many cart changes.");
+    expect(second).toHaveAttribute("aria-busy", "true");
   });
 
-  it("never writes to localStorage or sessionStorage", () => {
-    const spy = vi.spyOn(Storage.prototype, "setItem");
-    render(<CartPage cart={CART} onQuantityChange={vi.fn()} onRemove={vi.fn()} />);
-    expect(spy).not.toHaveBeenCalled();
-    spy.mockRestore();
+  it("shows an error for a line that has since disappeared at the top of the page", () => {
+    renderPage({ cart: cart([line()]), lineErrors: { "gone-1": "This item is no longer in your cart." } });
+    expect(screen.getByRole("alert")).toHaveTextContent("This item is no longer in your cart.");
+  });
+
+  it("shows a page notice (e.g. email verification) when given one", () => {
+    renderPage({ cart: cart([]), notice: "Verify your email address to add or change items in your cart." });
+    expect(screen.getByText(/verify your email address/i)).toBeInTheDocument();
   });
 });
