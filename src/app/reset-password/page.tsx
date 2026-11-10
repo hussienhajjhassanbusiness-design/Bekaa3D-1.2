@@ -9,6 +9,7 @@ import { Form } from "@/components/forms/Form";
 import { PasswordField } from "@/components/forms/PasswordField";
 import { Button } from "@/components/forms/Button";
 import { Alert } from "@/components/feedback/Alert";
+import { LoadingSpinner } from "@/components/feedback/LoadingSpinner";
 import { usePasswordResetConfirm } from "@/lib/auth/usePasswordResetConfirm";
 import { extractResetToken, removeTokenFromUrl } from "@/lib/auth/passwordResetToken";
 import { mapValidationErrorsToFields } from "@/lib/api/validationErrors";
@@ -133,23 +134,43 @@ function ResetPasswordFields() {
 export default function ResetPassword() {
   const { mutateAsync } = usePasswordResetConfirm();
   const router = useRouter();
-  // Lazily read location.hash exactly once, on the client, before the
-  // first render that matters — React 19 allows calling useState's
-  // initializer with a function that runs once per mount. Never stored
-  // in localStorage/sessionStorage, never logged.
-  const [token] = useState<string | null>(() =>
-    typeof window === "undefined" ? null : extractResetToken(window.location.hash)
-  );
+  // Phase 5A defect 6 (same root cause FVS-002 BATCH 4 fixed on
+  // /verify-email): the token lives only in the URL fragment, which never
+  // reaches the server. The previous version read window.location.hash in
+  // a useState initializer, so the server always rendered the invalid-link
+  // alert while the client's first render showed the form: a real
+  // hydration mismatch (reproduced in Edge against the dev server).
+  //
+  // `undefined` means "fragment not read yet". It is the initial value on
+  // BOTH the server and the client's hydration render, so their markup is
+  // identical. The fragment is then read, and removed from the URL, in one
+  // client-only effect. The token lives only in this component's memory:
+  // never localStorage/sessionStorage, never logged.
+  const [token, setToken] = useState<string | null | undefined>(undefined);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [failure, setFailure] = useState<Failure>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  // Capture exactly once per page instance. React Strict Mode re-runs
+  // effects in development without resetting refs, and by its second run
+  // the fragment has already been removed: re-reading it would wrongly
+  // settle on "no token".
+  const hasCapturedRef = useRef(false);
 
   useEffect(() => {
+    if (hasCapturedRef.current) {
+      return;
+    }
+    hasCapturedRef.current = true;
+    const captured = extractResetToken(window.location.hash);
     // Sanitize the browser-visible URL immediately after capturing the
     // token, regardless of whether one was present — never leave it
     // sitting in the address bar/history entry.
     const sanitized = removeTokenFromUrl(window.location.pathname + window.location.search + window.location.hash);
     window.history.replaceState(null, "", sanitized);
+    // Syncing once from an external system (the URL) after mount is the
+    // point of this effect; deriving it during render would reintroduce
+    // the server/client mismatch.
+    setToken(captured);
   }, []);
 
   useEffect(() => {
@@ -157,7 +178,7 @@ export default function ResetPassword() {
   }, [isSubmitted]);
 
   async function handleSubmit(values: ResetPasswordFormValues) {
-    if (token === null) {
+    if (token == null) {
       return;
     }
     setFailure(null);
@@ -178,7 +199,9 @@ export default function ResetPassword() {
         Reset your password
       </h1>
 
-      {isSubmitted ? (
+      {token === undefined ? (
+        <LoadingSpinner />
+      ) : isSubmitted ? (
         <>
           <Alert variant="success" message={SUCCESS_MESSAGE} />
           <Button onClick={() => router.push("/login")} className="mt-4">

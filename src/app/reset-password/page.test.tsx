@@ -224,3 +224,80 @@ describe("ResetPassword (/reset-password)", () => {
     expect(screen.queryByText(/SECRET_RAW_DIAGNOSTIC_TEXT/)).toBeNull();
   });
 });
+
+// Phase 5A defect 6 — the real hydration mismatch, reproduced in Edge
+// against the dev server: the token lives only in the URL fragment, which
+// never reaches the server, so the server always rendered the
+// invalid-link alert while the client's first render (a useState
+// initializer reading window.location.hash) rendered the form. These
+// tests hydrate genuine server markup (renderToString, produced without a
+// fragment exactly as the server sees the request) and fail on any
+// recoverable hydration error.
+describe("ResetPassword hydration (Phase 5A defect 6)", () => {
+  const cleanups: (() => void)[] = [];
+  afterEach(() => {
+    while (cleanups.length) cleanups.pop()?.();
+  });
+
+  async function hydrateServerMarkup(clientHash: string) {
+    const { renderToString } = await import("react-dom/server");
+    const { hydrateRoot } = await import("react-dom/client");
+    const { act } = await import("react");
+    mockedUsePasswordResetConfirm.mockReturnValue({ mutateAsync: vi.fn() } as never);
+
+    setHash("");
+    const serverHtml = renderToString(<ResetPassword />);
+
+    setHash(clientHash);
+    const container = document.createElement("div");
+    container.innerHTML = serverHtml;
+    document.body.appendChild(container);
+    const recoverableErrors: unknown[] = [];
+    let root: ReturnType<typeof hydrateRoot> | undefined;
+    await act(async () => {
+      root = hydrateRoot(container, <ResetPassword />, {
+        onRecoverableError: (error) => recoverableErrors.push(error),
+      });
+    });
+    cleanups.push(() => {
+      act(() => root?.unmount());
+      container.remove();
+    });
+    return { serverHtml, container, recoverableErrors };
+  }
+
+  it("server markup is the neutral pending state — never the invalid-link alert it cannot know is true", async () => {
+    const { serverHtml } = await hydrateServerMarkup("#token=abc123");
+    expect(serverHtml).not.toMatch(/invalid, expired, or missing a token/);
+    expect(serverHtml).not.toMatch(/New password/);
+  });
+
+  it("hydrates a #token= link with no hydration error, then shows the form and clears the fragment", async () => {
+    const { container, recoverableErrors } = await hydrateServerMarkup("#token=abc123");
+    expect(recoverableErrors).toEqual([]);
+    expect(container.querySelector("input[type='password']")).not.toBeNull();
+    expect(window.location.hash).toBe("");
+    expect(window.location.href).not.toContain("abc123");
+  });
+
+  it("hydrates a link with no token with no hydration error, then shows the invalid-link state", async () => {
+    const { container, recoverableErrors } = await hydrateServerMarkup("");
+    expect(recoverableErrors).toEqual([]);
+    expect(container.textContent).toMatch(/invalid, expired, or missing a token/);
+  });
+
+  it("keeps the captured token under React Strict Mode's double effect run (the fragment is already gone on the second run)", async () => {
+    const { StrictMode } = await import("react");
+    const mutateAsync = vi.fn().mockResolvedValue(undefined);
+    mockedUsePasswordResetConfirm.mockReturnValue({ mutateAsync } as never);
+    const user = userEvent.setup();
+    render(
+      <StrictMode>
+        <ResetPassword />
+      </StrictMode>
+    );
+
+    await fillAndSubmit(user, "newpassword1");
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledWith({ token: "abc123", new_password: "newpassword1" }));
+  });
+});
