@@ -216,4 +216,52 @@ describe("AdminProductEditPage", () => {
 
     await waitFor(() => expect(mutateAsync).toHaveBeenCalledWith("i1"));
   });
+
+  // Phase 5A final defect regression — after a SUCCESSFUL image delete the
+  // confirmation dialog used to stay open, still targeting the
+  // already-deleted image, so a second "Delete" press re-fired the
+  // mutation for an image that no longer exists.
+  it("closes the delete dialog and clears the target after a successful image delete", async () => {
+    const mutateAsync = vi.fn().mockResolvedValue(undefined);
+    mockedUseProductImageDelete.mockReturnValue({ mutateAsync, isPending: false } as never);
+    mockedUseAdminProduct.mockReturnValue(queryResult({ data: PRODUCT }));
+    const user = userEvent.setup();
+    render(<AdminProductEditPage />);
+
+    await user.click(screen.getByRole("button", { name: /delete/i }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    await user.click(screen.getAllByRole("button", { name: "Delete" }).at(-1)!);
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+    expect(mutateAsync).toHaveBeenCalledWith("i1");
+    // Only the row's own Delete button remains — no stale confirm button
+    // exists that could re-fire the mutation.
+    expect(screen.getAllByRole("button", { name: "Delete" })).toHaveLength(1);
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the delete dialog open with a safe error after a failed image delete, and retry targets the same image", async () => {
+    const mutateAsync = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("internal backend detail: db row lock"))
+      .mockResolvedValueOnce(undefined);
+    mockedUseProductImageDelete.mockReturnValue({ mutateAsync, isPending: false } as never);
+    mockedUseAdminProduct.mockReturnValue(queryResult({ data: PRODUCT }));
+    const user = userEvent.setup();
+    render(<AdminProductEditPage />);
+
+    await user.click(screen.getByRole("button", { name: /delete/i }));
+    await user.click(screen.getAllByRole("button", { name: "Delete" }).at(-1)!);
+
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(screen.queryByText(/db row lock/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    await user.click(screen.getAllByRole("button", { name: "Delete" }).at(-1)!);
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(2));
+    expect(mutateAsync).toHaveBeenLastCalledWith("i1");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
 });

@@ -125,6 +125,66 @@ describe("ImageGallery", () => {
     expect(onDelete).toHaveBeenCalledWith("img-1");
   });
 
+  // Phase 5A final defect regression — the dialog must close and drop its
+  // target once onDelete reports success, so a second confirm can never
+  // re-target the already-deleted image.
+  it("closes the dialog and clears the target after onDelete resolves true", async () => {
+    const onDelete = vi.fn().mockResolvedValue(true);
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <ImageGallery images={makeImages()} onReorder={vi.fn()} onSetCover={vi.fn()} onDelete={onDelete} />
+    );
+
+    const firstItem = screen.getByRole("img", { name: "Front view" }).closest("li")!;
+    await user.click(within(firstItem).getByRole("button", { name: /delete/i }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: /^delete$/i }));
+
+    expect(onDelete).toHaveBeenCalledTimes(1);
+    expect(onDelete).toHaveBeenCalledWith("img-1");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    // Refetch drops the deleted image; opening the dialog for another
+    // image targets that image, never the stale one.
+    rerender(
+      <ImageGallery images={makeImages().slice(1)} onReorder={vi.fn()} onSetCover={vi.fn()} onDelete={onDelete} />
+    );
+    const sideItem = screen.getByRole("img", { name: "Side view" }).closest("li")!;
+    await user.click(within(sideItem).getByRole("button", { name: /delete/i }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: /^delete$/i }));
+    expect(onDelete).toHaveBeenCalledTimes(2);
+    expect(onDelete).toHaveBeenLastCalledWith("img-2");
+  });
+
+  it("closes a dialog whose target image is no longer in the gallery", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <ImageGallery images={makeImages()} onReorder={vi.fn()} onSetCover={vi.fn()} onDelete={vi.fn()} />
+    );
+    const firstItem = screen.getByRole("img", { name: "Front view" }).closest("li")!;
+    await user.click(within(firstItem).getByRole("button", { name: /delete/i }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    rerender(
+      <ImageGallery images={makeImages().slice(1)} onReorder={vi.fn()} onSetCover={vi.fn()} onDelete={vi.fn()} />
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("keeps the dialog open with the same target when onDelete resolves false", async () => {
+    const onDelete = vi.fn().mockResolvedValue(false);
+    const user = userEvent.setup();
+    render(<ImageGallery images={makeImages()} onReorder={vi.fn()} onSetCover={vi.fn()} onDelete={onDelete} />);
+
+    const firstItem = screen.getByRole("img", { name: "Front view" }).closest("li")!;
+    await user.click(within(firstItem).getByRole("button", { name: /delete/i }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: /^delete$/i }));
+
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: /^delete$/i }));
+    expect(onDelete).toHaveBeenCalledTimes(2);
+    expect(onDelete).toHaveBeenLastCalledWith("img-1");
+  });
+
   it("does not render an alt-text editor when onUpdateAltText is not provided", () => {
     render(<ImageGallery images={makeImages()} onReorder={vi.fn()} onSetCover={vi.fn()} onDelete={vi.fn()} />);
     expect(screen.queryByLabelText(/alt text/i)).not.toBeInTheDocument();

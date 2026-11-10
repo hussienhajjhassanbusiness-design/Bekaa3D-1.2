@@ -169,12 +169,16 @@ export default function AdminProductEditPage() {
     }
   }
 
-  async function handleDeleteImage(imageId: string) {
+  // Returns whether the delete succeeded so the gallery closes its
+  // confirmation dialog only on success (Phase 5A final defect).
+  async function handleDeleteImage(imageId: string): Promise<boolean> {
     setImageError(null);
     try {
       await deleteMutation.mutateAsync(imageId);
+      return true;
     } catch (error) {
       setImageError(describeAdminError(error));
+      return false;
     }
   }
 
@@ -214,7 +218,7 @@ export default function AdminProductEditPage() {
             images={toGalleryImages(product.images, product.name)}
             onReorder={(nextIds) => void handleReorder(nextIds)}
             onSetCover={(imageId) => void handleSetCover(imageId)}
-            onDelete={(imageId) => void handleDeleteImage(imageId)}
+            onDelete={handleDeleteImage}
             onUpdateAltText={(imageId, nextAltText) => void handleUpdateAltText(imageId, nextAltText)}
             isDeleting={deleteMutation.isPending}
             isUpdatingAltText={altTextMutation.isPending}

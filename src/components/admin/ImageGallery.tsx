@@ -27,7 +27,11 @@ export interface ImageGalleryProps {
   images: readonly GalleryImageModel[];
   onReorder: (nextIds: string[]) => void;
   onSetCover: (imageId: string) => void;
-  onDelete: (imageId: string) => void;
+  // Resolves `true` only when the delete actually succeeded — the dialog
+  // then closes and drops its target. Anything else (false/void/a
+  // rejection) keeps the dialog open on the same image for retry; the
+  // caller owns surfacing the safe error message.
+  onDelete: (imageId: string) => Promise<boolean> | boolean | void;
   // Optional — a caller with no alt-text-editing concept simply omits
   // it and no such control renders (e.g. a hypothetical read-only
   // gallery view).
@@ -64,6 +68,27 @@ export function ImageGallery({
   isUpdatingAltText = false,
 }: ImageGalleryProps) {
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  // A target that is no longer in the gallery (e.g. removed by the
+  // post-delete refetch) is never actionable — the dialog can't stay open
+  // pointing at an image that no longer exists.
+  const activeDeleteTargetId =
+    deleteTargetId !== null && images.some((image) => image.id === deleteTargetId) ? deleteTargetId : null;
+
+  async function confirmDelete() {
+    const targetId = activeDeleteTargetId;
+    if (!targetId) {
+      return;
+    }
+    let succeeded = false;
+    try {
+      succeeded = (await onDelete(targetId)) === true;
+    } catch {
+      succeeded = false;
+    }
+    if (succeeded) {
+      setDeleteTargetId((current) => (current === targetId ? null : current));
+    }
+  }
 
   function move(index: number, direction: -1 | 1) {
     const targetIndex = index + direction;
@@ -121,17 +146,13 @@ export function ImageGallery({
       </ul>
 
       <ConfirmDialog
-        open={deleteTargetId !== null}
+        open={activeDeleteTargetId !== null}
         title="Delete image"
         description="This image will be removed from the gallery."
         confirmLabel="Delete"
         isDestructive
         isConfirming={isDeleting}
-        onConfirm={() => {
-          if (deleteTargetId) {
-            onDelete(deleteTargetId);
-          }
-        }}
+        onConfirm={() => void confirmDelete()}
         onCancel={() => setDeleteTargetId(null)}
       />
     </>
