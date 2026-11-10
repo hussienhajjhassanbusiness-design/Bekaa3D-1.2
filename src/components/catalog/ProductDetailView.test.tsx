@@ -172,4 +172,59 @@ describe("ProductDetailView", () => {
     await screen.findByRole("heading", { name: "Articulated Dragon" });
     expect(screen.queryByRole("link", { name: /chat on whatsapp/i })).not.toBeInTheDocument();
   });
+  describe("Add to cart (Phase 5C)", () => {
+    const VERIFIED = {
+      id: "u-1",
+      email: "a@b.c",
+      role: "customer",
+      emailVerified: true,
+      emailVerifiedAt: "2026-01-01T00:00:00Z",
+      createdAt: "2026-01-01T00:00:00Z",
+    };
+    const settings = { accepting_orders: true, cash_payment_enabled: true, cash_max_order_total: { amount_cents: 10000, currency: "USD" }, pickup_address: null, pickup_hours: null, whatsapp_number: "+96170000000" };
+
+    function serve(detail: object) {
+      vi.spyOn(apiClient, "get").mockImplementation(async (path: unknown) =>
+        (path as string).startsWith("/api/v1/settings/public") ? settings : detail
+      );
+    }
+
+    it("a verified customer gets a real Add to cart button with a quantity control for a physical product", async () => {
+      serve(physicalDetail);
+      mockedUseAuth.mockReturnValue(authState({ user: VERIFIED, isAuthenticated: true }));
+      renderDetail();
+      expect(await screen.findByRole("button", { name: "Add to cart" })).toBeInTheDocument();
+      expect(screen.getByRole("group", { name: "Quantity of Articulated Dragon" })).toBeInTheDocument();
+      expect(screen.getByText("Maximum 5 per order")).toBeInTheDocument();
+    });
+
+    it("an STL product gets Add to cart with no quantity control", async () => {
+      serve(stlDetail);
+      mockedUseAuth.mockReturnValue(authState({ user: VERIFIED, isAuthenticated: true }));
+      renderDetail("dragon-stl");
+      expect(await screen.findByRole("button", { name: "Add to cart" })).toBeInTheDocument();
+      expect(screen.queryByRole("group", { name: /quantity/i })).not.toBeInTheDocument();
+    });
+
+    it("a WhatsApp-only product (can_add_to_cart false) offers WhatsApp and no cart action at all", async () => {
+      serve({
+        ...physicalDetail,
+        purchase_mode: "whatsapp_only",
+        capabilities: { can_add_to_cart: false, can_offer: false, whatsapp_available: true },
+      });
+      mockedUseAuth.mockReturnValue(authState({ user: VERIFIED, isAuthenticated: true }));
+      renderDetail();
+      expect(await screen.findByRole("link", { name: /chat on whatsapp/i })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /add to cart/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: /add to cart/i })).not.toBeInTheDocument();
+    });
+
+    it("an unavailable product (can_add_to_cart false) has no cart action", async () => {
+      serve({ ...physicalDetail, is_available: false, capabilities: { can_add_to_cart: false, can_offer: false, whatsapp_available: false } });
+      mockedUseAuth.mockReturnValue(authState({ user: VERIFIED, isAuthenticated: true }));
+      renderDetail();
+      expect(await screen.findByText(/currently unavailable/i)).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /add to cart/i })).not.toBeInTheDocument();
+    });
+  });
 });

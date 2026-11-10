@@ -3,7 +3,6 @@
 import { Alert } from "@/components/feedback/Alert";
 import { LoadingSpinner } from "@/components/feedback/LoadingSpinner";
 import { NotFoundContent } from "@/components/feedback/NotFoundContent";
-import { useAuth } from "@/lib/auth/AuthProvider";
 import { useProduct } from "@/lib/catalog/useProduct";
 import { toProductDetailModel } from "@/lib/catalog/productAdapters";
 import { usePublicSettings } from "@/lib/settings/usePublicSettings";
@@ -33,7 +32,6 @@ export interface ProductDetailViewProps {
 export function ProductDetailView({ slug }: ProductDetailViewProps) {
   const productQuery = useProduct(slug);
   const settingsQuery = usePublicSettings();
-  const { isAuthenticated } = useAuth();
 
   if (productQuery.isLoading) {
     return (
@@ -114,9 +112,14 @@ export function ProductDetailView({ slug }: ProductDetailViewProps) {
           {product.description && <p className="text-body text-text-primary">{product.description}</p>}
 
           <div className="mt-2 flex flex-wrap gap-3">
-            {product.capabilities.canAddToCart && (
-              <AddToCartButton isAuthenticated={isAuthenticated} returnToPath={returnToPath} />
-            )}
+            <AddToCartButton
+              productId={product.id}
+              productType={product.type}
+              productName={product.name}
+              canAddToCart={product.capabilities.canAddToCart}
+              maxQuantityPerLine={product.maxQuantityPerLine}
+              returnToPath={returnToPath}
+            />
             {product.capabilities.whatsappAvailable && (
               <WhatsAppChatButton
                 normalizedNumber={settingsQuery.data?.whatsappNumber ?? null}
