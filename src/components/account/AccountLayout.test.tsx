@@ -77,6 +77,17 @@ describe("AccountLayout", () => {
     expect(links[1]).toHaveAttribute("href", "/account/notifications");
   });
 
+  it("mounts the shared Log out control for a signed-in user (Phase 5A defect 7)", () => {
+    mockedUseAuth.mockReturnValue(authState({ isAuthenticated: true, user: STUB_USER }));
+    render(
+      <AccountLayout>
+        <div>content</div>
+      </AccountLayout>
+    );
+
+    expect(screen.getAllByRole("button", { name: "Log out" })).toHaveLength(1);
+  });
+
   it("marks the active route with aria-current='page'", () => {
     mockPathname = "/account/profile";
     mockedUseAuth.mockReturnValue(authState({ isAuthenticated: true, user: STUB_USER }));

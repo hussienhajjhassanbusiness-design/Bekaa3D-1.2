@@ -28,6 +28,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getAuthSessionQueryOptions, AUTH_SESSION_QUERY_KEY, type SafeUser } from "./authSession";
 import { createCrossTabSignal } from "./crossTabSignal";
 import { useLogout, type LogoutResult } from "./useLogout";
+import { clearUserScopedQueries } from "./userScopedQueries";
 
 const LOGOUT_EVENT = "logout";
 
@@ -61,6 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       queryClient.cancelQueries({ queryKey: AUTH_SESSION_QUERY_KEY });
       queryClient.setQueryData(AUTH_SESSION_QUERY_KEY, null);
+      clearUserScopedQueries(queryClient);
     });
 
     return () => {

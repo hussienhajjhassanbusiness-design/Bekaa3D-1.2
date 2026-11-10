@@ -14,6 +14,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { ACCOUNT_NAV_ITEMS } from "./accountNavItems";
+import { LogoutButton } from "@/components/auth/LogoutButton";
 
 export function AccountLayout({ children }: { children: ReactNode }) {
   return (
@@ -44,6 +45,7 @@ function AccountShell({ children }: { children: ReactNode }) {
             </Link>
           );
         })}
+        <LogoutButton />
       </nav>
       <section aria-label="Account content" className="flex-1">
         {children}

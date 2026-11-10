@@ -271,3 +271,31 @@ describe("useLogout", () => {
     await expect(act(async () => result.current.mutateAsync())).resolves.toEqual({ serverConfirmed: false });
   });
 });
+
+describe("useLogout: user-scoped cache (Phase 5A defect 7)", () => {
+  it("drops cached admin and notification data synchronously, but keeps public catalogue data", async () => {
+    let resolvePost!: () => void;
+    vi.spyOn(apiClient, "post").mockReturnValue(new Promise((resolve) => (resolvePost = () => resolve(undefined))));
+    const { queryClient, Wrapper } = createWrapper();
+    queryClient.setQueryData(["admin", "customers", "list", {}], { items: [{ email: "someone@example.com" }] });
+    queryClient.setQueryData(["admin", "products", "detail", "p-1"], { id: "p-1" });
+    queryClient.setQueryData(["notifications", "list", {}], { items: [{ id: "n-1" }] });
+    queryClient.setQueryData(["products", "list", {}], { items: [] });
+    queryClient.setQueryData(["publicSettings", "current"], { accepting_orders: true });
+    const { result } = renderHook(() => useLogout(), { wrapper: Wrapper });
+
+    act(() => {
+      void result.current.mutateAsync();
+    });
+
+    await waitFor(() => expect(queryClient.getQueryData(AUTH_SESSION_QUERY_KEY)).toBeNull());
+    expect(queryClient.getQueryCache().findAll({ queryKey: ["admin"] })).toHaveLength(0);
+    expect(queryClient.getQueryCache().findAll({ queryKey: ["notifications"] })).toHaveLength(0);
+    expect(queryClient.getQueryData(["products", "list", {}])).toEqual({ items: [] });
+    expect(queryClient.getQueryData(["publicSettings", "current"])).toEqual({ accepting_orders: true });
+
+    await act(async () => {
+      resolvePost();
+    });
+  });
+});

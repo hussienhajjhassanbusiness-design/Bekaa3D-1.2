@@ -21,6 +21,7 @@ import { apiClient } from "@/lib/api/apiClient";
 import type { ApiError } from "@/lib/api/ApiError";
 import { AUTH_SESSION_QUERY_KEY } from "./authSession";
 import { createCrossTabSignal } from "./crossTabSignal";
+import { clearUserScopedQueries } from "./userScopedQueries";
 
 export interface LogoutResult {
   serverConfirmed: boolean;
@@ -55,6 +56,7 @@ function scheduleOneBackgroundRetry(): void {
 
 async function logout(queryClient: QueryClient): Promise<LogoutResult> {
   queryClient.setQueryData(AUTH_SESSION_QUERY_KEY, null);
+  clearUserScopedQueries(queryClient);
 
   const signal = createCrossTabSignal();
   signal.announce("logout");

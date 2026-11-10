@@ -74,6 +74,17 @@ describe("AdminShell", () => {
     expect(nav.textContent).not.toMatch(/orders|payments|refunds|cancellation|contact|shipping|entitlement/i);
   });
 
+  it("mounts the shared Log out control for a signed-in administrator (Phase 5A defect 7)", () => {
+    mockedUseAuth.mockReturnValue(authState({ isAuthenticated: true, user: ADMIN_USER }));
+    render(
+      <AdminShell>
+        <div>content</div>
+      </AdminShell>
+    );
+
+    expect(screen.getAllByRole("button", { name: "Log out" })).toHaveLength(1);
+  });
+
   it("marks the active route with aria-current='page'", () => {
     mockPathname = "/admin/products";
     mockedUseAuth.mockReturnValue(authState({ isAuthenticated: true, user: ADMIN_USER }));

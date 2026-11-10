@@ -270,6 +270,23 @@ describe("AuthProvider cross-tab logout wiring", () => {
     await waitFor(() => expect(screen.getByTestId("authenticated")).toHaveTextContent("false"));
   });
 
+  it("an incoming cross-tab logout also drops this tab's user-scoped cache (admin, notifications) — Phase 5A defect 7", async () => {
+    mockBootstrap(() => Promise.resolve(SAFE_USER));
+    const signal = mockSignal();
+    const { Wrapper, queryClient } = createClientWrapper();
+    render(<Probe />, { wrapper: Wrapper });
+    await waitFor(() => expect(screen.getByTestId("authenticated")).toHaveTextContent("true"));
+    queryClient.setQueryData(["notifications", "list", {}], { items: [{ id: "n-1" }] });
+    queryClient.setQueryData(["admin", "settings", "list"], [{ key: "accepting_orders" }]);
+    queryClient.setQueryData(["products", "list", {}], { items: [] });
+
+    signal.deliver("logout");
+
+    expect(queryClient.getQueryCache().findAll({ queryKey: ["notifications"] })).toHaveLength(0);
+    expect(queryClient.getQueryCache().findAll({ queryKey: ["admin"] })).toHaveLength(0);
+    expect(queryClient.getQueryData(["products", "list", {}])).toEqual({ items: [] });
+  });
+
   it("ignores cross-tab events other than the literal string 'logout'", async () => {
     mockBootstrap(() => Promise.resolve(SAFE_USER));
     const signal = mockSignal();

@@ -13,6 +13,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AdminGuard } from "./AdminGuard";
 import { ADMIN_NAV_ITEMS } from "./adminNavItems";
+import { LogoutButton } from "@/components/auth/LogoutButton";
 
 export function AdminShell({ children }: { children: ReactNode }) {
   return (
@@ -46,6 +47,7 @@ function AdminShellInner({ children }: { children: ReactNode }) {
             </Link>
           );
         })}
+        <LogoutButton />
       </nav>
       <section aria-label="Admin content" className="flex-1">
         {children}
