@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useEffect, useRef } from "react";
 import { DialogShell } from "./DialogShell";
 
 // Extracted from FVS-007's own ConfirmDialog so neither it nor any
@@ -133,6 +134,36 @@ describe("DialogShell", () => {
     rerender(
       <DialogShell open={false} onClose={onClose} labelledBy="t-id">
         <h2 id="t-id">Title</h2>
+      </DialogShell>
+    );
+
+    expect(document.activeElement).toBe(trigger);
+    document.body.removeChild(trigger);
+  });
+
+  it("still restores focus to the trigger when a child moves focus into the dialog on mount (Phase 5B)", () => {
+    // AddressForm focuses its first field as it opens. Child effects run
+    // before the shell's own, so the shell must record the trigger first.
+    function FocusOnMount() {
+      const ref = useRef<HTMLInputElement>(null);
+      useEffect(() => ref.current?.focus(), []);
+      return <input ref={ref} aria-label="first field" />;
+    }
+    const onClose = vi.fn();
+    const trigger = document.createElement("button");
+    document.body.appendChild(trigger);
+    trigger.focus();
+
+    const { rerender } = render(
+      <DialogShell open={true} onClose={onClose} labelledBy="t-id">
+        <FocusOnMount />
+      </DialogShell>
+    );
+    expect(screen.getByLabelText("first field")).toHaveFocus();
+
+    rerender(
+      <DialogShell open={false} onClose={onClose} labelledBy="t-id">
+        <FocusOnMount />
       </DialogShell>
     );
 

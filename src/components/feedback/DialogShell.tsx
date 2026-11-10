@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, type MouseEvent, type ReactNode } from "react";
 
 export interface DialogShellProps {
   open: boolean;
@@ -55,7 +55,13 @@ export function DialogShell({
   const dialogRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<Element | null>(null);
 
-  useEffect(() => {
+  // A layout effect, not a passive one: every layout effect runs before
+  // any passive effect, so the trigger is recorded before a child that
+  // focuses its first field in its own mount effect (AddressForm, Phase
+  // 5B) moves focus into the dialog. A passive effect here ran after the
+  // child's and recorded the child's input as the "trigger", so focus was
+  // never returned on close.
+  useLayoutEffect(() => {
     if (open) {
       triggerRef.current = document.activeElement;
     } else if (triggerRef.current instanceof HTMLElement) {
