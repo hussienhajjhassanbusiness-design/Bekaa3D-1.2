@@ -23,7 +23,10 @@ const PAID_STATUSES = new Set(["paid", "partially_refunded"]);
 // described in our own words from the server's order state: the backend
 // cancels every not-yet-started physical item (FR-09) and never an STL
 // file; a paid order's cancelled items are refunded (ADR-043), and the
-// refund appears in the Refunds section once the server records it. It
+// refund appears in the Refunds section once the server records it. A
+// cash order the customer cancels counts toward the open-cash-order limit
+// for 24 hours (ADR-038 d23), so cash may be refused meanwhile ("may": the
+// limit is a setting, and the checkout's own 422 never says which). It
 // stays open (and keeps its error) on failure; the parent closes it only
 // after a confirmed success. Escape/backdrop are inert while pending.
 export function CancelOrderDialog({ open, order, pending, error, onConfirm, onClose }: CancelOrderDialogProps) {
@@ -47,6 +50,9 @@ export function CancelOrderDialog({ open, order, pending, error, onConfirm, onCl
         {order.containsStl && <p>STL files in this order aren&apos;t affected and will still be emailed to you.</p>}
         {paid && <p>You paid online, so the cancelled items will be refunded. The refund will show on this page.</p>}
         {order.paymentMethod === "cash" && !paid && <p>You won&apos;t need to pay for the cancelled items.</p>}
+        {order.paymentMethod === "cash" && (
+          <p>After cancelling, you may not be able to choose cash payment for a new order for 24 hours.</p>
+        )}
       </div>
       {error && (
         <div className="mt-4">

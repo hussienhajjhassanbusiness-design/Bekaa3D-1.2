@@ -1528,6 +1528,14 @@ Each item below is `NEEDS BACKEND CONFIRMATION` — this plan does not guess an 
 **What is missing:** An OpenAPI spec, or direct backend confirmation, for the exact path/verb of every endpoint under the affected slices above.
 **Recommended question:** Please publish (or confirm) the literal REST path and HTTP verb for every endpoint under VS-007, VS-011, VS-012, VS-015 (admin), VS-016, VS-019 (admin), VS-020 (item mutations), VS-022 (admin), VS-024 (base list/detail/update), VS-026, VS-028 (admin), VS-029, VS-031 (all but `GET /me/reviews`), VS-032, VS-035 (admin), and VS-036 before any FVS slice in those areas is implemented against the paths shown in §5 of this document — treat every path in this document for those slices as a placeholder, not a contract, until then.
 
+---
+**Issue:** No capability flag for confirm receipt / report a problem on the customer order detail (phase 5G, FVS-031)
+**Backend slice:** VS-029b (backend `ordering/api/receipt.py`, 2dfb27b)
+**Why frontend needs clarification:** `OrderDetailRead` carries `can_cancel` and `can_retry_payment`, but nothing for the two receipt actions. The order page therefore offers them on the backend's own documented rule (a **physical** line `delivered` or `picked_up`; `ordering/domain/receipt.py`), not on a server flag. If that rule changes, the page would offer an action the server refuses (the `409 no_delivered_line` is still handled and shown).
+**What is currently defined:** `POST /me/orders/{id}/confirm-receipt` and `…/report-problem` refuse with `409 INVALID_STATE_TRANSITION` `reason: no_delivered_line` unless such a line exists; per-line `receipt_confirmed_at` / `problem_reported_at` record the first of each.
+**What is missing:** A server-computed `can_confirm_receipt` / `can_report_problem` (or equivalent) on `OrderDetailRead`.
+**Recommended question:** Could the customer order detail expose advisory flags for the two receipt actions, computed with `received_line_ids`, as it already does for cancel and retry?
+
 ## 18. Frontend ↔ Backend Traceability Matrix
 
 | Frontend Slice | Backend Slice(s) | Main Routes | Main API Endpoints | Customer/Admin | Status |

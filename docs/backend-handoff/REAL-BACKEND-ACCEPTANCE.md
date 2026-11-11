@@ -1,5 +1,113 @@
 # Real Backend Acceptance
 
+## Phase 5G: Customer Order Actions (FVS-031), 2026-11-11
+
+| Item | Value |
+|---|---|
+| Frontend commits tested | `74e2140` (action API, availability, error model), `cd70d6c` (Order actions section), `cf7cd5a` (mocked E2E), `11860ed` (smoke readiness-banner race, test only). The cash-cancel copy (ADR-038 d23, found by this run) is in the docs commit after them |
+| Backend | `C:\My projects\Bekaa3D-backend`, branch `main`, commit **`2dfb27b`** (unchanged, no backend code touched) |
+| Contract check | running `/openapi.json` is identical to `docs/backend-handoff/openapi.json` (key-sorted). `CustomerOrderCancelRequest`, `ProblemReportCreate` and the three routes' responses read field by field, then the implementation (`ordering/api/cancel.py`, `ordering/api/receipt.py`, `ordering/application/services/receipt.py`, `ordering/domain/receipt.py`, `ordering/domain/customer_view.py`, `ordering/domain/cancellation.py`, `fulfillment/application/cancel_lines.py`; ADR-038 d23, ADR-043) |
+| Runtime | Docker Compose backend on :8000 (`PAYMENT_PROVIDER=mock`). `npm run dev` on :3000, started only for the run and stopped after it. `scripts/mock_pay.py` copied to the API container's `/tmp` for the run and **removed after it** (verified) |
+| Method | real Edge through Playwright against the real frontend and backend. **No route mocking.** API probes used the browser context's request client (same cookies). Scripts kept in the session scratchpad, never committed |
+| Customer identities | throwaway `accept-actions-a-<ts>` and `accept-actions-d-<ts>@example.com` (real register with the Turnstile test token, real verify-email with the token read only from that account's `email_outbox` row; D re-entered once through the real password-reset flow). Random passwords, never printed or stored |
+| Admin | credentials read only from `%USERPROFILE%\.bekaa3d\dev-admin.json` (real login + TOTP). Used **only** to move one test order through its real line transitions (`POST /api/v1/admin/orders/{id}/items/{item}/transition`): `in_production` → `ready_to_ship` → `shipped` → `delivered`. No admin frontend was built or used |
+| Data left behind | A: `B3D-6QJMXDW1` and `B3D-AKX3XEAR` cash/delivery, **cancelled by the customer** (the first from an aborted script run); `B3D-5D0C9N6V` online (mock, paid)/delivery, **completed**, line `delivered`, receipt confirmed, 2 problem reports (2 `contact_messages` rows, status `new`). D: one STL-only online order, paid, line `awaiting_delivery` (never emailed). No setting or product changed |
+
+**Overall: PASS, 33/33** (after correcting three script assertions, none an app defect). One product rule found and surfaced in the UI (below).
+
+### Current contract (as implemented)
+
+All three: `POST`, the order's owner, **verified email** (`403 EMAIL_VERIFICATION_REQUIRED`, checked before ownership), `X-CSRF-Token` (`403 CSRF_INVALID`), `401 AUTH_REQUIRED` without a session. Another customer's order and an unknown id: the same `404 NOT_FOUND`. Every success answers with the full **`OrderDetailRead`**.
+
+- **Cancel:** `POST /api/v1/me/orders/{order_id}/cancel`. Optional body `CustomerOrderCancelRequest {reason?: string ≤500}` (`extra="forbid"`), an audit note only; the UI sends no body. `200`. **Order-level, all-or-nothing**: every live physical line, all still `pending`, cash or paid, order `in_progress`/`partially_refunded` (the same `can_cancel` the detail reports, re-checked under the locks). Otherwise `409 ORDER_NOT_CANCELLABLE` (no extensions): printing started, an unpaid online order, an STL-only order, nothing left. STL lines are never cancelled. A paid order's cancelled lines get a cancellation refund (pending until settled, ADR-043). `429 RATE_LIMITED` (10/h per user). Sets `orders.customer_cancelled_at`; **`orders.cancelled_at` stays null** (ADR-043 d7: it is the hold release's mark), each line gets its own `cancelled_at`.
+- **Confirm receipt:** `POST …/confirm-receipt`, no body, `200`. Needs a **physical** line `delivered` or `picked_up` (an STL "delivered" is an emailed file), else `409 INVALID_STATE_TRANSITION` with `reason: "no_delivered_line"`. Stamps `receipt_confirmed_at` on those lines once; a repeat is a no-op (no audit row). Changes no line or order status. No rate limit.
+- **Report a problem:** `POST …/report-problem`, body `ProblemReportCreate {message}` (`extra="forbid"`; 1-5000 characters, not blank, no control characters except tab/LF/CR), `201`. Same `409 no_delivered_line`. Every report is a new contact message for the team (no ticket number is returned); `problem_reported_at` keeps the **first**. No category or attachment. `422 VALIDATION_ERROR`; `429 RATE_LIMITED` (5/h per user, counting refused requests too).
+- **ADR-038 d23:** a cash order the customer cancels counts toward `cash_max_open_orders` for **24 hours**, for the account and the phone. Cash checkout meanwhile is `422 CASH_NOT_AVAILABLE` (which never says why).
+- **No capability flags for the receipt actions** on `OrderDetailRead` (logged in `FRONTEND-VERTICAL-SLICE-PLAN.md` §17).
+
+### Frontend behaviour
+
+- **Where:** `/account/orders/[id]`, a separate "Order actions" section under the items (`OrderCustomerActions`), apart from the FVS-027 payment section, which is unchanged.
+- **Offered only when the server's state makes it meaningful** (`orderActions.ts`): Cancel order ⇔ `can_cancel`; I received my items ⇔ a delivered/picked-up physical line without `receipt_confirmed_at`; Report a problem ⇔ a delivered/picked-up physical line (repeats allowed). With nothing offered and nothing recorded, the section is absent. Recorded receipt / problem dates come from the server's line fields.
+- **Cancel:** explicit dialog, focus on "Keep my order", effect described in frontend copy (printed items before production; STL files unaffected; paid online → refunded; cash → nothing to pay, and cash may be unavailable for a new order for 24 hours). Stays open with the error on failure; closes only on success.
+- **Report a problem:** one textarea with a live character count; client validation mirrors the server (code points, not UTF-16 units). The text survives a failed send and a close/reopen; it is cleared only after success.
+- **Cache:** one hook (`useOrderAction`). On success the POST's own `OrderDetailRead` is written to `orderKeys.detail(id)` and the user-scoped `orderKeys.root` family is invalidated (detail + history list). A refusal, 404 or unknown outcome also invalidates it. No second store; nothing set locally; history entries come only from the server.
+- **Duplicate submits:** a synchronous ref guard plus pending/disabled controls; `retry: false`. The shared `authenticatedRequest` resends the identical request once after a silent refresh on `401`.
+- **Errors** (`orderActionErrors.ts`, status + `code` + `reason` only): ORDER_NOT_CANCELLABLE, INVALID_STATE_TRANSITION/no_delivered_line (unknown reasons get neutral copy), NOT_FOUND, CSRF_INVALID (and the local missing-cookie case), AUTH_REQUIRED, EMAIL_VERIFICATION_REQUIRED, 422 on a report, RATE_LIMITED (with Retry-After), network/timeout/5xx ("couldn't confirm whether that went through", re-read). Never `title`, `detail` or `msg`.
+- **Keeps a refusal visible:** if the re-read after a refusal leaves nothing to offer, the open dialog (and its error) or the receipt error stays until dismissed (found by mocked E2E during development).
+
+### Results
+
+| Scenario | Result | Evidence |
+|---|---|---|
+| Contract: new cash order cancellable | **PASS** | `in_progress`, `can_cancel: true`, `payment_due: true` |
+| Cancel confirmation dialog | **PASS** | explicit confirmation; frontend copy incl. the 24-hour cash note; focus on "Keep my order" |
+| Cancel POST from the UI | **PASS** | double-click → **1** POST → `200`; no body; `X-CSRF-Token` = cookie |
+| Real cancel state transition | **PASS** | order `cancelled` (DB too), `customer_cancelled_at` set, detail `cancelled_at` null (ADR-043 d7), `can_cancel`/`payment_due` false, `amount_due` null, line `cancelled` with `cancelled_at`; history `order:in_progress→cancelled`, `line:pending→cancelled`; no refund, no payment (cash, unpaid) |
+| UI shows the server's cancelled state | **PASS** | badge "Cancelled"; "Order updates" gained the server's entries; no Cancel |
+| Cancel persists after reload | **PASS** | still Cancelled, no action |
+| Order history reflects the cancel | **PASS** | card "Cancelled", no payment due |
+| Repeat cancel refused | **PASS** | `409 ORDER_NOT_CANCELLABLE` |
+| Self-cancelled cash order counts for 24 h | **PASS** | cash checkout right after → `422 CASH_NOT_AVAILABLE` (ADR-038 d23) |
+| `no_delivered_line` (pending order) | **PASS** | confirm-receipt and report-problem → `409 INVALID_STATE_TRANSITION` `reason: no_delivered_line`; nothing stamped |
+| Pending order offers no receipt actions | **PASS** | only Cancel order |
+| Refused cancel once printing started | **PASS** | admin → `in_production`; the customer line still reads `pending`, `can_cancel: false`; POST → `409 ORDER_NOT_CANCELLABLE`; DB line still `in_production` |
+| Refused cancel in the UI (stale page) | **PASS** | dialog kept open with "This order can no longer be cancelled, so nothing was changed…"; after closing, the re-read order offers no Cancel |
+| Shipped is not received | **PASS** | line `shipped`: confirm-receipt → `409` `no_delivered_line` |
+| Admin precondition: delivered | **PASS** | real transitions `in_production` → `ready_to_ship` → `shipped` → `delivered` (each `200`); customer: line `delivered`, order **`completed`**, payment `paid` |
+| Delivered order offers receipt + report, no cancel | **PASS** | |
+| Confirm receipt | **PASS** | UI POST → `200`, no body; `receipt_confirmed_at` set; order status unchanged (`completed`); line still `delivered` |
+| UI after confirm | **PASS** | server date shown; action no longer offered |
+| Repeat confirm is idempotent | **PASS** | `200`; `receipt_confirmed_at` unchanged; one `order.receipt_confirmed` audit row |
+| Receipt persists after reload | **PASS** | |
+| Report validation (client) | **PASS** | blank → "Describe the problem before sending.", no request |
+| CSRF_INVALID | **PASS** | stale cookie → UI POST `403`; "Unable to verify your session…"; text kept; no contact message stored |
+| Session refresh during report | **PASS** | access cookie dropped → `401` → silent refresh → identical request → `201`; body exactly `{message}` |
+| Report a problem | **PASS** | `problem_reported_at` set; 1 contact message for the order; line and order state unchanged |
+| UI after report | **PASS** | "Your report was sent. Our team will reply by email." + server date |
+| Report persists after reload | **PASS** | date shown; Report a problem still offered |
+| Repeat report | **PASS** | `201`; a second contact message; `problem_reported_at` keeps the first |
+| Report validation (server) + rate limit | **PASS** | blank → `422`, 5001 characters → `422` `VALIDATION_ERROR`; the next (sixth this hour, refusals included) → `429 RATE_LIMITED`. No message stored for any |
+| STL-only cancellation rule | **PASS** | paid STL-only order: `can_cancel: false`; POST cancel → `409 ORDER_NOT_CANCELLABLE`; line `awaiting_delivery` |
+| STL-only order in the UI | **PASS** | no Order actions section; no download |
+| Foreign vs unknown order | **PASS** | D on A's order vs a random id: cancel, confirm-receipt, report-problem each `404`/`404` with identical bodies (apart from `instance`/`request_id`); A's order untouched |
+| Foreign order in the UI | **PASS** | "Order not found" (same as unknown) |
+| No page errors | **PASS** | none |
+
+Script assertions corrected during the run (not app defects): the first run expected the detail's `cancelled_at` to be set after a customer cancel (ADR-043 d7 says it stays null); it then expected a second cash order on the same account (ADR-038 d23 refuses it for 24 hours, so the receipt order became a paid online one); and the STL checkout lacked `accept_digital_final_sale`. The third validation probe met the real 5/h limit, which is recorded as evidence. Registration then hit its own 5/h per-IP limit (a sliding window that the script's own probes kept full), so the foreign check ran as D (a second verified customer).
+
+### Not tested against the real backend (and why)
+
+- **Cancelling a paid order** (refund created, `partially_refunded`/`refunded` status, Refunds row): the refund is settled by an administrator (Phase 5I). The dialog's refund copy and the Refunds section are covered by unit and mocked E2E.
+- **Mixed physical + STL cancel** (STL line kept, order stays live): not provoked, to keep to one cancelled order; the rule was read from `customer_cancels` and is covered by unit tests.
+- **Pickup `picked_up` receipt:** the delivery path was used; the rule (`delivered` or `picked_up`) is covered by unit tests.
+- **`429` on cancel** (10/h): not provoked, to avoid extra orders.
+- **Unverified account (`403 EMAIL_VERIFICATION_REQUIRED`):** registration was rate-limited for the rest of the run. Deferred to the Phase 5H run (recorded there). Covered meanwhile by unit tests (`orderActionErrors`, `OrderCustomerActions`).
+
+### Defects found and fixed
+
+- **During development (mocked E2E):** after a refusal, the canonical re-read could leave the section with nothing to offer, and it unmounted, taking the open dialog and its error with it. The section now stays while a dialog is open or an error is showing (unit test + E2E).
+- **Product rule surfaced by the real run:** ADR-038 d23 (cash held off for 24 hours after a self-cancel) was not in the cancel dialog. Added frontend copy for cash orders ("you may not be able to choose cash payment for a new order for 24 hours").
+- **Flaky test (pre-existing, test only):** `smoke.spec.ts` readiness-banner test counted `role=status` regions and then waited on each by index (failed 1/3 alone). It now reads every region's text in one `allTextContents()` snapshot (8/8).
+
+### Verification (this phase)
+
+| Command | Result |
+|---|---|
+| `npm run lint` | 0 errors, 4 warnings (the known `<img>` warnings) |
+| `npm run typecheck` | clean |
+| `npm run test` | **2272/2272** (239 files), re-run after the cash-copy change |
+| `npm run build` | pass, re-run after the cash-copy change |
+| `npm run test:e2e` | **134/135** in the one full run; the one failure was the pre-existing readiness-banner race (above), fixed test-only and then 8/8 on repeat. 10 new tests in `e2e/account-order-actions.spec.ts` (10/10 again after the copy change); `account-orders.spec.ts` updated in place |
+
+### Remaining gaps
+
+- No `can_confirm_receipt` / `can_report_problem` flags (§17): the page offers them on the backend's documented received-line rule.
+- The cancel reason (`reason?`, an audit note) is not collected by the UI.
+- A customer-cancelled order shows no "Cancelled on" date in the header, because the detail's `cancelled_at` is null by design; the date appears in "Order updates".
+
+---
+
 ## Phase 5F: Payment Result + Payment Retry (FVS-027), 2026-11-11
 
 | Item | Value |

@@ -93,6 +93,8 @@ describe("OrderCustomerActions — cancel", () => {
     const dialog = screen.getByRole("dialog", { name: "Cancel this order?" });
     expect(within(dialog).getByText(/STL files in this order aren't affected/)).toBeInTheDocument();
     expect(within(dialog).getByText(/won't need to pay for the cancelled items/)).toBeInTheDocument();
+    // ADR-038 d23: a self-cancelled cash order counts as an open cash order for 24 hours.
+    expect(within(dialog).getByText(/may not be able to choose cash payment for a new order for 24 hours/)).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "Keep my order" })).toHaveFocus();
     expect(spy).not.toHaveBeenCalled();
     await user.keyboard("{Escape}");
@@ -112,6 +114,7 @@ describe("OrderCustomerActions — cancel", () => {
     );
     await user.click(screen.getByRole("button", { name: "Cancel order" }));
     expect(screen.getByText(/cancelled items will be refunded/)).toBeInTheDocument();
+    expect(screen.queryByText(/choose cash payment/)).not.toBeInTheDocument();
   });
 
   it("on success: closes, stores the server's detail, re-reads the order family, announces", async () => {
