@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AdminActionDialog } from "@/components/admin/orders/AdminActionDialog";
@@ -65,6 +65,8 @@ export function ContactMessageView({ messageId }: { messageId: string }) {
     enabled: validId,
   });
   const [target, setTarget] = useState<ContactMessageAction | null>(null);
+  // Synchronous double-submit guard (isPending only flips on the next render).
+  const inFlight = useRef(false);
   const update = useMutation({
     mutationFn: (action: ContactMessageAction) => contactMessagesAdminApi.updateStatus(messageId, action.nextStatus),
     retry: false,
@@ -86,7 +88,8 @@ export function ContactMessageView({ messageId }: { messageId: string }) {
   const actions = isContactMessageStatus(message.status) ? getContactMessageActions(message.status) : [];
 
   async function confirm() {
-    if (!target || update.isPending) return;
+    if (!target || inFlight.current) return;
+    inFlight.current = true;
     try {
       const updated = await update.mutateAsync(target);
       queryClient.setQueryData(contactMessageKeys.detail(messageId), updated);
@@ -97,6 +100,8 @@ export function ContactMessageView({ messageId }: { messageId: string }) {
       if (e?.kind === "http" && e.status === 409) {
         void queryClient.invalidateQueries({ queryKey: contactMessageKeys.root });
       }
+    } finally {
+      inFlight.current = false;
     }
   }
 
