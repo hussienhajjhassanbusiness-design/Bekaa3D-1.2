@@ -1,5 +1,104 @@
 # Real Backend Acceptance
 
+## Phase 6B: Customer Engagement (Contact + Bring Your Idea), 2026-11-11 to 2026-11-12
+
+Contact (6B-1) has its own section below. This section covers Bring Your Idea (6B-2), the phase gate and the security review.
+
+### Phase 6B commits
+
+| Commit | What |
+|---|---|
+| `e0fe414` | Contact: `/contact`, `/admin/contact-messages`, `/admin/contact-messages/[id]`, the shared guest-form error mapper, mocked E2E |
+| `721884f` | docs: 6B-1 real acceptance |
+| `fae1692` | BYI: `/bring-your-idea`, `/admin/custom-requests` (+ funnel), `/admin/custom-requests/[id]`, `apiClient.getBlob`, `FileUploader` `accept`/`hint`, mocked E2E |
+| `91e7d04` → `32bc24e` | dev-proxy body limit raised, then **reverted** (see defects) |
+| `f8a4b4f` | E2E specs updated for the new header, footer and admin nav links |
+| `d967316` | Contact admin status confirm: synchronous double-submit guard |
+
+## Phase 6B-2: Bring Your Idea (VS-034, VS-035), 2026-11-12
+
+| Item | Value |
+|---|---|
+| Frontend commit tested | `fae1692` (the dev server also had `91e7d04` loaded, which the over-10 MB check depends on; see defects). Committed before the run |
+| Backend | `C:\My projects\Bekaa3D-backend`, branch `main`, commit **`2dfb27b`** (unchanged, no backend code touched) |
+| Contract check | running `/openapi.json` (as in 6B-1); then `engagement/api/custom_requests.py`, `custom_request_admin.py`, `custom_request_schemas.py`, `admin_analytics.py`, `domain/custom_request.py`, `domain/enums.py`, `application/commands/submit_custom_request.py`, `custom_request_pipeline.py` |
+| Runtime | Docker Compose backend on :8000 (`CAPTCHA_PROVIDER=fake`, `SCANNER=clamav`). `npm run dev` on :3000 for the run only |
+| Method | real Edge through Playwright, real frontend and backend, **no route mocking** except one in-flight rewrite of `captcha_token` to get the real `400`; admin through the frontend proxy (password + TOTP). Scripts in the session scratchpad, never committed |
+| Identities | guest senders `accept-byi-<ts>` and `accept-byi-b-<ts>@example.com`; admin from `%USERPROFILE%\.bekaa3d\dev-admin.json` (never printed); phase 5H's `accept-admin-e-<ts>` customer, re-entered through the real password-reset flow |
+| Rate limit | the run needs 5 submissions that pass the captcha (the per-IP limit is 5/h). The `ratelimit:custom_request:*` keys in the **dev** Redis were cleared before the final run, because earlier partial runs had spent the hour's quota. No backend code or setting changed |
+| Data | every `accept-byi-*` lead from all three runs (5) deleted afterwards, with their 7 attachment rows, the 7 stored files under `uploads_private/` and the 5 admin notifications; audit rows kept |
+
+**Overall: PASS, 22/22** (final run). Two script assertions were corrected along the way: a part-name regex that also matched `filename=`, and Postgres printing `true` rather than `t`. One earlier run aborted because a stale dev server's render worker had died (`EPIPE`); it was restarted.
+
+### Current contract (as implemented)
+
+- **Submit:** `POST /api/v1/custom-requests`, public (no session, no CSRF), `multipart/form-data`: `name` 1-100, `email`, **`phone` required** (≤32, phone-shaped), `project_title` 1-200, `description` 1-5000, `preferred_material?` ≤100, `preferred_colour?` ≤100, `dimensions?` ≤200 (all free text), `captcha_token`, `attachments` 0-5 files of 1 byte to 10 MB. **Images only** (JPEG, PNG, WebP), the type read from the content. Each is malware-scanned (ClamAV), decoded and re-encoded **synchronously** before the `201`; nothing is stored if any file fails. The body must carry `Content-Length` and be at most 5 × 10 MB + 64 KB. No STL/3D files, budget, deadline or quantity. `201 {id, created_at}` with no attachment URLs. The submitter has no status view (the lead is admin-only, BR-111) and no account link.
+- **Order of checks:** 20 attempts/h and the body size; field validation (`422 VALIDATION_ERROR`); file count and sizes (`422 UPLOAD_REJECTED`, `loc [body, attachments(, i)]`); captcha (`400 CAPTCHA_INVALID` / `503`); 5/h per IP and per email (`429`); then, per file, the scan (`422 MALWARE_DETECTED`, `loc [body, attachments, i]`; `503 SERVICE_UNAVAILABLE` while the scanner is down) and the decode (`422 UPLOAD_REJECTED`). Validation and size refusals spend no quota; a type/decode or malware refusal does.
+- **Admin:** `GET /api/v1/admin/custom-requests?cursor&limit(1-100, 20)&status&created_after&created_before&email` → summaries (with `quoted_amount_cents`, `currency`, `outcome`, `attachment_count`) in pipeline order. `GET /{id}` → the detail with unexpired attachment metadata (audited `custom_request.viewed`). `PATCH /{id} {admin_notes}` (CSRF; ≤5000; blank or null clears; status is not editable there). `POST /{id}/transition {target_status, quoted_amount_cents?}` (CSRF) on the only edges `new→contacted`, `contacted→quoted|lost`, `quoted→in_progress|lost`, `in_progress→completed`, `completed→closed`. `quoted` requires 1-100,000,000 cents and no other move may carry an amount; the server sets `currency` (USD), the `*_at` stamps and `outcome` (`in_progress` = won, `lost` = lost); otherwise `409 INVALID_STATE_TRANSITION`. `GET /{id}/attachments/{aid}/download` streams the re-encoded image (`Content-Disposition: attachment`, `nosniff`, `CSP default-src 'none'; sandbox`, `no-store`); expired → `404`. A lead is never an order or a payment. No assignment.
+- **Funnel:** `GET /api/v1/admin/analytics/custom-requests/funnel?from&to` → `{from, to, submitted, contacted, quoted, won, lost, open, quoted_total_cents, won_total_cents, currency}` for one cohort by submission date (from inclusive, to exclusive; default the last 90 days; at most 366 days; aware datetimes). A stage counts every lead that ever reached it.
+
+### Frontend behaviour
+
+- `/bring-your-idea` (header and footer "Bring your idea"): the exact fields in two fieldsets, the one `CaptchaWidget` (token reset after every attempt), and the shared `FileUploader` in deferred mode with a JPEG/PNG/WebP picker filter and a local pre-check (type, 10 MB, 5 files; UX only). One multipart request; blank optionals omitted. Success: "Thanks — we've received your idea…" (never the id) and "Send another idea". Refusals use frontend copy only: a rejected or infected image is named from the visitor's own selection by the server's index; any `503` (captcha or scanner) gets one neutral line; validation, rate limit, network and timeout as for Contact.
+- `/admin/custom-requests` (nav "Bring Your Idea"): the server's funnel numbers for a submitted from/to range (blank = the server default), no derived rates; the list with status, date and exact-email filters (the email never in the page URL) and cursor pagination.
+- `/admin/custom-requests/[id]`: requester (mailto for a plain address), the idea as plain pre-wrapped text, preferences, the image list (name, size, kept until) with **Download** (bytes fetched through the admin session with refresh and MFA handling, handed to the browser as a file; never displayed inline, never a server URL), pipeline timestamps and quote, one button per server edge behind a confirmation ("Record quote" asks for the amount), and the internal notes editor.
+
+### Results
+
+| Scenario | Result | Evidence |
+|---|---|---|
+| Client checks | **PASS** | empty submit → inline errors incl. the required phone; an `.stl` refused locally; nothing sent |
+| `400 CAPTCHA_INVALID` (real) | **PASS** | token rewritten in flight → real `400`; frontend captcha copy |
+| Exact multipart body | **PASS** | `multipart/form-data`, no CSRF header; parts `name, email, phone, project_title, description, preferred_material, dimensions, captcha_token, attachments, attachments` (blank colour omitted) |
+| `UPLOAD_REJECTED` names the file (real) | **PASS** | an undecodable "fake.png" at index 1 → `422 UPLOAD_REJECTED`; UI "“fake.png” couldn't be accepted…"; nothing stored |
+| Submit → persisted | **PASS** | `201`; values as sent, blank colour null, status `new`; no id shown |
+| Over-10 MB browser submission | **PASS** | 3 images, 11.2 MB body → `201`; 3 attachments, all `clean` (only with the reverted proxy setting loaded; see defects) |
+| Synchronous screening and re-encode | **PASS** | sketch.png sent 150 bytes, stored 122 (re-encoded), scan `clean`, private key under `custom-requests/`, expiry from the retention setting |
+| Server validation and bounds | **PASS** | missing phone `422 body.phone`; bad phone `422`; 6 images `422 UPLOAD_REJECTED`; 10 MB + 1 byte `422 UPLOAD_REJECTED` |
+| `MALWARE_DETECTED` (real ClamAV) | **PASS** | the EICAR test string as an image → `422 MALWARE_DETECTED`; nothing stored |
+| Receipt shape | **PASS** | keys `id, created_at` only |
+| Admin queue | **PASS** | exact email filter → the lead (3 images); email not in the page URL |
+| Admin detail | **PASS** | all fields; `<b>` as text; `custom_request.viewed` audited |
+| Image download (UI) | **PASS** | browser download "sketch.png", PNG signature, the stored (re-encoded) size; headers `image/png`, `nosniff`, `default-src 'none'; sandbox`, `no-store`, RFC 6266 filename |
+| Server pipeline rules | **PASS** | `contacted → in_progress` `409 INVALID_STATE_TRANSITION`; quoted without amount `422`; amount 0 `422`; stale CSRF `403`; unchanged |
+| Record quote (UI) | **PASS** | empty amount refused locally; `{"target_status":"quoted","quoted_amount_cents":18550}` with `X-CSRF-Token` → quoted, 18550 USD, stamps set |
+| Full pipeline, reload | **PASS** | `in_progress` (won) → `completed` → `closed`; after reload: Closed, Outcome Won, no moves |
+| Notes (UI) | **PASS** | saved with CSRF, survive reload, blank → `{"admin_notes":null}` clears; 2 `custom_request.notes_updated` rows |
+| Lost path (UI) | **PASS** | `contacted → lost`; outcome lost, `closed_at` set, no quote |
+| Funnel changes | **PASS** | today's cohort before → after: submitted +2, contacted +2, quoted +1, won +1, lost +1, open +0, quoted and won totals +$185.50 |
+| Funnel UI = server; bounds | **PASS** | default panel "Submitted" = API; a 2-year span `422`; a naive datetime `422` |
+| Customer and anonymous isolation | **PASS** | customer: list, detail, download, transition, notes, funnel all `404`; UI 404 page; anonymous download `401` |
+| No page errors | **PASS** | none |
+
+### Not tested against the real backend
+
+- `503` (captcha or scanner unavailable): unit and mocked E2E only.
+- `429` on this route: not provoked (Contact's `429` was verified live; the same mapper handles both).
+- Attachment expiry: the retention is about 90 days; the `404` copy is unit-tested.
+
+### Defects found
+
+1. **The dev proxy truncates request bodies over 10 MB (frontend, open, documented).** Next buffers a rewritten request body only up to `experimental.proxyClientMaxBodySize` (default 10 MB) and forwards it cut short under the original `Content-Length`, so the backend waits and the submission hangs; the client gives up after its 180 s timeout with the timeout copy. A BYI submission over 10 MB in total (for example two 6 MB photos, well inside the backend's 5 × 10 MB) therefore fails **through the local `/api` dev proxy**. Raising the limit (`91e7d04`) fixed the upload (the 11.2 MB check above) but degraded the dev server under the parallel mocked E2E suite (stalled page loads, 3-14 failures over four runs); without it the same suite is 161/161 in under a minute. It was reverted (`32bc24e`). Production fronts the backend with nginx (`docs/setup/frontend-setup.md`): the deployment must route `/api` to the backend directly, or allow at least 52,494,336 bytes on whatever proxies it.
+2. **Pre-contract placeholders replaced.** The old Contact form (3 fields), the BYI form (description and attachments only, no contact details), the linear-only contact workflow (the backend allows forward skips) and the speculative guest error kinds were removed. No fake field was kept.
+3. **Backend observation (no change requested):** the admin list filters take the sender's `email` as a GET query parameter, so it can appear in proxy and server access logs; the cash-block phone search uses a POST body for the same reason. The frontend keeps it out of the page URL.
+
+### Phase 6B gate
+
+| Command | Result |
+|---|---|
+| `npm run lint` | 0 errors, 4 warnings (the known `<img>` warnings) |
+| `npm run typecheck` | clean |
+| `npm run test` | **2154/2154** (226 files) on `f8a4b4f`; **2154/2154** again after `d967316` |
+| `npm run build` | pass (`/contact`, `/bring-your-idea`, `/admin/contact-messages`, `/admin/custom-requests` static; the `[id]` pages dynamic) |
+| `npm run test:e2e` | **161/161** (51 s) on `f8a4b4f`; `e2e/contact.spec.ts` 5/5 again after `d967316`. The earlier full runs with `91e7d04` failed 3-14 admin specs under load, which is how the proxy-setting regression was found |
+
+### Security review
+
+- **Automated:** the security-guidance plugin's commit review ran on every 6B code commit (`e0fe414`, `fae1692`, `91e7d04`, `32bc24e`, `f8a4b4f`, `d967316`): "no security issues found". The `/security-review` skill could not run: it diffs against `origin/HEAD`, and this repository has no remote.
+- **Manual:** captcha from the one widget, a fresh single-use token per attempt, never auto-retried, a missing token refused locally; uploads pre-checked for UX only, while the server screens and re-encodes; files are named only from the visitor's own selection; downloads are fetched bytes saved under the server's `Content-Disposition` name, never rendered inline or followed as a URL; all visitor text (names, messages, titles, descriptions, filenames) rendered as React text, no `dangerouslySetInnerHTML`, `mailto:` only for a plain address; admin routes behind `AdminShell`/`AdminGuard` with the MFA signal, and the backend's `404` verified for customers on every route; every admin write carries `X-CSRF-Token` and goes through a confirmation (status, transitions) or an explicit Save (notes), with a synchronous in-flight guard and `retry: false`; Problem `title`/`detail`/`msg` never shown; no browser storage; the receipt id never displayed; email filters never in page URLs. No open finding.
+
+---
+
 ## Phase 6B-1: Contact (VS-033), 2026-11-11
 
 | Item | Value |
