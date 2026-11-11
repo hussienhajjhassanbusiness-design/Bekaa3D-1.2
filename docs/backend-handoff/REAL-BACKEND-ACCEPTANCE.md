@@ -1,5 +1,106 @@
 # Real Backend Acceptance
 
+## Phase 6A: Admin Operations Completion, 2026-11-11
+
+| Item | Value |
+|---|---|
+| Frontend commits tested | `57ccc0c` (optional customer cancel reason), `1bf7b78` (manual release, late capture, chargeback create), `2a830a6` (`/admin/cash-blocks`), `6b43e13` (customer / date filters), `0fce5a9` (mocked E2E), `fe4a721` (backend handoff note). All committed before the run |
+| Backend | `C:\My projects\Bekaa3D-backend`, branch `main`, commit **`2dfb27b`** (unchanged, no backend code touched) |
+| Contract check | running `/openapi.json` identical to `docs/backend-handoff/openapi.json`; then `ordering/api/admin_cash_blocks.py`, `admin_release.py`, `ordering/domain/payment_recovery.py`, `cancellation.py` (cash block rule), `payments/api/admin_payments.py` (record-capture), `admin_chargebacks.py`, `payments/domain/manual.py`, `refunds.py`, `payments/application/services/refunds.py`, `ordering/api/cancel.py`, and every admin list's query parameters |
+| Runtime | Docker Compose backend on :8000 (`PAYMENT_PROVIDER=mock`). `npm run dev` on :3000 only for the run, stopped after it. `scripts/mock_pay.py` copied to the API container's `/tmp` and **removed after** (verified) |
+| Method | real Edge through Playwright, real frontend and backend, **no route mocking**; admin through the frontend proxy (password + TOTP) |
+| Identities | admin from `%USERPROFILE%\.bekaa3d\dev-admin.json` (never printed); phase 5H's `accept-admin-e-<ts>` customer, re-entered through the real password-reset flow; its own address phone read from the database only to drive the phone search (never printed or logged). No new registration |
+| Data left behind | E: `B3D-9YNGBN8W` cash/delivery, line **cancelled** (`refused`) by the admin → its cash block created and then **cleared**; `B3D-RDERK66R` online (mock, paid), **cancelled by the customer** with a reason, cancellation refund pending. `B3D-WQMG40BW` (phase 5I): one **chargeback** $31.00 recorded (it voided and absorbed the pending reissue). One audit row from a cash-block phone search. No setting or product changed |
+
+**Overall: PASS, 18/18** (one script assertion corrected: Postgres renders `text || boolean` as `true`, not `t`; the block row was confirmed directly).
+
+### Audit of the remaining admin operations
+
+| Operation | Class | Backend (2dfb27b) | Frontend now |
+|---|---|---|---|
+| Chargeback create | **A** built, was missing | `POST /admin/orders/{id}/chargebacks` + `Idempotency-Key` | **Built** (Record a chargeback on the admin order) |
+| Chargeback update / resolve / acknowledge | **C** not built | no such routes; `GET /admin/orders/{id}/chargebacks`, `GET /admin/chargebacks/{id}` only | read-only rows, as before |
+| Late capture | **A** | `POST /admin/payments/{id}/record-capture` + `Idempotency-Key` | **Built** (Record late capture on the payment) |
+| Manual release of unpaid orders | **A** | `POST /admin/orders/{id}/release` | **Built** (Release order on the payment, on `release_order`) |
+| Cash blocks | **A** (list, search, clear); creation **B** automatic only | `GET /admin/cash-blocks`, `POST …/search`, `POST …/{id}/clear` | **Built** `/admin/cash-blocks` |
+| Admin filters | **A** | orders `customer_id`, `placed_after/before`; payments `order_id`, `initiated_after/before`; refunds `customer_id`, `order_id`, `created_from/to`; cash blocks `customer_id`, `active`; STL queue `product_id`, `customer_id` | **Built** for orders, payments, refunds, cash blocks (STL queue filters not added) |
+| Customer cancel reason | **A** | `CustomerOrderCancelRequest {reason? ≤500}` | **Built** (optional field in the cancel dialog) |
+| Admin order cancel reason | already built | `AdminOrderCancelRequest {reason 1-500, cancel_reason?}` (required) | unchanged |
+| Void of a pending reissue after its line is `refunded` | **D** decision (intended rule with an operator consequence) | `refund_step`: "a void never reopens a closed line" | unchanged; backend handoff `REFUND-VOID-AFTER-REISSUE.md` |
+
+### Current contract (as implemented)
+
+- **Cash blocks:** a block is created **by the server** when every live line of a cash order ends `cancelled` with reason `refused` or `no_show` (`ordering/domain/cancellation.py cash_block_reason`); there is no manual create and no expiry. Read: `{id, customer_id, order_id, order_number, reason, created_at, active, cleared_at, cleared_by}` (never the phone or its hash). `GET /admin/cash-blocks?customer_id&active&limit(1-100, 25)&cursor` newest first; `POST /admin/cash-blocks/search {phone ≤32, active?, limit?, cursor?}` (CSRF; the phone only in the body, normalised and hashed server-side; `422` for a non-Lebanese number; one audit row per search without the phone); `POST /admin/cash-blocks/{id}/clear` (CSRF; clearing a cleared block returns it unchanged). 60/h. A block makes cash checkout `422 CASH_NOT_AVAILABLE`. It is not a deactivation, a payment failure or an order cancellation.
+- **Manual release:** `POST /admin/orders/{id}/release {reason 10-1000, events_reviewed}` → `{order_id, status: "cancelled", cancelled_at, attempts_expired, events_dismissed}`; the payment detail lists `release_order` only for an unpaid online order after `hold_expires_at + 24 h`. `409 INVALID_STATE_TRANSITION` reasons `cash_order`, `order_cancelled`, `order_not_payable`, `grace_not_elapsed` (+ `release_available_at`), `unprocessed_events` (+ `count`). The provider is never called. 30/h.
+- **Late capture:** `POST /admin/payments/{id}/record-capture` + `Idempotency-Key` `{captured_amount_cents > 0, captured_currency ^[A-Z]{3}$, dashboard_reference 1-255, reason 10-1000}` → `201 {outcome, payment, refund_id}` (a late-capture refund obligation). Refused for cash (`cash_payment`), a provider with a status API (`409 MANUAL_CONFIRMATION_NOT_ALLOWED`, i.e. always with the mock), `already_paid`, `already_late_captured`, `use_confirm` (matching amount).
+- **Chargeback create:** `POST /admin/orders/{id}/chargebacks` + `Idempotency-Key` `{payment_id, provider_dispute_reference 1-200, charged_cents > 0, items [{order_item_id, amount_cents}] (optional, unique), reason 1-1000, received_at (aware)}` → `201 ChargebackDetail` (`applied_cents`, `excess_cents`). It voids and absorbs the payment's open refunds; items must total `chargeable_cents` (the charge left after absorption, capped by the balance). `409 ORDER_NOT_PAID`, `CHARGEBACK_DUPLICATE`, `ORDER_TOTAL_MISMATCH`, idempotency codes; `422 CHARGEBACK_NOT_ONLINE`, `CHARGEBACK_ITEMS_FORBIDDEN`, `CHARGEBACK_ALLOCATION_INVALID` (+ `available.lines`, `payment_cents`, `chargeable_cents`).
+- **Date filters** are aware datetimes (a naive one is `422`); `placed_before`, `initiated_before`, `created_to` are exclusive.
+
+### Frontend behaviour
+
+- `/admin/cash-blocks` (nav "Cash blocks"): active / cleared / all, `?customer_id=` from the customer page, phone search through a mutation (the number never enters a URL or a query key), Clear block with confirmation; cleared rows offer nothing.
+- Payment detail: **Release order** only on `release_order`, reason ≥ 10, an "I reviewed the N unprocessed events" tick required when the payment has any; **Record late capture** only on the `confirm` gate (a provider without a status API) for an attempt that never reached paid and has no late capture, keyed, linking to the created obligation.
+- Admin order: **Record a chargeback** for a paid online order (cash attempts excluded), keyed, `received_at` from a local `datetime-local` as an aware instant; on `CHARGEBACK_ALLOCATION_INVALID` the form shows the server's `chargeable_cents` and line balances. Recorded chargebacks stay read-only.
+- Filters: orders (`?customer_id`, placed from/to), payments (`?order_id`, started from/to), refunds (`?customer_id`, `?order_id`, recorded from/to). A day range is local midnight to the next local midnight (exclusive). A malformed id in the URL is ignored, never sent. The customer page links to Orders, Refunds and Cash blocks for that customer.
+- Customer cancel: optional "Reason for cancelling" (≤500), sent as `{reason}` only when non-blank.
+- Every write: CSRF, the shared admin MFA guard, explicit confirmation, a ref guard against double submits, never retried by itself; keyed writes keep their key only across uncertain outcomes; success re-reads the canonical admin queries.
+
+### Results
+
+| Scenario | Result | Evidence |
+|---|---|---|
+| Cash block created automatically | **PASS** | cash order `ready_to_ship` → UI Cancel line with reason `refused` → block row (reason `refused`, active) created by the server (confirmed in the database; the script's first check misread Postgres's `true`) |
+| Block keeps the customer off cash | **PASS** | customer cash checkout → `422 CASH_NOT_AVAILABLE` |
+| Cash blocks list | **PASS** | active list shows the order; `customer_id` filter → 1; no phone in the response |
+| Phone search | **PASS** | invalid → `422`, "Enter a valid Lebanese phone number."; the real phone in a CSRF POST body → `200`, finds the block; the phone appeared in no URL |
+| CSRF_INVALID on clear | **PASS** | stale cookie → `403`; "Unable to verify your session…"; block still active |
+| Clear + idempotent repeat | **PASS** | UI clear → `200`; `cleared_at` + `cleared_by` set; repeat → `200` unchanged |
+| Persistence after reload | **PASS** | "Cleared blocks" lists it |
+| Customer cancel with optional reason | **PASS** | UI body `{reason}`; the `order.cancelled` audit row keeps it as `note`; order cancelled; cancellation refund pending |
+| Chargeback allocation refused | **PASS** | items $5 with a $31 charge → `422 CHARGEBACK_ALLOCATION_INVALID`; the form showed the server's chargeable amount ($0: the pending $31 reissue absorbs it); nothing written |
+| Chargeback recorded | **PASS** | UI POST → `201` with a new valid key; $31.00, applied 3100, excess 0; the pending reissue was voided and absorbed; order `refunded` |
+| Chargeback idempotency + duplicate | **PASS** | same key + body → `201` replayed; new key, same dispute reference → `409 CHARGEBACK_DUPLICATE`; still 1 |
+| Cash order: no chargeback | **PASS** | API → `422 CHARGEBACK_NOT_ONLINE`; the UI offers none |
+| Manual release gated by the server | **PASS** | unpaid online order past its hold but inside the grace: `available_actions ["reconcile"]`, no Release button; POST → `409 grace_not_elapsed` with `release_available_at`; order unchanged |
+| Late capture gated by the server | **PASS** | mock provider: POST → `409 MANUAL_CONFIRMATION_NOT_ALLOWED`; the UI offers none |
+| Orders: customer + date filters | **PASS** | customer page → Orders: 5 rows = API 5 (all this customer); + placed today: 5 = API 5 |
+| Refunds + payments filters | **PASS** | refunds `?customer_id`: 4 = API 4; payments `?order_id`: 1 = API 1 |
+| Customer gets 404 | **PASS** | customer GET cash-blocks, clear, chargeback create → `404`; UI 404 page |
+| No page errors | **PASS** | none |
+
+### Not tested against the real backend (and why)
+
+- **A successful manual release:** the oldest unpaid online order becomes releasable at 2026-11-11 23:56 UTC (hold + 24 h grace); the run ended before. The refusal path and the server gate were verified live; success, the events-reviewed tick and `unprocessed_events` are covered by unit and mocked E2E.
+- **A successful late capture / manual confirm:** impossible with the mock provider (it has a status API). Covered by unit tests.
+- **`CHARGEBACK_ITEMS_FORBIDDEN`** (a late-captured attempt), **`429`s:** not provoked.
+
+### Refund void after reissue (phase 5I observation)
+
+Verified against the implementation: `payments/domain/refunds.py refund_step` refuses a void with `line_already_refunded` whenever a line the refund names is `refunded` ("a void never reopens a closed line"), and the line becomes `refunded` once open refunds cover it. Intended by the current rule, but it leaves a full-line refund recorded by mistake impossible to void. Written up for the backend team in `docs/backend-handoff/REFUND-VOID-AFTER-REISSUE.md`. No frontend workaround: the dialog keeps the refusal, nothing is fabricated. (In this run the chargeback absorbed that pending reissue, which is the backend's own designed path.)
+
+### Security review
+
+- **Automated:** the security-guidance plugin's commit review (the project's existing workflow) ran on the phase 6A commits: "no security issues found". The phase 5I code commits (`18cceb1`, `e342025`, `52644c8`) had got no verdict (HTTP 429) and are not re-run by that hook; they were covered by the manual review below. The log file is outside the repository and was not committed.
+- **Manual (all 5G-6A code):** every write sends CSRF through the shared `apiClient`/`adminRequest`; admin routes behind `AdminShell`/`AdminGuard` and the MFA signal, and the backend's boundary 404 verified for customers; every financial create (refund, reissue, late capture, chargeback) carries one `Idempotency-Key` bound to its body and kept only across uncertain outcomes; ref guards and `retry: false` on every mutation; no `dangerouslySetInnerHTML`, no redirects built from server data (navigation only to internal `/admin/...` paths from server ids), no browser storage, no secrets; backend `title`/`detail`/`msg`/`processing_error` never rendered; the phone search keeps the number out of URLs, keys and logs. No finding.
+
+### Verification (this phase)
+
+| Command | Result |
+|---|---|
+| `npm run lint` | 0 errors, 4 warnings (the known `<img>` warnings) |
+| `npm run typecheck` | clean |
+| `npm run test` | **2145/2145** (221 files) |
+| `npm run build` | pass (`/admin/cash-blocks` static; search-param pages wrapped in `Suspense`) |
+| `npm run test:e2e` | **151/151** in the one full run (3 new in `e2e/admin-operations.spec.ts`) |
+
+### Remaining gaps
+
+- Chargebacks cannot be updated or resolved (no backend route).
+- STL delivery queue filters (`product_id`, `customer_id`) and the admin customer list's own link-back are not added.
+- The void-after-reissue rule awaits the backend team's answer.
+
+---
+
 ## Phase 5I: Admin Payments + Refunds (FVS-028), 2026-11-11
 
 | Item | Value |
