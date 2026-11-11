@@ -1,5 +1,110 @@
 # Real Backend Acceptance
 
+## Phase 5E: Customer Orders (FVS-029), 2026-11-11
+
+| Item | Value |
+|---|---|
+| Frontend commits tested | `eb2ce09` (order contract, adapters, labels, queries, views), `f6848b3` (`/account/orders`, `/account/orders/[id]`, nav), `34e2d7a` (user-scoped caches dropped before sign-in), `c4ea3fe` (checkout → order links, STL copy fix), `5d42afb` (mocked E2E). All committed before the run; this document is updated in the commit after them |
+| Backend | `C:\My projects\Bekaa3D-backend`, branch `main`, commit **`2dfb27b`** (unchanged, no backend code touched) |
+| Contract check | running `/openapi.json` is identical to `docs/backend-handoff/openapi.json` after key-sorted comparison (every schema and path) |
+| Runtime | Docker Compose backend on :8000 (`PAYMENT_PROVIDER=mock`). `npm run dev` on :3000 proxying to :8000, started only for this run and stopped after it. No media server |
+| Method | real Edge browser through Playwright against the real frontend and backend. **No route mocking.** API probes used the browser context's request client (same cookies). Temporary scripts kept in the session scratchpad, never committed |
+| Customer identity | throwaway `accept-orders-a-<ts>`, `accept-orders-b-<ts>` and `accept-orders-c-<ts>@example.com` (real register with the Turnstile test token, real verify-email with the token read only from that account's `email_outbox` row). Random passwords, never printed or stored. A and B were re-entered once through the real password-reset flow (below) |
+| Admin | credentials read only from `%USERPROFILE%\.bekaa3d\dev-admin.json` (real login + TOTP), used only for `pickup_address` / `pickup_hours` |
+| Products | seeded `dragon`, `moon-lamp`, `dragon-stl` only **read** and added to A's cart. None modified |
+| Settings | `pickup_address` / `pickup_hours` set for the pickup order, then **restored to `null`** (verified in the DB). The first restore ran from the script's abort path as a direct DB update; the second, after the resumed run, through the admin API |
+| Data left behind | **2 orders** on A (the minimum for cash + online): `B3D-833JEPMQ` cash/delivery/physical `in_progress`, unpaid, no payment row; `B3D-VCKV1V51` online (mock)/pickup/mixed physical+STL `pending_payment`, payment `pending`, never paid (the release job will expire it). B and C: no orders. One address on A. Empty carts |
+
+**Overall: PASS, 22/22.** The run was split in two by an acceptance-script bug (see below). Two checks of the resumed run first reported FAIL because of script bugs and were re-verified (one by a targeted probe, one by later steps of the same run). The run found no app defect.
+
+### Current contract (as implemented)
+
+- `GET /api/v1/me/orders`: session cookie only (no verified email, no rate limit, no CSRF). Query `status?` (`OrderStatus`), `placed_after?` (inclusive), `placed_before?` (exclusive; both need a time zone or it is `422`), `cursor?` (opaque; malformed → `422`), `limit` 1-100 (default 20). Newest `placed_at` first, then `id` desc. `200 OrderPage {items: OrderSummaryRead[], next_cursor: string|null}`; no total. Anonymous: `401 AUTH_REQUIRED`.
+- `OrderSummaryRead`: `id`, `order_number`, `status`, `payment_method` (`online`|`cash`), `fulfillment_method` (`delivery`|`pickup`|null = STL-only), `payment_due` (an unpaid cash order), `amount_due` (`PriceRead|null`: the live total of non-cancelled lines while `payment_due`), `total`, `placed_at`. **No lines, no payment status.**
+- `GET /api/v1/me/orders/{order_id}` (`uuid`; anything else `422`): `200 OrderDetailRead`. `404 NOT_FOUND` for an unknown id **and** for another customer's order, with identical bodies apart from `instance` and `request_id`.
+- `OrderDetailRead`: `id`, `order_number`, `source` (`cart`|`offer`), `status`, `fulfillment_method|null`, `payment_method`, `payment_due`, `amount_due|null`, `can_cancel`, `can_retry_payment` (advisory), `hold_expires_at|null` (unpaid online), `subtotal`, `tax`, `total`, `delivery_address|null` (snapshot with every field nullable: `recipient_name`, `governorate`, `city`, `area`, `street`, `landmark_notes`; delivery only), `contact_phone|null` (physical), `delivery_fee_note|null` (a fixed server sentence, delivery only), `estimated_dispatch_at|null`, `placed_at`, `completed_at|null`, `cancelled_at|null`, `customer_note|null`, `lines[]`, `payment|null` (`{status: string, provider, amount}`; **null while a cash order is unpaid**), `status_history[]` (`{order_item_id|null, from_status|null, to_status, at}`, oldest first), `refunds[]` (optional; `{kind: admin|cancellation|late_capture, status: processing|refunded, amount, created_at}`). No pickup snapshot: the pickup location comes from public settings.
+- `OrderLineRead`: `id`, `product_id`, `product_type` (`physical`|`stl`), `name` (as bought), `image_url|null`, `unit_price`, `quantity`, `line_total`, `fulfillment_status` (`OrderItemStatus`; never `in_production` to a customer: printing reads `pending`), `fulfilled_at|null` (STL: when emailed), `cancelled_at|null`, `receipt_confirmed_at|null`, `problem_reported_at|null` (physical only).
+- Enums: `OrderStatus` = pending_payment, in_progress, completed, partially_refunded, refunded, cancelled. `OrderItemStatus` = pending, awaiting_delivery, in_production, ready_to_ship, shipped, delivered, returned, ready_for_pickup, picked_up, cancelled, refunded. Payment status (backend `PaymentStatus`, a plain string on the wire) = pending, processing, paid, partially_refunded, refunded, failed, expired.
+- Actions recorded for later phases and **not mounted**: `POST /me/orders/{id}/cancel` (FVS-031; order-level, `CustomerOrderCancelRequest`), `POST …/confirm-receipt` and `POST …/report-problem` (FVS-031; verified email + CSRF; `409 INVALID_STATE_TRANSITION` with `reason: no_delivered_line`), `POST …/payments` (FVS-027 retry; `Idempotency-Key` required).
+
+### Results
+
+| Check | Result | Evidence |
+|---|---|---|
+| Anonymous `/account/orders` | **PASS** | → `/login?returnTo=%2Faccount%2Forders`; API `401 AUTH_REQUIRED` |
+| Empty history | **PASS** | new verified account: "You haven't placed any orders yet." + Browse the shop |
+| Checkout → View order (cash) | **PASS** | real UI checkout (cash, delivery, 2 × dragon); the confirmation's "View order" → `/account/orders/{id}` → heading "Order B3D-833JEPMQ" |
+| Cash representation | **PASS** | server `in_progress`/cash/3600, **0 payment rows**; UI "Payment due in cash to the courier on delivery: $36.00. This order hasn't been paid yet."; no payment-status row, no "Paid" |
+| Delivery order | **PASS** | recipient, street, "Zahle, Beqaa", landmark, contact phone, estimated ready date; frontend courier-fee copy (the server note is not echoed) |
+| Physical line | **PASS** | "Articulated Dragon $36.00 · Physical item · Qty 2 × $18.00 · Received" |
+| No actions mounted | **PASS** | server `can_cancel: true`; 0 buttons inside the order |
+| Detail after reload | **PASS** | the same order re-rendered from `GET /me/orders/{id}` |
+| History after creating orders | **PASS** | `/checkout/return` → "View your orders" → `["Order B3D-VCKV1V51", "Order B3D-833JEPMQ"]` (newest first) |
+| History cards | **PASS** | online: "Awaiting payment · $31.00 · Online payment · Pickup", no "paid"; cash: "In progress · $36.00 · Cash · Delivery · Payment due in cash: $36.00" |
+| History after reload | **PASS** (re-verified) | see "Script bugs": two later full page loads of `/account/orders` in the same run rendered both orders |
+| Pending online payment | **PASS** | server `pending_payment`, payment `pending`/`mock`; UI payment status "Awaiting payment", "This order hasn't been confirmed as paid…", "may be released after …" (`hold_expires_at`); no "Paid", no retry or redirect control |
+| Pickup order | **PASS** | "You'll collect this order from us." + the current pickup location/hours from public settings + contact phone; no courier-fee copy |
+| STL line (manual delivery) | **PASS** | server STL line `pending`, `fulfilled_at: null` (unpaid order); UI "STL file, sent by email" + "We'll email this file to you once your payment is confirmed."; no "download" text, link or button anywhere |
+| Mixed order | **PASS** | moon lamp (physical) + dragon STL in one order |
+| Unknown order | **PASS** | random UUID → API `404 NOT_FOUND` → "Order not found"; a malformed id → the same page with **0** API calls |
+| Session refresh | **PASS** | `access_token` cookie removed → the page load refreshed the session (new `access_token`) and rendered the order (order request `200`) |
+| 375px | **PASS** | horizontal overflow 0 px on history and detail |
+| Keyboard | **PASS** | Tab reached "Order B3D-833JEPMQ" (13 presses); Enter opened the detail |
+| Logout → relogin isolation | **PASS** | same tab: A logged out from the account nav, B logged in → empty history; none of A's order numbers rendered |
+| Another customer's order | **PASS** (re-verified) | C → A's order id: API `404 NOT_FOUND`, body identical to an unknown id except `instance`/`request_id`; UI "Order not found", A's order number not rendered |
+| Runtime errors | **PASS** | no page errors |
+
+### Script bugs (not app defects)
+
+1. The first run aborted right after placing the online order: a status query used `coalesce(enum, '')`, which PostgreSQL refuses. The abort path restored the pickup settings in the DB. The first 8 checks had passed. The rest was **resumed on the same accounts and the same two orders** (no new orders). A and B were re-entered through the real `POST /auth/password-reset/request` + `/confirm`, with the token read from that account's outbox row.
+2. "History after reload" counted the order links straight after `reload()`, before the list rendered. The two later steps of the same run (375 px and keyboard) each loaded `/account/orders` from scratch and found the orders, which is the same check. Repeating it directly needed another reset, which was refused: a probe re-requested resets inside the 2-minute per-account cooldown and used up the per-IP limit (5 per hour).
+3. "Another customer's order" compared whole problem bodies, but `request_id` differs per request (and `instance` contains the id). Re-verified with a fresh customer C that places no orders: the bodies are identical apart from those two fields.
+
+Not run live, and why (all covered by unit and mocked E2E):
+
+- **STL emailed** (`delivered` + `fulfilled_at`): needs a paid STL order and an admin "mark sent". Paying the mock payment belongs to FVS-027. Not done, so the mock payment stays untouched.
+- **A paid online payment row, refunds, cancelled/completed orders, receipt/problem timestamps, line entries in `status_history`**: need payment, admin fulfilment, refunds or VS-029b actions. Out of scope for a read phase.
+- **Load more against the real backend**: needs more than 20 orders on one account (the UI does not expose `limit`). The mocked E2E follows the real cursor contract. Not provoked, to avoid creating orders.
+- **History `status` / date filters**: not used by the phase 5E UI.
+
+### Defects found and fixed
+
+14. **The old customer order frontend predated the backend** (fixed in `eb2ce09`, `f6848b3`). Audit result:
+    - `lib/orders/orderModel.ts`: **contract-drifted**. Label-only shapes (`statusLabel`, `paymentStatusLabel`, `productDisplayName`) with no fulfillment, payment, address, phone, history or refund fields. Rewritten against `OrderSummaryRead` / `OrderDetailRead` with an adapter. The order enums now live in `lib/orders/orderTypes.ts`, and `checkoutTypes.ts` re-exports them.
+    - `lib/orders/orderKeys.ts`: **reusable concept, drifted key** (keyed on invented `status/dateFrom/dateTo/cursor` filters). Rewritten; `["orders"]` added to the user-scoped roots.
+    - `lib/orders/orderExceptionModel.ts`, `components/account/CancellableOrderLine`, `CancelOrderLineButton`: **speculative**. A per-line customer cancel the backend does not have (customer cancel is order-level, FVS-031). Removed.
+    - `components/account/OrderList`: **speculative**. Status/date filters and a table bound to the label-only model. Replaced by `OrderHistoryList`.
+    - `components/account/OrderDetail`: **contract-drifted**. Showed the raw id as the heading, with no payment or fulfillment. Replaced by `OrderDetailView`.
+    - `components/account/OrderLineItem`, `OrderSummaryDisplay`: **used by the unmounted admin order screens**. Moved under `components/admin/` (`AdminOrderLineItem`, `AdminOrderSummaryDisplay`) with their legacy types inlined into `adminOrderModel.ts`, flagged for a rebuild against `AdminOrderDetail` in the admin-orders phase. A new customer `OrderLineItem` renders the real line.
+    - `components/account/StatusTimeline`, `lib/orders/orderActionModel.ts`: **reusable**, kept unchanged (the timeline now renders `status_history`).
+15. **A user switch without logout could show cached data** (`34e2d7a`). User-scoped caches were dropped only on logout. If a session expired and a different user then signed in in the same tab, the previous user's cached orders, cart or addresses could show briefly. The login page now drops every user-scoped root before reading the new session.
+16. **Checkout copy promised STL downloads** (`c4ea3fe`). "You'll be able to download them…" and "STL file (digital download)" contradicted ADR-019 (an administrator emails each paid STL). Now "Our team emails each file to you once your payment is confirmed." and "STL file (sent by email)".
+- The checkout confirmation and the `PAYMENT_PROVIDER_UNAVAILABLE` state had no way to reach the order (`c4ea3fe`). Both now link to `/account/orders/{id}` (`order.id`, or the problem's `order_id`). `/checkout/return` links to the history. Placing an order invalidates the orders queries.
+- The account nav marked nothing active on `/account/orders/{id}` (`f6848b3`). Sub-routes now keep their section active.
+
+### Verification (this phase)
+
+| Command | Result |
+|---|---|
+| `npm run lint` | 0 errors, 4 warnings (the known `<img>` warnings) |
+| `npm run typecheck` | clean |
+| `npm run test` | **2119/2119** (229 files) |
+| `npm run build` | pass (`/account/orders` static, `/account/orders/[id]` dynamic) |
+| `npm run test:e2e` | **108/109** in the one full run (97 + 12 new in `e2e/account-orders.spec.ts`; `checkout.spec.ts` extended in place). The one failure was the existing `smoke.spec.ts` readiness-banner test, which counts transient `role="status"` regions and then reads one that has already gone. It passed 3/3 when re-run alone (`--repeat-each=3`). Unrelated to this phase; left as is |
+
+### Remaining gaps
+
+- **FVS-027**: no payment verification, polling or retry. A pending online order shows the server's `pending` state only; `can_retry_payment` is ignored on purpose.
+- **FVS-031**: no cancel, confirm receipt or report problem, even when `can_cancel` is true or a line is delivered.
+- `/checkout/return` links to the history, not to the order. Its URL carries an order **number**, and there is no customer lookup by number. The new order is first in the history (newest first).
+- The history has no line summary: `OrderSummaryRead` has no lines (they are on the detail page).
+- The pickup location on an order is the **current** public setting; the order has no pickup snapshot. If the setting changes, old orders show the new location.
+- Dates are shown in the viewer's time zone (`en-GB` format).
+- The admin order screens still use the legacy speculative shapes (moved, not rebuilt).
+- The smoke readiness-banner test is timing-sensitive under full parallel load (pre-existing).
+
+---
+
 ## Phase 5D: Checkout (FVS-026), 2026-11-11
 
 | Item | Value |
