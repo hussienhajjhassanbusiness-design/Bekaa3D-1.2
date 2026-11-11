@@ -19,6 +19,7 @@ import { useAdminOrderWrite } from "@/lib/admin/orders/useAdminOrders";
 import type { PriceRead } from "@/lib/catalog/productTypes";
 import { formatOrderDate, formatOrderDateTime, fulfillmentLabel, paymentMethodLabel } from "@/lib/orders/orderFormat";
 import { describeOrderStatus, describePaymentStatus } from "@/lib/orders/orderStatus";
+import { CreateChargeback } from "@/components/admin/payments/CreateChargeback";
 import { CreateRefund } from "@/components/admin/payments/CreateRefund";
 import { LineActions } from "./LineActions";
 import { OrderLevelActions } from "./OrderLevelActions";
@@ -28,7 +29,8 @@ import { OrderLevelActions } from "./OrderLevelActions";
 // GET /api/v1/admin/orders/{id}, rendered as the server has it: real line
 // states, each line's server-provided actions, payments (linked to their
 // admin payment page), refunds (Record a refund, phase 5I; rows linked to
-// the refund page) and chargebacks (read-only), the full
+// the refund page) and chargebacks (Record a chargeback, phase 6A; a
+// recorded one is read-only: no update route exists), the full
 // history with who did each step, and the internal note (PATCH). No
 // shipping fee (ADR-024), no STL file handling (ADR-019).
 export function AdminOrderView({ order }: { order: AdminOrderDetailDTO }) {
@@ -162,8 +164,9 @@ export function AdminOrderView({ order }: { order: AdminOrderDetailDTO }) {
             </Section>
           )}
 
-          {(order.chargebacks ?? []).length > 0 && (
+          {((order.chargebacks ?? []).length > 0 || (order.payment_reached_paid && order.payment_method === "online")) && (
             <Section title="Chargebacks">
+              <CreateChargeback order={order} />
               <ul className="flex flex-col gap-2">
                 {(order.chargebacks ?? []).map((c) => (
                   <li key={c.id} className="flex flex-wrap justify-between gap-2 text-body">

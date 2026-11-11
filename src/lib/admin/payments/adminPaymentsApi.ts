@@ -1,6 +1,12 @@
 import { apiClient } from "@/lib/api/apiClient";
 import { adminRequest } from "@/lib/admin/adminRequest";
 import type {
+  ChargebackCreateDTO,
+  ChargebackDetailDTO,
+  OrderReleaseReadDTO,
+  OrderReleaseRequestDTO,
+  RecordCaptureReadDTO,
+  RecordCaptureRequestDTO,
   AdminPaymentDetailDTO,
   AdminPaymentPageDTO,
   AdminPaymentsQueryParams,
@@ -90,7 +96,33 @@ async function reissueRefund(refundId: string, idempotencyKey: string): Promise<
   );
 }
 
+// Phase 6A: manual release, late capture, chargeback create.
+async function releaseOrder(orderId: string, body: OrderReleaseRequestDTO): Promise<OrderReleaseReadDTO> {
+  return adminRequest(() => apiClient.post<OrderReleaseReadDTO>(`/api/v1/admin/orders/${enc(orderId)}/release`, body, { csrf: true }));
+}
+
+async function recordCapture(paymentId: string, body: RecordCaptureRequestDTO, idempotencyKey: string): Promise<RecordCaptureReadDTO> {
+  return adminRequest(() =>
+    apiClient.post<RecordCaptureReadDTO>(`/api/v1/admin/payments/${enc(paymentId)}/record-capture`, body, {
+      csrf: true,
+      headers: { "Idempotency-Key": idempotencyKey },
+    })
+  );
+}
+
+async function createChargeback(orderId: string, body: ChargebackCreateDTO, idempotencyKey: string): Promise<ChargebackDetailDTO> {
+  return adminRequest(() =>
+    apiClient.post<ChargebackDetailDTO>(`/api/v1/admin/orders/${enc(orderId)}/chargebacks`, body, {
+      csrf: true,
+      headers: { "Idempotency-Key": idempotencyKey },
+    })
+  );
+}
+
 export const adminPaymentsApi = {
+  releaseOrder,
+  recordCapture,
+  createChargeback,
   listPayments,
   getPayment,
   reconcilePayment,

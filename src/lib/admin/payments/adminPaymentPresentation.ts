@@ -54,6 +54,15 @@ const REASONS: Readonly<Record<string, string>> = {
   line_already_refunded: "One of these items is already fully refunded.",
   line_already_cancelled: "One of these items was cancelled; its refund comes from the cancellation.",
   cash_payment: "A cash payment has no provider to check or confirm.",
+  // Manual release (phase 6A).
+  cash_order: "A cash order isn't held for payment, so it can't be released.",
+  order_cancelled: "This order is already cancelled.",
+  order_not_payable: "This order is no longer waiting for payment.",
+  unprocessed_events: "There are provider events still to review. Confirm you reviewed them, then try again.",
+  // Late capture (phase 6A).
+  already_paid: "This payment already reached paid; there's no late capture to record.",
+  already_late_captured: "A late capture is already recorded for this payment.",
+  use_confirm: "The amount matches the payment: use Confirm by hand instead.",
 };
 
 export const ADMIN_PAYMENT_MESSAGES = {
@@ -76,6 +85,11 @@ export const ADMIN_PAYMENT_MESSAGES = {
   validation: "Check the entered values and try again.",
   uncertain: "We couldn't confirm whether that went through. Check the record before trying again.",
   generic: "Something went wrong. Please try again.",
+  chargebackNotOnline: "A cash payment can't be charged back.",
+  chargebackItemsForbidden: "This attempt never paid an item, so its chargeback can't name items. Leave the items empty.",
+  chargebackDuplicate: "This dispute reference is already recorded.",
+  chargebackAllocation:
+    "The item amounts must add up to the part of the charge left after the open refunds. The server's figures are shown.",
 } as const;
 
 export interface AdminPaymentErrorOutcome {
@@ -102,8 +116,24 @@ export function describeAdminPaymentError(error: unknown): AdminPaymentErrorOutc
   switch (`${error.status} ${error.code ?? ""}`) {
     case "409 INVALID_STATE_TRANSITION": {
       const reason = readProblemString(error, "reason");
+      if (reason === "grace_not_elapsed") {
+        const at = readProblemString(error, "release_available_at");
+        const when =
+          at && !Number.isNaN(Date.parse(at))
+            ? new Intl.DateTimeFormat("en-GB", { dateStyle: "long", timeStyle: "short" }).format(new Date(at))
+            : null;
+        return out(when ? `This order can be released from ${when}.` : "This order can't be released yet.", true);
+      }
       return out((reason !== undefined ? lookup(REASONS, reason) : undefined) ?? M.stateChanged, true);
     }
+    case "422 CHARGEBACK_NOT_ONLINE":
+      return out(M.chargebackNotOnline);
+    case "422 CHARGEBACK_ITEMS_FORBIDDEN":
+      return out(M.chargebackItemsForbidden);
+    case "409 CHARGEBACK_DUPLICATE":
+      return out(M.chargebackDuplicate, true);
+    case "422 CHARGEBACK_ALLOCATION_INVALID":
+      return out(M.chargebackAllocation, true);
     case "409 ORDER_NOT_PAID":
       return out(M.orderNotPaid, true);
     case "422 REFUND_EXCEEDS_AVAILABLE":
@@ -143,6 +173,15 @@ export function describeAdminPaymentError(error: unknown): AdminPaymentErrorOutc
 
 // REFUND_EXCEEDS_AVAILABLE's typed `available` extension: the current
 // per-line balances. Anything malformed is treated as absent.
+// CHARGEBACK_ALLOCATION_INVALID's `available.chargeable_cents`.
+export function readChargeableCents(error: unknown): number | null {
+  if (!isApiError(error) || typeof error.raw !== "object" || error.raw === null) return null;
+  const available = (error.raw as Record<string, unknown>).available;
+  if (typeof available !== "object" || available === null) return null;
+  const cents = (available as Record<string, unknown>).chargeable_cents;
+  return typeof cents === "number" && Number.isInteger(cents) ? cents : null;
+}
+
 export function readAvailableBalances(error: unknown): Record<string, number> | null {
   if (!isApiError(error) || typeof error.raw !== "object" || error.raw === null) return null;
   const available = (error.raw as Record<string, unknown>).available;

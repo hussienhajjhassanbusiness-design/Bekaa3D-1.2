@@ -15,6 +15,7 @@ import { adminPaymentsApi } from "@/lib/admin/payments/adminPaymentsApi";
 import { describePaymentHistoryAction, REFUND_TEXT_MAX } from "@/lib/admin/payments/adminPaymentPresentation";
 import type { AdminPaymentDetailDTO } from "@/lib/admin/payments/adminPaymentTypes";
 import { useAdminFinancialWrite } from "@/lib/admin/payments/useAdminPayments";
+import { PaymentRecoveryActions } from "./PaymentRecoveryActions";
 import { formatOrderDateTime } from "@/lib/orders/orderFormat";
 import { describeOrderStatus, describePaymentStatus } from "@/lib/orders/orderStatus";
 
@@ -26,7 +27,7 @@ import { describeOrderStatus, describePaymentStatus } from "@/lib/orders/orderSt
 // are exactly the server's `available_actions`:
 //   reconcile -> POST …/reconcile (202: the check runs after the answer);
 //   confirm   -> POST …/confirm, only for a provider without a status API.
-// `release_order` (manual release of an unpaid order) is not built here.
+//   release_order / late capture -> PaymentRecoveryActions (phase 6A).
 // Nothing is marked paid locally.
 export function AdminPaymentView({ detail }: { detail: AdminPaymentDetailDTO }) {
   const { payment, order } = detail;
@@ -136,7 +137,10 @@ function PaymentActions({ detail }: { detail: AdminPaymentDetailDTO }) {
   const [reason, setReason] = useState("");
   const [errors, setErrors] = useState<{ reference?: string; amount?: string; reason?: string }>({});
   const actions = detail.available_actions.filter((a) => a === "reconcile" || a === "confirm");
-  if (actions.length === 0 && open === null) return null;
+  const recovery =
+    detail.available_actions.includes("release_order") ||
+    (detail.available_actions.includes("confirm") && detail.payment.late_captured_at === null);
+  if (actions.length === 0 && open === null && !recovery) return null;
 
   async function reconcile() {
     if (await write.run(() => adminPaymentsApi.reconcilePayment(detail.payment.id))) {
@@ -170,6 +174,7 @@ function PaymentActions({ detail }: { detail: AdminPaymentDetailDTO }) {
             Check with provider
           </Button>
         )}
+        <PaymentRecoveryActions detail={detail} />
         {actions.includes("confirm") && (
           <Button type="button" onClick={() => {
               write.reset();

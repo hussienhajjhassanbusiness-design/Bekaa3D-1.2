@@ -55,6 +55,9 @@ export interface AdminPaymentsQueryParams {
   provider?: PaymentProvider;
   order_id?: string;
   late_captured?: boolean;
+  // Aware ISO datetimes; after inclusive, before exclusive.
+  initiated_after?: string;
+  initiated_before?: string;
   cursor?: string;
   limit?: number;
 }
@@ -173,6 +176,10 @@ export interface AdminRefundsQueryParams {
   status?: RefundStatus;
   kind?: RefundKind;
   order_id?: string;
+  customer_id?: string;
+  // Aware ISO datetimes.
+  created_from?: string;
+  created_to?: string;
   cursor?: string;
   limit?: number;
 }
@@ -184,4 +191,75 @@ export interface RefundSettlementRequestDTO {
 
 export interface RefundReasonRequestDTO {
   reason: string; // 1-1000 (fail, void)
+}
+
+// ---------------------------------------------------------------------
+// Phase 6A additions (backend 2dfb27b)
+// ---------------------------------------------------------------------
+
+// POST /api/v1/admin/orders/{order_id}/release (extra="forbid"): the manual
+// exit for an unpaid online order the release job cannot release. Offered
+// only while the payment detail lists `release_order` (after the hold plus
+// the 24 h grace). `events_reviewed` must be true when unprocessed provider
+// events exist (else 409 unprocessed_events with `count`).
+export interface OrderReleaseRequestDTO {
+  reason: string; // 10-1000
+  events_reviewed: boolean;
+}
+
+export interface OrderReleaseReadDTO {
+  order_id: string;
+  status: "cancelled";
+  cancelled_at: string;
+  attempts_expired: string[];
+  events_dismissed: string[];
+}
+
+// POST /api/v1/admin/payments/{id}/record-capture + Idempotency-Key: a
+// capture the provider's dashboard shows but the attempt's amount does not
+// match. Only for a provider without a status API (the same gate as manual
+// confirm); it creates a late-capture refund obligation to pay back.
+export interface RecordCaptureRequestDTO {
+  captured_amount_cents: number; // > 0
+  captured_currency: string; // ^[A-Z]{3}$
+  dashboard_reference: string; // 1-255
+  reason: string; // 10-1000
+}
+
+export interface RecordCaptureReadDTO {
+  outcome: string;
+  payment: { id: string; status: string };
+  refund_id: string | null;
+}
+
+// POST /api/v1/admin/orders/{order_id}/chargebacks + Idempotency-Key.
+// Create only: no update / resolve / acknowledge route exists. `items`
+// (optional) allocate the part of the charge left after the open refunds
+// it absorbs; they must total the server's `chargeable_cents` (422
+// CHARGEBACK_ALLOCATION_INVALID returns it with the line balances).
+export interface ChargebackCreateDTO {
+  payment_id: string;
+  provider_dispute_reference: string; // 1-200
+  charged_cents: number; // > 0
+  items: { order_item_id: string; amount_cents: number }[];
+  reason: string; // 1-1000
+  received_at: string; // aware ISO datetime
+}
+
+export interface ChargebackDetailDTO {
+  id: string;
+  order_id: string;
+  order_number: string;
+  payment_id: string;
+  payment_provider: string;
+  provider_dispute_reference: string;
+  charged_cents: number;
+  applied_cents: number;
+  excess_cents: number;
+  currency: string;
+  reason: string;
+  recorded_by: string;
+  received_at: string;
+  created_at: string;
+  items: { order_item_id: string; product_name: string; amount_cents: number }[];
 }
