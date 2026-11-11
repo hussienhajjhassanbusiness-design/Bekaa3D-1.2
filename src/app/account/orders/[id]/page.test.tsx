@@ -12,6 +12,9 @@ vi.mock("next/navigation", () => ({ useParams: () => ({ id: mockId }) }));
 vi.mock("@/lib/orders/usePolledOrder", () => ({ usePolledOrder: vi.fn() }));
 vi.mock("@/lib/orders/useRetryPayment", () => ({ useRetryPayment: vi.fn() }));
 vi.mock("@/lib/settings/usePublicSettings", () => ({ usePublicSettings: vi.fn() }));
+vi.mock("@/lib/orders/useOrderActions", () => ({
+  useOrderAction: () => ({ state: { kind: "idle" }, submit: vi.fn(), reset: vi.fn() }),
+}));
 
 const mockedUsePolledOrder = vi.mocked(usePolledOrder);
 const retryStart = vi.fn();
@@ -53,6 +56,21 @@ describe("/account/orders/[id]", () => {
     render(<AccountOrderDetailPage />);
     expect(screen.getByRole("heading", { level: 1, name: "Order B3D-2026-000123" })).toBeInTheDocument();
     expect(mockedUsePolledOrder).toHaveBeenCalledWith(ORDER_ID, { enabled: true });
+  });
+
+  it("mounts the Order actions section from the same canonical order (FVS-031)", () => {
+    mockedUseMyOrder.mockReturnValue(result({ data: detailDTO({ can_cancel: true }) }));
+    render(<AccountOrderDetailPage />);
+    const region = screen.getByRole("region", { name: "Order actions" });
+    expect(region).toContainElement(screen.getByRole("button", { name: "Cancel order" }));
+    // Separate from the payment section.
+    expect(screen.getByRole("region", { name: "Payment" })).not.toContainElement(region);
+  });
+
+  it("offers no customer action when the server state allows none", () => {
+    mockedUseMyOrder.mockReturnValue(result({ data: detailDTO({ can_cancel: false }) }));
+    render(<AccountOrderDetailPage />);
+    expect(screen.queryByRole("region", { name: "Order actions" })).not.toBeInTheDocument();
   });
 
   it("shows the same not-found state for a 404 (unknown or another customer's order)", () => {

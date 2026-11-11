@@ -99,7 +99,7 @@ describe("OrderDetailView", () => {
       expect(screen.queryByRole("link", { name: /pay|retry|cancel|receipt|problem|continue/i })).not.toBeInTheDocument();
     });
 
-    it("never mounts cancel / confirm receipt / report problem even with the page's controls (FVS-031)", () => {
+    it("mounts no cancel / confirm receipt / report problem by itself: only the page's customerActions slot does (FVS-031)", () => {
       renderWithControls(pendingOnlineDetailDTO({ can_retry_payment: true, can_cancel: true }));
       expect(screen.queryByRole("button", { name: /cancel|receipt|problem/i })).not.toBeInTheDocument();
     });

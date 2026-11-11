@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo } from "react";
 import { useParams } from "next/navigation";
+import { OrderCustomerActions } from "@/components/account/OrderCustomerActions";
 import { OrderDetailView } from "@/components/account/OrderDetailView";
 import { LoadingSpinner } from "@/components/feedback/LoadingSpinner";
 import { Button } from "@/components/forms/Button";
@@ -26,6 +27,10 @@ import { usePublicSettings } from "@/lib/settings/usePublicSettings";
 // usePolledOrder (bounded re-reads only while the server reports a live
 // payment attempt) and owns the one "Retry payment" flow
 // (useRetryPayment). No payment state is ever set locally.
+//
+// FVS-031 (phase 5G) — the customer's cancel / confirm receipt / report a
+// problem actions (OrderCustomerActions), offered from the same canonical
+// order and writing back only into it.
 export default function AccountOrderDetailPage() {
   const params = useParams<{ id: string }>();
   const orderId = typeof params.id === "string" ? params.id : "";
@@ -44,6 +49,7 @@ export default function AccountOrderDetailPage() {
       <OrderDetailView
         order={order}
         pickup={pickupOption(settings.data)}
+        customerActions={<OrderCustomerActions order={order} />}
         paymentControls={{
           polling,
           timedOut,

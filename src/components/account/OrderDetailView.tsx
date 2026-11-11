@@ -24,6 +24,9 @@ export interface OrderDetailViewProps {
   // FVS-027: the page's bounded verification and retry controls. Absent,
   // the payment section is read-only.
   paymentControls?: OrderPaymentControls;
+  // FVS-031: the page's "Order actions" section (OrderCustomerActions),
+  // rendered under the items. Absent, the view stays read-only.
+  customerActions?: ReactNode;
 }
 
 // #FVS029-ORDER-DETAIL
@@ -37,10 +40,10 @@ export interface OrderDetailViewProps {
 //     redirect back from the provider is never proof of payment. FVS-027
 //     (phase 5F): bounded verification and "Retry payment" (only while
 //     can_retry_payment) live in OrderPaymentSection.
-//   - no cancel / confirm-receipt / report-problem controls (FVS-031),
-//     even when the server's advisory flags are true.
+//   - cancel / confirm receipt / report a problem (FVS-031, phase 5G) are
+//     the page's `customerActions` slot, kept apart from payment.
 //   - no download for STL lines (ADR-019).
-export function OrderDetailView({ order, pickup, paymentControls }: OrderDetailViewProps) {
+export function OrderDetailView({ order, pickup, paymentControls, customerActions }: OrderDetailViewProps) {
   const status = describeOrderStatus(order.status);
   const awaitingPayment = order.status === "pending_payment";
 
@@ -76,6 +79,8 @@ export function OrderDetailView({ order, pickup, paymentControls }: OrderDetailV
               ))}
             </ul>
           </Section>
+
+          {customerActions}
 
           <FulfillmentSection order={order} pickup={pickup} />
 

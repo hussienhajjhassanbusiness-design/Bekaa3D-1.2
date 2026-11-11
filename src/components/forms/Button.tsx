@@ -1,10 +1,13 @@
-import type { ButtonHTMLAttributes } from "react";
+import type { ButtonHTMLAttributes, Ref } from "react";
 
 export type ButtonVariant = "primary" | "secondary" | "destructive";
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   isLoading?: boolean;
   variant?: ButtonVariant;
+  // React 19: a plain prop (as TextAreaField), so a dialog can focus its
+  // safe default action on open.
+  ref?: Ref<HTMLButtonElement>;
 }
 
 // FVS002-T02 — a single visual treatment (matching error.tsx's existing

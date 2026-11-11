@@ -1,0 +1,66 @@
+"use client";
+
+import { useEffect, useId, useRef } from "react";
+import { Alert } from "@/components/feedback/Alert";
+import { DialogShell } from "@/components/feedback/DialogShell";
+import { Button } from "@/components/forms/Button";
+import type { OrderDetailModel } from "@/lib/orders/orderModel";
+
+export interface CancelOrderDialogProps {
+  open: boolean;
+  order: OrderDetailModel;
+  pending: boolean;
+  error: string | null;
+  onConfirm: () => void;
+  onClose: () => void;
+}
+
+const PAID_STATUSES = new Set(["paid", "partially_refunded"]);
+
+// #FVS031-CANCEL-DIALOG (phase 5G)
+//
+// The explicit confirmation for POST /me/orders/{id}/cancel. The effect is
+// described in our own words from the server's order state: the backend
+// cancels every not-yet-started physical item (FR-09) and never an STL
+// file; a paid order's cancelled items are refunded (ADR-043), and the
+// refund appears in the Refunds section once the server records it. It
+// stays open (and keeps its error) on failure; the parent closes it only
+// after a confirmed success. Escape/backdrop are inert while pending.
+export function CancelOrderDialog({ open, order, pending, error, onConfirm, onClose }: CancelOrderDialogProps) {
+  const titleId = useId();
+  const descriptionId = useId();
+  const keepRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (open) keepRef.current?.focus();
+  }, [open]);
+
+  const paid = order.payment !== null && PAID_STATUSES.has(order.payment.status);
+
+  return (
+    <DialogShell open={open} onClose={onClose} isBusy={pending} labelledBy={titleId} describedBy={descriptionId}>
+      <h2 id={titleId} className="text-h3 font-bold text-text-primary">
+        Cancel this order?
+      </h2>
+      <div id={descriptionId} className="mt-2 flex flex-col gap-2 text-body text-text-secondary">
+        <p>The printed items in this order will be cancelled before we start making them. This can&apos;t be undone.</p>
+        {order.containsStl && <p>STL files in this order aren&apos;t affected and will still be emailed to you.</p>}
+        {paid && <p>You paid online, so the cancelled items will be refunded. The refund will show on this page.</p>}
+        {order.paymentMethod === "cash" && !paid && <p>You won&apos;t need to pay for the cancelled items.</p>}
+      </div>
+      {error && (
+        <div className="mt-4">
+          <Alert variant="error" message={error} />
+        </div>
+      )}
+      <div className="mt-4 flex flex-wrap justify-end gap-2">
+        <Button ref={keepRef} type="button" variant="secondary" onClick={onClose} disabled={pending}>
+          Keep my order
+        </Button>
+        <Button type="button" variant="destructive" onClick={onConfirm} isLoading={pending}>
+          Cancel order
+        </Button>
+      </div>
+    </DialogShell>
+  );
+}
