@@ -1,5 +1,106 @@
 # Real Backend Acceptance
 
+## Phase 5F: Payment Result + Payment Retry (FVS-027), 2026-11-11
+
+| Item | Value |
+|---|---|
+| Frontend commits tested | `c2e4881` (retry API, idempotency, error model), `4b61218` (bounded polling on the canonical order detail), `841e587` (order-detail payment states, hold countdown, Retry payment), `f5cffde` (neutral `/checkout/return`), `d1ccb07` (mocked E2E). All committed before the run; this document is updated in the commit after them |
+| Backend | `C:\My projects\Bekaa3D-backend`, branch `main`, commit **`2dfb27b`** (unchanged, no backend code touched) |
+| Contract check | running `/openapi.json`: `POST /api/v1/me/orders/{order_id}/payments`, `PaymentRetryRequest`, `PaymentRetryRead`, `RetryOrderRead`, `RetryPaymentRead`, `OrderPaymentRead` read field by field; `GET /api/v1/me/orders` query parameters are `status, placed_after, placed_before, cursor, limit` (no order-number lookup) |
+| Runtime | Docker Compose backend on :8000 (`PAYMENT_PROVIDER=mock`, `ENVIRONMENT=development`, `checkout_hold_period` 1800 s). `npm run dev` on :3000 proxying to :8000, started only for this run and stopped after it |
+| Mock provider | the backend's own `scripts/mock_pay.py` (sets the mock state in Redis, then posts a signed `POST /api/v1/webhooks/payments/mock`; the backend verifies it in the background and applies the result). The image has no `scripts/` folder, so the file was copied to the dev API container's `/tmp` for the run and **removed after it** (verified) |
+| Method | real Edge browser through Playwright against the real frontend and backend. **No route mocking.** API probes used the browser context's request client (same cookies). Script kept in the session scratchpad, never committed |
+| Customer identity | one throwaway `accept-payment-<ts>@example.com` (real register with the Turnstile test token, real verify-email with the token read only from that account's `email_outbox` row). Random password, never printed or stored. No admin session was needed |
+| Products / settings | seeded `dragon` only **read**. No setting changed |
+| Data left behind | **3 orders**, none waiting on payment: `B3D-5J17ZHHV` online, 1 attempt, **paid**, `in_progress`; `B3D-33BZ19KN` online, 3 attempts (failed, failed, **paid**), `in_progress`; `B3D-K8Y1QEXQ` cash/delivery `in_progress`, unpaid, no payment row. One address. Empty cart |
+
+**Overall: PASS, 21/21.** No app defect found.
+
+### Current contract (as implemented)
+
+- **Retry route:** `POST /api/v1/me/orders/{order_id}/payments`. The order's owner, **verified email**, `X-CSRF-Token`, required `Idempotency-Key` (`^[A-Za-z0-9._:-]{8,255}$`). Body `PaymentRetryRequest` (`extra="forbid"`): only `payment_provider?` (1-32); the frontend sends `{}` (the server reuses the previous attempt's provider). The amount is always the order total. `201 PaymentRetryRead`: `order {id, order_number, status, total_cents, currency, hold_expires_at}` and `payment {id, status, provider, amount_cents, currency, redirect_url|null}`. 10 retries per user per hour (Redis outage refuses with 503).
+- **Idempotency:** scope `payment_retry:{order_id}` per user, kept 24 h. The `201` and the `502` are replayed for the same key (`Idempotent-Replayed: true`); same key + different body → `409 IDEMPOTENCY_KEY_CONFLICT`; a running claim → `409 IDEMPOTENCY_REQUEST_IN_PROGRESS` (`Retry-After: 2`); every other refusal rolls the claim back.
+- **Problems:** `409 PAYMENT_ALREADY_ACTIVE` (`payment_id`, `payment_status`, `redirect_url`, null while `processing`); `409 INVALID_STATE_TRANSITION` with `reason` = `cash_order` | `order_cancelled` | `order_not_payable` | `checkout_hold_expired` | `offer_checkout_expired`; `409 IDEMPOTENCY_KEY_CONFLICT` / `IDEMPOTENCY_REQUEST_IN_PROGRESS`; `422 PAYMENT_METHOD_NOT_ALLOWED` (`reason`), `422 VALIDATION_ERROR`; `429 RATE_LIMITED`; `502 PAYMENT_PROVIDER_UNAVAILABLE` (`order_id`, `order_number`; the attempt is failed, the order stays payable); `503 ONLINE_PAYMENT_UNAVAILABLE`; plus `401 AUTH_REQUIRED`, `403 CSRF_INVALID`, `403 EMAIL_VERIFICATION_REQUIRED`, `404 NOT_FOUND`. **There is no `PAYMENT_NOT_RETRYABLE` code.**
+- **Payment status** (`OrderPaymentRead.status`, a plain string; backend `PaymentStatus`): `pending`, `processing`, `paid`, `partially_refunded`, `refunded`, `failed`, `expired`. Live attempt = `pending` | `processing`.
+- **Customer payment read:** none of its own. `GET /me/orders/{id}`: `payment` (the live or paid attempt, else the latest), `can_retry_payment` (advisory: retry rules **and** no live attempt **and**, for an offer order, its window still open), `hold_expires_at` (`max(placed_at, latest attempt) + checkout_hold_period`, only while online, `pending_payment`, not cancelled).
+- **Transitions seen:** checkout online → order `pending_payment`, payment `pending`. Mock `paid` + webhook → payment `paid`, order `in_progress`, `can_retry_payment` false, `hold_expires_at` null. Mock `failed` + webhook inside the hold → payment `failed`, order **still `pending_payment`**, `can_retry_payment` true. A retry → a new `pending` attempt and a later `hold_expires_at`. An unpaid order is released (cancelled) only by the `release_stale_checkouts` job after the hold, and only when the provider answers `failed`/`expired`; not provoked here.
+- **Mock lifecycle:** `redirect_url` = `{FRONTEND_BASE_URL}/checkout/return?order=<order_number>`. There is no provider page: the mock state changes only through `mock_pay.py` (no HTTP route can change it).
+
+### Frontend behaviour
+
+- **Source of truth:** `/account/orders/[id]` through `orderKeys.detail(id)`; no separate payment cache. Every retry answer invalidates the `orders` root.
+- **Bounded polling** (`usePolledOrder`): on only while the server reports online + `pending_payment` + not cancelled + payment `pending`/`processing`. Every 3 s for 30 s, then every 10 s, stopping 3 min after the window opened, or on the first response that is terminal. Paused while the tab is hidden (TanStack default), refetch on focus. One page, one interval. After the bound: "We haven't received a confirmation…" + **Check again** (re-reads now, opens one new window). Never for cash or for an order without a payment row.
+- **Retry payment** (`useRetryPayment`): shown only while `can_retry_payment === true` (never for cash). One press = one logical attempt = one key, kept only across **uncertain** outcomes (network, timeout, unparseable body, 5xx other than the 502, `IDEMPOTENCY_REQUEST_IN_PROGRESS`; the silent refresh-and-retry resends inside the same call). Any definitive answer retires it. A separate tracker from checkout's, memory only, never shown. Ref guard + disabled button against double submits.
+- **Redirect safety:** `redirect_url` (and `PAYMENT_ALREADY_ACTIVE`'s) is followed exactly as given, only if absolute http(s); never parsed, and nothing local is marked paid. `PAYMENT_ALREADY_ACTIVE` with a URL offers **Continue to payment**, which the customer has to press.
+- **Hold countdown:** from the server's `hold_expires_at`, presentation only. At zero it re-reads the order once and says only that the order *may* be released.
+- **States:** awaiting, processing, paid, failed, expired, refunded, partially refunded, each with its own copy; any other value → "Status unavailable". Refund rows stay in the Refunds section; no refund action.
+- **Return page:** unchanged in substance: "Your payment hasn't been confirmed yet. Check your orders for the latest status." It reads nothing from the URL and links to `/account/orders`.
+
+### Results
+
+| Scenario | Result | Evidence |
+|---|---|---|
+| Contract: pending online order detail | **PASS** | `pending_payment`, payment `pending`/`mock`, `can_retry_payment: false` (live attempt), `hold_expires_at` set |
+| Contract: checkout `redirect_url` (mock) | **PASS** | `{FRONTEND}/checkout/return?order=<number>` |
+| Retry while an attempt is live | **PASS** | `409 PAYMENT_ALREADY_ACTIVE`, `payment_status: pending`, `redirect_url` present; still 1 payment row |
+| Pending online in the UI | **PASS** | "Awaiting payment", "Checking for a payment update…", countdown; no Retry (server says false); no "Paid" |
+| Real mock-provider completion | **PASS** | `mock_pay.py <payment> paid --send-to` → "webhook answered 200" |
+| Server-side payment + order update | **PASS** | DB payment `paid`, order `in_progress`; detail `can_retry_payment: false`, `hold_expires_at: null` |
+| Bounded polling sees the new state | **PASS** | UI showed "Paid" and "Your payment has been confirmed." 4.9 s after `mock_pay`, with no reload (2 re-reads) |
+| Polling stops on a terminal state | **PASS** | 0 detail GETs in the 8 s after "Paid" |
+| Retryable failed payment (real) | **PASS** | mock `failed` + webhook 200 → payment `failed`, order still `pending_payment`, `can_retry_payment: true` |
+| Failed payment in the UI | **PASS** | "Payment failed", "Your last payment attempt didn't go through.", Retry payment shown; no polling (terminal attempt) |
+| POST payment retry from the UI | **PASS** | one POST → `201`; body `{}`; key matches the pattern; `X-CSRF-Token` = cookie; payment rows 1 → 2 |
+| Redirect handling | **PASS** | browser followed `redirect_url` exactly → `/checkout/return?order=<number>` |
+| Return page remains truthful | **PASS** | no success/failure claim; links to `/account/orders` |
+| Retry restarts the hold (server) | **PASS** | new attempt `pending`; `hold_expires_at` later; `can_retry_payment: false` while live |
+| Idempotency-Key replay | **PASS** | the UI's key + same body → `201 Idempotent-Replayed: true`, same payment id, still 2 rows |
+| Same key, different body | **PASS** | `{payment_provider: "mock"}` under the UI's key → `409 IDEMPOTENCY_KEY_CONFLICT` |
+| CSRF_INVALID | **PASS** | stale cookie → UI POST `403`; "Unable to verify your session…"; no redirect; no new row |
+| Session refresh during retry | **PASS** | access cookie removed → `401` → silent refresh → resend with the **same** key → `201`; the key differs from the refused CSRF attempt (a new logical attempt); rows 3 |
+| Retried payment completes | **PASS** | third attempt paid via mock webhook; order `in_progress` |
+| Cash order has no retry | **PASS** | server `can_retry_payment: false`, `payment: null`, `hold_expires_at: null`; UI: no button, countdown or polling (0 re-reads in 5 s); API retry → `409 INVALID_STATE_TRANSITION` `reason: cash_order` |
+| No page errors | **PASS** | none |
+
+### Not tested against the real backend (and why)
+
+- **`expired` payment and a released (cancelled) order:** the release needs the hold to pass (30 min) and the 5-minute job; `mock_pay expired` was not run so as not to add another order. Both states are covered by unit and mocked E2E tests.
+- **`processing`:** `mock_pay processing` works the same way as `paid`/`failed`; not run, to keep the run to three orders. Covered by unit and mocked E2E.
+- **`refunded` / `partially_refunded`:** need an admin refund (VS-030), which is a later phase. Presentation covered by unit and mocked E2E.
+- **`checkout_hold_expired`, `order_cancelled`, `offer_checkout_expired` refusals, `502 PAYMENT_PROVIDER_UNAVAILABLE`, `503 ONLINE_PAYMENT_UNAVAILABLE`, `IDEMPOTENCY_REQUEST_IN_PROGRESS`, `429 RATE_LIMITED`:** need a 30-minute wait, an offer, a provider outage, an env change, a concurrent request or 10+ retries. Not provoked; covered by unit tests and mocked E2E (refusal, 502).
+- **Hold countdown reaching zero:** 30 minutes against the real backend; covered by unit and mocked E2E.
+- **`PAYMENT_ALREADY_ACTIVE` → Continue to payment in the UI:** the UI shows Retry only when `can_retry_payment` is true, and the real backend makes it false while an attempt is live, so the UI cannot reach that answer against a consistent backend. The real `409` body was verified by API; the UI path is covered by mocked E2E.
+
+### Defects found and fixed
+
+- None in the app during the real run.
+- During development (test-only): two mocked E2E locators matched the header's transient "Loading…" status region as well as the return page's own (`getByRole("status")` strict-mode violation, the same pattern as phase 5D); and the mocked hold-countdown test depended on dev-server compile time. Both fixed in the spec before `d1ccb07`.
+
+### Backend observations (not changed; recorded for the backend team)
+
+- **Retry eligibility vs. `hold_expires_at`.** `retry_refusal` refuses at `placed_at + checkout_hold_period`, while `hold_expires_at` is measured from the **latest attempt** (`docs/payment-recovery.md`: "a retry restarts it"). After a retry, the order page can show time left while a further retry is already refused with `checkout_hold_expired`. The frontend follows `can_retry_payment` (computed with the same rule), so it never offers a retry the server will refuse, but the countdown is about the release, not about retry eligibility.
+- **No customer resume URL** for a `pending` attempt (see `FRONTEND-VERTICAL-SLICE-PLAN.md` §17).
+
+### Verification (this phase)
+
+| Command | Result |
+|---|---|
+| `npm run lint` | 0 errors, 4 warnings (the known `<img>` warnings) |
+| `npm run typecheck` | clean |
+| `npm run test` | **2219/2219** (235 files) |
+| `npm run build` | pass (`/account/orders/[id]` dynamic, `/checkout/return` static) |
+| `npm run test:e2e` | **125/125** in the one full run (109 + 16 new in `e2e/payment-result.spec.ts`; `account-orders.spec.ts` updated in place). The known readiness-banner test passed in this run |
+
+### Remaining gaps
+
+- `/checkout/return` cannot open the order: its URL carries an order **number** and there is no customer lookup by number. It stays a neutral handoff to the orders list (§17).
+- A customer who leaves the provider page while the attempt is still `pending` cannot resume it from the order page: `can_retry_payment` is false and the detail has no `redirect_url` (§17). With the mock provider this changes nothing.
+- The live provider (VS-032) is not built: online payment runs against the mock only. Its return parameters and timing are unknown; the polling bound (3 min) may need tuning then.
+- The old speculative `src/lib/payment/*` and `src/components/payment/*` (written before the real contract, e.g. a `PaymentStatus` without the refund values) are not used by the customer flow. Only the unmounted `src/lib/admin/adminPaymentModel.ts` imports from them; reconcile both with the real admin schemas in the admin-payments phase.
+- FVS-031 (cancel, confirm receipt, report problem), admin orders/payments and refunds are not started.
+
+---
+
 ## Phase 5E: Customer Orders (FVS-029), 2026-11-11
 
 | Item | Value |

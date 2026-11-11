@@ -1415,6 +1415,15 @@ Each item below is `NEEDS BACKEND CONFIRMATION` — this plan does not guess an 
 **What is currently defined:** Checkout creates a pending payment; webhook independently verifies; admin can reconcile/manually confirm.
 **What is missing:** The exact return-URL query parameters the provider/mock redirects back with, whether a dedicated `GET` status endpoint exists distinct from order detail, and the recommended polling interval/timeout.
 **Recommended question:** What does the payment-provider return redirect look like exactly, and is there a lightweight status-only endpoint the frontend should poll instead of the full order detail?
+**Status (phase 5F, 2026-11-11, backend `2dfb27b`): PARTLY RESOLVED.** Confirmed from code and runtime: there is no customer payment route; `GET /api/v1/me/orders/{id}` (`status`, `payment.status`, `can_retry_payment`, `hold_expires_at`) is the read, and the frontend polls it (bounded, see `REAL-BACKEND-ACCEPTANCE.md` Phase 5F). The checkout and retry return URL is `{FRONTEND_BASE_URL}/checkout/return?order=<order_number>` (mock; the live provider's parameters wait on VS-032). **Still open:** the return URL carries an order *number*, and there is no customer lookup by number (`GET /me/orders` filters only by status/dates/cursor), so `/checkout/return` cannot open the order and stays a neutral handoff to the orders list. **Recommended question:** can the return URL carry the order `id` (UUID), or can a customer `GET /me/orders?order_number=` be added?
+
+---
+**Issue:** Resuming a live payment attempt from the order page
+**Backend slice:** VS-024 (backend repo numbering; payment recovery)
+**Why frontend needs clarification:** While an attempt is `pending`, `can_retry_payment` is `false`, and the order detail carries no `redirect_url`. The only route that returns the live attempt's URL is `POST /me/orders/{id}/payments`, as `409 PAYMENT_ALREADY_ACTIVE` with `redirect_url`. A customer who left the provider page without paying cannot get back to it from the order page; the frontend does not send a POST it is told is not allowed just to read that refusal.
+**What is currently defined:** `PAYMENT_ALREADY_ACTIVE` carries `payment_id`, `payment_status`, `redirect_url` (null while `processing`). The frontend offers "Continue to payment" when it receives one.
+**What is missing:** A customer-readable resume URL for a `pending` attempt (e.g. `payment.redirect_url` on `OrderDetailRead`, owner only), or a documented "resume" action.
+**Recommended question:** Should `OrderDetailRead.payment` expose the live attempt's `redirect_url` to its owner, or should `can_retry_payment` be true for a `pending` attempt so the POST's `PAYMENT_ALREADY_ACTIVE` is the intended resume path?
 
 ---
 **Issue:** Captcha provider
