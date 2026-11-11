@@ -92,8 +92,9 @@ function view(fake: Fake, who: "customer" | "admin"): Json {
   const myTurn = offer.turn === who;
   const allowed = !awaiting ? [] : who === "customer" ? [...(myTurn ? ["counter", "accept"] : []), "withdraw"] : myTurn ? ["counter", "accept", "reject"] : [];
   if (who === "admin") return { ...offer, allowed_actions: allowed };
-  const { customer: _customer, ...rest } = offer;
-  return { ...rest, allowed_actions: allowed };
+  const rest: Json = { ...offer, allowed_actions: allowed };
+  delete rest.customer;
+  return rest;
 }
 
 async function install(page: Page, me: Json | null, initial: Json | null = null): Promise<Fake> {
