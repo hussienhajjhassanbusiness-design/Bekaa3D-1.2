@@ -1,92 +1,128 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ContactForm } from "./ContactForm";
+import { useSubmitContactMessage } from "@/lib/contact/contactApi";
+import { CAPTCHA_FAILURE_COPY } from "@/lib/captcha/captchaErrors";
+import { FAKE_CAPTCHA_TOKEN, fakeCaptcha, resetFakeCaptcha } from "@/test/fakeCaptchaWidget";
 
-// FVS-016-IMPLEMENTATION-PLAN.md T02 — only the three VS-015-confirmed
-// fields exist (name, email, message) — no phone/subject/company was
-// invented. Reuses the shared guest-submission copy
-// (GUEST_SUBMISSION_ERROR_COPY) so Contact and BYI never drift into two
-// slightly different vocabularies for the same captcha/rate-limit UX.
+vi.mock("@/lib/contact/contactApi", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/contact/contactApi")>();
+  return { ...actual, useSubmitContactMessage: vi.fn() };
+});
+
+vi.mock("@/components/forms/CaptchaWidget", async () => {
+  const fake = await import("@/test/fakeCaptchaWidget");
+  return { CaptchaWidget: fake.FakeCaptchaWidget };
+});
+
+const mocked = vi.mocked(useSubmitContactMessage);
+
+async function fillRequired(user: ReturnType<typeof userEvent.setup>) {
+  await user.type(screen.getByLabelText("Name"), "Rana");
+  await user.type(screen.getByLabelText("Email"), "rana@example.com");
+  await user.type(screen.getByLabelText("Message"), "Do you print in PETG?");
+}
+
+beforeEach(() => {
+  mocked.mockReset();
+  resetFakeCaptcha();
+});
 
 describe("ContactForm", () => {
-  it("renders an accessible name field", () => {
-    render(<ContactForm onSubmit={vi.fn()} />);
-    expect(screen.getByLabelText(/name/i).tagName).toBe("INPUT");
+  it("renders labelled backend fields only", () => {
+    mocked.mockReturnValue({ mutateAsync: vi.fn() } as never);
+    render(<ContactForm />);
+    for (const label of ["Name", "Email", "Phone (optional)", "Subject (optional)", "Message"]) {
+      expect(screen.getByLabelText(label)).toBeInTheDocument();
+    }
   });
 
-  it("renders an accessible email field using native email semantics", () => {
-    render(<ContactForm onSubmit={vi.fn()} />);
-    expect(screen.getByLabelText(/email/i)).toHaveAttribute("type", "email");
-  });
-
-  it("renders an accessible message field", () => {
-    render(<ContactForm onSubmit={vi.fn()} />);
-    expect(screen.getByLabelText(/message/i).tagName).toBe("TEXTAREA");
-  });
-
-  it("renders no unconfirmed fields (phone/subject/company)", () => {
-    render(<ContactForm onSubmit={vi.fn()} />);
-    expect(screen.queryByLabelText(/phone/i)).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/subject/i)).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/company/i)).not.toBeInTheDocument();
-  });
-
-  it("calls onSubmit with the normalized form values", async () => {
-    const onSubmit = vi.fn();
+  it("blocks an empty or malformed submit client-side", async () => {
     const user = userEvent.setup();
-    render(<ContactForm onSubmit={onSubmit} />);
-
-    await user.type(screen.getByLabelText(/name/i), "Ada Lovelace");
-    await user.type(screen.getByLabelText(/email/i), "ada@example.com");
-    await user.type(screen.getByLabelText(/message/i), "Interested in a custom stand.");
-    await user.click(screen.getByRole("button", { name: /send/i }));
-
-    expect(onSubmit).toHaveBeenCalledWith({
-      name: "Ada Lovelace",
-      email: "ada@example.com",
-      message: "Interested in a custom stand.",
-    });
+    const mutateAsync = vi.fn();
+    mocked.mockReturnValue({ mutateAsync } as never);
+    render(<ContactForm />);
+    await user.type(screen.getByLabelText("Phone (optional)"), "call me");
+    await user.click(screen.getByRole("button", { name: "Send message" }));
+    expect(await screen.findByText("Enter your name.", { selector: "p" })).toBeInTheDocument();
+    expect(screen.getByText("Enter a valid phone number.", { selector: "p" })).toBeInTheDocument();
+    expect(mutateAsync).not.toHaveBeenCalled();
   });
 
-  it("disables the submit button while isSubmitting, preventing a duplicate submit", () => {
-    render(<ContactForm onSubmit={vi.fn()} isSubmitting />);
-    expect(screen.getByRole("button", { name: /send/i })).toBeDisabled();
-  });
-
-  it("shows the shared captcha guidance for a captcha error", () => {
-    render(<ContactForm onSubmit={vi.fn()} error={{ kind: "captcha", message: "irrelevant" }} />);
-    expect(screen.getByText("Please complete the verification and try again.")).toBeInTheDocument();
-  });
-
-  it("shows the shared rate-limit guidance for a rate-limit error", () => {
-    render(<ContactForm onSubmit={vi.fn()} error={{ kind: "rate-limit", message: "irrelevant" }} />);
-    expect(screen.getByText("Please try again in a few minutes.")).toBeInTheDocument();
-  });
-
-  it("shows the shared generic guidance for a generic error, never the raw message", () => {
-    render(<ContactForm onSubmit={vi.fn()} error={{ kind: "generic", message: "raw internal detail" }} />);
-    expect(screen.getByText("Something went wrong. Please try again.")).toBeInTheDocument();
-    expect(screen.queryByText("raw internal detail")).not.toBeInTheDocument();
-  });
-
-  it("renders a supplied captcha slot without building a fake captcha itself", () => {
-    render(<ContactForm onSubmit={vi.fn()} captchaSlot={<div data-testid="captcha-slot">real widget here</div>} />);
-    expect(screen.getByTestId("captcha-slot")).toBeInTheDocument();
-  });
-
-  it("never makes a network/fetch call", () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
-    render(<ContactForm onSubmit={vi.fn()} />);
-    expect(fetchSpy).not.toHaveBeenCalled();
-    fetchSpy.mockRestore();
-  });
-
-  it("never writes to localStorage or sessionStorage", async () => {
-    const spy = vi.spyOn(Storage.prototype, "setItem");
+  it("sends the exact payload, then shows a safe success state", async () => {
     const user = userEvent.setup();
-    render(<ContactForm onSubmit={vi.fn()} />);
-    await user.type(screen.getByLabelText(/name/i), "a");
-    expect(spy).not.toHaveBeenCalled();
+    const mutateAsync = vi.fn().mockResolvedValue({ id: "secret-id", created_at: "2026-11-11T10:00:00Z" });
+    mocked.mockReturnValue({ mutateAsync } as never);
+    render(<ContactForm />);
+    await fillRequired(user);
+    await user.type(screen.getByLabelText("Subject (optional)"), "Materials");
+    await user.click(screen.getByRole("button", { name: "Send message" }));
+    await waitFor(() =>
+      expect(mutateAsync).toHaveBeenCalledWith({
+        name: "Rana",
+        email: "rana@example.com",
+        subject: "Materials",
+        message: "Do you print in PETG?",
+        captcha_token: FAKE_CAPTCHA_TOKEN,
+      })
+    );
+    expect(await screen.findByText(/your message has been sent/i)).toBeInTheDocument();
+    expect(screen.queryByText(/secret-id/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Send another message" }));
+    expect(screen.getByLabelText("Name")).toHaveValue("");
+  });
+
+  it("shows captcha copy on CAPTCHA_INVALID and retries with a fresh token", async () => {
+    const user = userEvent.setup();
+    const mutateAsync = vi
+      .fn()
+      .mockRejectedValueOnce({ kind: "http", status: 400, code: "CAPTCHA_INVALID", detail: "RAW", message: "x", raw: {} })
+      .mockResolvedValueOnce({ id: "m", created_at: "x" });
+    mocked.mockReturnValue({ mutateAsync } as never);
+    render(<ContactForm />);
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: "Send message" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(CAPTCHA_FAILURE_COPY.invalid);
+    expect(screen.queryByText("RAW")).not.toBeInTheDocument();
+    expect(fakeCaptcha.resetCount).toBe(1);
+    await user.click(screen.getByRole("button", { name: "Send message" }));
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText(/your message has been sent/i)).toBeInTheDocument();
+  });
+
+  it("refuses to submit without a captcha token", async () => {
+    fakeCaptcha.autoIssue = false;
+    const user = userEvent.setup();
+    const mutateAsync = vi.fn();
+    mocked.mockReturnValue({ mutateAsync } as never);
+    render(<ContactForm />);
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: "Send message" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(CAPTCHA_FAILURE_COPY.missing);
+    expect(mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("shows rate-limit and field copy, never the server's text", async () => {
+    const user = userEvent.setup();
+    const mutateAsync = vi
+      .fn()
+      .mockRejectedValueOnce({ kind: "http", status: 429, code: "RATE_LIMITED", retryAfterSeconds: 600, detail: "RAW", message: "x", raw: {} })
+      .mockRejectedValueOnce({
+        kind: "http",
+        status: 422,
+        code: "VALIDATION_ERROR",
+        errors: [{ loc: ["body", "email"], msg: "RAW MSG", type: "value_error" }],
+        message: "x",
+        raw: {},
+      });
+    mocked.mockReturnValue({ mutateAsync } as never);
+    render(<ContactForm />);
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: "Send message" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Please try again in about 10 minutes.");
+    await user.click(screen.getByRole("button", { name: "Send message" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Please check: Email."));
+    expect(screen.queryByText(/RAW/)).not.toBeInTheDocument();
   });
 });

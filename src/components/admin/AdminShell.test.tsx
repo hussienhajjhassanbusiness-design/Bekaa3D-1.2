@@ -70,8 +70,8 @@ describe("AdminShell", () => {
 
     const nav = screen.getByRole("navigation", { name: "Admin" });
     const links = Array.from(nav.querySelectorAll("a")).map((a) => a.textContent);
-    expect(links).toEqual(["Orders", "STL deliveries", "Payments", "Refunds", "Cash blocks", "Settings", "Customers", "Categories", "Materials", "Colours", "Products"]);
-    expect(nav.textContent).not.toMatch(/cancellation|contact|shipping|entitlement/i);
+    expect(links).toEqual(["Orders", "STL deliveries", "Payments", "Refunds", "Cash blocks", "Contact messages", "Settings", "Customers", "Categories", "Materials", "Colours", "Products"]);
+    expect(nav.textContent).not.toMatch(/cancellation|shipping|entitlement/i);
   });
 
   it("mounts the shared Log out control for a signed-in administrator (Phase 5A defect 7)", () => {

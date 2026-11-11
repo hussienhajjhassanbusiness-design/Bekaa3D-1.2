@@ -1,34 +1,37 @@
 import type { StatusBadgeTone } from "@/components/admin/StatusBadge";
 
-// #ARCHITECTURE-CONTACT-STATUS-WORKFLOW
+// #ARCHITECTURE-CONTACT-STATUS-WORKFLOW (phase 6B-1)
 //
-// Frontend-normalized status model — NOT a claim about the backend's
-// real serialized enum strings, which are still NEEDS BACKEND
-// CONFIRMATION (FVS-017-IMPLEMENTATION-PLAN.md §1). A future API
-// adapter maps whatever VS-015's admin half actually returns onto this
-// union. The linear sequence below (new → read → replied → archived,
-// no skips, no reverse transitions) is confirmed PRODUCT behavior —
-// FRONTEND-VERTICAL-SLICE-PLAN.md's own FVS-017 capability line states
-// exactly this sequence — not an invented workflow engine.
-export type ContactMessageStatus = "new" | "read" | "replied" | "archived";
+// Backend 2dfb27b `contact_message_status` (engagement/domain/enums.py),
+// declaration order = queue order: new -> read -> replied -> archived.
+// Transitions are FORWARD ONLY, SKIPS ALLOWED (contact_message.py
+// can_transition, VS-033 Q6): any later status is a legal target; a
+// backwards move is 409 INVALID_STATE_TRANSITION. Staying put is a no-op,
+// so it is never offered as an action. The server stays authoritative —
+// this only decides which buttons to render.
+export const CONTACT_MESSAGE_STATUSES = ["new", "read", "replied", "archived"] as const;
+export type ContactMessageStatus = (typeof CONTACT_MESSAGE_STATUSES)[number];
 
 export interface ContactMessageAction {
   nextStatus: ContactMessageStatus;
   label: string;
 }
 
-const TRANSITIONS: Record<ContactMessageStatus, ContactMessageAction | null> = {
-  new: { nextStatus: "read", label: "Mark read" },
-  read: { nextStatus: "replied", label: "Mark replied" },
-  replied: { nextStatus: "archived", label: "Archive" },
-  archived: null,
+const ACTION_LABELS: Record<ContactMessageStatus, string> = {
+  new: "Mark new",
+  read: "Mark read",
+  replied: "Mark replied",
+  archived: "Archive",
 };
 
-// The ONLY legal next action for a status, or null at the terminal
-// state — a caller can never reach an illegal transition (e.g.
-// "archived" -> "read") through this API, since no other path exists.
-export function getNextContactMessageAction(status: ContactMessageStatus): ContactMessageAction | null {
-  return TRANSITIONS[status];
+export function isContactMessageStatus(value: unknown): value is ContactMessageStatus {
+  return typeof value === "string" && (CONTACT_MESSAGE_STATUSES as readonly string[]).includes(value);
+}
+
+// Every forward target from `status`, nearest first; empty at `archived`.
+export function getContactMessageActions(status: ContactMessageStatus): ContactMessageAction[] {
+  const index = CONTACT_MESSAGE_STATUSES.indexOf(status);
+  return CONTACT_MESSAGE_STATUSES.slice(index + 1).map((next) => ({ nextStatus: next, label: ACTION_LABELS[next] }));
 }
 
 const STATUS_DESCRIPTIONS: Record<ContactMessageStatus, { label: string; tone: StatusBadgeTone }> = {
@@ -38,6 +41,7 @@ const STATUS_DESCRIPTIONS: Record<ContactMessageStatus, { label: string; tone: S
   archived: { label: "Archived", tone: "neutral" },
 };
 
-export function describeContactMessageStatus(status: ContactMessageStatus): { label: string; tone: StatusBadgeTone } {
-  return STATUS_DESCRIPTIONS[status];
+// An unknown value (a future enum member) renders as itself, never crashes.
+export function describeContactMessageStatus(status: string): { label: string; tone: StatusBadgeTone } {
+  return isContactMessageStatus(status) ? STATUS_DESCRIPTIONS[status] : { label: status, tone: "neutral" };
 }

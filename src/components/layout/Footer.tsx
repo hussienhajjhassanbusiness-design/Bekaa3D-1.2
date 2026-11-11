@@ -1,9 +1,8 @@
 import Link from "next/link";
 
 // Content for AppLayout's <footer> landmark — not a second <footer>
-// element. Only links to routes actually mounted this phase (/shop,
-// /about) — no legal/social/contact links, since no such page exists yet
-// and none is specified anywhere in the approved plan.
+// element. Only links to routes actually mounted (/shop, /about and, from
+// phase 6B, /contact) — no legal/social links, since no such page exists.
 export function Footer() {
   return (
     <div className="border-t border-border-default bg-surface-subtle px-4 py-6 tablet:px-6 desktop:px-8">
@@ -19,6 +18,11 @@ export function Footer() {
             <li>
               <Link href="/about" className="text-caption text-text-secondary hover:text-brand-dark-green">
                 About
+              </Link>
+            </li>
+            <li>
+              <Link href="/contact" className="text-caption text-text-secondary hover:text-brand-dark-green">
+                Contact
               </Link>
             </li>
           </ul>

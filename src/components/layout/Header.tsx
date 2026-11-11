@@ -19,6 +19,7 @@ const NAV_ITEMS: readonly NavItem[] = [
   { href: "/", label: "Home" },
   { href: "/shop", label: "Shop" },
   { href: "/about", label: "About" },
+  { href: "/contact", label: "Contact" },
 ];
 
 // Content for AppLayout's <header> landmark — not a second <header>

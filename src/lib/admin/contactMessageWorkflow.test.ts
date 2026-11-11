@@ -1,46 +1,35 @@
 import { describe, it, expect } from "vitest";
-import { getNextContactMessageAction, describeContactMessageStatus, type ContactMessageStatus } from "./contactMessageWorkflow";
+import { describeContactMessageStatus, getContactMessageActions, isContactMessageStatus } from "./contactMessageWorkflow";
 
-const ALL_STATUSES: readonly ContactMessageStatus[] = ["new", "read", "replied", "archived"];
-
-// FVS-017-IMPLEMENTATION-PLAN.md T01 — frontend-normalized workflow
-// only. "new"/"read"/"replied"/"archived" are UI-normalized concepts,
-// not claimed backend enum literals (plan §1) — a future API adapter
-// maps the real backend representation onto this union. The linear
-// sequence (new → read → replied → archived, no skips, no reverse
-// transitions) is confirmed PRODUCT behavior
-// (FRONTEND-VERTICAL-SLICE-PLAN.md's own FVS-017 capability line:
-// "new → read → replied → archived").
-
-describe("getNextContactMessageAction", () => {
-  it("exposes Mark read as the only action for a new message", () => {
-    expect(getNextContactMessageAction("new")).toEqual({ nextStatus: "read", label: "Mark read" });
+// Backend 2dfb27b contact_message.py can_transition: forward only, skips
+// allowed; staying put is a no-op (never offered).
+describe("getContactMessageActions", () => {
+  it("offers every later status from new, nearest first", () => {
+    expect(getContactMessageActions("new")).toEqual([
+      { nextStatus: "read", label: "Mark read" },
+      { nextStatus: "replied", label: "Mark replied" },
+      { nextStatus: "archived", label: "Archive" },
+    ]);
   });
 
-  it("exposes Mark replied as the only action for a read message", () => {
-    expect(getNextContactMessageAction("read")).toEqual({ nextStatus: "replied", label: "Mark replied" });
+  it("never offers a backwards or same-status move", () => {
+    expect(getContactMessageActions("replied").map((a) => a.nextStatus)).toEqual(["archived"]);
+    expect(getContactMessageActions("read").map((a) => a.nextStatus)).toEqual(["replied", "archived"]);
   });
 
-  it("exposes Archive as the only action for a replied message", () => {
-    expect(getNextContactMessageAction("replied")).toEqual({ nextStatus: "archived", label: "Archive" });
-  });
-
-  it("exposes no action for an archived message", () => {
-    expect(getNextContactMessageAction("archived")).toBeNull();
+  it("offers nothing once archived", () => {
+    expect(getContactMessageActions("archived")).toEqual([]);
   });
 });
 
 describe("describeContactMessageStatus", () => {
-  it("gives each status a human-readable label", () => {
-    expect(describeContactMessageStatus("new").label).toBe("New");
-    expect(describeContactMessageStatus("read").label).toBe("Read");
-    expect(describeContactMessageStatus("replied").label).toBe("Replied");
-    expect(describeContactMessageStatus("archived").label).toBe("Archived");
+  it("labels each backend status with visible text", () => {
+    expect(describeContactMessageStatus("new")).toEqual({ label: "New", tone: "warning" });
+    expect(describeContactMessageStatus("replied")).toEqual({ label: "Replied", tone: "positive" });
   });
 
-  it("gives each status a bounded tone, never an arbitrary color string", () => {
-    for (const status of ALL_STATUSES) {
-      expect(["neutral", "positive", "negative", "warning"]).toContain(describeContactMessageStatus(status).tone);
-    }
+  it("renders an unknown future status as itself rather than crashing", () => {
+    expect(describeContactMessageStatus("escalated")).toEqual({ label: "escalated", tone: "neutral" });
+    expect(isContactMessageStatus("escalated")).toBe(false);
   });
 });
