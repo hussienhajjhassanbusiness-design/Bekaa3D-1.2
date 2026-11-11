@@ -1,6 +1,6 @@
 import { apiClient } from "@/lib/api/apiClient";
 import { authenticatedRequest } from "@/lib/auth/authenticatedRequest";
-import type { OrderDetailReadDTO, OrderPageDTO } from "./orderTypes";
+import type { OrderDetailReadDTO, OrderPageDTO, PaymentRetryReadDTO, PaymentRetryRequestDTO } from "./orderTypes";
 
 // #ARCHITECTURE-CUSTOMER-ORDERS-API
 //
@@ -33,4 +33,25 @@ async function getMyOrder(orderId: string): Promise<OrderDetailReadDTO> {
   );
 }
 
-export const ordersApi = { listMyOrders, getMyOrder };
+// FVS-027 (phase 5F) — POST /api/v1/me/orders/{order_id}/payments: a new
+// payment attempt for the caller's own unpaid online order. CSRF and the
+// required Idempotency-Key (paymentRetryIdempotency.ts). The key and the
+// fixed `{}` body are captured once in this closure, so the shared
+// refresh-on-401-then-retry-once wrapper can only resend the identical
+// request, which the server treats as the same retry. Like checkout, the
+// server calls the provider between two transactions, so the client waits
+// longer than its default before calling the outcome unknown.
+export const PAYMENT_RETRY_TIMEOUT_MS = 30_000;
+
+async function retryPayment(orderId: string, idempotencyKey: string): Promise<PaymentRetryReadDTO> {
+  const body: PaymentRetryRequestDTO = {};
+  return authenticatedRequest(() =>
+    apiClient.post<PaymentRetryReadDTO>(`/api/v1/me/orders/${encodeURIComponent(orderId)}/payments`, body, {
+      csrf: true,
+      headers: { "Idempotency-Key": idempotencyKey },
+      timeoutMs: PAYMENT_RETRY_TIMEOUT_MS,
+    })
+  );
+}
+
+export const ordersApi = { listMyOrders, getMyOrder, retryPayment };

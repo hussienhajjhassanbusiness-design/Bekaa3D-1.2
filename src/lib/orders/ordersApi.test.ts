@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { apiClient } from "@/lib/api/apiClient";
 import { refreshSession } from "@/lib/auth/refreshSession";
-import { buildOrdersSearchParams, ordersApi } from "./ordersApi";
+import { buildOrdersSearchParams, ordersApi, PAYMENT_RETRY_TIMEOUT_MS } from "./ordersApi";
 import { orderKeys } from "./orderKeys";
 import { classifyOrderError } from "./orderErrors";
 import { ORDER_ID } from "./orderFixtures";
@@ -61,6 +61,46 @@ describe("ordersApi", () => {
     mockedRefreshSession.mockResolvedValue(false);
     vi.spyOn(apiClient, "get").mockRejectedValue(AUTH_REQUIRED);
     await expect(ordersApi.getMyOrder(ORDER_ID)).rejects.toBe(AUTH_REQUIRED);
+  });
+});
+
+describe("ordersApi.retryPayment (FVS-027)", () => {
+  const READ = { order: { id: ORDER_ID }, payment: { redirect_url: null } };
+
+  it("POSTs an empty body to /api/v1/me/orders/{id}/payments with CSRF and the Idempotency-Key", async () => {
+    const postSpy = vi.spyOn(apiClient, "post").mockResolvedValue(READ);
+    await expect(ordersApi.retryPayment(ORDER_ID, "retry-key-0001")).resolves.toBe(READ);
+    expect(postSpy).toHaveBeenCalledTimes(1);
+    expect(postSpy).toHaveBeenCalledWith(
+      `/api/v1/me/orders/${ORDER_ID}/payments`,
+      {},
+      { csrf: true, headers: { "Idempotency-Key": "retry-key-0001" }, timeoutMs: PAYMENT_RETRY_TIMEOUT_MS }
+    );
+    // Never a provider, an amount or a total.
+    expect(Object.keys(postSpy.mock.calls[0]![1] as object)).toEqual([]);
+  });
+
+  it("encodes the id and waits longer than the provider's own 10 s call", async () => {
+    const postSpy = vi.spyOn(apiClient, "post").mockResolvedValue(READ);
+    await ordersApi.retryPayment("a/b", "retry-key-0001");
+    expect(postSpy.mock.calls[0]![0]).toBe("/api/v1/me/orders/a%2Fb/payments");
+    expect(PAYMENT_RETRY_TIMEOUT_MS).toBeGreaterThan(10_000);
+  });
+
+  it("after a silent session refresh, resends ONCE with the SAME key and body", async () => {
+    mockedRefreshSession.mockResolvedValue(true);
+    const postSpy = vi.spyOn(apiClient, "post").mockRejectedValueOnce(AUTH_REQUIRED).mockResolvedValueOnce(READ);
+    await expect(ordersApi.retryPayment(ORDER_ID, "retry-key-0001")).resolves.toBe(READ);
+    expect(postSpy).toHaveBeenCalledTimes(2);
+    expect(postSpy.mock.calls[1]).toEqual(postSpy.mock.calls[0]);
+  });
+
+  it("never retries any other failure by itself", async () => {
+    const conflict = { kind: "http" as const, status: 409, code: "PAYMENT_ALREADY_ACTIVE", message: "x", raw: {} };
+    const postSpy = vi.spyOn(apiClient, "post").mockRejectedValue(conflict);
+    await expect(ordersApi.retryPayment(ORDER_ID, "retry-key-0001")).rejects.toBe(conflict);
+    expect(postSpy).toHaveBeenCalledTimes(1);
+    expect(mockedRefreshSession).not.toHaveBeenCalled();
   });
 });
 

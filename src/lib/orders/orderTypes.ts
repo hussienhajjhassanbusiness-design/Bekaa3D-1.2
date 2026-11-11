@@ -160,3 +160,44 @@ export interface OrderDetailReadDTO {
   // Oldest first. Not in `required` in the schema: may be absent.
   refunds?: OrderRefundReadDTO[];
 }
+
+// #FVS027-PAYMENT-RETRY-WIRE-CONTRACT (phase 5F)
+//
+// POST /api/v1/me/orders/{order_id}/payments (backend 2dfb27b
+// ordering/api/payment_retry.py; docs/payment-recovery.md; running
+// /openapi.json PaymentRetryRequest / PaymentRetryRead). Verified session,
+// CSRF, required `Idempotency-Key` (^[A-Za-z0-9._:-]{8,255}$, scope
+// `payment_retry:{order_id}` per user, kept 24 h).
+//
+// Body `extra="forbid"`: only `payment_provider?` (1-32). The frontend
+// sends `{}` — the server reuses the previous attempt's provider while it
+// is configured, and the frontend never names a provider. The amount is
+// always the order's own total and cannot be sent.
+export type PaymentRetryRequestDTO = Record<string, never>;
+
+export interface RetryOrderReadDTO {
+  id: string;
+  order_number: string;
+  status: OrderStatus;
+  total_cents: number;
+  currency: string;
+  // The new hold deadline: a retry restarts the hold.
+  hold_expires_at: string;
+}
+
+export interface RetryPaymentReadDTO {
+  id: string;
+  // A plain string on the wire (backend PaymentStatus); `pending` on a 201.
+  status: string;
+  provider: string;
+  amount_cents: number;
+  currency: string;
+  // The provider's payment page; null if none. Opaque: followed exactly as
+  // given (after the absolute-http(s) check), never parsed.
+  redirect_url: string | null;
+}
+
+export interface PaymentRetryReadDTO {
+  order: RetryOrderReadDTO;
+  payment: RetryPaymentReadDTO;
+}
