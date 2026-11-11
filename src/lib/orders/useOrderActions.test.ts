@@ -41,7 +41,7 @@ describe("useOrderAction", () => {
     });
 
     expect(ok).toBe(true);
-    expect(spy).toHaveBeenCalledWith(ORDER_ID);
+    expect(spy).toHaveBeenCalledWith(ORDER_ID, undefined);
     expect(queryClient.getQueryData(orderKeys.detail(ORDER_ID))).toBe(cancelled);
     expect(invalidate).toHaveBeenCalledWith({ queryKey: orderKeys.root });
     expect(result.current.state).toEqual({ kind: "success" });

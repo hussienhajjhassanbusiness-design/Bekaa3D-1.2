@@ -68,16 +68,16 @@ async function retryPayment(orderId: string, idempotencyKey: string): Promise<Pa
 // identical request only after the session was refreshed (a 401 is
 // answered before the route body runs, so nothing changed).
 //
-// cancel: the optional `{ reason? (<=500) }` body is not collected by the
-// UI (it is an audit note only), so no body is sent.
+// cancel: the optional `{ reason? (<=500) }` (an audit note for the team)
+// is sent only when the customer typed one; otherwise no body at all.
 function actionPath(orderId: string, action: "cancel" | "confirm-receipt" | "report-problem"): string {
   return `/api/v1/me/orders/${encodeURIComponent(orderId)}/${action}`;
 }
 
-async function cancelOrder(orderId: string): Promise<OrderDetailReadDTO> {
-  return authenticatedRequest(() =>
-    apiClient.post<OrderDetailReadDTO>(actionPath(orderId, "cancel"), undefined, { csrf: true })
-  );
+async function cancelOrder(orderId: string, reason?: string): Promise<OrderDetailReadDTO> {
+  const note = reason?.trim();
+  const body = note ? { reason: note } : undefined;
+  return authenticatedRequest(() => apiClient.post<OrderDetailReadDTO>(actionPath(orderId, "cancel"), body, { csrf: true }));
 }
 
 async function confirmReceipt(orderId: string): Promise<OrderDetailReadDTO> {

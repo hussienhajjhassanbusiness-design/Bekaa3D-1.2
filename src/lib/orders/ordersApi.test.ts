@@ -137,6 +137,14 @@ describe("ordersApi customer order actions (FVS-031)", () => {
     expect(postSpy).toHaveBeenCalledWith(`/api/v1/me/orders/${ORDER_ID}/cancel`, undefined, { csrf: true });
   });
 
+  it("cancel sends { reason } only when a non-blank reason was typed (CustomerOrderCancelRequest)", async () => {
+    const postSpy = vi.spyOn(apiClient, "post").mockResolvedValue(DETAIL);
+    await ordersApi.cancelOrder(ORDER_ID, "  Ordered the wrong colour  ");
+    await ordersApi.cancelOrder(ORDER_ID, "   ");
+    expect(postSpy.mock.calls[0]).toEqual([`/api/v1/me/orders/${ORDER_ID}/cancel`, { reason: "Ordered the wrong colour" }, { csrf: true }]);
+    expect(postSpy.mock.calls[1]).toEqual([`/api/v1/me/orders/${ORDER_ID}/cancel`, undefined, { csrf: true }]);
+  });
+
   it("confirms receipt via POST /api/v1/me/orders/{id}/confirm-receipt with CSRF and no body", async () => {
     const postSpy = vi.spyOn(apiClient, "post").mockResolvedValue(DETAIL);
     await expect(ordersApi.confirmReceipt(ORDER_ID)).resolves.toBe(DETAIL);

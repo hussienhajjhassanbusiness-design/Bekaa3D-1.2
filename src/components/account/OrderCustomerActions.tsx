@@ -62,8 +62,8 @@ export function OrderCustomerActions({ order }: { order: OrderDetailModel }) {
     return null;
   }
 
-  async function confirmCancel() {
-    if (await cancel.submit()) {
+  async function confirmCancel(reason: string) {
+    if (await cancel.submit(reason)) {
       setCancelOpen(false);
       setNotice("cancel");
     }
@@ -145,7 +145,7 @@ export function OrderCustomerActions({ order }: { order: OrderDetailModel }) {
         order={order}
         pending={cancel.state.kind === "pending"}
         error={errorMessage(cancel.state)}
-        onConfirm={() => void confirmCancel()}
+        onConfirm={(reason) => void confirmCancel(reason)}
         onClose={() => {
           setCancelOpen(false);
           cancel.reset();

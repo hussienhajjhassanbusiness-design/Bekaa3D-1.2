@@ -102,6 +102,19 @@ describe("OrderCustomerActions — cancel", () => {
     expect(screen.getByRole("button", { name: "Cancel order" })).toHaveFocus();
   });
 
+  it("passes the optional reason through (max 500, never required)", async () => {
+    const user = userEvent.setup();
+    const spy = vi.spyOn(ordersApi, "cancelOrder").mockResolvedValue(detailDTO({ status: "cancelled", can_cancel: false }));
+    renderActions(detailDTO({ can_cancel: true }));
+    await user.click(screen.getByRole("button", { name: "Cancel order" }));
+    const dialog = screen.getByRole("dialog");
+    const field = within(dialog).getByLabelText("Reason for cancelling (optional)");
+    expect(field).toHaveAttribute("maxLength", "500");
+    await user.type(field, "Ordered the wrong colour");
+    await user.click(within(dialog).getByRole("button", { name: "Cancel order" }));
+    await waitFor(() => expect(spy).toHaveBeenCalledWith(ORDER_ID, "Ordered the wrong colour"));
+  });
+
   it("mentions the refund for a paid online order", async () => {
     const user = userEvent.setup();
     renderActions(
@@ -126,6 +139,7 @@ describe("OrderCustomerActions — cancel", () => {
     await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel order" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith(ORDER_ID, "");
     expect(queryClient.getQueryData(orderKeys.detail(ORDER_ID))).toBe(cancelled);
     expect(invalidate).toHaveBeenCalledWith({ queryKey: orderKeys.root });
     expect(screen.getByRole("status")).toHaveTextContent("Your cancellation went through");

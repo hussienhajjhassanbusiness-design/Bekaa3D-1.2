@@ -22,12 +22,16 @@ import type { OrderDetailReadDTO } from "./orderTypes";
 export type OrderActionState =
   { kind: "idle" } | { kind: "pending" } | { kind: "success" } | { kind: "error"; outcome: OrderActionErrorOutcome };
 
-type ActionArgs<A extends OrderAction> = A extends "report-problem" ? [message: string] : [];
+type ActionArgs<A extends OrderAction> = A extends "report-problem"
+  ? [message: string]
+  : A extends "cancel"
+    ? [reason?: string]
+    : [];
 
 function run(orderId: string, action: OrderAction, args: unknown[]): Promise<OrderDetailReadDTO> {
   switch (action) {
     case "cancel":
-      return ordersApi.cancelOrder(orderId);
+      return ordersApi.cancelOrder(orderId, typeof args[0] === "string" ? args[0] : undefined);
     case "confirm-receipt":
       return ordersApi.confirmReceipt(orderId);
     case "report-problem":

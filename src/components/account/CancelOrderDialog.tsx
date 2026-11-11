@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Alert } from "@/components/feedback/Alert";
 import { DialogShell } from "@/components/feedback/DialogShell";
 import { Button } from "@/components/forms/Button";
+import { TextAreaField } from "@/components/forms/TextAreaField";
 import type { OrderDetailModel } from "@/lib/orders/orderModel";
 
 export interface CancelOrderDialogProps {
@@ -11,11 +12,13 @@ export interface CancelOrderDialogProps {
   order: OrderDetailModel;
   pending: boolean;
   error: string | null;
-  onConfirm: () => void;
+  // The optional reason (<= 500), passed through only when typed.
+  onConfirm: (reason: string) => void;
   onClose: () => void;
 }
 
 const PAID_STATUSES = new Set(["paid", "partially_refunded"]);
+const REASON_MAX = 500;
 
 // #FVS031-CANCEL-DIALOG (phase 5G)
 //
@@ -33,6 +36,7 @@ export function CancelOrderDialog({ open, order, pending, error, onConfirm, onCl
   const titleId = useId();
   const descriptionId = useId();
   const keepRef = useRef<HTMLButtonElement>(null);
+  const [reason, setReason] = useState("");
 
   useEffect(() => {
     if (open) keepRef.current?.focus();
@@ -54,6 +58,16 @@ export function CancelOrderDialog({ open, order, pending, error, onConfirm, onCl
           <p>After cancelling, you may not be able to choose cash payment for a new order for 24 hours.</p>
         )}
       </div>
+      <div className="mt-4">
+        <TextAreaField
+          label="Reason for cancelling (optional)"
+          rows={2}
+          maxLength={REASON_MAX}
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          disabled={pending}
+        />
+      </div>
       {error && (
         <div className="mt-4">
           <Alert variant="error" message={error} />
@@ -63,7 +77,7 @@ export function CancelOrderDialog({ open, order, pending, error, onConfirm, onCl
         <Button ref={keepRef} type="button" variant="secondary" onClick={onClose} disabled={pending}>
           Keep my order
         </Button>
-        <Button type="button" variant="destructive" onClick={onConfirm} isLoading={pending}>
+        <Button type="button" variant="destructive" onClick={() => onConfirm(reason)} isLoading={pending}>
           Cancel order
         </Button>
       </div>
