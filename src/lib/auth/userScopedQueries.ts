@@ -16,6 +16,8 @@ const USER_SCOPED_QUERY_ROOTS: readonly (readonly string[])[] = [
   ["addresses"],
   ["cart"],
   ["orders"],
+  // Phase 6C: the customer's own offers (amounts and messages are personal).
+  ["offers"],
 ];
 
 export function clearUserScopedQueries(queryClient: QueryClient): void {

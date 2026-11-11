@@ -39,14 +39,16 @@ function stableStringify(value: unknown): string {
   return JSON.stringify(value);
 }
 
-export function checkoutFingerprint(body: CheckoutRequestDTO): string {
+export function checkoutFingerprint(body: object): string {
   return stableStringify(body);
 }
 
-export interface CheckoutAttemptTracker {
+// Generic over the body (phase 6C: offer checkout reuses the same rules
+// for POST /me/offers/{id}/checkout); cart checkout keeps the default.
+export interface CheckoutAttemptTracker<TBody extends object = CheckoutRequestDTO> {
   // The key for this exact body: the current one if the body is unchanged,
   // otherwise a freshly minted one.
-  keyFor(body: CheckoutRequestDTO): string;
+  keyFor(body: TBody): string;
   // Forget the current key (after a placed order, or a key conflict).
   retire(): void;
   currentKey(): string | null;
@@ -56,7 +58,9 @@ function defaultGenerate(): string {
   return crypto.randomUUID();
 }
 
-export function createCheckoutAttemptTracker(generate: () => string = defaultGenerate): CheckoutAttemptTracker {
+export function createCheckoutAttemptTracker<TBody extends object = CheckoutRequestDTO>(
+  generate: () => string = defaultGenerate
+): CheckoutAttemptTracker<TBody> {
   let current: { fingerprint: string; key: string } | null = null;
 
   return {
@@ -81,9 +85,9 @@ export function createCheckoutAttemptTracker(generate: () => string = defaultGen
   };
 }
 
-export function useCheckoutAttemptTracker(): CheckoutAttemptTracker {
+export function useCheckoutAttemptTracker<TBody extends object = CheckoutRequestDTO>(): CheckoutAttemptTracker<TBody> {
   // The lazy initializer runs once per mount; the tracker object is then
   // stable across every re-render.
-  const [tracker] = useState(() => createCheckoutAttemptTracker());
+  const [tracker] = useState(() => createCheckoutAttemptTracker<TBody>());
   return tracker;
 }

@@ -6,6 +6,7 @@ import { NotFoundContent } from "@/components/feedback/NotFoundContent";
 import { useProduct } from "@/lib/catalog/useProduct";
 import { toProductDetailModel } from "@/lib/catalog/productAdapters";
 import { usePublicSettings } from "@/lib/settings/usePublicSettings";
+import { MakeOfferPanel } from "@/components/offers/MakeOfferPanel";
 import { AddToCartButton } from "./AddToCartButton";
 import { PriceDisplay } from "./PriceDisplay";
 import { ProductImageGallery } from "./ProductImageGallery";
@@ -127,6 +128,12 @@ export function ProductDetailView({ slug }: ProductDetailViewProps) {
               />
             )}
           </div>
+          <MakeOfferPanel
+            productId={product.id}
+            productName={product.name}
+            canOffer={product.capabilities.canOffer}
+            returnToPath={returnToPath}
+          />
         </div>
       </div>
     </div>

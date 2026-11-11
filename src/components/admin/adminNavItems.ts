@@ -5,7 +5,8 @@
 // only the BUILT, authoritative admin areas (AGENTS.md Phase 3 scope):
 // settings, customers, reference data, products, (phase 5H) orders and the
 // STL delivery queue, (phase 5I) payments and refunds, and (phase 6A) cash
-// blocks, and (phase 6B) the contact queue and the Bring Your Idea pipeline. Deliberately
+// blocks, (phase 6B) the contact queue and the Bring Your Idea pipeline, and
+// (phase 6C) the offer queue. Deliberately
 // excludes STL asset versions / entitlement grants /
 // shipping zones (removed by ADR-019/ADR-024): no nav entry for them
 // exists, not even disabled.
@@ -17,6 +18,7 @@ export interface AdminNavItem {
 export const ADMIN_NAV_ITEMS: readonly AdminNavItem[] = [
   { label: "Orders", href: "/admin/orders" },
   { label: "STL deliveries", href: "/admin/stl-deliveries" },
+  { label: "Offers", href: "/admin/offers" },
   { label: "Payments", href: "/admin/payments" },
   { label: "Refunds", href: "/admin/refunds" },
   { label: "Cash blocks", href: "/admin/cash-blocks" },
