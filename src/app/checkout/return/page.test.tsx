@@ -23,4 +23,11 @@ describe("CheckoutReturnPage (/checkout/return)", () => {
     // the page links to the history rather than guessing an order page.
     expect(screen.getByRole("link", { name: "View your orders" })).toHaveAttribute("href", "/account/orders");
   });
+
+  it("takes no input: it cannot read the return URL's order number or any provider parameter (FVS-027)", () => {
+    expect(CheckoutReturnPage.length).toBe(0);
+    render(<CheckoutReturnPage />);
+    expect(screen.getByRole("status")).toHaveTextContent("Check your orders for the latest status.");
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
 });
