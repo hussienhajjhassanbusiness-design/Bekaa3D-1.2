@@ -292,7 +292,7 @@ test.describe("Login real-browser accessibility & responsive check (FVS-003 BATC
     await expect(skipLink).toBeFocused();
 
     // The real Header (FVS-022 follow-up) now contributes its own tab
-    // stops before main content: the brand link, then Home/Shop/About.
+    // stops before main content: the brand link, then Home/Shop/About (and, from phase 6B, Bring your idea/Contact).
     // The mobile menu toggle is `tablet:hidden` and genuinely not in the
     // tab order at this (desktop) viewport, so it's not listed here.
     await page.keyboard.press("Tab");
@@ -304,6 +304,11 @@ test.describe("Login real-browser accessibility & responsive check (FVS-003 BATC
     await expect(mainNav.getByRole("link", { name: "Shop" })).toBeFocused();
     await page.keyboard.press("Tab");
     await expect(mainNav.getByRole("link", { name: "About" })).toBeFocused();
+    // Phase 6B — Bring your idea and Contact follow About.
+    await page.keyboard.press("Tab");
+    await expect(mainNav.getByRole("link", { name: "Bring your idea" })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(mainNav.getByRole("link", { name: "Contact" })).toBeFocused();
     // Phase 5C — the header cart link follows the main nav.
     await page.keyboard.press("Tab");
     await expect(page.getByRole("banner").getByRole("link", { name: "Cart" })).toBeFocused();

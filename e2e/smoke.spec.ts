@@ -54,14 +54,18 @@ test.describe("Frontend smoke (FVS001-T16)", () => {
     await expect(page.getByText(/FVS-001 frontend foundation slice/i)).toHaveCount(0);
   });
 
-  test("/ links to the now-real /shop and /about routes, and still exposes no dead Bring Your Idea/Contact CTA — those routes don't exist yet", async ({
+  test("/ links to the real /shop and /about routes, and (phase 6B) the header and footer link to the now-real Bring your idea and Contact pages", async ({
     page,
   }) => {
     await page.goto("/");
     await expect(page.getByRole("link", { name: "Shop Now" })).toHaveAttribute("href", "/shop");
     await expect(page.getByRole("link", { name: "Learn More" })).toHaveAttribute("href", "/about");
-    await expect(page.getByRole("link", { name: /bring your idea/i })).toHaveCount(0);
-    await expect(page.getByRole("link", { name: /^contact$/i })).toHaveCount(0);
+    const mainNav = page.getByRole("navigation", { name: "Main" }).first();
+    await expect(mainNav.getByRole("link", { name: "Bring your idea" })).toHaveAttribute("href", "/bring-your-idea");
+    await expect(mainNav.getByRole("link", { name: "Contact" })).toHaveAttribute("href", "/contact");
+    const footer = page.getByRole("navigation", { name: "Footer" });
+    await expect(footer.getByRole("link", { name: "Bring your idea" })).toHaveAttribute("href", "/bring-your-idea");
+    await expect(footer.getByRole("link", { name: "Contact" })).toHaveAttribute("href", "/contact");
   });
 
   test("/ renders the static Why Choose Bekaa3D section alongside the Hero heading", async ({ page }) => {
