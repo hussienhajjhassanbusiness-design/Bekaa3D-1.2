@@ -146,7 +146,8 @@ const ORDERS: Json[] = [
     payment_method: "online",
     payment_due: false,
     amount_due: null,
-    can_retry_payment: true,
+    // A live (pending) attempt: the backend reports can_retry_payment false.
+    can_retry_payment: false,
     hold_expires_at: "2026-11-10T11:00:00Z",
     subtotal: usd(3600),
     total: usd(3600),
@@ -330,7 +331,7 @@ test.describe("Account orders (Phase 5E / FVS-029)", () => {
     await expect(page.getByRole("heading", { level: 1, name: "Order B3D-2026-000001" })).toBeVisible();
   });
 
-  test("pending online pickup order: awaiting payment with its hold time; no retry or redirect", async ({ page }) => {
+  test("pending online pickup order: awaiting payment with its hold time; no retry while the attempt is live", async ({ page }) => {
     await installFakeBackend(page);
     await page.goto(`/account/orders/${ONLINE_ID}`);
     const payment = page.getByRole("region", { name: "Payment" });
@@ -339,7 +340,7 @@ test.describe("Account orders (Phase 5E / FVS-029)", () => {
     await expect(payment).toContainText("hasn't been confirmed as paid");
     await expect(payment).toContainText("may be released after");
     await expect(page.getByText("Paid", { exact: true })).toHaveCount(0);
-    // can_retry_payment is true, but retry is FVS-027.
+    // A live attempt: can_retry_payment is false, so no retry (FVS-027 retry is covered in payment-result.spec.ts).
     await expect(page.getByRole("button", { name: /pay|retry/i })).toHaveCount(0);
     await expect(page.getByRole("link", { name: /pay|retry|continue/i })).toHaveCount(0);
 
