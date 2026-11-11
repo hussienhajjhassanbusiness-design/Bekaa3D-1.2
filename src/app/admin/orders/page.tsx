@@ -1,11 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { TextField } from "@/components/forms/TextField";
+import { dayEndExclusive, dayStart } from "@/lib/admin/dateRange";
+import { isOrderId } from "@/lib/orders/orderModel";
 import { AdminTable, type AdminTableColumn } from "@/components/admin/AdminTable";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { PriceDisplay } from "@/components/catalog/PriceDisplay";
 import { Alert } from "@/components/feedback/Alert";
+import { LoadingSpinner } from "@/components/feedback/LoadingSpinner";
 import { SelectField } from "@/components/forms/SelectField";
 import { describeAdminError } from "@/lib/admin/adminErrorMessages";
 import type { AdminOrderSummaryReadDTO, AdminOrdersQueryParams } from "@/lib/admin/orders/adminOrderTypes";
@@ -19,7 +24,8 @@ import { useDebouncedValue } from "@/lib/shared/useDebouncedValue";
 // Protection: AdminShell's AdminGuard (admin + MFA); a customer gets 404.
 // Filters are exactly the backend's: status (never pending_payment: unpaid
 // online orders are not in the queue), fulfillment method, payment method,
-// the "cash due" view (payment_due) and an order-number lookup. Newest
+// the "cash due" view (payment_due), an order-number lookup, and (phase 6A)
+// ?customer_id from the customer page plus a placed-date range. Newest
 // first, keyset cursor, no total count, no invented metrics.
 
 const STATUS_OPTIONS = [
@@ -65,13 +71,21 @@ const COLUMNS: readonly AdminTableColumn<AdminOrderSummaryReadDTO>[] = [
 
 type Filters = Pick<AdminOrdersQueryParams, "status" | "fulfillment_method" | "payment_method" | "payment_due">;
 
-export default function AdminOrdersPage() {
+function AdminOrdersPageContent() {
+  const params = useSearchParams();
+  const customerParam = params.get("customer_id");
+  const customerId = customerParam && isOrderId(customerParam) ? customerParam : undefined;
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [filters, setFilters] = useState<Filters>({});
   const [orderNumber, setOrderNumber] = useState("");
   const number = useDebouncedValue(orderNumber.trim(), 300);
-  const pagination = useCursorPagination(JSON.stringify({ ...filters, number }));
+  const pagination = useCursorPagination(JSON.stringify({ ...filters, number, customerId, from, to }));
   const { data, isLoading, isError, error } = useAdminOrders({
     ...filters,
+    ...(customerId ? { customer_id: customerId } : {}),
+    ...(dayStart(from) ? { placed_after: dayStart(from) } : {}),
+    ...(dayEndExclusive(to) ? { placed_before: dayEndExclusive(to) } : {}),
     order_number: number || undefined,
     cursor: pagination.cursor,
   });
@@ -88,7 +102,17 @@ export default function AdminOrdersPage() {
   return (
     <>
       <h1 className="text-h1 font-bold text-text-primary">Orders</h1>
-      <div className="mt-4 grid gap-3 tablet:grid-cols-4">
+      {customerId && (
+        <p className="mt-2 text-body text-text-primary">
+          Showing one customer&apos;s orders.{" "}
+          <Link href="/admin/orders" className="text-text-link underline">
+            Show all
+          </Link>
+        </p>
+      )}
+      <div className="mt-4 grid gap-3 tablet:grid-cols-2 desktop:grid-cols-6">
+        <TextField label="Placed from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+        <TextField label="Placed to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
         <SelectField
           label="Status"
           value={filters.status ?? ""}
@@ -153,5 +177,15 @@ export default function AdminOrdersPage() {
         />
       </div>
     </>
+  );
+}
+
+// useSearchParams() needs a Suspense boundary to keep the page prerenderable
+// (Next.js App Router; same convention as /login).
+export default function AdminOrdersPage() {
+  return (
+    <Suspense fallback={<LoadingSpinner />}>
+      <AdminOrdersPageContent />
+    </Suspense>
   );
 }

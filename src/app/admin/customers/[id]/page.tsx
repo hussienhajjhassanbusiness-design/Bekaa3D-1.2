@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { LoadingSpinner } from "@/components/feedback/LoadingSpinner";
 import { Alert } from "@/components/feedback/Alert";
@@ -85,6 +86,18 @@ export default function AdminCustomerDetailPage() {
           <dd className="mt-1 text-body text-text-primary">{new Date(user.created_at).toLocaleDateString()}</dd>
         </div>
       </dl>
+
+      <nav aria-label="Customer records" className="mt-4 flex flex-wrap gap-4 text-body">
+        <Link href={`/admin/orders?customer_id=${user.id}`} className="text-text-link underline">
+          Orders
+        </Link>
+        <Link href={`/admin/refunds?customer_id=${user.id}&queue=false`} className="text-text-link underline">
+          Refunds
+        </Link>
+        <Link href={`/admin/cash-blocks?customer_id=${user.id}`} className="text-text-link underline">
+          Cash blocks
+        </Link>
+      </nav>
 
       <Button className="mt-6" onClick={() => setConfirmOpen(true)}>
         {actionLabel}

@@ -27,7 +27,10 @@ export function buildAdminOrdersSearchParams(params: AdminOrdersQueryParams): UR
   if (params.fulfillment_method) search.set("fulfillment_method", params.fulfillment_method);
   if (params.payment_method) search.set("payment_method", params.payment_method);
   if (params.payment_due !== undefined) search.set("payment_due", String(params.payment_due));
+  if (params.customer_id) search.set("customer_id", params.customer_id);
   if (params.order_number) search.set("order_number", params.order_number);
+  if (params.placed_after) search.set("placed_after", params.placed_after);
+  if (params.placed_before) search.set("placed_before", params.placed_before);
   if (params.cursor) search.set("cursor", params.cursor);
   if (params.limit !== undefined) search.set("limit", String(params.limit));
   return search;

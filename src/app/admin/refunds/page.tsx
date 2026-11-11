@@ -1,11 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { TextField } from "@/components/forms/TextField";
+import { dayEndExclusive, dayStart } from "@/lib/admin/dateRange";
+import { isOrderId } from "@/lib/orders/orderModel";
 import { AdminTable, type AdminTableColumn } from "@/components/admin/AdminTable";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { PriceDisplay } from "@/components/catalog/PriceDisplay";
 import { Alert } from "@/components/feedback/Alert";
+import { LoadingSpinner } from "@/components/feedback/LoadingSpinner";
 import { SelectField } from "@/components/forms/SelectField";
 import { describeAdminError } from "@/lib/admin/adminErrorMessages";
 import { describeAdminRefundKind, describeAdminRefundStatus } from "@/lib/admin/orders/adminOrderPresentation";
@@ -46,15 +51,41 @@ const COLUMNS: readonly AdminTableColumn<RefundDetailDTO>[] = [
 
 type Filters = Pick<AdminRefundsQueryParams, "queue" | "kind" | "status">;
 
-export default function AdminRefundsPage() {
+function AdminRefundsPageContent() {
+  const params = useSearchParams();
+  const uuid = (key: string) => {
+    const value = params.get(key);
+    return value && isOrderId(value) ? value : undefined;
+  };
+  const customerId = uuid("customer_id");
+  const orderId = uuid("order_id");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [filters, setFilters] = useState<Filters>({ queue: true });
-  const pagination = useCursorPagination(JSON.stringify(filters));
-  const { data, isLoading, isError, error } = useAdminRefunds({ ...filters, cursor: pagination.cursor });
+  const pagination = useCursorPagination(JSON.stringify({ ...filters, customerId, orderId, from, to }));
+  const { data, isLoading, isError, error } = useAdminRefunds({
+    ...filters,
+    ...(customerId ? { customer_id: customerId } : {}),
+    ...(orderId ? { order_id: orderId } : {}),
+    ...(dayStart(from) ? { created_from: dayStart(from) } : {}),
+    ...(dayEndExclusive(to) ? { created_to: dayEndExclusive(to) } : {}),
+    cursor: pagination.cursor,
+  });
 
   return (
     <>
       <h1 className="text-h1 font-bold text-text-primary">Refunds</h1>
-      <div className="mt-4 grid gap-3 tablet:grid-cols-3">
+      {(customerId || orderId) && (
+        <p className="mt-2 text-body text-text-primary">
+          Showing one {customerId ? "customer" : "order"}&apos;s refunds.{" "}
+          <Link href="/admin/refunds" className="text-text-link underline">
+            Show all
+          </Link>
+        </p>
+      )}
+      <div className="mt-4 grid gap-3 tablet:grid-cols-2 desktop:grid-cols-5">
+        <TextField label="Recorded from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+        <TextField label="Recorded to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
         <SelectField
           label="View"
           value={filters.queue ? "queue" : "history"}
@@ -108,5 +139,15 @@ export default function AdminRefundsPage() {
         />
       </div>
     </>
+  );
+}
+
+// useSearchParams() needs a Suspense boundary to keep the page prerenderable
+// (Next.js App Router; same convention as /login).
+export default function AdminRefundsPage() {
+  return (
+    <Suspense fallback={<LoadingSpinner />}>
+      <AdminRefundsPageContent />
+    </Suspense>
   );
 }

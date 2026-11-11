@@ -51,7 +51,11 @@ export interface AdminOrdersQueryParams {
   fulfillment_method?: FulfillmentMethod;
   payment_method?: PaymentMethod;
   payment_due?: boolean;
+  customer_id?: string;
   order_number?: string;
+  // Aware ISO datetimes: after inclusive, before exclusive.
+  placed_after?: string;
+  placed_before?: string;
   cursor?: string;
   limit?: number;
 }
