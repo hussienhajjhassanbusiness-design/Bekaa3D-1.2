@@ -30,11 +30,15 @@ export function useMyOrders() {
   });
 }
 
-export function useMyOrder(orderId: string, options: { enabled?: boolean } = {}) {
+// `refetchInterval` (FVS-027): set only by usePolledOrder while the
+// server reports a live payment attempt; TanStack's default
+// refetchIntervalInBackground=false pauses it while the tab is hidden.
+export function useMyOrder(orderId: string, options: { enabled?: boolean; refetchInterval?: number | false } = {}) {
   return useQuery({
     queryKey: orderKeys.detail(orderId),
     queryFn: () => ordersApi.getMyOrder(orderId),
     enabled: options.enabled ?? true,
     retry: retryOnce,
+    refetchInterval: options.refetchInterval ?? false,
   });
 }
