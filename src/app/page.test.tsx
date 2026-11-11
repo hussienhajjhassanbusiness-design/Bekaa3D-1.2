@@ -4,6 +4,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/apiClient";
 import Home from "./page";
 
+// Phase 6D: the wishlist heart needs the auth context; it has its own tests
+// (src/components/wishlist), so it is stubbed out of these card tests.
+vi.mock("@/components/wishlist/WishlistButton", () => ({ WishlistButton: () => null }));
+
 // REAL STOREFRONT INTEGRATION — PHASE 1: Home now composes HeroSection
 // (with real /shop, /about CTAs), FeaturedProductsSection,
 // CategoryShowcaseSection, and WhyChooseSection, instead of the

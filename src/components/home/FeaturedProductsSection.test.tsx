@@ -4,6 +4,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/apiClient";
 import { FeaturedProductsSection } from "./FeaturedProductsSection";
 
+// Phase 6D: the wishlist heart needs the auth context; it has its own tests
+// (src/components/wishlist), so it is stubbed out of these card tests.
+vi.mock("@/components/wishlist/WishlistButton", () => ({ WishlistButton: () => null }));
+
 function renderSection() {
   const queryClient = new QueryClient();
   return render(

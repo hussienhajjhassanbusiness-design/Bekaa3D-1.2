@@ -1,4 +1,5 @@
 import { test, expect, type Page, type Route } from "@playwright/test";
+import { stubEmptyWishlist } from "./support/stubCart";
 
 // Phase 5C — /cart and product-page Add to cart (FVS-025) against a
 // deterministic, in-memory stand-in for the real contract (openapi.json
@@ -139,6 +140,7 @@ async function installFakeBackend(page: Page, initial: StoredLine[] = []): Promi
 
   await page.context().addCookies([{ name: "csrf_token", value: CSRF, url: "http://localhost:3000" }]);
   await page.route("**/api/v1/me", (route) => route.fulfill({ status: 200, body: JSON.stringify(ME) }));
+  await stubEmptyWishlist(page);
   await page.route("**/api/v1/settings/public", (route) =>
     route.fulfill({
       body: JSON.stringify({

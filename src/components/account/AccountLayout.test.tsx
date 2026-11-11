@@ -60,7 +60,7 @@ describe("AccountLayout", () => {
     expect(screen.getByTestId("page-content")).toBeInTheDocument();
   });
 
-  it("renders exactly the registered nav items — Profile, Orders, Offers, Addresses and Notifications", () => {
+  it("renders exactly the registered nav items — Profile, Orders, Offers, Wishlist, Addresses and Notifications", () => {
     mockedUseAuth.mockReturnValue(authState({ isAuthenticated: true, user: STUB_USER }));
     render(
       <AccountLayout>
@@ -70,17 +70,19 @@ describe("AccountLayout", () => {
 
     const nav = screen.getByRole("navigation", { name: "Account" });
     const links = nav.querySelectorAll("a");
-    expect(links).toHaveLength(5);
+    expect(links).toHaveLength(6);
     expect(links[0]).toHaveTextContent("Profile");
     expect(links[0]).toHaveAttribute("href", "/account/profile");
     expect(links[1]).toHaveTextContent("Orders");
     expect(links[1]).toHaveAttribute("href", "/account/orders");
     expect(links[2]).toHaveTextContent("Offers");
     expect(links[2]).toHaveAttribute("href", "/account/offers");
-    expect(links[3]).toHaveTextContent("Addresses");
-    expect(links[3]).toHaveAttribute("href", "/account/addresses");
-    expect(links[4]).toHaveTextContent("Notifications");
-    expect(links[4]).toHaveAttribute("href", "/account/notifications");
+    expect(links[3]).toHaveTextContent("Wishlist");
+    expect(links[3]).toHaveAttribute("href", "/account/wishlist");
+    expect(links[4]).toHaveTextContent("Addresses");
+    expect(links[4]).toHaveAttribute("href", "/account/addresses");
+    expect(links[5]).toHaveTextContent("Notifications");
+    expect(links[5]).toHaveAttribute("href", "/account/notifications");
   });
 
   it("mounts the shared Log out control for a signed-in user (Phase 5A defect 7)", () => {

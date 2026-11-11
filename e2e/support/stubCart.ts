@@ -16,9 +16,23 @@ export const EMPTY_CART = {
 };
 
 export async function stubEmptyCart(page: Page): Promise<void> {
+  await stubEmptyWishlist(page);
   await page.route(/\/api\/v1\/cart$/, (route) =>
     route.request().method() === "GET"
       ? route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(EMPTY_CART) })
+      : route.fallback()
+  );
+}
+
+// Phase 6D — product cards and the product page read the signed-in
+// viewer's wishlist (GET /api/v1/me/wishlist?limit=100). Specs that sign a
+// viewer in through stubEmptyCart get an empty wishlist too, so that read
+// never leaves the browser either. GET only, exact path; wishlist.spec.ts
+// registers its own fake later, which takes precedence.
+export async function stubEmptyWishlist(page: Page): Promise<void> {
+  await page.route(/\/api\/v1\/me\/wishlist(\?.*)?$/, (route) =>
+    route.request().method() === "GET"
+      ? route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ items: [], next_cursor: null }) })
       : route.fallback()
   );
 }

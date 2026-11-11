@@ -4,6 +4,10 @@ import userEvent from "@testing-library/user-event";
 import { ProductGrid } from "./ProductGrid";
 import type { ProductCardModel } from "@/lib/catalog/productAdapters";
 
+// Phase 6D: the wishlist heart needs the auth context; it has its own tests
+// (src/components/wishlist), so it is stubbed out of these card tests.
+vi.mock("@/components/wishlist/WishlistButton", () => ({ WishlistButton: () => null }));
+
 const product: ProductCardModel = {
   id: "p1",
   type: "physical",

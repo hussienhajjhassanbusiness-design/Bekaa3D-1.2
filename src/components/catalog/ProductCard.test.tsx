@@ -1,7 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { ProductCard } from "./ProductCard";
 import type { ProductCardModel } from "@/lib/catalog/productAdapters";
+
+// Phase 6D: the wishlist heart needs the auth context; it has its own tests
+// (src/components/wishlist), so it is stubbed out of these card tests.
+vi.mock("@/components/wishlist/WishlistButton", () => ({ WishlistButton: () => null }));
 
 const baseProduct: ProductCardModel = {
   id: "p1",

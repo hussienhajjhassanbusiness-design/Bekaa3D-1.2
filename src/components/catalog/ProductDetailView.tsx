@@ -7,6 +7,7 @@ import { useProduct } from "@/lib/catalog/useProduct";
 import { toProductDetailModel } from "@/lib/catalog/productAdapters";
 import { usePublicSettings } from "@/lib/settings/usePublicSettings";
 import { MakeOfferPanel } from "@/components/offers/MakeOfferPanel";
+import { WishlistButton } from "@/components/wishlist/WishlistButton";
 import { AddToCartButton } from "./AddToCartButton";
 import { PriceDisplay } from "./PriceDisplay";
 import { ProductImageGallery } from "./ProductImageGallery";
@@ -128,6 +129,7 @@ export function ProductDetailView({ slug }: ProductDetailViewProps) {
               />
             )}
           </div>
+          <WishlistButton productId={product.id} productName={product.name} returnToPath={returnToPath} variant="full" />
           <MakeOfferPanel
             productId={product.id}
             productName={product.name}
