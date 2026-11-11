@@ -92,7 +92,7 @@ export type CheckoutErrorOutcome = OutcomeFlags &
     | { kind: "already-owned"; productIds: string[] }
     | { kind: "cart-empty"; droppedProductIds: string[] }
     | { kind: "fields"; fieldErrors: CheckoutFieldErrors }
-    | { kind: "payment-not-started"; orderNumber: string | null }
+    | { kind: "payment-not-started"; orderId: string | null; orderNumber: string | null }
     | { kind: "verify-email" }
     | { kind: "session-expired" }
     | { kind: "message" }
@@ -348,6 +348,7 @@ export function describeCheckoutError(error: unknown, context: CheckoutErrorCont
     case "502 PAYMENT_PROVIDER_UNAVAILABLE":
       return {
         kind: "payment-not-started",
+        orderId: readProblemString(error, "order_id") ?? null,
         orderNumber: readProblemString(error, "order_number") ?? null,
         ...flags(CHECKOUT_MESSAGES.paymentNotStarted, {
           retireKey: true,

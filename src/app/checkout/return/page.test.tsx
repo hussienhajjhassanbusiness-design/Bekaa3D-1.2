@@ -16,4 +16,11 @@ describe("CheckoutReturnPage (/checkout/return)", () => {
     render(<CheckoutReturnPage />);
     expect(screen.getByRole("link", { name: "View notifications" })).toHaveAttribute("href", "/account/notifications");
   });
+
+  it("links to the order history, where the order's real status is shown (phase 5E)", () => {
+    render(<CheckoutReturnPage />);
+    // The return URL carries an order NUMBER, not an id, and is never read:
+    // the page links to the history rather than guessing an order page.
+    expect(screen.getByRole("link", { name: "View your orders" })).toHaveAttribute("href", "/account/orders");
+  });
 });

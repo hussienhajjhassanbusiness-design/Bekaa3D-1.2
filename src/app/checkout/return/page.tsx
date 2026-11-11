@@ -13,6 +13,10 @@ import Link from "next/link";
 // payment is confirmed by the backend, not by this page. Verifying and
 // showing the order's real payment state (pending/paid/failed/expired from
 // GET /me/orders/{id}) is FVS-027.
+//
+// Phase 5E: links to /account/orders, where the order's server-backed
+// status is shown. The URL carries an order number, not an id, and is still
+// never read here, so the page cannot link to one order.
 export const metadata: Metadata = {
   title: "Payment — Bekaa3D",
 };
@@ -27,9 +31,12 @@ export default function CheckoutReturnPage() {
       </p>
       <p className="text-body text-text-secondary">
         We&apos;ll email you and send you a notification as soon as your payment is confirmed. This page doesn&apos;t
-        show your payment status.
+        show your payment status; your order history shows each order&apos;s current status.
       </p>
       <div className="flex flex-wrap gap-4">
+        <Link href="/account/orders" className="font-semibold text-brand-dark-green underline">
+          View your orders
+        </Link>
         <Link href="/account/notifications" className="font-semibold text-brand-dark-green underline">
           View notifications
         </Link>

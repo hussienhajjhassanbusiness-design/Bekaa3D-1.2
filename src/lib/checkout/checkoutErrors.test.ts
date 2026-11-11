@@ -211,6 +211,7 @@ describe("describeCheckoutError", () => {
       })
     );
     expect(outcome.kind === "payment-not-started" && outcome.orderNumber).toBe("B3D-2026-000777");
+    expect(outcome.kind === "payment-not-started" && outcome.orderId).toBe("o-1");
     expect(outcome.refetchCart).toBe(true);
     expect(outcome.retireKey).toBe(true);
   });

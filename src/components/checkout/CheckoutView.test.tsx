@@ -346,6 +346,8 @@ describe("CheckoutView submission", () => {
     expect(screen.getByText(/This order hasn't been paid yet\./)).toBeInTheDocument();
     expect(screen.queryByText(/payment (was )?successful/i)).not.toBeInTheDocument();
     expect(mockedRedirect).not.toHaveBeenCalled();
+    // Phase 5E: the new order can be opened on its real order page.
+    expect(screen.getByRole("link", { name: "View order" })).toHaveAttribute("href", "/account/orders/o-1");
     await waitFor(() => expect(getCartSpy.mock.calls.length).toBeGreaterThan(cartReads));
   });
 
@@ -484,6 +486,7 @@ describe("CheckoutView submission", () => {
     expect(screen.getByText(/not included in your order because you already own them/)).toBeInTheDocument();
     expect(screen.getByText("Dragon STL")).toBeInTheDocument();
     expect(mockedRedirect).not.toHaveBeenCalled();
+    expect(screen.getByRole("link", { name: "View order" })).toHaveAttribute("href", "/account/orders/o-1");
     await u.click(screen.getByRole("button", { name: "Continue to payment" }));
     expect(mockedRedirect).toHaveBeenCalledWith("http://localhost:3000/checkout/return?order=B3D-2026-000124");
   });
@@ -585,6 +588,7 @@ describe("CheckoutView submission", () => {
     expect(await screen.findByRole("heading", { name: "Payment not started" })).toBeInTheDocument();
     expect(screen.getByText("B3D-2026-000999")).toBeInTheDocument();
     expect(screen.getByText(/nothing has been charged/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View order" })).toHaveAttribute("href", "/account/orders/o-9");
     await waitFor(() => expect(getCartSpy.mock.calls.length).toBeGreaterThan(reads));
   });
 

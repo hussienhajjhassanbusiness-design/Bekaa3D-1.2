@@ -20,10 +20,12 @@ export const FULFILLMENT_COPY = {
   courierFee:
     "The courier sets the delivery fee and you pay it to them directly on delivery. It isn't part of your order total.",
   pickupHint: "Collect your order from us. There's no delivery fee.",
+  // ADR-019: STL files are emailed by our team, never downloaded from the
+  // site (phase 5E fixed copy that promised a download).
   digitalOnly:
-    "Your order only has STL files, so there's nothing to deliver. You'll be able to download them once your payment is confirmed.",
+    "Your order only has STL files, so nothing is shipped. Our team emails each file to you once your payment is confirmed.",
   mixedDigital:
-    "STL files in this order aren't delivered: you'll be able to download them once your payment is confirmed.",
+    "STL files in this order aren't shipped: our team emails them to you once your payment is confirmed.",
 } as const;
 
 export const PAYMENT_COPY = {

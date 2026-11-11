@@ -49,6 +49,8 @@ describe("usePlaceOrder", () => {
     });
     expect(spy).toHaveBeenCalledWith(BODY, "key-12345678");
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: cartKeys.root });
+    // Phase 5E: the new order must appear in the order history.
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["orders"] });
   });
 
   it("a failure is surfaced once, never retried, and does not touch the cart cache", async () => {

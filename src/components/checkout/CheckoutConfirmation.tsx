@@ -31,6 +31,9 @@ function formatDate(iso: string): string {
 // when it is not redirected straight to the payment page (an already-owned
 // STL was dropped, or there is no usable redirect_url), and never claims
 // the payment succeeded. Payment results are FVS-027.
+//
+// Phase 5E: "View order" opens the real order page (/account/orders/{id},
+// GET /me/orders/{id}), which shows the server's current state.
 export function CheckoutConfirmation({
   result,
   names,
@@ -86,9 +89,17 @@ export function CheckoutConfirmation({
 
       <FulfillmentSummary result={result} pickup={pickup} />
 
-      <Link href="/shop" className="self-start font-semibold text-brand-dark-green underline">
-        Continue shopping
-      </Link>
+      <div className="flex flex-wrap gap-4">
+        <Link
+          href={`/account/orders/${encodeURIComponent(result.orderId)}`}
+          className="font-semibold text-brand-dark-green underline"
+        >
+          View order
+        </Link>
+        <Link href="/shop" className="font-semibold text-brand-dark-green underline">
+          Continue shopping
+        </Link>
+      </div>
     </section>
   );
 }

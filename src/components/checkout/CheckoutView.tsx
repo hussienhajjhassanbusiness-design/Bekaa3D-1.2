@@ -54,6 +54,7 @@ type Phase =
   | { kind: "redirecting"; result: CheckoutResultModel }
   | {
       kind: "payment-not-started";
+      orderId: string | null;
       orderNumber: string | null;
       message: string;
     };
@@ -152,6 +153,7 @@ export function CheckoutView() {
       if (outcome.kind === "payment-not-started") {
         setPhase({
           kind: "payment-not-started",
+          orderId: outcome.orderId,
           orderNumber: outcome.orderNumber,
           message: outcome.message,
         });
@@ -266,6 +268,14 @@ export function CheckoutView() {
           Retrying the payment for an existing order isn&apos;t available on the website yet. Please contact us to
           complete this order.
         </p>
+        {phase.orderId && (
+          <Link
+            href={`/account/orders/${encodeURIComponent(phase.orderId)}`}
+            className="font-semibold text-brand-dark-green underline"
+          >
+            View order
+          </Link>
+        )}
       </section>
     );
   }
