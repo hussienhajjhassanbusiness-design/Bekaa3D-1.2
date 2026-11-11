@@ -320,4 +320,53 @@ async function postForm<T = unknown>(
   return request<T>(path, init, timeoutMs);
 }
 
-export const apiClient = { get, post, patch, put, del, postForm };
+// Phase 6B — a binary GET (an admin's private Bring Your Idea image). Same
+// path assertion, timeout and Problem parsing as request(); on success it
+// returns the bytes plus the server's download filename from
+// Content-Disposition (RFC 6266 `filename*` preferred), never a URL.
+export interface BinaryResponse {
+  blob: Blob;
+  filename: string | null;
+}
+
+function filenameFromDisposition(header: string | null): string | null {
+  if (!header) return null;
+  const star = /filename\*=UTF-8''([^;]+)/i.exec(header);
+  if (star?.[1]) {
+    try {
+      return decodeURIComponent(star[1].trim());
+    } catch {
+      // fall through to the ASCII fallback
+    }
+  }
+  const plain = /filename="([^"]*)"/i.exec(header);
+  return plain?.[1] ?? null;
+}
+
+async function getBlob(path: string, options: ApiClientRequestOptions = {}): Promise<BinaryResponse> {
+  assertApiPath(path);
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    let response: Response;
+    try {
+      response = await fetch(path, { signal: controller.signal });
+    } catch {
+      throw controller.signal.aborted ? timeoutError() : networkError();
+    }
+    if (response.ok) {
+      return { blob: await response.blob(), filename: filenameFromDisposition(response.headers.get("Content-Disposition")) };
+    }
+    const parsed = parseProblemBody(await response.text());
+    const apiError: ApiError = { ...parsed, message: fallbackHttpMessage(response.status) };
+    if (apiError.kind === "http") {
+      apiError.status = response.status;
+    }
+    throw apiError;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export const apiClient = { get, post, patch, put, del, postForm, getBlob };

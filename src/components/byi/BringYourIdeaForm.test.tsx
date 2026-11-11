@@ -1,161 +1,142 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { BringYourIdeaForm } from "./BringYourIdeaForm";
+import { useSubmitCustomRequest } from "@/lib/byi/customRequestApi";
+import { CAPTCHA_FAILURE_COPY } from "@/lib/captcha/captchaErrors";
+import { FAKE_CAPTCHA_TOKEN, fakeCaptcha, resetFakeCaptcha } from "@/test/fakeCaptchaWidget";
 
-// FVS-015-IMPLEMENTATION-PLAN.md T02/T03 — only the two backend-
-// confirmed fields exist (description, attachments) — no name/email/
-// phone/address/budget was invented. UPLOADER-REUSE FOLLOW-UP: this
-// form now reuses FVS-012's shared `FileUploader` directly in its
-// deferred-selection mode (no `driver` prop) instead of a second,
-// duplicated attachment picker — the selection/precheck/list UX is
-// transport-independent (see FileUploader.tsx/uploadTypes.ts). Nothing
-// is uploaded while files are merely selected; the real submission
-// adapter remains blocked.
+vi.mock("@/lib/byi/customRequestApi", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/byi/customRequestApi")>();
+  return { ...actual, useSubmitCustomRequest: vi.fn() };
+});
 
-function makeFile(name: string, type: string, sizeBytes = 10): File {
-  return new File([new Uint8Array(sizeBytes)], name, { type });
+vi.mock("@/components/forms/CaptchaWidget", async () => {
+  const fake = await import("@/test/fakeCaptchaWidget");
+  return { CaptchaWidget: fake.FakeCaptchaWidget };
+});
+
+const mocked = vi.mocked(useSubmitCustomRequest);
+const png = (name: string, size = 4) => new File([new Uint8Array(size)], name, { type: "image/png" });
+
+async function fillRequired(user: ReturnType<typeof userEvent.setup>) {
+  await user.type(screen.getByLabelText("Name"), "Rana");
+  await user.type(screen.getByLabelText("Email"), "rana@example.com");
+  await user.type(screen.getByLabelText("Phone"), "+961 70 123 456");
+  await user.type(screen.getByLabelText("Project title"), "Cedar lamp");
+  await user.type(screen.getByLabelText("Description"), "A lamp shaped like a cedar.");
 }
 
+beforeEach(() => {
+  mocked.mockReset();
+  resetFakeCaptcha();
+});
+
 describe("BringYourIdeaForm", () => {
-  it("renders an accessible description field", () => {
-    render(<BringYourIdeaForm onSubmit={vi.fn()} />);
-    expect(screen.getByLabelText(/description/i).tagName).toBe("TEXTAREA");
+  it("renders exactly the backend fields and an image-only uploader", () => {
+    mocked.mockReturnValue({ mutateAsync: vi.fn() } as never);
+    render(<BringYourIdeaForm />);
+    for (const label of [
+      "Name",
+      "Email",
+      "Phone",
+      "Project title",
+      "Description",
+      "Preferred material (optional)",
+      "Preferred colour (optional)",
+      "Dimensions (optional)",
+      "Reference images (optional)",
+    ]) {
+      expect(screen.getByLabelText(label)).toBeInTheDocument();
+    }
+    expect(screen.getByLabelText("Reference images (optional)")).toHaveAttribute("accept", "image/jpeg,image/png,image/webp");
+    expect(screen.queryByLabelText(/budget|deadline|quantity|stl/i)).not.toBeInTheDocument();
   });
 
-  it("renders no unconfirmed fields (name/email/phone)", () => {
-    render(<BringYourIdeaForm onSubmit={vi.fn()} />);
-    expect(screen.queryByLabelText(/name/i)).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/email/i)).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/phone/i)).not.toBeInTheDocument();
-  });
-
-  it("calls onSubmit with the description and selected attachments", async () => {
-    const onSubmit = vi.fn();
+  it("requires name, email, phone, title and description client-side", async () => {
     const user = userEvent.setup();
-    render(<BringYourIdeaForm onSubmit={onSubmit} />);
-    const file = makeFile("idea.png", "image/png");
-
-    await user.type(screen.getByLabelText(/description/i), "A custom stand");
-    await user.upload(screen.getByLabelText(/attachments/i), file);
-    await user.click(screen.getByRole("button", { name: /submit/i }));
-
-    expect(onSubmit).toHaveBeenCalledWith({ description: "A custom stand", attachments: [file] });
+    const mutateAsync = vi.fn();
+    mocked.mockReturnValue({ mutateAsync } as never);
+    render(<BringYourIdeaForm />);
+    await user.click(screen.getByRole("button", { name: "Send my idea" }));
+    for (const text of ["Enter your name.", "Enter a phone number.", "Give your project a title.", "Describe your idea."]) {
+      expect(await screen.findByText(text, { selector: "p" })).toBeInTheDocument();
+    }
+    expect(mutateAsync).not.toHaveBeenCalled();
   });
 
-  it("disables the submit button while isSubmitting, preventing a duplicate submit", () => {
-    render(<BringYourIdeaForm onSubmit={vi.fn()} isSubmitting />);
-    expect(screen.getByRole("button", { name: /submit/i })).toBeDisabled();
+  it("pre-checks images locally: wrong type, too large, more than five", async () => {
+    const user = userEvent.setup({ applyAccept: false });
+    mocked.mockReturnValue({ mutateAsync: vi.fn() } as never);
+    render(<BringYourIdeaForm />);
+    const input = screen.getByLabelText("Reference images (optional)");
+    await user.upload(input, new File(["solid"], "model.stl", { type: "model/stl" }));
+    expect(await screen.findByText(/"model.stl" isn't a supported file type/)).toBeInTheDocument();
+    await user.upload(input, png("huge.png", 10 * 1024 * 1024 + 1));
+    expect(await screen.findByText(/"huge.png" is too large/)).toBeInTheDocument();
+    await user.upload(input, [1, 2, 3, 4, 5, 6].map((n) => png(`p${n}.png`)));
+    expect(await screen.findByText(/"p6.png" exceeds the maximum number of files/)).toBeInTheDocument();
   });
 
-  it("shows safe generic guidance for a generic error", () => {
-    render(<BringYourIdeaForm onSubmit={vi.fn()} error={{ kind: "generic", message: "raw internal detail" }} />);
-    expect(screen.getByText("Something went wrong. Please try again.")).toBeInTheDocument();
-    expect(screen.queryByText("raw internal detail")).not.toBeInTheDocument();
-  });
-
-  it("shows distinct captcha guidance for a captcha error", () => {
-    render(<BringYourIdeaForm onSubmit={vi.fn()} error={{ kind: "captcha", message: "irrelevant" }} />);
-    expect(screen.getByText("Please complete the verification and try again.")).toBeInTheDocument();
-  });
-
-  it("shows distinct rate-limit guidance for a rate-limit error", () => {
-    render(<BringYourIdeaForm onSubmit={vi.fn()} error={{ kind: "rate-limit", message: "irrelevant" }} />);
-    expect(screen.getByText("Please try again in a few minutes.")).toBeInTheDocument();
-  });
-
-  it("shows the backend-confirmed attachment message verbatim", () => {
-    render(<BringYourIdeaForm onSubmit={vi.fn()} error={{ kind: "attachment", message: "This file type isn't supported." }} />);
-    expect(screen.getByText("This file type isn't supported.")).toBeInTheDocument();
-  });
-
-  it("rejects a disallowed attachment locally using the shared precheck logic, never including it in the submission", async () => {
-    const onSubmit = vi.fn();
+  it("submits values, selected images and the captcha token; shows a safe receipt", async () => {
     const user = userEvent.setup();
-    render(
-      <BringYourIdeaForm onSubmit={onSubmit} attachmentConfig={{ allowedMimeTypes: ["image/png"] }} />
-    );
-    const file = makeFile("notes.txt", "text/plain");
-
-    await user.upload(screen.getByLabelText(/attachments/i), file);
-
-    expect(screen.getByRole("alert")).toHaveTextContent("notes.txt");
-
-    await user.type(screen.getByLabelText(/description/i), "desc");
-    await user.click(screen.getByRole("button", { name: /submit/i }));
-
-    expect(onSubmit).toHaveBeenCalledWith({ description: "desc", attachments: [] });
+    const mutateAsync = vi.fn().mockResolvedValue({ id: "secret-id", created_at: "x" });
+    mocked.mockReturnValue({ mutateAsync } as never);
+    render(<BringYourIdeaForm />);
+    await fillRequired(user);
+    await user.type(screen.getByLabelText("Dimensions (optional)"), "20 cm tall");
+    await user.upload(screen.getByLabelText("Reference images (optional)"), png("sketch.png"));
+    await user.click(screen.getByRole("button", { name: "Send my idea" }));
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
+    const arg = mutateAsync.mock.calls[0]![0];
+    expect(arg.captchaToken).toBe(FAKE_CAPTCHA_TOKEN);
+    expect(arg.values).toMatchObject({ name: "Rana", phone: "+961 70 123 456", project_title: "Cedar lamp", dimensions: "20 cm tall", preferred_material: "" });
+    expect(arg.attachments.map((f: File) => f.name)).toEqual(["sketch.png"]);
+    expect(await screen.findByText(/we've received your idea/i)).toBeInTheDocument();
+    expect(screen.queryByText(/secret-id/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Send another idea" }));
+    expect(screen.getByLabelText("Name")).toHaveValue("");
+    expect(screen.queryByText("sketch.png")).not.toBeInTheDocument();
   });
 
-  it("imposes no hardcoded attachment limit when none is configured", async () => {
+  it("names a server-rejected image, keeps the form, and retries with a fresh token", async () => {
     const user = userEvent.setup();
-    render(<BringYourIdeaForm onSubmit={vi.fn()} />);
-    const file = makeFile("anything.xyz", "application/octet-stream", 50_000_000);
-
-    await user.upload(screen.getByLabelText(/attachments/i), file);
-
-    expect(screen.getByText("anything.xyz")).toBeInTheDocument();
+    const mutateAsync = vi
+      .fn()
+      .mockRejectedValueOnce({
+        kind: "http",
+        status: 422,
+        code: "UPLOAD_REJECTED",
+        detail: "RAW",
+        errors: [{ loc: ["body", "attachments", 0], msg: "RAW MSG", type: "value_error" }],
+        message: "x",
+        raw: {},
+      })
+      .mockResolvedValueOnce({ id: "m", created_at: "x" });
+    mocked.mockReturnValue({ mutateAsync } as never);
+    render(<BringYourIdeaForm />);
+    await fillRequired(user);
+    await user.upload(screen.getByLabelText("Reference images (optional)"), png("fake.png"));
+    await user.click(screen.getByRole("button", { name: "Send my idea" }));
+    expect(await screen.findByText(/“fake.png” couldn't be accepted/)).toBeInTheDocument();
+    expect(screen.queryByText(/RAW/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Project title")).toHaveValue("Cedar lamp");
+    expect(fakeCaptcha.resetCount).toBe(1);
+    await user.click(screen.getByRole("button", { name: "Remove fake.png" }));
+    await user.click(screen.getByRole("button", { name: "Send my idea" }));
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(2));
+    expect(mutateAsync.mock.calls[1]![0].attachments).toEqual([]);
   });
 
-  it("announces attachment additions and removals via aria-live", async () => {
+  it("shows captcha copy on refusal and refuses to send without a token", async () => {
+    fakeCaptcha.autoIssue = false;
     const user = userEvent.setup();
-    render(<BringYourIdeaForm onSubmit={vi.fn()} />);
-    const file = makeFile("idea.png", "image/png");
-
-    await user.upload(screen.getByLabelText(/attachments/i), file);
-    expect(screen.getByRole("status")).toHaveTextContent(/added/i);
-
-    await user.click(screen.getByRole("button", { name: /remove idea\.png/i }));
-    expect(screen.getByRole("status")).toHaveTextContent(/removed/i);
-  });
-
-  it("lets the guest remove a selected attachment before submitting", async () => {
-    const onSubmit = vi.fn();
-    const user = userEvent.setup();
-    render(<BringYourIdeaForm onSubmit={onSubmit} />);
-    const file = makeFile("idea.png", "image/png");
-
-    await user.upload(screen.getByLabelText(/attachments/i), file);
-    await user.click(screen.getByRole("button", { name: /remove idea\.png/i }));
-    await user.type(screen.getByLabelText(/description/i), "desc");
-    await user.click(screen.getByRole("button", { name: /submit/i }));
-
-    expect(onSubmit).toHaveBeenCalledWith({ description: "desc", attachments: [] });
-    expect(screen.queryByText("idea.png")).not.toBeInTheDocument();
-  });
-
-  it("renders a supplied captcha slot without building a fake captcha itself", () => {
-    render(<BringYourIdeaForm onSubmit={vi.fn()} captchaSlot={<div data-testid="captcha-slot">real widget here</div>} />);
-    expect(screen.getByTestId("captcha-slot")).toBeInTheDocument();
-  });
-
-  it("uses the shared FileUploader selection UI, not a duplicated picker", () => {
-    render(<BringYourIdeaForm onSubmit={vi.fn()} />);
-    expect(screen.getByTestId("file-dropzone")).toBeInTheDocument();
-  });
-
-  it("never shows a fake progress bar or upload-complete state while files are merely selected", async () => {
-    const user = userEvent.setup();
-    render(<BringYourIdeaForm onSubmit={vi.fn()} />);
-
-    await user.upload(screen.getByLabelText(/attachments/i), makeFile("idea.png", "image/png"));
-
-    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
-    expect(screen.queryByText(/uploaded/i)).not.toBeInTheDocument();
-  });
-
-  it("never makes a network/fetch call", () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
-    render(<BringYourIdeaForm onSubmit={vi.fn()} />);
-    expect(fetchSpy).not.toHaveBeenCalled();
-    fetchSpy.mockRestore();
-  });
-
-  it("never writes to localStorage or sessionStorage", async () => {
-    const spy = vi.spyOn(Storage.prototype, "setItem");
-    const user = userEvent.setup();
-    render(<BringYourIdeaForm onSubmit={vi.fn()} />);
-    await user.upload(screen.getByLabelText(/attachments/i), makeFile("idea.png", "image/png"));
-    expect(spy).not.toHaveBeenCalled();
+    const mutateAsync = vi.fn();
+    mocked.mockReturnValue({ mutateAsync } as never);
+    render(<BringYourIdeaForm />);
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: "Send my idea" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(CAPTCHA_FAILURE_COPY.missing);
+    expect(mutateAsync).not.toHaveBeenCalled();
   });
 });

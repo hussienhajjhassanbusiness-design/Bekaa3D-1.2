@@ -37,6 +37,11 @@ export interface FileUploaderProps {
   // deferred mode, where it is the only way a parent learns what's
   // selected; harmless and unused in immediate mode.
   onSelectionChange?: (files: File[]) => void;
+  // Phase 6B — optional native file-picker filter (e.g. "image/jpeg,image/png")
+  // and a visible hint. A picker filter is a convenience only; `config` and
+  // ultimately the server stay the real checks.
+  accept?: string;
+  hint?: string;
 }
 
 const GENERIC_FAILURE_MESSAGE = "Upload failed. Please try again.";
@@ -66,8 +71,9 @@ function createLocalId(): string {
 // upload starts the moment a file is accepted. `driver` absent →
 // deferred selection: accepted files sit in memory as "selected" and
 // are reported via `onSelectionChange`; nothing is ever sent.
-export function FileUploader({ label, config, driver, multiple = false, onSelectionChange }: FileUploaderProps) {
+export function FileUploader({ label, config, driver, multiple = false, onSelectionChange, accept, hint }: FileUploaderProps) {
   const inputId = useId();
+  const hintId = useId();
   const [queue, setQueue] = useState<UploadQueueItem[]>([]);
   const [localRejections, setLocalRejections] = useState<readonly UploadPrecheckRejection[]>([]);
   const [announcement, setAnnouncement] = useState("");
@@ -196,7 +202,20 @@ export function FileUploader({ label, config, driver, multiple = false, onSelect
       <label htmlFor={inputId} className="block text-label font-semibold uppercase tracking-label text-text-primary">
         {label}
       </label>
-      <input id={inputId} type="file" multiple={multiple} onChange={handleInputChange} className="mt-1" />
+      {hint && (
+        <p id={hintId} className="mt-1 text-caption text-text-secondary">
+          {hint}
+        </p>
+      )}
+      <input
+        id={inputId}
+        type="file"
+        multiple={multiple}
+        accept={accept}
+        aria-describedby={hint ? hintId : undefined}
+        onChange={handleInputChange}
+        className="mt-1 max-w-full"
+      />
 
       <div role="status" aria-live="polite" className="sr-only">
         {announcement}
@@ -211,8 +230,8 @@ export function FileUploader({ label, config, driver, multiple = false, onSelect
       {queue.length > 0 && (
         <ul className="mt-2">
           {queue.map((item) => (
-            <li key={item.id} className="flex items-center gap-2 py-1">
-              <span className="text-body text-text-primary">{item.file.name}</span>
+            <li key={item.id} className="flex flex-wrap items-center gap-2 py-1">
+              <span className="break-all text-body text-text-primary">{item.file.name}</span>
 
               {item.status === "uploading" && (
                 <progress value={item.progress} max={100} aria-label={`Uploading ${item.file.name}`} />

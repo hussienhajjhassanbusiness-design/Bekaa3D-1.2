@@ -19,6 +19,7 @@ const NAV_ITEMS: readonly NavItem[] = [
   { href: "/", label: "Home" },
   { href: "/shop", label: "Shop" },
   { href: "/about", label: "About" },
+  { href: "/bring-your-idea", label: "Bring your idea" },
   { href: "/contact", label: "Contact" },
 ];
 

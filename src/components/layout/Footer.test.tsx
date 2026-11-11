@@ -21,7 +21,8 @@ describe("Footer", () => {
     expect(screen.getByRole("link", { name: "Shop" })).toHaveAttribute("href", "/shop");
     expect(screen.getByRole("link", { name: "About" })).toHaveAttribute("href", "/about");
     expect(screen.getByRole("link", { name: "Contact" })).toHaveAttribute("href", "/contact");
-    expect(screen.getAllByRole("link")).toHaveLength(3);
+    expect(screen.getByRole("link", { name: "Bring your idea" })).toHaveAttribute("href", "/bring-your-idea");
+    expect(screen.getAllByRole("link")).toHaveLength(4);
   });
 
   it("does not render an actual logo image asset", () => {
