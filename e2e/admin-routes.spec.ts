@@ -94,7 +94,7 @@ test.describe("Admin guard (P1-1)", () => {
     await expect(page).toHaveURL(/\/admin\/mfa\/setup$/);
   });
 
-  test("the admin nav never links to an unbuilt area (payments/refunds/etc.; orders are built since phase 5H)", async ({ page }) => {
+  test("the admin nav never links to an unbuilt area (contact/shipping/etc.; orders since 5H, payments and refunds since 5I)", async ({ page }) => {
     await signInAs(page, ADMIN_ME);
     await page.route("**/api/v1/admin/settings*", async (route) => {
       await route.fulfill({ status: 200, body: JSON.stringify(EMPTY_SETTINGS_PAGE) });
@@ -105,7 +105,7 @@ test.describe("Admin guard (P1-1)", () => {
     const nav = page.getByRole("navigation", { name: "Admin" });
     await expect(nav).toBeVisible();
     const navText = (await nav.innerText()).toLowerCase();
-    for (const forbidden of ["payment", "refund", "cancellation", "contact", "shipping", "entitlement"]) {
+    for (const forbidden of ["cancellation", "contact", "shipping", "entitlement"]) {
       expect(navText).not.toContain(forbidden);
     }
     await expect(nav.getByRole("link", { name: "Orders" })).toHaveAttribute("href", "/admin/orders");
