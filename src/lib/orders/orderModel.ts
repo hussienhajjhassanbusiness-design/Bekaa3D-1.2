@@ -23,9 +23,9 @@ import type {
 // notes, provider references, the checkout email or the phone hash on
 // these routes, and no model here has a field for one.
 //
-// `can_cancel` is deliberately NOT carried: its action belongs to FVS-031.
-// `can_retry_payment` (FVS-027, phase 5F) is carried as advisory only: it
-// decides whether "Retry payment" is offered, and the POST re-checks.
+// `can_retry_payment` (FVS-027, phase 5F) and `can_cancel` (FVS-031, phase
+// 5G) are carried as advisory only: they decide whether "Retry payment" /
+// "Cancel order" is offered, and each POST re-checks.
 
 export interface Money {
   amountCents: number;
@@ -99,6 +99,7 @@ export interface OrderDetailModel {
   holdExpiresAt: string | null;
   // Advisory (backend re-checks under its lock).
   canRetryPayment: boolean;
+  canCancel: boolean;
   subtotal: Money;
   tax: Money;
   total: Money;
@@ -186,6 +187,7 @@ export function adaptOrderDetail(dto: OrderDetailReadDTO): OrderDetailModel {
     amountDue: dto.amount_due ? money(dto.amount_due) : null,
     holdExpiresAt: dto.hold_expires_at,
     canRetryPayment: dto.can_retry_payment === true,
+    canCancel: dto.can_cancel === true,
     subtotal: money(dto.subtotal),
     tax: money(dto.tax),
     total: money(dto.total),

@@ -127,3 +127,58 @@ describe("classifyOrderError", () => {
     expect(classifyOrderError(new Error("boom"))).toBe("generic");
   });
 });
+
+describe("ordersApi customer order actions (FVS-031)", () => {
+  const DETAIL = { id: ORDER_ID };
+
+  it("cancels via POST /api/v1/me/orders/{id}/cancel with CSRF and no body", async () => {
+    const postSpy = vi.spyOn(apiClient, "post").mockResolvedValue(DETAIL);
+    await expect(ordersApi.cancelOrder(ORDER_ID)).resolves.toBe(DETAIL);
+    expect(postSpy).toHaveBeenCalledWith(`/api/v1/me/orders/${ORDER_ID}/cancel`, undefined, { csrf: true });
+  });
+
+  it("confirms receipt via POST /api/v1/me/orders/{id}/confirm-receipt with CSRF and no body", async () => {
+    const postSpy = vi.spyOn(apiClient, "post").mockResolvedValue(DETAIL);
+    await expect(ordersApi.confirmReceipt(ORDER_ID)).resolves.toBe(DETAIL);
+    expect(postSpy).toHaveBeenCalledWith(`/api/v1/me/orders/${ORDER_ID}/confirm-receipt`, undefined, { csrf: true });
+  });
+
+  it("reports a problem via POST /api/v1/me/orders/{id}/report-problem with exactly { message }", async () => {
+    const postSpy = vi.spyOn(apiClient, "post").mockResolvedValue(DETAIL);
+    await expect(ordersApi.reportProblem(ORDER_ID, "The lid is cracked")).resolves.toBe(DETAIL);
+    expect(postSpy).toHaveBeenCalledWith(
+      `/api/v1/me/orders/${ORDER_ID}/report-problem`,
+      { message: "The lid is cracked" },
+      { csrf: true }
+    );
+    expect(Object.keys(postSpy.mock.calls[0]![1] as object)).toEqual(["message"]);
+  });
+
+  it("encodes the id on every action path", async () => {
+    const postSpy = vi.spyOn(apiClient, "post").mockResolvedValue(DETAIL);
+    await ordersApi.cancelOrder("a/b");
+    await ordersApi.confirmReceipt("a/b");
+    await ordersApi.reportProblem("a/b", "x");
+    expect(postSpy.mock.calls.map((call) => call[0])).toEqual([
+      "/api/v1/me/orders/a%2Fb/cancel",
+      "/api/v1/me/orders/a%2Fb/confirm-receipt",
+      "/api/v1/me/orders/a%2Fb/report-problem",
+    ]);
+  });
+
+  it("after a silent session refresh, resends each action ONCE with the same request", async () => {
+    mockedRefreshSession.mockResolvedValue(true);
+    const postSpy = vi.spyOn(apiClient, "post").mockRejectedValueOnce(AUTH_REQUIRED).mockResolvedValueOnce(DETAIL);
+    await expect(ordersApi.reportProblem(ORDER_ID, "msg")).resolves.toBe(DETAIL);
+    expect(postSpy).toHaveBeenCalledTimes(2);
+    expect(postSpy.mock.calls[1]).toEqual(postSpy.mock.calls[0]);
+  });
+
+  it("never retries a refusal by itself", async () => {
+    const refused = { kind: "http" as const, status: 409, code: "ORDER_NOT_CANCELLABLE", message: "x", raw: {} };
+    const postSpy = vi.spyOn(apiClient, "post").mockRejectedValue(refused);
+    await expect(ordersApi.cancelOrder(ORDER_ID)).rejects.toBe(refused);
+    expect(postSpy).toHaveBeenCalledTimes(1);
+    expect(mockedRefreshSession).not.toHaveBeenCalled();
+  });
+});

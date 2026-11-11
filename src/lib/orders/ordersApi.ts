@@ -1,6 +1,12 @@
 import { apiClient } from "@/lib/api/apiClient";
 import { authenticatedRequest } from "@/lib/auth/authenticatedRequest";
-import type { OrderDetailReadDTO, OrderPageDTO, PaymentRetryReadDTO, PaymentRetryRequestDTO } from "./orderTypes";
+import type {
+  OrderDetailReadDTO,
+  OrderPageDTO,
+  PaymentRetryReadDTO,
+  PaymentRetryRequestDTO,
+  ProblemReportCreateDTO,
+} from "./orderTypes";
 
 // #ARCHITECTURE-CUSTOMER-ORDERS-API
 //
@@ -54,4 +60,37 @@ async function retryPayment(orderId: string, idempotencyKey: string): Promise<Pa
   );
 }
 
-export const ordersApi = { listMyOrders, getMyOrder, retryPayment };
+// FVS-031 (phase 5G) — the customer's three order actions (backend 2dfb27b
+// ordering/api/cancel.py, ordering/api/receipt.py). Each: verified session,
+// CSRF, and the answer is the full OrderDetailRead, which the caller
+// writes into the canonical orderKeys.detail(id) cache. None is idempotency-
+// keyed; the shared refresh-on-401-then-retry-once wrapper resends the
+// identical request only after the session was refreshed (a 401 is
+// answered before the route body runs, so nothing changed).
+//
+// cancel: the optional `{ reason? (<=500) }` body is not collected by the
+// UI (it is an audit note only), so no body is sent.
+function actionPath(orderId: string, action: "cancel" | "confirm-receipt" | "report-problem"): string {
+  return `/api/v1/me/orders/${encodeURIComponent(orderId)}/${action}`;
+}
+
+async function cancelOrder(orderId: string): Promise<OrderDetailReadDTO> {
+  return authenticatedRequest(() =>
+    apiClient.post<OrderDetailReadDTO>(actionPath(orderId, "cancel"), undefined, { csrf: true })
+  );
+}
+
+async function confirmReceipt(orderId: string): Promise<OrderDetailReadDTO> {
+  return authenticatedRequest(() =>
+    apiClient.post<OrderDetailReadDTO>(actionPath(orderId, "confirm-receipt"), undefined, { csrf: true })
+  );
+}
+
+async function reportProblem(orderId: string, message: string): Promise<OrderDetailReadDTO> {
+  const body: ProblemReportCreateDTO = { message };
+  return authenticatedRequest(() =>
+    apiClient.post<OrderDetailReadDTO>(actionPath(orderId, "report-problem"), body, { csrf: true })
+  );
+}
+
+export const ordersApi = { listMyOrders, getMyOrder, retryPayment, cancelOrder, confirmReceipt, reportProblem };

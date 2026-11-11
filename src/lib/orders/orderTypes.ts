@@ -131,8 +131,8 @@ export interface OrderDetailReadDTO {
   payment_method: PaymentMethod;
   payment_due: boolean;
   amount_due: PriceRead | null;
-  // Advisory capability flags. Their actions (cancel: FVS-031, retry:
-  // FVS-027) are NOT mounted in this phase; the adapter does not expose them.
+  // Advisory capability flags; the POST re-checks under its lock.
+  // cancel: FVS-031 (phase 5G), retry: FVS-027 (phase 5F).
   can_cancel: boolean;
   can_retry_payment: boolean;
   // An unpaid online order: when it may be released if still unpaid.
@@ -200,4 +200,25 @@ export interface RetryPaymentReadDTO {
 export interface PaymentRetryReadDTO {
   order: RetryOrderReadDTO;
   payment: RetryPaymentReadDTO;
+}
+
+// #FVS031-ORDER-ACTION-WIRE-CONTRACT (phase 5G)
+//
+// Backend 2dfb27b ordering/api/cancel.py + receipt.py; running
+// /openapi.json CustomerOrderCancelRequest / ProblemReportCreate. All three
+// answer with OrderDetailRead (report-problem with 201). Verified session
+// (403 EMAIL_VERIFICATION_REQUIRED) and CSRF (403 CSRF_INVALID); another
+// customer's order and an unknown id are the same 404 NOT_FOUND.
+//
+//   cancel           409 ORDER_NOT_CANCELLABLE (no extensions); 429
+//                    RATE_LIMITED (10/h per user). Whole order: every live
+//                    physical line, all `pending`, else nothing.
+//   confirm-receipt  409 INVALID_STATE_TRANSITION { reason:
+//                    "no_delivered_line" }. Idempotent, no rate limit.
+//   report-problem   same 409; 422 VALIDATION_ERROR; 429 RATE_LIMITED (5/h).
+//
+// ProblemReportCreate is `extra="forbid"`: `message` only, 1-5000
+// characters, not blank, no control characters except tab/LF/CR.
+export interface ProblemReportCreateDTO {
+  message: string;
 }

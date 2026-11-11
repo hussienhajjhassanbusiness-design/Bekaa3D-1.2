@@ -44,9 +44,10 @@ describe("adaptOrderDetail", () => {
     expect(model.tax).toEqual({ amountCents: 0, currency: "USD" });
   });
 
-  it("does not expose can_cancel (FVS-031); carries can_retry_payment as given (FVS-027, advisory)", () => {
+  it("carries can_cancel (FVS-031) and can_retry_payment (FVS-027) as given, advisory only", () => {
     const model = adaptOrderDetail(detailDTO({ can_cancel: true, can_retry_payment: true }));
-    expect(model).not.toHaveProperty("canCancel");
+    expect(model.canCancel).toBe(true);
+    expect(adaptOrderDetail(detailDTO({ can_cancel: false })).canCancel).toBe(false);
     expect(model.canRetryPayment).toBe(true);
     expect(adaptOrderDetail(detailDTO({ can_retry_payment: false })).canRetryPayment).toBe(false);
   });
