@@ -1,5 +1,88 @@
 # Real Backend Acceptance
 
+## Phase 6C: Offers / Make an Offer (VS-039, VS-040, VS-041), 2026-11-12
+
+| Item | Value |
+|---|---|
+| Frontend commits tested | `ab3a5a4` (offers), `d4697f0` (E2E lint fix). Committed before the run |
+| Backend | `C:\My projects\Bekaa3D-backend`, branch `main`, commit **`2dfb27b`** (unchanged, no backend code touched) |
+| Contract check | running `/openapi.json` **identical** to `docs/backend-handoff/openapi.json` (105 paths, every schema); then `negotiation/api/offers.py`, `admin_offers.py`, `offer_errors.py`, `offer_schemas.py`, `negotiation/domain/offers.py`, `domain/enums.py`, `ordering/api/offer_checkout.py`, `ordering/application/services/offer_checkout.py`, `catalog/domain/storefront.py` (`can_offer`), `platform/domain/settings_registry.py` |
+| Runtime | Docker Compose backend on :8000 (`CAPTCHA_PROVIDER=fake`, mock payment provider). `npm run dev` on :3000 for the run only |
+| Method | real Edge through Playwright, real frontend and backend, **no route mocking**; admin through the frontend proxy (password + TOTP); the mock payment settled with the backend's own `scripts/mock_pay.py` (copied into the api container's `/tmp`). Script in the session scratchpad, never committed |
+| Identities | fresh customers `accept-offers-a-<ts>` and `accept-offers-b-<ts>@example.com` (registered and verified through the real routes, random passwords never printed); admin from `%USERPROFILE%\.bekaa3d\dev-admin.json` (never printed) |
+| Data | products `dragon-stl` ($7.00; `minimum_offer_percentage` 70 gives a $4.90 floor), `phone-stand-stl`, and the unavailable `low-poly-vase-stl` for the negative check. Afterwards the 6 unpaid `accept-offers-*` offers from the three runs and their 9 rounds were deleted; the 2 **paid** offers are kept because their orders reference them |
+
+**Overall: PASS, 19/19** (final run). The two earlier runs stopped on script bugs, not app defects: a link regex that assumed the product was named "Dragon STL" (it is "Articulated Dragon STL"), a read of the admin buttons before the detail had rendered, and Postgres printing `true` rather than `t` (the same slip as 6B).
+
+### Current contract (as implemented)
+
+- **Offers are STL-only** and need a listed, available product: `ProductDetail.capabilities.can_offer` is `is_available and not physical` (`catalog/domain/storefront.py`); `offer_refusal` refuses the rest with `422 PRODUCT_NOT_PURCHASABLE` (`reason` not_listed / not_negotiable / unavailable). USD only, integer cents.
+- **Open:** `POST /api/v1/offers {product_id, amount_cents, currency: "USD", message? (≤1000)}`; verified email, CSRF, 20/h per user; `201 OfferDetailRead`. Refusals: `409 OFFER_ALREADY_ACTIVE` (one live offer per product), `409 PRODUCT_ALREADY_OWNED`, `422 OFFER_BELOW_MINIMUM` (`minimum {amount_cents, currency}`), `422 OFFER_COOLDOWN_ACTIVE` (`cooldown_until`), above the list price as `422 VALIDATION_ERROR` on `amount_cents`, `429`, `503 ORDERS_PAUSED`. The floor (`minimum_offer_percentage`) is **not** a public setting, so the frontend never computes it.
+- **Read:** `GET /me/offers?status&product_id&cursor&limit` (newest first) and `GET /me/offers/{id}` (full round history and `allowed_actions`); session only. Another customer's offer is `404`.
+- **Answer (customer):** `counter {amount_cents, currency, message?}` (must meet the floor), `accept {expected_amount_cents}` (must equal `current_amount`, else `409 OFFER_AMOUNT_CHANGED` with `current_amount`), `withdraw {reason?}` (either turn); 60/h. **Answer (admin):** `accept`, `counter` (≤ list price, no floor), `reject {reason?}` (arms the cooldown). Refusal order: `410 OFFER_EXPIRED`, then `409 INVALID_STATE_TRANSITION` (`offer_status`), then `409 OFFER_NOT_YOUR_TURN`. Accepting freezes `agreed = min(current, today's list price)` and opens `checkout_expires_at`.
+- **States:** awaiting_admin, awaiting_customer, accepted, rejected, expired, withdrawn, paid, checkout_expired, auto_closed. Expiry, checkout expiry, reminders and auto-close are backend jobs; no client route.
+- **Checkout:** `POST /me/offers/{id}/checkout {accept_terms: true, accept_digital_final_sale: true, payment_provider?}` with `Idempotency-Key` (cart checkout's rules and rate limit). Online only; `201 CheckoutRead` with `order.source = "offer"` and the agreed amount as the total. `410 OFFER_CHECKOUT_EXPIRED`, `409 PAYMENT_ALREADY_ACTIVE` (`redirect_url`), `409 PRODUCT_ALREADY_OWNED`, `502 PAYMENT_PROVIDER_UNAVAILABLE` (order exists unpaid), `503 ORDERS_PAUSED | ONLINE_PAYMENT_UNAVAILABLE`. The offer becomes `paid` only when the payment is verified.
+
+### Frontend behaviour
+
+- **Product page:** `MakeOfferPanel` renders only with `can_offer`. Anonymous: a sign-in link with the safe `returnTo`. Unverified: the verification link. Verified: one small `GET /me/offers?product_id=&limit=5`; a live offer is linked instead of the form. The form is a disclosure (`aria-expanded`, focus returns on Cancel) with `MoneyInput` (string to cents, no floats) and an optional message.
+- **`/account/offers`** (new account nav entry) and **`/account/offers/[id]`**: status, amounts, the deadline that applies now, the cooldown, the round history as plain text, and only the server's `allowed_actions` as buttons. Accept sends `current_amount` as `expected_amount_cents`. A refusal that means "it moved on" (not your turn, invalid transition, amount changed, expired) re-reads the offer and shows the real state.
+- **Checkout panel** (accepted only): both consents (never pre-ticked), one in-flight press, an `Idempotency-Key` bound to the fixed body (the cart checkout tracker, now generic over the body), a same-key retry for an unknown outcome, then the server's `redirect_url` as given. Prices come only from the offer and the checkout response.
+- **`/admin/offers`** (new admin nav entry; status filter only, no PII in the URL) and **`/admin/offers/[id]`**: customer, product, history, and accept / counter / reject through one confirmation dialog (`OfferMoveDialog` on the shared `AdminActionDialog`; reject is destructive), CSRF, a synchronous in-flight guard, `retry: false`.
+- **Cache:** one `["offers"]` family (added to `userScopedQueries`, so cleared on logout, cross-tab logout and user switch); the admin queue under `["admin", "offers"]`. Writes store the server's `OfferDetailRead`; nothing is optimistic. Problem `title`/`detail`/`msg` are never shown.
+
+### Results
+
+| # | Check | Result | Evidence |
+|---|---|---|---|
+| 1 | Eligibility follows `can_offer` | PASS | available STL `dragon-stl`: button shown; unavailable `low-poly-vase-stl` (`can_offer` false): none; physical `dragon`: none |
+| 2 | Below the minimum | PASS | $1.00 on $7.00 → `422`; "The lowest offer we can accept for this product is $4.90." (from the server's `minimum`); no row |
+| 3 | Create | PASS | UI `POST /api/v1/offers` with `X-CSRF-Token`, exact body → `201`; DB `awaiting_admin`, turn admin, 500 c |
+| 4 | Live offer replaces the form; duplicate refused | PASS | after reload the product page links the offer; a second `POST` → `409 OFFER_ALREADY_ACTIVE` |
+| 5 | Persistence | PASS | `/account/offers` → detail "Waiting for our reply", "You offered $5.00", moves `[Withdraw offer]` |
+| 6 | `CSRF_INVALID` | PASS | stale `csrf_token` cookie → withdraw `403`; "Unable to verify your session…"; still `awaiting_admin` |
+| 7 | Admin queue and detail | PASS | row "Your reply needed", $5.00, the customer's email; moves `[Accept offer, Counter-offer, Reject offer]` |
+| 8 | Admin counter | PASS | `{600, USD, message}` with CSRF → `200`; DB `awaiting_customer`, 600; admin moves gone |
+| 9 | Invalid transition (out of turn) | PASS | admin accept on the customer's turn → `409 OFFER_NOT_YOUR_TURN` |
+| 10 | Customer counter across a session refresh | PASS | sees "Bekaa3D countered with $6.00" and the message; `access_token` cookie dropped → counter `401`, refresh, `200`; DB `awaiting_admin`, 550 |
+| 11 | Admin accept | PASS | `{expected_amount_cents: 550}` → `200`; DB `accepted`, agreed 550, checkout window set |
+| 12 | Customer resulting state; withdraw after accept | PASS | "Accepted: ready to check out", panel $5.50, no moves; withdraw → `409 INVALID_STATE_TRANSITION` |
+| 13 | Offer checkout | PASS | UI with both consents → `201` (`Idempotency-Key` matches the pattern, CSRF, exact body); the browser followed `redirect_url`; order `source offer`, total 550 c, online |
+| 14 | Paid | PASS | mock provider `paid` → offer `paid`; the customer page shows "Paid" |
+| 15 | Non-admin guard | PASS | customer `GET /api/v1/admin/offers` → `404`; `/admin/offers` renders the 404 page |
+| 16 | Other-customer isolation | PASS | B `GET` A's offer → `404`; B's page "Offer not found"; B's list empty |
+| 17 | Customer withdraw | PASS | with a reason → `200`; DB `withdrawn` |
+| 18 | Admin reject and the cooldown | PASS | destructive confirm with a reason → DB `rejected`, `cooldown_until` set; B sees "Declined" and "New offer possible after"; a new offer → `422 OFFER_COOLDOWN_ACTIVE` with the date |
+| 19 | No page errors | PASS | 0 `pageerror` across the three pages |
+
+### Not tested against the real backend
+
+- `410 OFFER_EXPIRED`, `checkout_expired`, the customer reminder and `auto_closed`: they need the response or checkout window to pass (at least 1 h, a backend setting) or a backend job. The copy and the re-read are unit-tested.
+- `409 OFFER_AMOUNT_CHANGED`: needs a concurrent counter between page load and accept; unit-tested and mocked.
+- `PAYMENT_ALREADY_ACTIVE`, `502 PAYMENT_PROVIDER_UNAVAILABLE`, `503`: unit-tested; the same rules as cart checkout.
+- `429`: not provoked (20 opens and 60 answers per hour).
+
+### Defects found
+
+None in the app during the run. Found while building: offer checkout could not reuse `describeCheckoutError` as is, because its copy mentions the cart ("Your cart has been kept"), so offer checkout has its own mapper with the same rules.
+
+### Phase 6C gate
+
+| Command | Result |
+|---|---|
+| `npm run lint` | 0 errors, 4 warnings (the known `<img>` warnings) |
+| `npm run typecheck` | clean |
+| `npm run test` | **2182/2182** (228 files) |
+| `npm run build` | pass (`/account/offers`, `/admin/offers` static; the `[id]` pages dynamic) |
+| `npm run test:e2e` | **170/170** (50 s), including `e2e/offers.spec.ts` 9/9 |
+
+### Security review
+
+- **Automated:** the `/security-review` skill diffs against `origin/HEAD`, and this repository has no remote, so it could not run (as in 6B).
+- **Manual:** every write carries `X-CSRF-Token` through `apiClient`; offer checkout carries an `Idempotency-Key` bound to its body; every answer goes through a confirmation with a synchronous in-flight guard and `retry: false`; accept binds only the amount on screen (`expected_amount_cents`); the buttons are the server's `allowed_actions` only; prices are never computed client-side; the payment `redirect_url` is followed only if absolute http(s); messages and reasons are plain React text, no `dangerouslySetInnerHTML`; the offer cache is user-scoped; admin routes sit behind `AdminShell`/`AdminGuard` (the backend's `404` verified for a customer); no customer data in admin URLs; no browser storage. No open finding.
+
+---
+
 ## Phase 6B: Customer Engagement (Contact + Bring Your Idea), 2026-11-11 to 2026-11-12
 
 Contact (6B-1) has its own section below. This section covers Bring Your Idea (6B-2), the phase gate and the security review.
