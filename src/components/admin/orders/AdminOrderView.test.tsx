@@ -3,6 +3,8 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AdminOrderView } from "./AdminOrderView";
+
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 import { adminOrderKeys, adminOrdersApi } from "@/lib/admin/orders/adminOrdersApi";
 import { adminDetailDTO, adminLineDTO, ADMIN_LINE_ID, ADMIN_ORDER_ID } from "@/lib/admin/orders/adminOrderFixtures";
 import type { AdminOrderDetailDTO } from "@/lib/admin/orders/adminOrderTypes";
@@ -77,7 +79,7 @@ describe("AdminOrderView — rendering", () => {
     expect(screen.queryByText(/download|upload/i)).not.toBeInTheDocument();
   });
 
-  it("read-only payments, refunds and chargebacks; no refund action in this phase", () => {
+  it("payments and refunds link to their admin pages; chargebacks read-only", () => {
     renderView(
       adminDetailDTO({
         payment_method: "online",
@@ -90,7 +92,8 @@ describe("AdminOrderView — rendering", () => {
     );
     expect(screen.getByRole("region", { name: "Payment" })).toHaveTextContent("Online (mock provider)");
     expect(screen.getByRole("region", { name: "Refunds" })).toHaveTextContent(/Cancellation refund\s*Pending/);
-    expect(screen.queryByRole("button", { name: /refund/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Cancellation refund" })).toHaveAttribute("href", "/admin/refunds/r1");
+    expect(screen.getByRole("link", { name: "Payment" })).toHaveAttribute("href", "/admin/payments/p1");
   });
 });
 

@@ -19,14 +19,16 @@ import { useAdminOrderWrite } from "@/lib/admin/orders/useAdminOrders";
 import type { PriceRead } from "@/lib/catalog/productTypes";
 import { formatOrderDate, formatOrderDateTime, fulfillmentLabel, paymentMethodLabel } from "@/lib/orders/orderFormat";
 import { describeOrderStatus, describePaymentStatus } from "@/lib/orders/orderStatus";
+import { CreateRefund } from "@/components/admin/payments/CreateRefund";
 import { LineActions } from "./LineActions";
 import { OrderLevelActions } from "./OrderLevelActions";
 
 // #FVS030-ADMIN-ORDER-VIEW (phase 5H)
 //
 // GET /api/v1/admin/orders/{id}, rendered as the server has it: real line
-// states, each line's server-provided actions, payments, refunds and
-// chargebacks (read-only here; refund actions are phase 5I), the full
+// states, each line's server-provided actions, payments (linked to their
+// admin payment page), refunds (Record a refund, phase 5I; rows linked to
+// the refund page) and chargebacks (read-only), the full
 // history with who did each step, and the internal note (PATCH). No
 // shipping fee (ADR-024), no STL file handling (ADR-019).
 export function AdminOrderView({ order }: { order: AdminOrderDetailDTO }) {
@@ -121,6 +123,9 @@ export function AdminOrderView({ order }: { order: AdminOrderDetailDTO }) {
                   return (
                     <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 text-body">
                       <span>
+                        <Link href={`/admin/payments/${p.id}`} className="text-text-link underline">
+                          Payment
+                        </Link>{" "}
                         <StatusBadge label={d.label} tone={d.tone} />{" "}
                         <span className="text-caption text-text-secondary">
                           {describePaymentProvider(p.provider)} · {formatOrderDateTime(p.initiated_at)}
@@ -134,15 +139,19 @@ export function AdminOrderView({ order }: { order: AdminOrderDetailDTO }) {
             )}
           </Section>
 
-          {(order.refunds ?? []).length > 0 && (
+          {((order.refunds ?? []).length > 0 || order.payment_reached_paid) && (
             <Section title="Refunds">
+              <CreateRefund order={order} />
               <ul className="flex flex-col gap-2">
                 {(order.refunds ?? []).map((r) => {
                   const d = describeAdminRefundStatus(r.status);
                   return (
                     <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 text-body">
                       <span>
-                        {describeAdminRefundKind(r.kind)} <StatusBadge label={d.label} tone={d.tone} />
+                        <Link href={`/admin/refunds/${r.id}`} className="text-text-link underline">
+                          {describeAdminRefundKind(r.kind)}
+                        </Link>{" "}
+                        <StatusBadge label={d.label} tone={d.tone} />
                         <span className="block text-caption text-text-secondary">{formatOrderDate(r.created_at)}</span>
                       </span>
                       <Amount price={r.amount} />
