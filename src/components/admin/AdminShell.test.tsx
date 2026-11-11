@@ -60,7 +60,7 @@ describe("AdminShell", () => {
     expect(screen.getByTestId("page-content")).toBeInTheDocument();
   });
 
-  it("renders exactly the six built admin nav items, with no entry for an unbuilt area", () => {
+  it("renders exactly the built admin nav items, with no entry for an unbuilt area", () => {
     mockedUseAuth.mockReturnValue(authState({ isAuthenticated: true, user: ADMIN_USER }));
     render(
       <AdminShell>
@@ -70,8 +70,8 @@ describe("AdminShell", () => {
 
     const nav = screen.getByRole("navigation", { name: "Admin" });
     const links = Array.from(nav.querySelectorAll("a")).map((a) => a.textContent);
-    expect(links).toEqual(["Settings", "Customers", "Categories", "Materials", "Colours", "Products"]);
-    expect(nav.textContent).not.toMatch(/orders|payments|refunds|cancellation|contact|shipping|entitlement/i);
+    expect(links).toEqual(["Orders", "STL deliveries", "Settings", "Customers", "Categories", "Materials", "Colours", "Products"]);
+    expect(nav.textContent).not.toMatch(/payments|refunds|cancellation|contact|shipping|entitlement/i);
   });
 
   it("mounts the shared Log out control for a signed-in administrator (Phase 5A defect 7)", () => {

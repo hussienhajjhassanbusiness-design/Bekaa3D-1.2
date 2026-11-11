@@ -18,16 +18,10 @@ export interface InternalNoteEditorProps {
 // save-on-blur. The note is never persisted to browser storage,
 // never logged, never placed in a URL/query key.
 //
-// CONTRACT/DEPENDENCY GATED (independent review, FVS-030): `draft`
-// seeds from `note` only on mount, so if a parent re-renders this
-// same mounted instance with a changed `note` prop (e.g. a future
-// concurrency refetch), the textarea will keep the stale local draft
-// rather than the refreshed value. Deliberately NOT auto-synced here:
-// doing so would silently discard an admin's in-progress unsaved
-// edit on refetch, the same failure #SECURITY-ORDER-CONCURRENCY-REFETCH
-// forbids elsewhere in this slice. The real fix depends on how the
-// integrating slice signals "note changed externally" (e.g. a remount
-// via `key`, or an explicit conflict notice) — not yet confirmed.
+// Phase 5H: `draft` seeds from `note` only on mount. The admin order page
+// (AdminOrderView) remounts it with `key={admin_note}`, so a saved or
+// externally changed server note replaces the draft, while an unsaved edit
+// survives refetches that leave the note unchanged.
 export function InternalNoteEditor({ note, onSave, isSaving = false, errorMessage }: InternalNoteEditorProps) {
   const labelId = useId();
   const [draft, setDraft] = useState(note);
