@@ -51,6 +51,7 @@ async function fillValidForm(user: ReturnType<typeof userEvent.setup>, email = "
 }
 
 let invalidateQueries: ReturnType<typeof vi.fn>;
+let removeQueries: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   mockedUseLogin.mockReset();
@@ -59,7 +60,8 @@ beforeEach(() => {
   mockReplace.mockReset();
   mockSearchParams = new URLSearchParams();
   invalidateQueries = vi.fn().mockResolvedValue(undefined);
-  mockedUseQueryClient.mockReturnValue({ invalidateQueries } as never);
+  removeQueries = vi.fn();
+  mockedUseQueryClient.mockReturnValue({ invalidateQueries, removeQueries } as never);
 });
 
 describe("Login (/login)", () => {
@@ -200,6 +202,21 @@ describe("Login (/login)", () => {
     await waitFor(() => expect(mockReplace.mock.calls.length + mockPush.mock.calls.length).toBeGreaterThan(0));
     const navigatedTo = (mockReplace.mock.calls[0] ?? mockPush.mock.calls[0])?.[0];
     expect(navigatedTo).toBe("/account");
+  });
+
+  it("drops every user-scoped cache (orders, cart, addresses...) before a new session is used (user switch)", async () => {
+    const user = userEvent.setup();
+    const mutateAsync = vi.fn().mockResolvedValue({ kind: "session", data: { user_id: "u2" } });
+    mockedUseLogin.mockReturnValue({ mutateAsync } as never);
+    render(<Login />);
+
+    await fillValidForm(user);
+    await user.click(screen.getByRole("button", { name: /log ?in|sign ?in/i }));
+
+    await waitFor(() => expect(invalidateQueries).toHaveBeenCalled());
+    expect(removeQueries).toHaveBeenCalledWith({ queryKey: ["orders"] });
+    expect(removeQueries).toHaveBeenCalledWith({ queryKey: ["cart"] });
+    expect(removeQueries.mock.invocationCallOrder[0]).toBeLessThan(invalidateQueries.mock.invocationCallOrder[0] ?? 0);
   });
 
   it("falls back to / for a missing returnTo", async () => {

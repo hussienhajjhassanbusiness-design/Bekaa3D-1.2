@@ -15,6 +15,7 @@ import { useLogin, type LoginResult } from "@/lib/auth/useLogin";
 import { useMfaVerify } from "@/lib/auth/useMfaVerify";
 import { useCooldown } from "@/lib/auth/useCooldown";
 import { AUTH_SESSION_QUERY_KEY } from "@/lib/auth/authSession";
+import { clearUserScopedQueries } from "@/lib/auth/userScopedQueries";
 import { resolveReturnTo } from "@/lib/auth/returnTo";
 
 // FVS-003-IMPLEMENTATION-PLAN.md §2 rows 2/3/4b (confirmed BATCH 3B) —
@@ -262,6 +263,12 @@ function LoginPage() {
     // AuthProvider derives authenticated state for real before
     // navigating, so the destination's ProtectedRoute (if any) doesn't
     // see stale anonymous data.
+    //
+    // Phase 5E — drop every user-scoped cache first. A session that expired
+    // without an explicit logout leaves the previous user's orders/cart/
+    // addresses cached in this tab; a different user signing in here must
+    // never see them, even for one render.
+    clearUserScopedQueries(queryClient);
     await queryClient.invalidateQueries({ queryKey: AUTH_SESSION_QUERY_KEY });
     const safePath = resolveReturnTo(searchParams.get("returnTo"));
     router.replace(safePath);
