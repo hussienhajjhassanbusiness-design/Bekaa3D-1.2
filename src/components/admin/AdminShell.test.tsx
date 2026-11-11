@@ -70,7 +70,7 @@ describe("AdminShell", () => {
 
     const nav = screen.getByRole("navigation", { name: "Admin" });
     const links = Array.from(nav.querySelectorAll("a")).map((a) => a.textContent);
-    expect(links).toEqual(["Orders", "STL deliveries", "Payments", "Refunds", "Settings", "Customers", "Categories", "Materials", "Colours", "Products"]);
+    expect(links).toEqual(["Orders", "STL deliveries", "Payments", "Refunds", "Cash blocks", "Settings", "Customers", "Categories", "Materials", "Colours", "Products"]);
     expect(nav.textContent).not.toMatch(/cancellation|contact|shipping|entitlement/i);
   });
 
