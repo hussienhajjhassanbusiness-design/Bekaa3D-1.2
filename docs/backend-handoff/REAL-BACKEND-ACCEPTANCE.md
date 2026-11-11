@@ -1,5 +1,23 @@
 # Real Backend Acceptance
 
+## Phase 5I: Admin Payments + Refunds (FVS-028), 2026-11-11 — REAL ACCEPTANCE NOT YET RUN
+
+| Item | Value |
+|---|---|
+| Frontend commits | `18cceb1` (payment/refund contract, API, idempotency, write hook), `e342025` (`/admin/payments`, `/admin/refunds`, Record a refund on the admin order; removal of `src/lib/payment`, `src/components/payment` and the unmounted pre-contract admin payment/refund code), `52644c8` (mocked E2E) |
+| Backend | `2dfb27b`, unchanged |
+| Status | Implementation and the full gate are done. **The real-backend run has not happened yet** (the session ran out before it). Nothing in this phase is claimed against the live backend |
+
+**Gate:** lint 0 errors / 4 known warnings; typecheck clean; unit **2127/2127** (218 files; lower because the obsolete pre-contract payment tests were deleted); build pass; E2E **148/148** in one full run (5 new in `e2e/admin-payments.spec.ts`).
+
+**Built:** payments list (status, provider, late captures) and detail (events without payloads or backend error text, audit history, server `available_actions`: reconcile / confirm); refunds queue/history and detail with settle / fail / void / reissue; Record a refund from the admin order (per-line amounts up to the server's `refund_balance`, reason, one `Idempotency-Key` per intended refund, kept only across uncertain outcomes; `REFUND_EXCEEDS_AVAILABLE` balances shown).
+
+**Not built (gaps):** chargeback creation (`POST /admin/orders/{id}/chargebacks`; chargebacks are read-only on the order), `record-capture`, manual release (`release_order`).
+
+**To run next:** a paid mock order → partial refund → settle; a full refund → fail → reissue → void; reconcile a mock payment; a cash payment record; CSRF_INVALID; customer 404; persistence after reload.
+
+---
+
 ## Phase 5H: Admin Orders + Fulfillment (FVS-030), 2026-11-11
 
 | Item | Value |
