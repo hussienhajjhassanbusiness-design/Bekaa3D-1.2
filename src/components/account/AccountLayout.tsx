@@ -31,7 +31,7 @@ function AccountShell({ children }: { children: ReactNode }) {
     <div className="flex flex-col gap-6 tablet:flex-row">
       <nav aria-label="Account" className="flex gap-2 overflow-x-auto tablet:flex-col tablet:overflow-visible">
         {ACCOUNT_NAV_ITEMS.map((item) => {
-          const isActive = pathname === item.href;
+          const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
           return (
             <Link
               key={item.href}

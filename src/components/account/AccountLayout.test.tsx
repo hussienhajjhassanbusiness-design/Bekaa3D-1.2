@@ -60,7 +60,7 @@ describe("AccountLayout", () => {
     expect(screen.getByTestId("page-content")).toBeInTheDocument();
   });
 
-  it("renders exactly the registered nav items — Profile, Addresses and Notifications", () => {
+  it("renders exactly the registered nav items — Profile, Orders, Addresses and Notifications", () => {
     mockedUseAuth.mockReturnValue(authState({ isAuthenticated: true, user: STUB_USER }));
     render(
       <AccountLayout>
@@ -70,13 +70,15 @@ describe("AccountLayout", () => {
 
     const nav = screen.getByRole("navigation", { name: "Account" });
     const links = nav.querySelectorAll("a");
-    expect(links).toHaveLength(3);
+    expect(links).toHaveLength(4);
     expect(links[0]).toHaveTextContent("Profile");
     expect(links[0]).toHaveAttribute("href", "/account/profile");
-    expect(links[1]).toHaveTextContent("Addresses");
-    expect(links[1]).toHaveAttribute("href", "/account/addresses");
-    expect(links[2]).toHaveTextContent("Notifications");
-    expect(links[2]).toHaveAttribute("href", "/account/notifications");
+    expect(links[1]).toHaveTextContent("Orders");
+    expect(links[1]).toHaveAttribute("href", "/account/orders");
+    expect(links[2]).toHaveTextContent("Addresses");
+    expect(links[2]).toHaveAttribute("href", "/account/addresses");
+    expect(links[3]).toHaveTextContent("Notifications");
+    expect(links[3]).toHaveAttribute("href", "/account/notifications");
   });
 
   it("mounts the shared Log out control for a signed-in user (Phase 5A defect 7)", () => {
@@ -111,6 +113,19 @@ describe("AccountLayout", () => {
       </AccountLayout>
     );
 
+    expect(screen.getByRole("link", { name: "Profile" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("keeps Orders active on an order detail page (a sub-route of its section)", () => {
+    mockPathname = "/account/orders/0b6f2a52-7f5d-4f3e-9c55-3b8b1f5d2a10";
+    mockedUseAuth.mockReturnValue(authState({ isAuthenticated: true, user: STUB_USER }));
+    render(
+      <AccountLayout>
+        <div>content</div>
+      </AccountLayout>
+    );
+
+    expect(screen.getByRole("link", { name: "Orders" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "Profile" })).not.toHaveAttribute("aria-current");
   });
 
