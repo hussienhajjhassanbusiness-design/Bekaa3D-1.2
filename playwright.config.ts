@@ -53,6 +53,7 @@ export default defineConfig({
         "account-orders.spec.ts",
         "payment-result.spec.ts",
         "account-order-actions.spec.ts",
+        "admin-orders.spec.ts",
       ],
       // Uses the system-installed Microsoft Edge (Chromium-based) via
       // Playwright's "channel" option instead of Playwright's own bundled
