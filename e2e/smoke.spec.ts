@@ -101,17 +101,17 @@ test.describe("Frontend smoke (FVS001-T16)", () => {
     // itself (not as a descendant), so `hasNot` never excludes it. A CSS
     // `:not()` on the same locator excludes the element itself instead.
     const alert = page.locator('[role="alert"]:not(#__next-route-announcer__)');
-    const statusCount = await status.count();
-    const alertCount = await alert.count();
-    expect(statusCount).toBeLessThanOrEqual(2);
-    expect(alertCount).toBeLessThanOrEqual(1);
+    // One atomic snapshot of every region's text: counting first and then
+    // waiting on `.nth(i)` raced a transient loading region that had
+    // already gone (phase 5D/5E/5G notes). The assertion is unchanged.
+    const statusTexts = await status.allTextContents();
+    const alertTexts = await alert.allTextContents();
+    expect(statusTexts.length).toBeLessThanOrEqual(2);
+    expect(alertTexts.length).toBeLessThanOrEqual(1);
 
     const validText = /Loading…|reachable but not ready yet|could not be reached|readiness check timed out/;
-    for (let i = 0; i < statusCount; i++) {
-      await expect(status.nth(i)).toHaveText(validText);
-    }
-    for (let i = 0; i < alertCount; i++) {
-      await expect(alert.nth(i)).toHaveText(validText);
+    for (const text of [...statusTexts, ...alertTexts]) {
+      expect(text).toMatch(validText);
     }
   });
 });
