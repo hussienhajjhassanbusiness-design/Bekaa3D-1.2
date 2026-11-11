@@ -324,8 +324,10 @@ test.describe("Account orders (Phase 5E / FVS-029)", () => {
     await expect(page.getByRole("region", { name: "Summary" })).toContainText(/courier sets the delivery fee/);
     await expect(page.getByRole("region", { name: "Your note" })).toContainText("Please call first");
     await expect(page.getByText("RAW DETAIL")).toHaveCount(0);
-    // can_cancel is true on this order, but cancellation is FVS-031: nothing is mounted.
-    await expect(page.getByRole("article").getByRole("button")).toHaveCount(0);
+    // can_cancel is true: the one control is FVS-031's Cancel order, in its own
+    // section (the flow itself is covered in account-order-actions.spec.ts).
+    await expect(page.getByRole("article").getByRole("button")).toHaveCount(1);
+    await expect(page.getByRole("region", { name: "Order actions" }).getByRole("button", { name: "Cancel order" })).toBeVisible();
 
     await page.reload();
     await expect(page.getByRole("heading", { level: 1, name: "Order B3D-2026-000001" })).toBeVisible();
