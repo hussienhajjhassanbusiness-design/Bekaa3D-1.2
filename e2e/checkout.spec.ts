@@ -95,6 +95,13 @@ interface FakeBackend {
   next: ((route: Route) => Promise<void>) | null;
   orderSeq: number;
   cashMaxCents: number;
+  // Phase 5E: placed orders by id, served on GET /api/v1/me/orders/{id}.
+  orders: Map<string, Record<string, unknown>>;
+}
+
+// Real order ids are UUIDs (the order page refuses anything else).
+function orderUuid(seq: number): string {
+  return `00000000-0000-4000-8000-${String(seq).padStart(12, "0")}`;
 }
 
 function product(id: string): FakeProduct {
@@ -218,7 +225,7 @@ function placeOrder(backend: FakeBackend, body: Record<string, unknown>): { stat
     status: 201,
     json: {
       order: {
-        id: `o-${backend.orderSeq}`,
+        id: orderUuid(backend.orderSeq),
         order_number: number,
         source: "cart",
         status: cash ? "in_progress" : "pending_payment",
@@ -253,6 +260,7 @@ async function installFakeBackend(page: Page, initial: StoredLine[], options: { 
     stored: new Map(),
     next: null,
     orderSeq: 122,
+    orders: new Map(),
     cashMaxCents: (options.settings?.cash_max_order_total ?? SETTINGS.cash_max_order_total).amount_cents,
   };
   const settings = { ...SETTINGS, ...options.settings };
@@ -297,15 +305,53 @@ async function installFakeBackend(page: Page, initial: StoredLine[], options: { 
       return route.fulfill({ status: 201, contentType: "application/json", headers: { "Idempotent-Replayed": "true" }, body: JSON.stringify(stored.response) });
     }
     const result = placeOrder(backend, body);
-    if (result.status === 201) backend.stored.set(key, { body: fingerprint, response: result.json });
+    if (result.status === 201) {
+      backend.stored.set(key, { body: fingerprint, response: result.json });
+      const placed = result.json as unknown as Parameters<typeof orderDetailFrom>[0];
+      backend.orders.set(String(placed.order.id), orderDetailFrom(placed));
+    }
     return route.fulfill({
       status: result.status,
       contentType: result.status === 201 ? "application/json" : "application/problem+json",
       body: JSON.stringify(result.json),
     });
   });
+  // Phase 5E: the customer order detail for orders placed in this fake.
+  await page.route(/\/api\/v1\/me\/orders\/[^/?]+$/, (route) => {
+    const id = decodeURIComponent(new URL(route.request().url()).pathname.split("/").pop() ?? "");
+    const order = backend.orders.get(id);
+    return order
+      ? route.fulfill({ contentType: "application/json", body: JSON.stringify(order) })
+      : problem(route, 404, "NOT_FOUND");
+  });
   // The mock provider's return page is a real frontend route; nothing to intercept.
   return backend;
+}
+
+// OrderDetailRead for a just-placed order, as GET /me/orders/{id} returns it.
+function orderDetailFrom(read: { order: Record<string, unknown>; payment: { status: string; provider: string } | null }) {
+  const order = read.order as Record<string, unknown> & { lines: Record<string, unknown>[]; total: unknown; status: string; fulfillment_method: string | null };
+  return {
+    ...order,
+    can_cancel: false,
+    can_retry_payment: false,
+    hold_expires_at: order.status === "pending_payment" ? "2026-11-11T10:30:00Z" : null,
+    contact_phone: order.fulfillment_method ? ADDRESS.phone : null,
+    completed_at: null,
+    cancelled_at: null,
+    customer_note: null,
+    lines: order.lines.map((line) => ({
+      ...line,
+      image_url: null,
+      fulfilled_at: null,
+      cancelled_at: null,
+      receipt_confirmed_at: null,
+      problem_reported_at: null,
+    })),
+    payment: read.payment ? { status: read.payment.status, provider: read.payment.provider, amount: order.total } : null,
+    status_history: [{ order_item_id: null, from_status: null, to_status: order.status, at: "2026-11-11T10:00:00Z" }],
+    refunds: [],
+  };
 }
 
 const header = (page: Page) => page.getByRole("banner");
@@ -360,6 +406,15 @@ test.describe("Checkout (Phase 5D / FVS-026)", () => {
     expect(backend.calls[0]!.key).toMatch(KEY_PATTERN);
     expect(backend.calls[0]!.csrf).toBe(CSRF);
     await expect(header(page).getByRole("link", { name: "Cart", exact: true })).toBeVisible();
+
+    // Phase 5E: the confirmation opens the real order page, which shows the same unpaid cash order.
+    await expect(page.getByRole("link", { name: "View order" })).toHaveAttribute("href", `/account/orders/${orderUuid(123)}`);
+    await page.getByRole("link", { name: "View order" }).click();
+    await expect(page).toHaveURL(new RegExp(`/account/orders/${orderUuid(123)}$`));
+    await expect(page.getByRole("heading", { level: 1, name: "Order B3D-2026-000123" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Payment" })).toContainText(/Payment due in cash to the courier on delivery: \$36\.00/);
+    await page.goBack();
+    await expect(page).toHaveURL(/\/checkout$/);
 
     // Reload: the confirmation was a one-time response; the cart stays empty and nothing is resubmitted.
     await page.reload();
