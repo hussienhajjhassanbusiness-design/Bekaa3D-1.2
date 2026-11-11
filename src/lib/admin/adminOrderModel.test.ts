@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { AdminOrderLineModel, AdminOrderModel, TransitionAffordance } from "./adminOrderModel";
 import type { OrderLineItemProps } from "@/components/account/OrderLineItem";
-import type { OrderDetailProps } from "@/components/account/OrderDetail";
+import type { OrderDetailViewProps } from "@/components/account/OrderDetailView";
 
 // FVS-030-IMPLEMENTATION-PLAN.md T01 — AdminOrderLineModel reuses
 // FVS-029's OrderLineModel directly via extension, never a forked
@@ -97,9 +97,9 @@ describe("Customer/admin order boundary regression (#SECURITY-INTERNAL-NOTE-BOUN
     expect(attempted).toBeDefined();
   });
 
-  it("FVS-029's OrderDetailProps structurally cannot carry an internal note", () => {
-    // @ts-expect-error — OrderDetailProps has no internalNote field
-    const attempted: OrderDetailProps = { result: { kind: "not-found" }, internalNote: "leaked" };
+  it("FVS-029's OrderDetailViewProps structurally cannot carry an internal note", () => {
+    // @ts-expect-error — OrderDetailViewProps has no internalNote field
+    const attempted: OrderDetailViewProps = { order: {} as never, internalNote: "leaked" };
     expect(attempted).toBeDefined();
   });
 });

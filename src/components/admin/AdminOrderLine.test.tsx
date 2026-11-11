@@ -2,13 +2,13 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AdminOrderLine } from "./AdminOrderLine";
-import { OrderLineItem } from "@/components/account/OrderLineItem";
+import { AdminOrderLineItem } from "./AdminOrderLineItem";
 import type { AdminOrderLineModel } from "@/lib/admin/adminOrderModel";
 
 // FVS-030-IMPLEMENTATION-PLAN.md T05 — composes FVS-029's
-// OrderLineItem (reused completely unmodified) alongside
+// AdminOrderLineItem (reused completely unmodified) alongside
 // TransitionActions rendered separately, never injecting admin state
-// into OrderLineItem itself (#ARCHITECTURE-CUSTOMER-ADMIN-ORDER-BOUNDARY).
+// into AdminOrderLineItem itself (#ARCHITECTURE-CUSTOMER-ADMIN-ORDER-BOUNDARY).
 
 function makeLine(overrides: Partial<AdminOrderLineModel> = {}): AdminOrderLineModel {
   return {
@@ -26,12 +26,12 @@ function makeLine(overrides: Partial<AdminOrderLineModel> = {}): AdminOrderLineM
 }
 
 describe("AdminOrderLine", () => {
-  it("renders the exact same customer-visible output OrderLineItem alone would — proving genuine reuse", () => {
+  it("renders the exact same customer-visible output AdminOrderLineItem alone would — proving genuine reuse", () => {
     const line = makeLine();
     const { container: adminContainer } = render(
       <AdminOrderLine line={line} onSelectAction={vi.fn()} />
     );
-    const { container: plainContainer } = render(<OrderLineItem line={line} />);
+    const { container: plainContainer } = render(<AdminOrderLineItem line={line} />);
 
     expect(adminContainer.textContent).toContain(plainContainer.textContent);
   });

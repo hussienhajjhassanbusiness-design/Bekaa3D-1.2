@@ -17,8 +17,16 @@ import type { PriceRead, ProductType } from "@/lib/catalog/productTypes";
 // double-submit `X-CSRF-Token`. Auth: a verified customer session
 // (403 EMAIL_VERIFICATION_REQUIRED otherwise).
 
-export type PaymentMethod = "online" | "cash";
-export type FulfillmentMethod = "delivery" | "pickup";
+import type {
+  FulfillmentMethod,
+  OrderItemStatus,
+  OrderSource,
+  OrderStatus,
+  PaymentMethod,
+} from "@/lib/orders/orderTypes";
+
+// The order enums are owned by the customer-order domain (FVS-029).
+export type { FulfillmentMethod, OrderItemStatus, OrderSource, OrderStatus, PaymentMethod };
 
 // `extra="forbid"`: no amount, total or price is ever sent; the server
 // charges live prices. Fulfillment matrix (domain/fulfillment.py, run on
@@ -53,24 +61,6 @@ export interface AcceptedPriceDTO {
   amount_cents: number;
   currency: string;
 }
-
-export type OrderStatus =
-  "pending_payment" | "cancelled" | "refunded" | "partially_refunded" | "completed" | "in_progress";
-
-export type OrderItemStatus =
-  | "pending"
-  | "awaiting_delivery"
-  | "in_production"
-  | "ready_to_ship"
-  | "shipped"
-  | "delivered"
-  | "returned"
-  | "ready_for_pickup"
-  | "picked_up"
-  | "cancelled"
-  | "refunded";
-
-export type OrderSource = "cart" | "offer";
 
 export interface CheckoutLineReadDTO {
   id: string;

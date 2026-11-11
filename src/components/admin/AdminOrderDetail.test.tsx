@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { AdminOrderDetail } from "./AdminOrderDetail";
 import type { AdminOrderModel } from "@/lib/admin/adminOrderModel";
 
-// FVS-030-IMPLEMENTATION-PLAN.md T06 — composes OrderSummaryDisplay
+// FVS-030-IMPLEMENTATION-PLAN.md T06 — composes AdminOrderSummaryDisplay
 // (reused from FVS-029) + InternalNoteEditor + a list of AdminOrderLine.
 // No payment-provider secret/raw payload prop exists on this component
 // structurally (AdminOrderModel reuses OrderSummaryModel verbatim).
@@ -34,7 +34,7 @@ function makeOrder(overrides: Partial<AdminOrderModel> = {}): AdminOrderModel {
 }
 
 describe("AdminOrderDetail", () => {
-  it("renders the order summary via OrderSummaryDisplay", () => {
+  it("renders the order summary via AdminOrderSummaryDisplay", () => {
     render(<AdminOrderDetail order={makeOrder()} onSelectAction={vi.fn()} onSaveNote={vi.fn()} />);
     expect(screen.getByText("$59.99")).toBeInTheDocument();
   });

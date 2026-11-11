@@ -1,4 +1,4 @@
-import { OrderSummaryDisplay } from "@/components/account/OrderSummaryDisplay";
+import { AdminOrderSummaryDisplay } from "./AdminOrderSummaryDisplay";
 import { InternalNoteEditor } from "./InternalNoteEditor";
 import { AdminOrderLine } from "./AdminOrderLine";
 import type { AdminOrderModel } from "@/lib/admin/adminOrderModel";
@@ -14,7 +14,7 @@ export interface AdminOrderDetailProps {
 
 // #ARCHITECTURE-ADMIN-ORDER-PROJECTION
 //
-// Composes FVS-029's OrderSummaryDisplay unmodified (AdminOrderModel
+// Composes FVS-029's AdminOrderSummaryDisplay unmodified (AdminOrderModel
 // reuses OrderSummaryModel verbatim, so no payment-provider secret or
 // raw payload prop exists on this component structurally) alongside
 // InternalNoteEditor and one AdminOrderLine per order line.
@@ -32,7 +32,7 @@ export function AdminOrderDetail({
         <h2 className="text-h3 font-bold text-text-primary">Order {order.id}</h2>
         <p className="text-caption text-text-secondary">{order.displayDate}</p>
         <div className="mt-4">
-          <OrderSummaryDisplay summary={order.summary} />
+          <AdminOrderSummaryDisplay summary={order.summary} />
         </div>
       </div>
 

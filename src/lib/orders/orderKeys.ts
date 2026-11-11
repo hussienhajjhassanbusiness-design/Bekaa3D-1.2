@@ -1,23 +1,25 @@
-import type { OrderListFilters } from "./orderModel";
-
 // #ARCHITECTURE-CANONICAL-ORDERS-QUERY
 //
-// The ONE canonical query-key family for the customer order resource.
-// If the backend later confirms GET /me/orders/{id} is ALSO FVS-027's
-// authoritative payment-verification read, FVS-027 MUST invalidate
-// orderKeys.detail(id) rather than inventing a second, parallel
-// payment/order cache for the same backend truth
-// (FVS-029-IMPLEMENTATION-PLAN.md §0/T01, resolving the gate FVS-027
-// deliberately left open).
+// The ONE canonical query-key family for the customer's own orders
+// (GET /api/v1/me/orders, GET /api/v1/me/orders/{id}). FVS-027 (payment
+// result) and FVS-031 (cancel / confirm receipt / report problem) MUST
+// read and invalidate these keys, never a parallel payment/order cache:
+// the order detail is the backend's customer-facing payment truth
+// (CURRENT-BACKEND-DRIFT-AUDIT.md: there is no customer payment route).
 //
-// Keys carry order id (and the normalized filter state for list())
-// only — never address/customer PII, never a payment-provider
-// reference. `filters` is embedded directly as a key segment; a
-// consistent object shape is already deterministic under TanStack
-// Query's own key-hashing, so no extra manual canonicalization step
-// is needed.
+// User scoping: the whole `root` is dropped on logout, on a cross-tab
+// logout and before every new sign-in (userScopedQueries.ts), so one
+// user's orders are never served from cache to another.
+//
+// Keys carry the order id and the list's page size only — never address,
+// phone or payment-provider data.
+export interface OrderListParams {
+  limit?: number;
+}
+
 export const orderKeys = {
   root: ["orders"] as const,
-  list: (filters: OrderListFilters) => [...orderKeys.root, "list", filters] as const,
+  lists: () => [...orderKeys.root, "list"] as const,
+  list: (params: OrderListParams) => [...orderKeys.lists(), params] as const,
   detail: (orderId: string) => [...orderKeys.root, "detail", orderId] as const,
 };

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/forms/Button";
-import { OrderLineItem } from "@/components/account/OrderLineItem";
+import { AdminOrderLineItem } from "./AdminOrderLineItem";
 import { TransitionActions } from "./TransitionActions";
 import { AdminCancelDialog } from "./AdminCancelDialog";
 import type { AdminOrderLineModel } from "@/lib/admin/adminOrderModel";
@@ -17,10 +17,10 @@ export interface AdminOrderLineProps {
 
 // #ARCHITECTURE-CUSTOMER-ADMIN-ORDER-BOUNDARY
 //
-// Composes FVS-029's OrderLineItem completely unmodified (rendering
+// Composes FVS-029's AdminOrderLineItem completely unmodified (rendering
 // `line` directly, since AdminOrderLineModel is a superset) alongside
 // TransitionActions rendered separately — never injecting admin state
-// into OrderLineItem itself. A digital/STL line's absence of
+// into AdminOrderLineItem itself. A digital/STL line's absence of
 // transition controls comes naturally from an empty
 // `availableActions` array, never a hardcoded product-type check.
 //
@@ -42,7 +42,7 @@ export function AdminOrderLine({
 
   return (
     <div className="flex flex-col gap-2 tablet:flex-row tablet:items-center tablet:justify-between">
-      <OrderLineItem line={line} />
+      <AdminOrderLineItem line={line} />
       <div className="flex flex-wrap items-center gap-2">
         <TransitionActions
           actions={line.availableActions}

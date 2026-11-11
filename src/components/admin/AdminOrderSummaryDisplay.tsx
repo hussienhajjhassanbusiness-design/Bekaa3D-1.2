@@ -1,15 +1,15 @@
 import { PriceDisplay } from "@/components/catalog/PriceDisplay";
-import type { OrderSummaryModel } from "@/lib/orders/orderModel";
+import type { AdminOrderSummary } from "@/lib/admin/adminOrderModel";
 
-export interface OrderSummaryDisplayProps {
-  summary: OrderSummaryModel;
+export interface AdminOrderSummaryDisplayProps {
+  summary: AdminOrderSummary;
 }
 
 // Extracted from OrderDetail — a second genuine reuse case
 // (AdminOrderDetail) justifies pulling this out. Renders only the
 // confirmed-concept fields present on the model, never fabricating a
 // section for an absent one (#ARCHITECTURE-ORDER-SNAPSHOT-IMMUTABLE).
-export function OrderSummaryDisplay({ summary }: OrderSummaryDisplayProps) {
+export function AdminOrderSummaryDisplay({ summary }: AdminOrderSummaryDisplayProps) {
   return (
     <dl className="flex flex-col gap-2">
       {summary.paymentStatusLabel && (

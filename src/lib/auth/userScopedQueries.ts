@@ -5,7 +5,9 @@ import type { QueryClient } from "@tanstack/react-query";
 // later sign-in in the same tab can never see the previous user's cached
 // rows, even briefly while refetching. Phase 5B adds the address book
 // (`addressKeys.root`): saved addresses are personal data. Phase 5C adds
-// the cart (`cartKeys.root`). Public catalogue/settings caches
+// the cart (`cartKeys.root`). Phase 5E adds the customer's orders
+// (`orderKeys.root`): order history, addresses and phone are personal
+// data. Public catalogue/settings caches
 // are user-independent and stay. Any future user-scoped key root must be
 // added here.
 const USER_SCOPED_QUERY_ROOTS: readonly (readonly string[])[] = [
@@ -13,6 +15,7 @@ const USER_SCOPED_QUERY_ROOTS: readonly (readonly string[])[] = [
   ["notifications"],
   ["addresses"],
   ["cart"],
+  ["orders"],
 ];
 
 export function clearUserScopedQueries(queryClient: QueryClient): void {

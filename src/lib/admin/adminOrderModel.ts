@@ -1,5 +1,33 @@
-import type { OrderLineModel, OrderSummaryModel } from "@/lib/orders/orderModel";
 import type { OrderActionAffordance } from "@/lib/orders/orderActionModel";
+
+// #FVS030-LEGACY-SPECULATIVE (phase 5E)
+//
+// These two shapes were FVS-029's pre-contract customer models. The real
+// customer order domain (src/lib/orders/orderModel.ts, phase 5E) replaced
+// them; they live on here ONLY because the still-unmounted admin order
+// components were built on them. They are speculative label-only shapes,
+// NOT the real AdminOrderDetail contract: the admin-orders phase must
+// rebuild these against `GET /api/v1/admin/orders/{id}` (AdminOrderDetail,
+// AdminOrderLineRead) rather than extend them.
+export interface AdminOrderLineBase {
+  id: string;
+  productDisplayName: string;
+  productType: "physical" | "stl";
+  quantity: number;
+  unitPriceCents: number;
+  lineTotalCents: number;
+  currency: string;
+  statusLabel: string;
+  thumbnailSrc?: string;
+}
+
+export interface AdminOrderSummary {
+  currency: string;
+  paymentStatusLabel?: string;
+  refundStatusLabel?: string;
+  subtotalCents?: number;
+  totalCents?: number;
+}
 
 // #SECURITY-SERVER-FULFILLMENT-STATE-MACHINE
 //
@@ -29,7 +57,7 @@ export type TransitionAffordance = OrderActionAffordance;
 // real backend name or computes a refund amount
 // (#ARCHITECTURE-REFUND-OBLIGATION-SERVER-OWNED) — both are only
 // ever caller-supplied.
-export interface AdminOrderLineModel extends OrderLineModel {
+export interface AdminOrderLineModel extends AdminOrderLineBase {
   availableActions: readonly TransitionAffordance[];
   adminCancelAction?: OrderActionAffordance | null;
   refundObligationMessage?: string;
@@ -47,6 +75,6 @@ export interface AdminOrderModel {
   displayDate: string;
   statusLabel: string;
   lines: readonly AdminOrderLineModel[];
-  summary: OrderSummaryModel;
+  summary: AdminOrderSummary;
   internalNote: string;
 }
