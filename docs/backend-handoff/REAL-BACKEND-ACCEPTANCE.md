@@ -1,20 +1,92 @@
 # Real Backend Acceptance
 
-## Phase 5I: Admin Payments + Refunds (FVS-028), 2026-11-11 — REAL ACCEPTANCE NOT YET RUN
+## Phase 5I: Admin Payments + Refunds (FVS-028), 2026-11-11
 
 | Item | Value |
 |---|---|
-| Frontend commits | `18cceb1` (payment/refund contract, API, idempotency, write hook), `e342025` (`/admin/payments`, `/admin/refunds`, Record a refund on the admin order; removal of `src/lib/payment`, `src/components/payment` and the unmounted pre-contract admin payment/refund code), `52644c8` (mocked E2E) |
-| Backend | `2dfb27b`, unchanged |
-| Status | Implementation and the full gate are done. **The real-backend run has not happened yet** (the session ran out before it). Nothing in this phase is claimed against the live backend |
+| Frontend commits tested | `18cceb1` (payment/refund contract, API, idempotency, write hook), `e342025` (`/admin/payments`, `/admin/payments/[id]`, `/admin/refunds`, `/admin/refunds/[id]`, Record a refund on the admin order; removal of the pre-contract payment code), `52644c8` (mocked E2E). All committed before the run |
+| Backend | `C:\My projects\Bekaa3D-backend`, branch `main`, commit **`2dfb27b`** (unchanged, no backend code touched) |
+| Contract check | running `/openapi.json` identical to `docs/backend-handoff/openapi.json`; `AdminPaymentPage/Read/Detail`, `AdminPaymentOrderRead`, `AdminPaymentEventRead`, `AdminPaymentHistoryRead`, `ReconcileQueued`, `ManualPaymentConfirmRequest`, `RefundCreate`, `RefundDetail`, `RefundPage`, `RefundSettlementRequest`, `RefundFailureRequest`, `RefundVoidRequest` read field by field, then `payments/api/admin_payments.py`, `admin_refunds.py`, `admin_chargebacks.py`, `payments/domain/enums.py`, `refunds.py`, `manual.py`, `limits.py` |
+| Runtime | Docker Compose backend on :8000 (`PAYMENT_PROVIDER=mock`). `npm run dev` on :3000 only for the run, stopped after it. `scripts/mock_pay.py` copied to the API container's `/tmp` and **removed after** (verified) |
+| Method | real Edge through Playwright, real frontend and backend, **no route mocking**; the admin signed in through the frontend proxy (password + TOTP). Scripts in the session scratchpad, never committed |
+| Identities | admin from `%USERPROFILE%\.bekaa3d\dev-admin.json` (never printed); phase 5H's `accept-admin-e-<ts>` customer, re-entered through the real password-reset flow. No new registration |
+| Data left behind | `B3D-WQMG40BW` online (mock, **paid**) delivery, 2 × dragon, line delivered (admin transitions), order **`refunded`**: refund $5.00 **settled** (reference `MOCK-DASH-ACCEPT-1`), refund $31.00 **failed** (reissued), its reissue $31.00 **pending** (the void was refused by the backend, below). Phase 5H's cash payment on `B3D-NRAW56SC` was only read. No money moved (mock provider; refunds are records) |
 
-**Gate:** lint 0 errors / 4 known warnings; typecheck clean; unit **2127/2127** (218 files; lower because the obsolete pre-contract payment tests were deleted); build pass; E2E **148/148** in one full run (5 new in `e2e/admin-payments.spec.ts`).
+**Overall: PASS, 18/18** for the frontend (two script assertions corrected; one backend observation recorded).
 
-**Built:** payments list (status, provider, late captures) and detail (events without payloads or backend error text, audit history, server `available_actions`: reconcile / confirm); refunds queue/history and detail with settle / fail / void / reissue; Record a refund from the admin order (per-line amounts up to the server's `refund_balance`, reason, one `Idempotency-Key` per intended refund, kept only across uncertain outcomes; `REFUND_EXCEEDS_AVAILABLE` balances shown).
+### Current contract (as implemented)
 
-**Not built (gaps):** chargeback creation (`POST /admin/orders/{id}/chargebacks`; chargebacks are read-only on the order), `record-capture`, manual release (`release_order`).
+Admin + completed MFA; customers get `404`; writes need `X-CSRF-Token`; no refund route calls a provider (ADR-024 d16: the admin pays in the dashboard or by hand, then records it).
 
-**To run next:** a paid mock order → partial refund → settle; a full refund → fail → reissue → void; reconcile a mock payment; a cash payment record; CSRF_INVALID; customer 404; persistence after reload.
+- **Payments:** `GET /api/v1/admin/payments` (`status` repeatable, `provider` `mock`|`cash`, `order_id`, `late_captured`, `initiated_after/before`, `limit` 1-100 (20), `cursor`; oldest first). `GET …/{id}` → `{payment, order (with hold_expires_at, manual_release_available_at), events (no payloads), history (audit), available_actions}`. `available_actions`: online with a status API → `reconcile`; online without one → `confirm`; cash → none; `release_order` after an unpaid order's grace.
+- **Reconcile:** `POST …/{id}/reconcile` → `202 {payment, reconcile: "queued"}` (the provider is asked after the answer); cash → `409 INVALID_STATE_TRANSITION` `cash_payment`; no status API → `503 PAYMENT_VERIFICATION_UNAVAILABLE`. 60/h.
+- **Manual confirm:** `POST …/{id}/confirm` `{provider_reference 1-255, verified_amount_cents, verified_currency, reason 10-1000}`; `409 MANUAL_CONFIRMATION_NOT_ALLOWED` / `PAYMENT_REFERENCE_MISMATCH`, `422 PAYMENT_AMOUNT_MISMATCH`. Never offered with the mock provider (it has a status API).
+- **Refund create:** `POST /api/v1/admin/orders/{id}/refunds` + required `Idempotency-Key`, body `{items: [{order_item_id, amount_cents > 0}] (1-50), reason 1-1000}` → `201 RefundDetail` (kind `admin`, status `pending`). Per **line**, up to `refund_balance.lines`, total up to `payment_cents`; no shipping amount (ADR-024); STL lines like any other (ADR-019). `409 ORDER_NOT_PAID`, `ORDER_TOTAL_MISMATCH`, `IDEMPOTENCY_KEY_CONFLICT`, `IDEMPOTENCY_REQUEST_IN_PROGRESS`; `422 REFUND_EXCEEDS_AVAILABLE` (`available.lines[]`, `payment_cents`), `REFUND_REQUIRES_CANCELLATION` (`order_item_ids`: refunding an unfinished printed line in full needs a cancel). Same key + same body replays the 201 (`Idempotent-Replayed: true`).
+- **Refund transitions:** `settle {reference? ≤200, note? ≤1000}`, `fail {reason}`, `void {reason}` (on a pending refund; a failed one stays `owed` until reissued or voided), `reissue` (+ `Idempotency-Key`: failed → a new pending refund). `409 INVALID_STATE_TRANSITION` reasons `not_pending`, `not_failed`, `already_settled`, `already_reissued` (+ `reissued_by_refund_id`), `line_already_refunded`, `line_already_cancelled`. 60 writes/h.
+- **Refund lists:** `GET /api/v1/admin/refunds` (`queue=true` default: pending or owed, oldest first; `queue=false`: history; `status`, `kind`, `order_id`, `customer_id`, dates, `limit`, `cursor`); `GET …/{id}`.
+- **Chargebacks:** `POST /api/v1/admin/orders/{id}/chargebacks` (+ `Idempotency-Key`) and the `GET` routes exist. **Not built in the frontend**: chargebacks show read-only on the admin order.
+- **Effects seen:** a settled partial refund → order and payment `partially_refunded`; open refunds covering the rest → order `refunded`. The customer sees refunds as `processing` (pending) / `refunded` (settled).
+
+### Frontend behaviour
+
+- `/admin/payments` (filters: status, provider, late captures) and `/admin/payments/[id]`: events without payloads and without the backend's `processing_error` text (only "Processing failed"), the audit history in our own labels (no `data`), and exactly the server's `reconcile`/`confirm` actions, each confirmed.
+- `/admin/refunds` (queue / history, kind, status) and `/admin/refunds/[id]`: actions offered from the documented state machine (pending → settle/fail/void; failed and owed → reissue/void), each confirmed; the server re-checks.
+- **Record a refund** on `/admin/orders/[id]`: one amount per line that has a server balance, each up to that balance, total up to the payment's; a reason; one `Idempotency-Key` per intended refund (bound to the exact body, kept only across uncertain outcomes, retired by any definitive answer). On `REFUND_EXCEEDS_AVAILABLE` the form switches to the balances the server returned. Success opens the refund page.
+- **Cache:** `["admin","payments"]` and `["admin","refunds"]` under the user-scoped `["admin"]` root. Every success stores the returned `RefundDetail` and re-reads payments, refunds and admin orders. No financial write is retried by itself; a ref guard drops double submits.
+
+### Results
+
+| Scenario | Result | Evidence |
+|---|---|---|
+| Payments list + provider filter | **PASS** | the new mock payment listed; `provider=cash` → phase 5H's `B3D-NRAW56SC` (API rows all cash) |
+| Cash payment record | **PASS** | cash/paid, `available_actions []`, no actions in the UI; reconcile → `409` `cash_payment` |
+| Online/mock payment + reconcile | **PASS** | `available_actions ["reconcile"]`, no "Confirm by hand"; UI POST → `202`, "Check requested…"; history gained `payment.reconcile_requested` |
+| Full refund of an unfinished line | **PASS** | pending line, full amount → `422 REFUND_REQUIRES_CANCELLATION` (`order_item_ids`); no refund row |
+| Refund over balance | **PASS** | 3700 > 3600 → `422 REFUND_EXCEEDS_AVAILABLE`, `available.lines[0].balance_cents 3600`, `payment_cents 3600` |
+| Partial refund from the UI | **PASS** | UI POST → `201` with a valid `Idempotency-Key` + CSRF; body `{items:[{line, 500}], reason}`; refund pending/admin $5.00; its page opened |
+| Refund idempotency | **PASS** | same key + body → `201 Idempotent-Replayed`, same refund id; same key + other body → `409 IDEMPOTENCY_KEY_CONFLICT`; still 1 row |
+| Settle + post-refund state | **PASS** | settled, reference kept, no further actions; order and payment `partially_refunded`, balance left 3100; the customer sees `partially_refunded` with the refund |
+| Void after settlement refused | **PASS** | `409` `already_settled` |
+| CSRF_INVALID | **PASS** | stale cookie → UI POST fail `403`; "Unable to verify your session…"; refund still pending |
+| Fail → reissue | **PASS** | failed (owed) → reissue `201` with a valid key; original failed, not owed, `reissued_by_refund_id` set; new refund pending $31.00 |
+| Void refused by the backend (UI handling) | **PASS** | voiding the pending reissue → `409` `line_already_refunded`; the dialog stayed open with "One of these items is already fully refunded."; refund unchanged (backend observation below) |
+| Queue vs history | **PASS** | queue for the order: 1 (the pending reissue), UI 1; history: 3 (pending, failed, settled), UI 3 |
+| Persistence after reload | **PASS** | refund page reload: Settled |
+| Order state after the refunds | **PASS** | order **`refunded`** (the pending reissue covers the rest); customer refunds `refunded` + `processing` |
+| Customer gets 404 | **PASS** | customer `GET /admin/payments` and `/admin/refunds/{id}` → `404`; UI `/admin/refunds` → 404 page |
+| Admin MFA/guard | **PASS** | the same `AdminShell`/`adminRequest` verified in the phase 5H run; this run used a real MFA-complete session |
+| No page errors | **PASS** | none |
+
+Script assertions corrected (not app defects): after the reissue the script still expected `partially_refunded`, but open refunds covering the rest make the order `refunded`; and a duplicate password-reset confirm in the resume script returned `400` (the first one had succeeded).
+
+### Backend observation (not changed; for the backend team)
+
+- **A pending reissue cannot be voided once its line is fully committed.** After a $5.00 settled refund and a $31.00 refund that failed and was reissued, voiding the $31.00 reissue answered `409 INVALID_STATE_TRANSITION` `reason: line_already_refunded`. The failed original is no longer owed (it was reissued), so the reissue looks like the only open obligation, and voiding it should probably free the balance. The frontend shows the refusal and changes nothing.
+
+### Not tested against the real backend (and why)
+
+- **Manual confirm** (`confirm`): never offered with the mock provider (it has a status API). Covered by unit tests (validation, exact body, `PAYMENT_AMOUNT_MISMATCH`).
+- **A plain void of a pending refund:** the only pending refund at that point was the reissue (above). Covered by unit and mocked E2E.
+- **Late captures** (`late_captured`, `record-capture`), **chargebacks** (create not built), **`IDEMPOTENCY_REQUEST_IN_PROGRESS`**, **`429`:** these need a provider race, an unbuilt form, a concurrent request or many writes.
+
+### Defects found and fixed
+
+- None in the app during the real run. During development (mocked E2E) the refund form correctly kept enforcing the server's newer balance after a refusal; the test was adjusted to reopen the form after the balance changed.
+
+### Verification (this phase)
+
+| Command | Result |
+|---|---|
+| `npm run lint` | 0 errors, 4 warnings (the known `<img>` warnings) |
+| `npm run typecheck` | clean |
+| `npm run test` | **2127/2127** (218 files; lower because the obsolete pre-contract payment tests were deleted) |
+| `npm run build` | pass |
+| `npm run test:e2e` | **148/148** in the one full run (5 new in `e2e/admin-payments.spec.ts`) |
+
+### Remaining gaps
+
+- Chargeback creation, `record-capture`, manual release (`release_order`) and cash blocks are not built in the frontend.
+- No `customer_id`/date filters in the payment and refund list UIs.
 
 ---
 
