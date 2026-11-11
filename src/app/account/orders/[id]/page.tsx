@@ -9,7 +9,8 @@ import { Button } from "@/components/forms/Button";
 import { pickupOption } from "@/lib/checkout/checkoutEligibility";
 import { adaptOrderDetail, isOrderId } from "@/lib/orders/orderModel";
 import { classifyOrderError, ORDER_ERROR_COPY } from "@/lib/orders/orderErrors";
-import { useMyOrder } from "@/lib/orders/useMyOrders";
+import { usePolledOrder } from "@/lib/orders/usePolledOrder";
+import { useRetryPayment } from "@/lib/orders/useRetryPayment";
 import { usePublicSettings } from "@/lib/settings/usePublicSettings";
 
 // FVS-029 (phase 5E) — one of the customer's own orders,
@@ -19,11 +20,18 @@ import { usePublicSettings } from "@/lib/settings/usePublicSettings";
 // another customer's order with the same 404 NOT_FOUND. This page has one
 // "Order not found" state for both (and for a malformed id, which is never
 // sent to the API), so it reveals nothing the backend does not.
+//
+// FVS-027 (phase 5F) — this page is the customer's payment-status surface.
+// It reads the canonical orderKeys.detail(id) query through
+// usePolledOrder (bounded re-reads only while the server reports a live
+// payment attempt) and owns the one "Retry payment" flow
+// (useRetryPayment). No payment state is ever set locally.
 export default function AccountOrderDetailPage() {
   const params = useParams<{ id: string }>();
   const orderId = typeof params.id === "string" ? params.id : "";
   const validId = isOrderId(orderId);
-  const query = useMyOrder(orderId, { enabled: validId });
+  const { query, polling, timedOut, checkAgain } = usePolledOrder(orderId, { enabled: validId });
+  const retry = useRetryPayment(orderId);
   const settings = usePublicSettings();
   const order = useMemo(() => (query.data ? adaptOrderDetail(query.data) : null), [query.data]);
 
@@ -32,7 +40,19 @@ export default function AccountOrderDetailPage() {
   }
 
   if (order) {
-    return <OrderDetailView order={order} pickup={pickupOption(settings.data)} />;
+    return (
+      <OrderDetailView
+        order={order}
+        pickup={pickupOption(settings.data)}
+        paymentControls={{
+          polling,
+          timedOut,
+          onCheckAgain: checkAgain,
+          onHoldElapsed: () => void query.refetch(),
+          retry: { state: retry.state, onRetry: () => void retry.start(), onResume: retry.resume },
+        }}
+      />
+    );
   }
 
   if (query.isError) {

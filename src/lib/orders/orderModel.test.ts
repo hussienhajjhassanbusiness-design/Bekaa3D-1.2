@@ -44,10 +44,11 @@ describe("adaptOrderDetail", () => {
     expect(model.tax).toEqual({ amountCents: 0, currency: "USD" });
   });
 
-  it("does not expose the advisory action flags (actions are later phases)", () => {
+  it("does not expose can_cancel (FVS-031); carries can_retry_payment as given (FVS-027, advisory)", () => {
     const model = adaptOrderDetail(detailDTO({ can_cancel: true, can_retry_payment: true }));
     expect(model).not.toHaveProperty("canCancel");
-    expect(model).not.toHaveProperty("canRetryPayment");
+    expect(model.canRetryPayment).toBe(true);
+    expect(adaptOrderDetail(detailDTO({ can_retry_payment: false })).canRetryPayment).toBe(false);
   });
 
   it("maps a pending online order's payment row exactly as given", () => {

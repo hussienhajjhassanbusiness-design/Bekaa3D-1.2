@@ -2,24 +2,42 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import AccountOrderDetailPage from "./page";
-import { useMyOrder } from "@/lib/orders/useMyOrders";
+import { usePolledOrder } from "@/lib/orders/usePolledOrder";
+import { useRetryPayment } from "@/lib/orders/useRetryPayment";
 import { usePublicSettings } from "@/lib/settings/usePublicSettings";
-import { detailDTO, ORDER_ID } from "@/lib/orders/orderFixtures";
+import { detailDTO, ORDER_ID, pendingOnlineDetailDTO } from "@/lib/orders/orderFixtures";
 
 let mockId = ORDER_ID;
 vi.mock("next/navigation", () => ({ useParams: () => ({ id: mockId }) }));
-vi.mock("@/lib/orders/useMyOrders", () => ({ useMyOrder: vi.fn() }));
+vi.mock("@/lib/orders/usePolledOrder", () => ({ usePolledOrder: vi.fn() }));
+vi.mock("@/lib/orders/useRetryPayment", () => ({ useRetryPayment: vi.fn() }));
 vi.mock("@/lib/settings/usePublicSettings", () => ({ usePublicSettings: vi.fn() }));
 
-const mockedUseMyOrder = vi.mocked(useMyOrder);
+const mockedUsePolledOrder = vi.mocked(usePolledOrder);
+const retryStart = vi.fn();
+const retryResume = vi.fn();
+const checkAgain = vi.fn();
+let polledState = { polling: false, timedOut: false };
 
 function result(overrides: Record<string, unknown> = {}) {
-  return { data: undefined, isError: false, error: null, refetch: vi.fn(), ...overrides } as never;
+  return { data: undefined, isError: false, error: null, refetch: vi.fn(), ...overrides };
 }
+
+// The page's one order reader is usePolledOrder (canonical detail query).
+const mockedUseMyOrder = {
+  mockReturnValue(query: ReturnType<typeof result>) {
+    mockedUsePolledOrder.mockReturnValue({ query, transient: false, ...polledState, checkAgain } as never);
+  },
+};
 
 beforeEach(() => {
   mockId = ORDER_ID;
-  mockedUseMyOrder.mockReset();
+  mockedUsePolledOrder.mockReset();
+  polledState = { polling: false, timedOut: false };
+  retryStart.mockReset();
+  retryResume.mockReset();
+  checkAgain.mockReset();
+  vi.mocked(useRetryPayment).mockReturnValue({ state: { kind: "idle" }, start: retryStart, resume: retryResume });
   vi.mocked(usePublicSettings).mockReturnValue({ data: undefined } as never);
 });
 
@@ -34,7 +52,7 @@ describe("/account/orders/[id]", () => {
     mockedUseMyOrder.mockReturnValue(result({ data: detailDTO() }));
     render(<AccountOrderDetailPage />);
     expect(screen.getByRole("heading", { level: 1, name: "Order B3D-2026-000123" })).toBeInTheDocument();
-    expect(mockedUseMyOrder).toHaveBeenCalledWith(ORDER_ID, { enabled: true });
+    expect(mockedUsePolledOrder).toHaveBeenCalledWith(ORDER_ID, { enabled: true });
   });
 
   it("shows the same not-found state for a 404 (unknown or another customer's order)", () => {
@@ -51,7 +69,7 @@ describe("/account/orders/[id]", () => {
     mockId = "not-a-uuid";
     mockedUseMyOrder.mockReturnValue(result());
     render(<AccountOrderDetailPage />);
-    expect(mockedUseMyOrder).toHaveBeenCalledWith("not-a-uuid", { enabled: false });
+    expect(mockedUsePolledOrder).toHaveBeenCalledWith("not-a-uuid", { enabled: false });
     expect(screen.getByRole("heading", { name: "Order not found" })).toBeInTheDocument();
   });
 
@@ -81,5 +99,47 @@ describe("/account/orders/[id]", () => {
     expect(screen.queryByText(/redis/i)).not.toBeInTheDocument();
     await userEvent.setup().click(screen.getByRole("button", { name: /try again/i }));
     expect(refetch).toHaveBeenCalled();
+  });
+
+  describe("payment (FVS-027)", () => {
+    it("offers Retry payment only when the server's can_retry_payment is true, and starts the one retry flow", async () => {
+      mockedUseMyOrder.mockReturnValue(
+        result({ data: pendingOnlineDetailDTO({ can_retry_payment: true, payment: { status: "failed", provider: "mock", amount: { amount_cents: 2500, currency: "USD" } } }) })
+      );
+      render(<AccountOrderDetailPage />);
+      await userEvent.setup().click(screen.getByRole("button", { name: "Retry payment" }));
+      expect(retryStart).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(useRetryPayment)).toHaveBeenCalledWith(ORDER_ID);
+    });
+
+    it("no Retry payment while can_retry_payment is false", () => {
+      mockedUseMyOrder.mockReturnValue(result({ data: pendingOnlineDetailDTO({ can_retry_payment: false }) }));
+      render(<AccountOrderDetailPage />);
+      expect(screen.queryByRole("button", { name: /retry payment/i })).not.toBeInTheDocument();
+    });
+
+    it("shows the bounded verification state and Check again re-reads", async () => {
+      polledState = { polling: false, timedOut: true };
+      mockedUseMyOrder.mockReturnValue(result({ data: pendingOnlineDetailDTO() }));
+      render(<AccountOrderDetailPage />);
+      expect(screen.getByRole("status")).toHaveTextContent(/haven't received a confirmation/i);
+      await userEvent.setup().click(screen.getByRole("button", { name: "Check again" }));
+      expect(checkAgain).toHaveBeenCalledTimes(1);
+    });
+
+    it("says it is checking while polling", () => {
+      polledState = { polling: true, timedOut: false };
+      mockedUseMyOrder.mockReturnValue(result({ data: pendingOnlineDetailDTO() }));
+      render(<AccountOrderDetailPage />);
+      expect(screen.getByRole("status")).toHaveTextContent(/checking for a payment update/i);
+    });
+
+    it("a cash order never shows retry or verification, even with stray flags", () => {
+      polledState = { polling: true, timedOut: true };
+      mockedUseMyOrder.mockReturnValue(result({ data: detailDTO({ can_retry_payment: true, hold_expires_at: "2026-11-10T10:00:00Z" }) }));
+      render(<AccountOrderDetailPage />);
+      expect(screen.queryByRole("button", { name: /retry|check again|continue/i })).not.toBeInTheDocument();
+      expect(screen.queryByText(/checking for a payment update|time left/i)).not.toBeInTheDocument();
+    });
   });
 });

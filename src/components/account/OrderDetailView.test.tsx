@@ -1,6 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { OrderDetailView } from "./OrderDetailView";
+import type { OrderPaymentControls } from "./OrderPaymentSection";
+import type { RetryPaymentState } from "@/lib/orders/useRetryPayment";
+import { PAYMENT_RETRY_MESSAGES } from "@/lib/orders/paymentRetryErrors";
 import { adaptOrderDetail } from "@/lib/orders/orderModel";
 import { detailDTO, lineDTO, pendingOnlineDetailDTO, stlLineDTO } from "@/lib/orders/orderFixtures";
 import type { OrderDetailReadDTO } from "@/lib/orders/orderTypes";
@@ -8,6 +12,25 @@ import type { OrderDetailReadDTO } from "@/lib/orders/orderTypes";
 function renderOrder(dto: OrderDetailReadDTO, pickup = { available: true, address: "Bekaa3D Workshop, Zahle", hours: "Mon-Fri 9-5" }) {
   render(<OrderDetailView order={adaptOrderDetail(dto)} pickup={pickup} />);
 }
+
+function controls(overrides: Partial<OrderPaymentControls> = {}, retryState: RetryPaymentState = { kind: "idle" }) {
+  return {
+    polling: false,
+    timedOut: false,
+    onCheckAgain: vi.fn(),
+    onHoldElapsed: vi.fn(),
+    retry: { state: retryState, onRetry: vi.fn(), onResume: vi.fn() },
+    ...overrides,
+  } satisfies OrderPaymentControls;
+}
+
+function renderWithControls(dto: OrderDetailReadDTO, c: OrderPaymentControls = controls()) {
+  render(<OrderDetailView order={adaptOrderDetail(dto)} paymentControls={c} />);
+  return c;
+}
+
+const usd = (amount_cents: number) => ({ amount_cents, currency: "USD" });
+const pay = (status: string) => ({ status, provider: "mock", amount: usd(2500) });
 
 function section(name: string) {
   return screen.getByRole("region", { name });
@@ -70,10 +93,15 @@ describe("OrderDetailView", () => {
       expect(screen.queryByText(/^paid$/i)).not.toBeInTheDocument();
     });
 
-    it("mounts no retry, cancel, confirm-receipt, report-problem or redirect control", () => {
+    it("without the page's controls it is read-only: no retry, cancel, receipt, problem or redirect control", () => {
       renderOrder(pendingOnlineDetailDTO({ can_retry_payment: true, can_cancel: true }));
       expect(screen.queryByRole("button")).not.toBeInTheDocument();
       expect(screen.queryByRole("link", { name: /pay|retry|cancel|receipt|problem|continue/i })).not.toBeInTheDocument();
+    });
+
+    it("never mounts cancel / confirm receipt / report problem even with the page's controls (FVS-031)", () => {
+      renderWithControls(pendingOnlineDetailDTO({ can_retry_payment: true, can_cancel: true }));
+      expect(screen.queryByRole("button", { name: /cancel|receipt|problem/i })).not.toBeInTheDocument();
     });
 
     it("shows a paid online payment as Paid only because the server says so", () => {
@@ -229,5 +257,158 @@ describe("OrderDetailView", () => {
     );
     expect(section("Refunds")).toHaveTextContent(/cancellation refund · processing/i);
     expect(section("Refunds")).toHaveTextContent("$12.50");
+  });
+
+  describe("payment states (FVS-027)", () => {
+    it("processing: being processed, not paid", () => {
+      renderWithControls(pendingOnlineDetailDTO({ payment: pay("processing") }));
+      const payment = section("Payment");
+      expect(within(payment).getByText("Payment processing")).toBeInTheDocument();
+      expect(payment).toHaveTextContent(/being processed/i);
+      expect(payment).not.toHaveTextContent(/payment has been confirmed/i);
+    });
+
+    it("failed on a payable order: says so and offers Retry payment when the server allows", async () => {
+      const c = renderWithControls(pendingOnlineDetailDTO({ payment: pay("failed"), can_retry_payment: true }));
+      const payment = section("Payment");
+      expect(within(payment).getByText("Payment failed")).toBeInTheDocument();
+      expect(payment).toHaveTextContent(/last payment attempt didn't go through/i);
+      await userEvent.setup().click(within(payment).getByRole("button", { name: "Retry payment" }));
+      expect(c.retry.onRetry).toHaveBeenCalledTimes(1);
+    });
+
+    it("expired on a payable order: says so", () => {
+      renderWithControls(pendingOnlineDetailDTO({ payment: pay("expired"), can_retry_payment: true }));
+      expect(within(section("Payment")).getByText("Payment expired")).toBeInTheDocument();
+      expect(section("Payment")).toHaveTextContent(/expired before it was completed/i);
+    });
+
+    it("failed on a released (cancelled) order: no retry, no countdown, no polling copy", () => {
+      renderWithControls(
+        pendingOnlineDetailDTO({ status: "cancelled", cancelled_at: "2026-11-10T10:40:00Z", hold_expires_at: null, payment: pay("failed") }),
+        controls({ polling: true })
+      );
+      const payment = section("Payment");
+      expect(payment).toHaveTextContent("This payment didn't go through.");
+      expect(within(payment).queryByRole("button")).not.toBeInTheDocument();
+      expect(payment).not.toHaveTextContent(/time left|checking/i);
+    });
+
+    it("paid: confirmed only from the server's status", () => {
+      renderWithControls(pendingOnlineDetailDTO({ status: "in_progress", hold_expires_at: null, payment: pay("paid") }));
+      expect(section("Payment")).toHaveTextContent("Your payment has been confirmed.");
+      expect(within(section("Payment")).queryByRole("button")).not.toBeInTheDocument();
+    });
+
+    it("refunded is presented without any refund action", () => {
+      renderWithControls(pendingOnlineDetailDTO({ status: "refunded", hold_expires_at: null, payment: pay("refunded") }));
+      expect(within(section("Payment")).getByText("Refunded")).toBeInTheDocument();
+      expect(section("Payment")).toHaveTextContent("This payment has been refunded.");
+      expect(screen.queryByRole("button", { name: /refund/i })).not.toBeInTheDocument();
+    });
+
+    it("partially refunded", () => {
+      renderWithControls(
+        pendingOnlineDetailDTO({
+          status: "partially_refunded",
+          hold_expires_at: null,
+          payment: pay("partially_refunded"),
+          refunds: [{ kind: "admin", status: "refunded", amount: usd(500), created_at: "2026-11-11T12:00:00Z" }],
+        })
+      );
+      expect(within(section("Payment")).getByText("Partially refunded")).toBeInTheDocument();
+      expect(section("Payment")).toHaveTextContent("Part of this payment has been refunded.");
+      expect(section("Refunds")).toHaveTextContent("$5.00");
+    });
+
+    it("an unknown future status: 'Status unavailable', never the raw value", () => {
+      renderWithControls(pendingOnlineDetailDTO({ payment: pay("held_for_review") }));
+      expect(within(section("Payment")).getByText("Status unavailable")).toBeInTheDocument();
+      expect(screen.queryByText(/held_for_review/)).not.toBeInTheDocument();
+    });
+
+    it("pending with a hold: shows the countdown", () => {
+      renderWithControls(pendingOnlineDetailDTO({ hold_expires_at: "2999-01-01T00:00:00Z" }));
+      expect(section("Payment")).toHaveTextContent(/time left to complete payment/i);
+    });
+
+    it("no retry button while can_retry_payment is false (e.g. a live attempt)", () => {
+      renderWithControls(pendingOnlineDetailDTO({ can_retry_payment: false }));
+      expect(screen.queryByRole("button", { name: /retry payment/i })).not.toBeInTheDocument();
+    });
+
+    it("the retry button is disabled while sending and while leaving for the provider", () => {
+      const { unmount } = render(
+        <OrderDetailView
+          order={adaptOrderDetail(pendingOnlineDetailDTO({ payment: pay("failed"), can_retry_payment: true }))}
+          paymentControls={controls({}, { kind: "sending" })}
+        />
+      );
+      expect(screen.getByRole("button", { name: "Starting payment…" })).toBeDisabled();
+      unmount();
+      renderWithControls(pendingOnlineDetailDTO({ payment: pay("failed"), can_retry_payment: true }), controls({}, { kind: "redirecting" }));
+      expect(screen.getByRole("button", { name: "Opening payment page…" })).toBeDisabled();
+    });
+
+    it("an uncertain outcome says a resend is safe and relabels the button", () => {
+      renderWithControls(
+        pendingOnlineDetailDTO({ payment: pay("failed"), can_retry_payment: true }),
+        controls({}, {
+          kind: "error",
+          outcome: { kind: "uncertain", message: PAYMENT_RETRY_MESSAGES.uncertain, uncertain: true, refetchOrder: false, resumeUrl: null },
+        })
+      );
+      expect(screen.getByRole("alert")).toHaveTextContent(PAYMENT_RETRY_MESSAGES.uncertain);
+      expect(screen.getByRole("button", { name: "Try again" })).toBeEnabled();
+    });
+
+    it("a refusal stays visible after the server withdraws can_retry_payment", () => {
+      renderWithControls(
+        pendingOnlineDetailDTO({ payment: pay("failed"), can_retry_payment: false }),
+        controls({}, {
+          kind: "error",
+          outcome: { kind: "not-retryable", message: PAYMENT_RETRY_MESSAGES.holdExpired, uncertain: false, refetchOrder: true, resumeUrl: null },
+        })
+      );
+      expect(screen.getByRole("alert")).toHaveTextContent(PAYMENT_RETRY_MESSAGES.holdExpired);
+      expect(screen.queryByRole("button", { name: /retry payment/i })).not.toBeInTheDocument();
+    });
+
+    it("PAYMENT_ALREADY_ACTIVE offers Continue to payment with the server's URL", async () => {
+      const url = "https://pay.example.test/s/1";
+      const c = renderWithControls(
+        pendingOnlineDetailDTO({ payment: pay("failed"), can_retry_payment: true }),
+        controls({}, {
+          kind: "error",
+          outcome: { kind: "already-active", message: PAYMENT_RETRY_MESSAGES.alreadyActiveResume, uncertain: false, refetchOrder: true, resumeUrl: url },
+        })
+      );
+      await userEvent.setup().click(screen.getByRole("button", { name: "Continue to payment" }));
+      expect(c.retry.onResume).toHaveBeenCalledWith(url);
+    });
+
+    it("session expiry during retry links to sign-in back to this order", () => {
+      renderWithControls(
+        pendingOnlineDetailDTO({ payment: pay("failed"), can_retry_payment: true }),
+        controls({}, {
+          kind: "error",
+          outcome: { kind: "session-expired", message: PAYMENT_RETRY_MESSAGES.sessionExpired, uncertain: false, refetchOrder: false, resumeUrl: null },
+        })
+      );
+      expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute(
+        "href",
+        `/login?returnTo=${encodeURIComponent("/account/orders/0b6f2a52-7f5d-4f3e-9c55-3b8b1f5d2a10")}`
+      );
+    });
+
+    it("cash: no retry, countdown, polling or redirect even with stray flags and controls", () => {
+      renderWithControls(
+        detailDTO({ can_retry_payment: true, hold_expires_at: "2999-01-01T00:00:00Z", status: "pending_payment" }),
+        controls({ polling: true, timedOut: true }, { kind: "started" })
+      );
+      const payment = section("Payment");
+      expect(within(payment).queryByRole("button")).not.toBeInTheDocument();
+      expect(payment).not.toHaveTextContent(/time left|checking|confirmation|new payment/i);
+    });
   });
 });

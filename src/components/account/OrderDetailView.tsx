@@ -8,12 +8,12 @@ import type { Money, OrderDetailModel } from "@/lib/orders/orderModel";
 import {
   describeHistoryStatus,
   describeOrderStatus,
-  describePaymentStatus,
   describeRefundKind,
   describeRefundStatus,
 } from "@/lib/orders/orderStatus";
-import { formatOrderDate, formatOrderDateTime, paymentMethodLabel } from "@/lib/orders/orderFormat";
+import { formatOrderDate, formatOrderDateTime } from "@/lib/orders/orderFormat";
 import { OrderLineItem } from "./OrderLineItem";
+import { OrderPaymentSection, type OrderPaymentControls } from "./OrderPaymentSection";
 import { StatusTimeline } from "./StatusTimeline";
 
 export interface OrderDetailViewProps {
@@ -21,6 +21,9 @@ export interface OrderDetailViewProps {
   // Current pickup location/hours from public settings. The order itself
   // carries no pickup snapshot, so this is labelled as current info.
   pickup?: PickupOption;
+  // FVS-027: the page's bounded verification and retry controls. Absent,
+  // the payment section is read-only.
+  paymentControls?: OrderPaymentControls;
 }
 
 // #FVS029-ORDER-DETAIL
@@ -31,12 +34,13 @@ export interface OrderDetailViewProps {
 //     due, never as paid. A cash payment row appears only once the server
 //     records one, and is labelled from its own status.
 //   - online: the order/payment status is shown as the server has it. A
-//     redirect back from the provider is never proof of payment; checking
-//     and retrying payment are FVS-027.
-//   - no cancel / retry / confirm-receipt / report-problem controls
-//     (FVS-027 / FVS-031), even when the server's advisory flags are true.
+//     redirect back from the provider is never proof of payment. FVS-027
+//     (phase 5F): bounded verification and "Retry payment" (only while
+//     can_retry_payment) live in OrderPaymentSection.
+//   - no cancel / confirm-receipt / report-problem controls (FVS-031),
+//     even when the server's advisory flags are true.
 //   - no download for STL lines (ADR-019).
-export function OrderDetailView({ order, pickup }: OrderDetailViewProps) {
+export function OrderDetailView({ order, pickup, paymentControls }: OrderDetailViewProps) {
   const status = describeOrderStatus(order.status);
   const awaitingPayment = order.status === "pending_payment";
 
@@ -97,7 +101,7 @@ export function OrderDetailView({ order, pickup }: OrderDetailViewProps) {
         </div>
 
         <div className="flex flex-col gap-6 tablet:w-80 tablet:shrink-0">
-          <PaymentSection order={order} />
+          <OrderPaymentSection order={order} controls={paymentControls} />
           <TotalsSection order={order} />
           {order.refunds.length > 0 && (
             <Section title="Refunds">
@@ -131,58 +135,6 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 
 function Amount({ money }: { money: Money }) {
   return <PriceDisplay amountCents={money.amountCents} currency={money.currency} />;
-}
-
-function PaymentSection({ order }: { order: OrderDetailModel }) {
-  const cash = order.paymentMethod === "cash";
-  const payment = order.payment ? describePaymentStatus(order.payment.status) : null;
-  const where =
-    order.fulfillmentMethod === "pickup" ? "when you pick up your order" : "to the courier on delivery";
-
-  return (
-    <Section title="Payment">
-      <dl className="flex flex-col gap-2 text-body text-text-primary">
-        <div className="flex justify-between gap-2">
-          <dt className="text-text-secondary">Method</dt>
-          <dd>{paymentMethodLabel(order.paymentMethod)}</dd>
-        </div>
-        {payment && order.payment && (
-          <div className="flex items-center justify-between gap-2">
-            <dt className="text-text-secondary">Payment status</dt>
-            <dd>
-              <StatusBadge label={payment.label} tone={payment.tone} />
-            </dd>
-          </div>
-        )}
-      </dl>
-
-      {cash && order.paymentDue && order.amountDue && (
-        <p className="rounded-md border-l-4 border-l-info bg-info-bg p-3 text-body text-text-primary">
-          Payment due in cash {where}:{" "}
-          <span className="font-semibold">
-            <Amount money={order.amountDue} />
-          </span>
-          . This order hasn&apos;t been paid yet.
-        </p>
-      )}
-
-      {!cash && order.status === "pending_payment" && (
-        <div className="flex flex-col gap-2 rounded-md border-l-4 border-l-warning bg-warning-bg p-3 text-body text-text-primary">
-          <p>
-            This order hasn&apos;t been confirmed as paid. We only mark an order paid once our payment provider
-            confirms it to us.
-          </p>
-          {order.holdExpiresAt && (
-            <p>If it&apos;s still unpaid, this order may be released after {formatOrderDateTime(order.holdExpiresAt)}.</p>
-          )}
-        </div>
-      )}
-
-      {!cash && !order.payment && order.status !== "pending_payment" && (
-        <p className="text-body text-text-secondary">No payment has been recorded for this order.</p>
-      )}
-    </Section>
-  );
 }
 
 function TotalsSection({ order }: { order: OrderDetailModel }) {
