@@ -1,5 +1,63 @@
 # Real Backend Acceptance
 
+## Phase 6B-1: Contact (VS-033), 2026-11-11
+
+| Item | Value |
+|---|---|
+| Frontend commit tested | `e0fe414` (public `/contact`, `/admin/contact-messages`, `/admin/contact-messages/[id]`, mocked E2E). Committed before the run |
+| Backend | `C:\My projects\Bekaa3D-backend`, branch `main`, commit **`2dfb27b`** (unchanged, no backend code touched) |
+| Contract check | running `/openapi.json` equal to `docs/backend-handoff/openapi.json` except a `§` text-encoding artifact in two wishlist descriptions; then `engagement/api/contact_messages.py`, `contact_message_schemas.py`, `domain/contact_message.py`, `domain/enums.py`, `api/captcha.py`, `api/text.py` |
+| Runtime | Docker Compose backend on :8000 (`CAPTCHA_PROVIDER=fake`, which accepts only Cloudflare's test token). `npm run dev` on :3000 for the run only |
+| Method | real Edge through Playwright, real frontend and backend, **no route mocking** except one in-flight rewrite of `captcha_token` to get the real `400`; admin through the frontend proxy (password + TOTP). Scripts in the session scratchpad, never committed |
+| Identities | a guest sender `accept-contact-<ts>@example.com`; admin from `%USERPROFILE%\.bekaa3d\dev-admin.json` (never printed); phase 5H's `accept-admin-e-<ts>` customer, re-entered through the real password-reset flow |
+| Data | one disposable message moved `new` → `read` → `archived`, plus 4 disposable rate-limit probes; all 5 `accept-contact-*` rows deleted after the run (audit rows kept) |
+
+**Overall: PASS, 21/21** (one script assertion corrected: it counted the shell's "Log out" as a status action; a re-check showed it is the only button left on an archived message).
+
+### Current contract (as implemented)
+
+- **Submit:** `POST /api/v1/contact-messages`, public (no session, no CSRF). JSON, `extra="forbid"`: `name` 1-100, `email` (an address ≤254), `phone?` ≤32 phone-shaped (`+`, digits, space `( ) . -`, ≥6 digits), `subject?` ≤200, `message` 1-5000 (line breaks allowed), `captcha_token` (Turnstile, ≤2048). Values are trimmed and blank optionals stored as null. `201 {id, created_at}`.
+- **Order of checks:** 60 attempts/h, body validation (`422 VALIDATION_ERROR`, spends no quota), captcha (`400 CAPTCHA_INVALID`; `503 SERVICE_UNAVAILABLE` + `Retry-After: 30` when it can't be verified), then 5/h per IP and 5/h per email (`429 RATE_LIMITED` + `Retry-After`). A refused captcha spends neither quota. Domain-rule failures (for example a badly shaped phone) come back as a model-level `422` with `loc ["body"]`.
+- **Admin:** `GET /api/v1/admin/contact-messages?cursor&limit(1-100, 20)&status&created_after&created_before&email` → `{items, next_cursor}`, new first then oldest first; dates must be aware (after inclusive, before exclusive); `email` exact and case-insensitive. `GET /{id}` (audited `contact_message.viewed`; reading does **not** mark it read). `PATCH /{id} {status}` with CSRF: forward only, skips allowed, backwards `409 INVALID_STATE_TRANSITION`; audited `contact_message.status_changed`. Statuses `new`, `read`, `replied`, `archived`. No notes, no assignment, no reply from the system (the admin replies by email). A customer's order problem report is a contact message with `user_id` and `order_id`. Non-admin `404`; no session or MFA incomplete `401`.
+
+### Frontend behaviour
+
+- `/contact` (header and footer link "Contact"): the exact fields, client checks mirroring the server's (UX only), the one `CaptchaWidget`; the token is reset after every attempt so a retry carries a fresh one. Success shows "Thanks — your message has been sent. We'll reply by email." (never the id) and offers "Send another message". Failures use frontend copy only: captcha (invalid / unavailable / missing), "Please check: Email." for a field `422`, a generic line for a model-level `422`, rate limit with the `Retry-After` minutes, network, timeout, generic.
+- `/admin/contact-messages` (nav "Contact messages"): status, received from/to (local days) and exact sender email filters, cursor pagination; problem reports carry an "Order problem" badge. The email filter is component state only, never in the page URL.
+- `/admin/contact-messages/[id]`: sender, email (mailto only for a plain address), phone, received, last updated, the message as plain pre-wrapped text, order and customer links for a problem report. One button per forward status ("Mark read", "Mark replied", "Archive"), each behind a confirmation; `409` shows "already moved on" and refetches. A malformed id renders the 404 page without a request.
+
+### Results
+
+| Scenario | Result | Evidence |
+|---|---|---|
+| Client validation | **PASS** | empty form + phone "call me" → inline errors, no request |
+| `400 CAPTCHA_INVALID` (real) | **PASS** | token rewritten in flight → real `400`; UI showed the frontend captcha copy; backend `detail` not rendered |
+| Refused captcha stores nothing | **PASS** | 0 rows for the sender |
+| Retry with a fresh token | **PASS** | the next attempt carried a newly issued Turnstile test token → `201`; success copy; no id shown |
+| Exact payload | **PASS** | keys `captcha_token, email, message, name, phone, subject` |
+| Persistence | **PASS** | one row, values as sent, status `new`, no `user_id` |
+| Server validation | **PASS** | bad phone `422` (`loc ["body"]`), bad email `422` `body.email`, missing token `422` `body.captcha_token`, extra field `422` |
+| Admin MFA required | **PASS** | password-only login → queue `401 AUTH_REQUIRED` |
+| Queue shows the submission | **PASS** | upper-cased email filter → 1 row; the address only in the API query, never the page URL |
+| Status filter | **PASS** | `archived` → empty; `new` → the row |
+| Detail | **PASS** | all fields; `<b>` in the message rendered as text |
+| Read audited, not marked read | **PASS** | one `contact_message.viewed` row; status still `new` |
+| Mark read (UI) | **PASS** | `PATCH {"status":"read"}` with `X-CSRF-Token`; database `read` |
+| Persistence after reload | **PASS** | badge Read; actions Mark replied, Archive |
+| Backwards refused | **PASS** | `read` → `new`: `409 INVALID_STATE_TRANSITION` |
+| CSRF required | **PASS** | stale token → `403`; unchanged |
+| Skip forward (UI) | **PASS** | `read` → `archived`; no action offered after |
+| Status changes audited | **PASS** | 2 `contact_message.status_changed` rows |
+| Customer gets 404 | **PASS** | list, detail, PATCH `404`; UI 404 page |
+| `429` rate limit (real) | **PASS** | after 4 more disposable sends → `429 RATE_LIMITED`, `Retry-After` ~3600; UI "Too many submissions. Please try again in about 60 minutes." |
+| No page errors | **PASS** | none |
+
+### Not tested against the real backend
+
+- `503` captcha unavailable (the fake verifier is always available): unit-tested.
+
+---
+
 ## Phase 6A: Admin Operations Completion, 2026-11-11
 
 | Item | Value |
