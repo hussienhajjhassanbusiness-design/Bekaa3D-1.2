@@ -1,5 +1,101 @@
 # Real Backend Acceptance
 
+## Phase 5H: Admin Orders + Fulfillment (FVS-030), 2026-11-11
+
+| Item | Value |
+|---|---|
+| Frontend commits tested | `797cde3` (admin order contract, API, presentation, write hook), `9a43cc1` (`/admin/orders`, `/admin/orders/[id]`, `/admin/stl-deliveries`; removal of the pre-contract admin order code), `4e6613e` (mocked E2E), `7126f5d` (admin nav E2E update). All committed before the run; this document is updated in the commit after them |
+| Backend | `C:\My projects\Bekaa3D-backend`, branch `main`, commit **`2dfb27b`** (unchanged, no backend code touched) |
+| Contract check | running `/openapi.json` identical to `docs/backend-handoff/openapi.json`. `AdminOrderPage`, `AdminOrderSummaryRead`, `AdminOrderDetail`, `AdminOrderLineRead`, `AvailableActionRead`, `AdminOrderPaymentRead`, `AdminHistoryRead`, `AdminOrderRefundRead`, `AdminOrderChargebackRead`, `AdminRefundBalanceRead`, `OrderItemTransitionRequest`, `CashHandoverRequest`, `AdminOrderUpdate`, `AdminOrderCancelRequest`, `StlDeliveryPage` read field by field, then `fulfillment/api/admin_orders.py`, `item_transition.py`, `stl_deliveries.py`, `admin_order_schemas.py`, `ordering/domain/line_transitions.py`, `handover.py`, `cancellation.py`, `fulfillment/domain/limits.py` |
+| Runtime | Docker Compose backend on :8000. `npm run dev` on :3000 only for the run, stopped after it |
+| Method | real Edge through Playwright, real frontend and backend, **no route mocking**. The admin signed in through the frontend proxy (real password login + TOTP), so the browser held a real MFA-complete admin session. API probes used the same browser contexts. Scripts in the session scratchpad, never committed |
+| Identities | admin from `%USERPROFILE%\.bekaa3d\dev-admin.json` (never printed). Throwaway customer `accept-admin-e-<ts>@example.com` (real register + verify; re-entered once through the real password-reset flow after a script abort), and phase 5G's `accept-actions-d-<ts>` STL order. One unverified `accept-actions-u-<ts>` for phase 5G's deferred check |
+| Data left behind | E: `B3D-NRAW56SC` cash/delivery **completed** (handover recorded, internal note set); `B3D-ND4X5EE4` cash/delivery **cancelled by the administrator**. D: `B3D-MHPCF8SG` STL line now **delivered** (marked emailed; no file was actually sent). U: no orders. No setting or product changed |
+
+**Overall: PASS, 20/20** (19 for phase 5H plus phase 5G's deferred unverified-account check).
+
+### Current contract (as implemented)
+
+Admin with completed MFA; a customer gets `404 NOT_FOUND` from the admin boundary; a password-only login (MFA challenge pending) holds no session (`401 AUTH_REQUIRED`), and an admin whose MFA enrolment is incomplete gets `401 MFA_REQUIRED`. Writes need `X-CSRF-Token`. **No version / If-Match concurrency**: every write re-checks under the server's locks and answers `409`. Every write answers with the full `AdminOrderDetail`.
+
+- **Queue:** `GET /api/v1/admin/orders` — `status` (never `pending_payment`: `422`; unpaid online orders are not in the queue), `fulfillment_method`, `payment_method`, `payment_due` (the "cash due" view), `customer_id`, `order_number` (1-40), `placed_after`/`placed_before`, `limit` 1-100 (default 25), opaque `cursor`. Newest first; `{items, next_cursor}`; no total.
+- **Detail:** `GET /api/v1/admin/orders/{id}` — the real line states (`in_production` included), per line `available_actions [{target_status, cancel_reasons}]` (ADR-025), `payments[]` (newest first; `provider` `cash`/`mock`, `recorded_by` for cash), `status_history[]` with `actor_user_id` and `reason`, `refunds[]`, `chargebacks[]`, `refund_balance`, `admin_note`, `payment_reached_paid`.
+- **Line transition:** `POST …/items/{item_id}/transition` `{target_status, reason? ≤500 (history note), cancel_reason?}`. Edges: delivery `pending→in_production→ready_to_ship→shipped→delivered|returned`, pickup `…→ready_for_pickup→picked_up`, STL `awaiting_delivery→delivered` (manual email, ADR-019), plus cancels (`cancel_reason` required from `ready_to_ship`/`ready_for_pickup`/`returned`/`shipped`). A **cash** line never offers `delivered`/`picked_up`: that is the cash handover. `409 INVALID_STATE_TRANSITION` with `reason` (`payment_required`, `cash_handover_required`, `not_a_legal_edge`, `line_closed`, `cancel_reason_required`, `cancel_reason_not_allowed`, `refund_exceeds_available`, STL `already_delivered` with `fulfilled_at`, `not_awaiting_delivery`) and `fulfillment_status`; `ORDER_TOTAL_MISMATCH`. 300/h per admin, shared by every line transition and the order cancel.
+- **Cash handover:** `POST …/cash-handover` `{amount_cents, currency: "USD", note?}`. Every live line at the ready state (delivery `shipped`, pickup `ready_for_pickup`); the amount is exactly the live total (`422 CASH_AMOUNT_MISMATCH` with `amount_due`). Records a `cash` payment (`paid`, `recorded_by`) and marks every live line delivered / picked up. `409` reasons `not_a_cash_order`, `no_live_line`, `already_recorded`, `lines_not_ready`. 60/h.
+- **Order cancel:** `POST …/cancel` `{reason (1-500), cancel_reason?}`: every physical line still `pending`/`in_production`/`ready_to_ship`/`ready_for_pickup`; refuses an unpaid online order (`payment_required`) or none left (`no_cancellable_line`). Paid lines are refunded (ADR-043). An admin cancel never sets `customer_cancelled_at` (no 24-hour cash hold).
+- **Internal note:** `PATCH /api/v1/admin/orders/{id}` `{admin_note}` (≤5000; blank or null clears). Never in any customer response. 120/h.
+- **STL delivery queue:** `GET /api/v1/admin/stl-deliveries` (`product_id`, `customer_id`, `limit`, `cursor`): every paid STL line still owed, oldest first. Recording a send is the line transition `awaiting_delivery → delivered`.
+- **Not in scope here:** `POST /admin/orders/{id}/release` (manual release of an unpaid online order after the 24 h grace, payment recovery) and `/admin/cash-blocks` (cash eligibility blocks). Both are real routes, not built in the frontend yet.
+
+### Frontend behaviour
+
+- **Routes:** `/admin/orders` (queue), `/admin/orders/[id]` (detail), `/admin/stl-deliveries`; nav entries "Orders" and "STL deliveries". Protected by the existing `AdminShell`/`AdminGuard` (customer → 404, MFA incomplete → setup).
+- **Server-provided actions only:** a line's buttons are exactly its `available_actions` (labels are ours; an unknown target reads "Update line"). Every write goes through an explicit confirmation (`AdminActionDialog`, on `DialogShell`), with an optional history note; a cancel that lists `cancel_reasons` requires one of exactly those.
+- **Order-level offers** (no server flag; the POST re-checks): Record cash handover ⇔ unpaid cash order with every live line at the ready state; Cancel order ⇔ some physical line before shipping/collection that the server offers `cancelled` for (reason required; cancel reason required when a ready line takes one). The cash amount is **typed**, never prefilled.
+- **Cache:** `adminOrderKeys` under the user-scoped `["admin"]` root. Each write stores the server's `AdminOrderDetail` in `adminOrderKeys.detail(id)` and invalidates the admin order family (queue, STL queue, detail). Refusals re-read too. Nothing marked paid or delivered locally. No silent retry of a state-changing conflict; a ref guard drops double submits.
+- **Errors:** status + `code` + typed `reason`/`amount_due` only; frontend copy for every documented reason; unknown → neutral. Never `title`/`detail`/`msg`.
+- **Payments/refunds/chargebacks** on the detail are read-only in this phase.
+- **Removed (pre-contract, unmounted):** `adminOrderModel`, `AdminOrderDetail`, `AdminOrderLine`, `AdminOrderLineItem`, `AdminOrderSummaryDisplay`, `AdminCancelDialog` (per-line cancel with free text: not the contract), `TransitionActions`, `OrderConcurrencyConflictNotice` (no version concurrency exists), `OrderActionButtons`, `orderActionModel`. `InternalNoteEditor` reused (remounted by `key` on the server's note).
+
+### Results
+
+| Scenario | Result | Evidence |
+|---|---|---|
+| 5G deferred: unverified account | **PASS** | confirm-receipt (another customer's order) `403 EMAIL_VERIFICATION_REQUIRED`; report-problem and cancel (unknown ids) `403` — checked before ownership, reveals nothing |
+| Customer gets 404 | **PASS** | customer `GET /admin/orders/{id}` and `GET /admin/orders` → `404 NOT_FOUND`; UI `/admin/orders/{id}` → 404 page |
+| Admin MFA guard | **PASS** | password-only login `202` (challenge pending) → `GET /admin/orders` `401 AUTH_REQUIRED` |
+| Queue + filters | **PASS** | nav "Orders" current; Cash due filter (API rows all `payment_due`); order-number lookup → 1 row; `status=pending_payment` → `422` |
+| Detail = server state | **PASS** | server `available_actions ["in_production","cancelled"]` → UI "Start production", "Cancel line"; cash due, address, phone; no handover offered yet |
+| Physical fulfillment transitions | **PASS** | 3 UI POSTs → `200` (pending → in_production → ready_to_ship → shipped); bodies `{target_status[, reason]}`; DB line `shipped`; history keeps the note and the admin actor |
+| Cash line offers no "Mark delivered" | **PASS** | server actions at `shipped` (cash) `["returned"]`; UI "Mark returned"; Record cash handover offered |
+| Illegal transition refused | **PASS** | shipped → delivered (cash) `409` `cash_handover_required`; shipped → in_production `409` `not_a_legal_edge`, `fulfillment_status: shipped`; line unchanged |
+| CSRF_INVALID | **PASS** | stale cookie → UI POST cash-handover `403`; "Unable to verify your session…"; no payment row |
+| Cash amount mismatch | **PASS** | $0.01 → `422 CASH_AMOUNT_MISMATCH`; "…exactly the amount due ($36.00)." from `amount_due`; no payment row |
+| Cash handover | **PASS** | body exactly `{amount_cents: 3600, currency: "USD"}` (typed); order `completed`, `payment_due` false; payment `cash`/`paid`, `recorded_by` set; line `delivered` |
+| Customer sees the handover | **PASS** | customer detail `completed`, payment `paid`, line `delivered` |
+| Repeat handover refused | **PASS** | `409` `already_recorded`; still 1 payment |
+| Internal note + persistence | **PASS** | PATCH `200`; reload shows it; absent from the customer's order detail |
+| Reload persistence | **PASS** | Completed, Delivered, Staff history entries |
+| STL manual delivery | **PASS** | queue row → Mark emailed → `{target_status: "delivered"}` `200`; `fulfilled_at` + `delivered_by` set; row left the queue; order `completed` |
+| STL repeat refused | **PASS** | `409` `already_delivered` with `fulfilled_at` |
+| STL line in the UI | **PASS** | "Sent by email", no actions, no download/upload |
+| Admin order cancel | **PASS** | reason required client-side; POST `{reason}` → `200`; order and line `cancelled`; `customer_cancelled_at` stays null; history keeps the reason |
+| No page errors | **PASS** | none |
+
+The first attempt aborted on the acceptance script's own address payload (missing `landmark_notes`) after registering the customer; the rerun re-entered that customer through the real password-reset flow. Registration's 5/h per-IP limit was read from Redis (TTL only) rather than probed, after the phase 5G run showed that probing keeps the window full.
+
+### Not tested against the real backend (and why)
+
+- **Pickup flow** (`ready_for_pickup`, `picked_up`, pickup handover): delivery was used; the pickup edges come from the same server `available_actions` and are covered by unit tests.
+- **`returned` and a cancel with `cancel_reason`** (from `ready_to_ship`/`ready_for_pickup`): not provoked; covered by unit and mocked E2E (reason required, exactly the server's reasons).
+- **Online paid line → Mark delivered:** shown in phase 5G's admin precondition (API) and in mocked E2E.
+- **`MFA_REQUIRED` for an admin with incomplete enrolment:** needs a second admin account; covered by the existing admin guard tests (phase 5A real run).
+- **`429` limits:** not provoked.
+
+### Defects found and fixed
+
+- **During development (mocked E2E):** after a refused transition, the re-read line could offer nothing, and `LineActions` unmounted with its open dialog and error. Same for the order-level dialogs (handover, cancel) when the re-read withdrew the offer. Both now stay until dismissed (unit tests + E2E).
+- **Expected test updates:** the admin nav tests (unit and E2E) asserted "no Orders entry"; updated now that orders are built.
+- No app defect in the real run.
+
+### Verification (this phase)
+
+| Command | Result |
+|---|---|
+| `npm run lint` | 0 errors, 4 warnings (the known `<img>` warnings) |
+| `npm run typecheck` | clean |
+| `npm run test` | **2252/2252** (236 files; the removed pre-contract admin order tests account for the lower count) |
+| `npm run build` | pass (`/admin/orders` static, `/admin/orders/[id]` dynamic, `/admin/stl-deliveries` static) |
+| `npm run test:e2e` | **142/143** in the one full run; the one failure was `admin-routes.spec.ts` still asserting the nav had no "Orders" link — updated (5/5). 8 new tests in `e2e/admin-orders.spec.ts` |
+
+### Remaining gaps
+
+- Manual release (`POST /admin/orders/{id}/release`) and cash blocks (`/admin/cash-blocks`) are not built in the frontend.
+- No customer filter (`customer_id`) or date-range filter in the queue UI (the backend supports them).
+- STL queue filters (`product_id`, `customer_id`) not exposed.
+
+---
+
 ## Phase 5G: Customer Order Actions (FVS-031), 2026-11-11
 
 | Item | Value |
@@ -82,7 +178,7 @@ Script assertions corrected during the run (not app defects): the first run expe
 - **Mixed physical + STL cancel** (STL line kept, order stays live): not provoked, to keep to one cancelled order; the rule was read from `customer_cancels` and is covered by unit tests.
 - **Pickup `picked_up` receipt:** the delivery path was used; the rule (`delivered` or `picked_up`) is covered by unit tests.
 - **`429` on cancel** (10/h): not provoked, to avoid extra orders.
-- **Unverified account (`403 EMAIL_VERIFICATION_REQUIRED`):** registration was rate-limited for the rest of the run. Deferred to the Phase 5H run (recorded there). Covered meanwhile by unit tests (`orderActionErrors`, `OrderCustomerActions`).
+- **Unverified account (`403 EMAIL_VERIFICATION_REQUIRED`):** registration was rate-limited for the rest of the run. Run in the Phase 5H run instead: **PASS** (see that section).
 
 ### Defects found and fixed
 
