@@ -56,6 +56,8 @@ describe("ProductCard", () => {
   it("shows an Unavailable badge when the product is not available", () => {
     render(<ProductCard product={{ ...baseProduct, isAvailable: false }} />);
     expect(screen.getByText(/unavailable/i)).toBeInTheDocument();
+    // Phase 6E: AA contrast on the warning tint.
+    expect(screen.getByText(/unavailable/i)).toHaveClass("text-warning-text");
   });
 
   it("does not show an Unavailable badge for an available product", () => {

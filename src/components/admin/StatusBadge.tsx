@@ -21,7 +21,7 @@ const TONE_CLASSES: Record<StatusBadgeTone, string> = {
   neutral: "bg-neutral-100 text-text-primary",
   positive: "bg-success-bg text-success",
   negative: "bg-danger-bg text-danger",
-  warning: "bg-warning-bg text-warning",
+  warning: "bg-warning-bg text-warning-text",
 };
 
 export function StatusBadge({ label, tone }: StatusBadgeProps) {

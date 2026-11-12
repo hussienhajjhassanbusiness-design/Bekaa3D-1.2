@@ -10,7 +10,7 @@
 // ADR-024) and must never be reintroduced here.
 //
 // `current()` rather than `list()`/`detail(id)`: unlike a per-id
-// resource (see refundKeys.detail), this is a single shared resource
+// resource (see orderKeys.detail), this is a single shared resource
 // — the public-settings endpoint returns one snapshot, not a
 // per-id collection — so there is no detail variant to add.
 export const publicSettingsKeys = {

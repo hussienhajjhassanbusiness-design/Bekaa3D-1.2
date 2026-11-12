@@ -98,7 +98,7 @@ export function WishlistList() {
                 <div className="flex flex-wrap items-center gap-2">
                   {item.type && <ProductTypeBadge type={item.type} />}
                   {!item.available && (
-                    <span className="rounded-pill bg-warning-bg px-2 py-0.5 text-caption font-semibold text-warning">No longer available</span>
+                    <span className="rounded-pill bg-warning-bg px-2 py-0.5 text-caption font-semibold text-warning-text">No longer available</span>
                   )}
                 </div>
                 {item.available && item.slug ? (

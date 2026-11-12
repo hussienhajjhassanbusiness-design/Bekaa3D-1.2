@@ -51,6 +51,7 @@ export function ProductImageGallery({ images }: ProductImageGalleryProps) {
           statically knowable here, so next/image's remote-pattern
           allowlist can't be configured — same gap as FVS-012's admin
           ImageGallery and ProductCard. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         data-testid="product-gallery-main-image"
         src={activeImage.src}
@@ -68,6 +69,7 @@ export function ProductImageGallery({ images }: ProductImageGalleryProps) {
               index === selectedIndex ? "border-brand-dark-green" : "border-border-default"
             }`}
           >
+            {/* eslint-disable-next-line @next/next/no-img-element -- same media-host gap as above */}
             <img src={image.src} alt={image.alt} className="h-16 w-16 object-cover" />
           </button>
         ))}

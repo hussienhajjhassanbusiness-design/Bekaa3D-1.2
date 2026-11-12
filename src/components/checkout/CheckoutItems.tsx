@@ -24,7 +24,7 @@ export function CheckoutItems({ cart }: { cart: CartModel }) {
                 <p className="text-caption text-text-secondary">
                   {line.productType === "stl" ? "STL file (sent by email)" : "Physical item"} · Qty {line.quantity}
                 </p>
-                {line.priceChanged && <p className="text-caption font-semibold text-warning">Price updated</p>}
+                {line.priceChanged && <p className="text-caption font-semibold text-warning-text">Price updated</p>}
               </div>
               <p className="text-body text-text-primary">
                 <PriceDisplay amountCents={price.amountCents} currency={price.currency} />

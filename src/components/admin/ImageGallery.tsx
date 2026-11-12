@@ -110,6 +110,7 @@ export function ImageGallery({
               is still an open gap (FRONTEND-VERTICAL-SLICE-PLAN.md §17's
               "Image/asset URL format" item) — next/image's remote-pattern
               allowlist can't be configured safely until that's confirmed. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={image.src} alt={image.accessibleLabel} className="h-16 w-16 rounded-sm object-cover" />
           <span className="text-body text-text-primary">{image.accessibleLabel}</span>
           {image.isCover && (

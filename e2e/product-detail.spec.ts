@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { stubGuest } from "./support/stubGuest";
 
 // REAL STOREFRONT INTEGRATION — PHASE 1. Deterministic, backend-
 // independent coverage for `/shop/[slug]` — route interception only,
@@ -61,6 +62,10 @@ async function mockSettings(page: Page, whatsappNumber: string | null = "+961700
 }
 
 test.describe("Product detail (/shop/[slug])", () => {
+  test.beforeEach(async ({ page }) => {
+    await stubGuest(page);
+  });
+
   test("renders a physical product's price, images, category/material/colour, and WhatsApp CTA", async ({ page }) => {
     await mockSettings(page);
     await page.route("**/api/v1/products/dragon", (route) => route.fulfill({ body: JSON.stringify(physicalDetail) }));

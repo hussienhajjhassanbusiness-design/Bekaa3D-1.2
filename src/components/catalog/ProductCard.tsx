@@ -40,10 +40,11 @@ export function ProductCard({ product }: ProductCardProps) {
             // can't be configured yet (FRONTEND-VERTICAL-SLICE-PLAN.md §17
             // image-URL item; matches ProductImageGallery's own same-gap
             // decision).
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={product.coverImage.src}
               alt={product.coverImage.alt}
-              className="h-full w-full object-cover transition-transform group-hover:scale-105"
+              className="h-full w-full object-cover transition-transform group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
               loading="lazy"
             />
           ) : (
@@ -74,7 +75,7 @@ export function ProductCard({ product }: ProductCardProps) {
               currency={product.price.currency}
             />
             {!product.isAvailable && (
-              <span className="rounded-pill bg-warning-bg px-2 py-0.5 text-caption font-semibold text-warning">
+              <span className="rounded-pill bg-warning-bg px-2 py-0.5 text-caption font-semibold text-warning-text">
                 Unavailable
               </span>
             )}

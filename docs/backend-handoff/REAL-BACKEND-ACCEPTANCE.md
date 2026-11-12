@@ -1,5 +1,64 @@
 # Real Backend Acceptance
 
+## Phase 6E: UX, accessibility, performance and security hardening, 2026-11-12
+
+Not a redesign: an audit of every mounted route, fixing only confirmed defects.
+
+### Method
+
+- **Accessibility:** an `axe-core` sweep (WCAG 2.0/2.1/2.2 A and AA tags) on the real stack (dev frontend + backend `2dfb27b`) over **49 route/width scans**: 12 public routes at 1280 px and 5 at 375 px, 9 customer routes at 1280 px and 3 at 375 px (a fresh disposable account), 18 admin routes at 1280 px and 2 at 375 px (MFA admin; read-only page loads). Each scan also checked exactly one `h1` and no horizontal overflow. Script in the session scratchpad, never committed.
+- **Security, performance, test quality:** whole-tree greps (`dangerouslySetInnerHTML`, `eval`, browser storage, `console.*`, `target="_blank"`, `window.location`, `process.env`, raw `title`/`detail`/`msg`, query-key roots, polling, `waitForTimeout`, specs without a `/me` stub) and reading each hit.
+
+### Findings and fixes
+
+| # | Area | Finding | Class | Action |
+|---|---|---|---|---|
+| 1 | A11y | `color-contrast` on 8 routes: every warning badge (`text-warning` `#B8860B` on its 8 % tint, about 3:1) | IMPORTANT | new token `warning-text` `#805B07` (5.6:1) in `tokens.md` and `globals.css`; the 5 warning-text sites use it (`StatusBadge`, `ProductCard`, `ReferenceDataManager`, `CheckoutItems`, `WishlistList`); `warning` stays for borders and fills. Re-sweep: **0 violations on all 49 scans**. Unit regressions in `StatusBadge.test.tsx` and `ProductCard.test.tsx` |
+| 2 | A11y | product-card image zoom ignored reduced motion | FOLLOW-UP fixed | `motion-reduce:transition-none motion-reduce:group-hover:scale-100` |
+| 3 | UX | checkout "Payment not started" still said payment retry "isn't available on the website yet" (built in 5F) | IMPORTANT | now "You can retry the payment from the order page", with a "View your orders" fallback when the order id is missing |
+| 4 | Security | `lib/admin/refundKeys.ts`: an unused pre-contract `["refunds"]` key root outside the user-scoped `["admin"]` root. No query used it, so nothing leaked, but a future use would have survived logout | FOLLOW-UP fixed | removed with its test (real refunds use `["admin", "refunds"]`) |
+| 5 | Lint | the 4 known `no-img-element` warnings | FOLLOW-UP fixed | the same justified `eslint-disable-next-line` already used by `CartLineItem` and `OrderLineItem`: media URLs are opaque backend paths on a per-environment host, so `next/image` remote patterns can't be configured. **Lint is now 0 errors, 0 warnings** |
+| 6 | Tests | `shop`, `product-detail` and `register-and-verify` specs claimed to be backend-independent, but `AuthProvider`'s `/me` (and refresh) read left the browser | IMPORTANT | `e2e/support/stubGuest.ts` (`401 AUTH_REQUIRED` for `/me` and refresh) in a `beforeEach`; per-test routes still override it |
+| 7 | Tests | `smoke.spec.ts` has no `/me` stub | ACCEPTED | deliberately tolerant of any backend state (its own header says so) |
+| 8 | Tests | two `waitForTimeout(4_000)` in `payment-result.spec.ts` | ACCEPTED | they prove that *nothing more* happens (polling stopped, no polling for cash); a wait is the assertion |
+| 9 | Runtime | one dev-only `pageerror` on `/admin`: React 19's `performance.measure` "negative time stamp" for a component track | ACCEPTED | React development profiling, not app code; checked again in 6F production mode |
+
+### Confirmed with no change needed
+
+- **Landmarks and structure:** `SkipLink` to `#main-content`, `<html lang="en">`, one `h1` on every scanned route, no horizontal overflow at 375 px.
+- **Focus:** global `:focus-visible` ring; `outline-none` appears only on programmatic `tabIndex={-1}` targets; dialogs use the shared `DialogShell` (trap, Escape, focus return); new toggles (wishlist heart) keep focus while busy.
+- **XSS:** no `dangerouslySetInnerHTML`, `eval` or `new Function`; all user and visitor text is React text.
+- **Raw server errors:** no Problem `title`/`detail`/`msg` rendered anywhere; `ApiError.message` is frontend fallback copy.
+- **Browser storage:** none used for app data (only comments saying so); the cross-tab logout signal uses `BroadcastChannel`.
+- **Redirects:** `isSafeReturnTo` refuses `//`, backslashes, decoded tricks and cross-origin results; payment `redirect_url` and `PAYMENT_ALREADY_ACTIVE` resume URLs are followed only if absolute http(s).
+- **External links:** both WhatsApp links use `rel="noopener noreferrer"`.
+- **Cache isolation:** every per-user root (`admin`, `notifications`, `addresses`, `cart`, `orders`, `offers`, `wishlist`) is cleared on logout, cross-tab logout and before sign-in.
+- **Financial idempotency and double submit:** cart checkout, payment retry and offer checkout carry an `Idempotency-Key` bound to the body; every money and state write has a synchronous in-flight guard and `retry: false`.
+- **Performance:** no `refetchInterval` except bounded order-payment polling (paused when hidden) and the readiness banner, which is mounted only in development. Settings, cart and reference data already have stale times; wishlist and offers are one list read per page view, never per product.
+
+### Not done here (6F or later)
+
+- `isFollowableRedirect` accepts `http:` so the local mock provider works; production should accept only `https:` once a real provider exists (FOLLOW-UP, with VS-032).
+- CSP and the other security headers, `console.error` in `app/error.tsx`, production-mode smoke: Phase 6F.
+
+### Phase 6E gate
+
+| Command | Result |
+|---|---|
+| `npm run lint` | **0 errors, 0 warnings** |
+| `npm run typecheck` | clean |
+| `npm run test` | **2190/2190** (228 files; the removed `refundKeys` placeholder took 6 tests, 2 regressions added) |
+| `npm run build` | pass |
+| `npm run test:e2e` | **176/176** (51 s) |
+
+**Focused real-browser regression:** the same 49-scan sweep on the real stack: 0 axe violations, 0 API 5xx responses, the one dev-only React timing error above.
+
+### Security review
+
+The `/security-review` skill cannot run (no git remote). Manual review as above; no open BLOCKER or IMPORTANT finding.
+
+---
+
 ## Phase 6D: Wishlist (VS-038), 2026-11-12
 
 | Item | Value |

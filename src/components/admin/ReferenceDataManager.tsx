@@ -131,7 +131,7 @@ export function ReferenceDataManager({
                   </span>
                 )}
                 {!entry.isArchived && entry.isActive === false && (
-                  <span className="rounded-pill bg-warning-bg px-2 py-0.5 text-caption font-semibold text-warning">
+                  <span className="rounded-pill bg-warning-bg px-2 py-0.5 text-caption font-semibold text-warning-text">
                     Disabled
                   </span>
                 )}

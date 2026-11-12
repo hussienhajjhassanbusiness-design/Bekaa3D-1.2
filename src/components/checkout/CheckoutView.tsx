@@ -265,15 +265,18 @@ export function CheckoutView() {
           </p>
         )}
         <p className="text-body text-text-secondary">
-          Retrying the payment for an existing order isn&apos;t available on the website yet. Please contact us to
-          complete this order.
+          You can retry the payment from the order page.
         </p>
-        {phase.orderId && (
+        {phase.orderId ? (
           <Link
             href={`/account/orders/${encodeURIComponent(phase.orderId)}`}
             className="font-semibold text-brand-dark-green underline"
           >
             View order
+          </Link>
+        ) : (
+          <Link href="/account/orders" className="font-semibold text-brand-dark-green underline">
+            View your orders
           </Link>
         )}
       </section>

@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { stubGuest } from "./support/stubGuest";
 
 // REAL STOREFRONT INTEGRATION — PHASE 1. Deterministic, backend-
 // independent coverage for the real `/shop` catalogue, matching
@@ -38,6 +39,10 @@ async function mockReferenceData(page: Page) {
 }
 
 test.describe("Shop catalogue (/shop)", () => {
+  test.beforeEach(async ({ page }) => {
+    await stubGuest(page);
+  });
+
   test("loads and shows real products from the catalogue endpoint", async ({ page }) => {
     await mockReferenceData(page);
     await page.route("**/api/v1/products**", (route) =>

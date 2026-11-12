@@ -26,6 +26,7 @@ Deliberately **not** all derived from brand green — status meaning must stay l
 | `success-bg` | `#3D793A` at 8% opacity | Success alert/badge background |
 | `warning` | `#B8860B` | Pending, awaiting response, cooldown-active, in-production |
 | `warning-bg` | `#B8860B` at 8% opacity | Warning alert/badge background |
+| `warning-text` | `#805B07` | Warning **text** (badges, inline notes). `#B8860B` text is ~3:1 on `warning-bg` and fails WCAG AA for small text; this darker amber is 5.6:1. Keep `warning` for borders, icons and fills (phase 6E) |
 | `danger` | `#B3261E` | Errors, destructive actions, rejected, cancelled, failed payment |
 | `danger-bg` | `#B3261E` at 8% opacity | Error alert/badge background |
 | `info` | `#2B6CB0` | Neutral informational banners, "verifying," in-transit |
