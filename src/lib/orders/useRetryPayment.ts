@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { isFollowableRedirect } from "@/lib/checkout/checkoutModel";
 import { followPaymentRedirect } from "@/lib/checkout/paymentRedirect";
+import { isPaymentProviderAllowed } from "@/lib/checkout/paymentProviderGuard";
 import { orderKeys } from "./orderKeys";
 import { ordersApi } from "./ordersApi";
 import { describePaymentRetryError, type PaymentRetryErrorOutcome } from "./paymentRetryErrors";
@@ -55,7 +56,8 @@ export function useRetryPayment(orderId: string) {
       tracker.retire();
       void queryClient.invalidateQueries({ queryKey: orderKeys.root });
       const url = read.payment.redirect_url;
-      if (isFollowableRedirect(url)) {
+      // Phase 6F: never the mock provider's page in a production build.
+      if (isFollowableRedirect(url) && isPaymentProviderAllowed(read.payment.provider)) {
         setState({ kind: "redirecting" });
         followPaymentRedirect(url);
         // Stay locked: the browser is leaving for the provider.

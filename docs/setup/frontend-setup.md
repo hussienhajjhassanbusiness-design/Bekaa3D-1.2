@@ -22,15 +22,15 @@ Copy the committed example file to your own local, git-ignored copy:
 cp .env.local.example .env.local
 ```
 
-`.env.local.example` (committed) contains:
+`.env.local.example` (committed) is the canonical list of **every** frontend variable (`API_PROXY_TARGET`, `MEDIA_PROXY_TARGET`, `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, `NEXT_PUBLIC_ALLOW_MOCK_PAYMENTS`), each marked server-only, development-only or public, with its production rule. For local development the only required line is:
 
 ```
 API_PROXY_TARGET=http://localhost:8000
 ```
 
-Edit `.env.local` to point at wherever you actually run the backend.
+Edit `.env.local` to point at wherever you actually run the backend. **Production** (topology, reverse proxy, the 52,494,336-byte upload limit, security headers, cookies, the mock-payment limitation and the deployment checklist): see [`production-readiness.md`](production-readiness.md).
 
-- `API_PROXY_TARGET` is read **server-side only**, by `next.config.ts`'s `rewrites()`. It must **never** be renamed with a `NEXT_PUBLIC_` prefix — that would ship the backend's real origin into client-side JavaScript, which this design specifically avoids. There is no `NEXT_PUBLIC_*` variable anywhere in FVS-001.
+- `API_PROXY_TARGET` is read **server-side only**, by `next.config.ts`'s `rewrites()`. It must **never** be renamed with a `NEXT_PUBLIC_` prefix — that would ship the backend's real origin into client-side JavaScript, which this design specifically avoids. (FVS-001 had no `NEXT_PUBLIC_*` variable; the two that exist now are public by design and listed in `.env.local.example`.)
 - `.env.local` is git-ignored (`.gitignore`'s `.env*.local` pattern); `.env.local.example` is committed.
 - This is not a secret — it's a local-development convenience value, not a credential.
 

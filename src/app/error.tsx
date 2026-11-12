@@ -25,8 +25,12 @@ export default function Error({
   useEffect(() => {
     // Dev-console-only diagnostic — never rendered to the user. No external
     // logging dependency; see T07 scope (logging infrastructure is out of
-    // scope beyond this).
-    console.error(error);
+    // scope beyond this). Phase 6F: a production build does not write the
+    // raw error to the visitor's console; server-side failures keep their
+    // `digest` in the server logs (docs/setup/production-readiness.md).
+    if (process.env.NODE_ENV !== "production") {
+      console.error(error);
+    }
   }, [error]);
 
   return (

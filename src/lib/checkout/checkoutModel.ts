@@ -1,5 +1,6 @@
 import type { ProductType, PriceRead } from "@/lib/catalog/productTypes";
 import { governorateLabel } from "@/lib/addresses/addressModel";
+import { isPaymentProviderAllowed } from "./paymentProviderGuard";
 import type {
   CheckoutAddressReadDTO,
   CheckoutLineReadDTO,
@@ -123,7 +124,9 @@ export function adaptCheckoutRead(dto: CheckoutReadDTO): CheckoutResultModel {
   if (payment === null) {
     next = "cash-confirmation";
   } else {
-    next = isFollowableRedirect(payment.redirectUrl) ? "online-redirect" : "online-no-redirect";
+    // Phase 6F: a production build never follows the mock provider's page
+    // (paymentProviderGuard.ts); that shows the "no payment page" result.
+    next = isFollowableRedirect(payment.redirectUrl) && isPaymentProviderAllowed(payment.provider) ? "online-redirect" : "online-no-redirect";
   }
 
   return {

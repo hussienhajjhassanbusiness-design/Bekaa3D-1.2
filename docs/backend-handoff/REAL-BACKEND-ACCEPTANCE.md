@@ -1,5 +1,66 @@
 # Real Backend Acceptance
 
+## Phase 6F: Production / deployment readiness, 2026-11-12
+
+No deployment, hosting, DNS or push. The deliverable is [`docs/setup/production-readiness.md`](../setup/production-readiness.md) plus the code changes below.
+
+### Changes
+
+| Change | Where |
+|---|---|
+| Security headers on every route: `nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: DENY`, a `Permissions-Policy`; a **production-only CSP** allowing only Cloudflare Turnstile as a third party; `poweredByHeader: false`. HSTS is left to the TLS proxy | `src/lib/config/securityHeaders.ts` (+ tests), `next.config.ts` |
+| **Mock-payment guard:** a production build never follows a `mock` provider's `redirect_url` (checkout, offer checkout, payment retry show "the payment page isn't available, nothing has been charged"); `NEXT_PUBLIC_ALLOW_MOCK_PAYMENTS=true` opts a staging build in | `src/lib/checkout/paymentProviderGuard.ts` (+ tests), `checkoutModel.ts`, `useRetryPayment.ts` |
+| `app/error.tsx` no longer writes the raw error to the visitor's console in production builds | `src/app/error.tsx` |
+| Canonical env list with server-only / development-only / public classes and production rules | `.env.local.example`, `docs/setup/frontend-setup.md` |
+| Production topology, the large-upload route, env, cookies/HTTPS/proxy headers, headers, media, observability, deployment checklist, rollback, limitations | `docs/setup/production-readiness.md` |
+
+### Production-mode smoke (local)
+
+`next build` + `next start` on :3000 against the local backend `2dfb27b` (`API_PROXY_TARGET` set only because no reverse proxy exists locally), real Edge, read-only page loads, twice: once built **without** a Turnstile key and once with Cloudflare's test key.
+
+| Check | Result |
+|---|---|
+| Headers on `/` | all five present, CSP exactly as documented, no `X-Powered-By` |
+| Routes (36): public `/`, `/shop`, two product pages, `/about`, `/login`, `/register`, `/forgot-password`, `/cart`, a 404, `/contact`, `/bring-your-idea`; customer `/account/{profile,orders,offers,wishlist,addresses,notifications}`, `/cart`, `/checkout`, an STL product (wishlist button and Make an offer present); admin (MFA) `/admin`, `/admin/{orders,offers,payments,contact-messages,custom-requests,products,settings}` | every route rendered its `h1` |
+| Turnstile, no key | "Verification is unavailable right now. Please try again later.", no Cloudflare frame (production never falls back to the test key) |
+| Turnstile, test key | the Cloudflare iframe rendered under the CSP |
+| CSP violations / page errors / API `5xx` / console errors | **0 / 0 / 0 / 0** (6E's dev-only React timing error does not occur in production) |
+| Cookies | `access_token` HttpOnly, Lax, `/`; `refresh_token` HttpOnly, Lax, `/api/v1/auth`; `csrf_token` readable, Lax, `/`. `Secure` off because the local backend is `ENVIRONMENT=development`; it is on in any other environment |
+
+Not exercised in the smoke (unit-tested instead): the mock-payment guard (a checkout would create an order) and uploads through a real reverse proxy (none exists locally).
+
+### Findings
+
+| Class | Finding | Status |
+|---|---|---|
+| BLOCKER (backend/product, not frontend) | No real online payment provider (VS-032): STL products and accepted offers cannot be sold publicly | documented prominently; frontend guard added |
+| BLOCKER (legal/product) | Consent, terms, privacy and STL final-sale wording are "PENDING LEGAL REVIEW" | documented |
+| IMPORTANT (fixed) | No security headers or CSP | added |
+| IMPORTANT (fixed) | A production frontend could send shoppers to the mock provider if pointed at a staging backend | guard added |
+| IMPORTANT (documented, backend deployment) | The backend rate-limits by `request.client.host`; behind a proxy uvicorn needs `--proxy-headers --forwarded-allow-ips=<proxy>` or all visitors share one bucket | deployment checklist |
+| IMPORTANT (documented) | BYI uploads above 10 MB fail through Next's proxy | the proxy routes `/api` to the backend directly, `client_max_body_size 51m` (≥ 52,494,336 bytes) |
+| FOLLOW-UP | CSP keeps `'unsafe-inline'` scripts (a nonce needs middleware and dynamic rendering) | documented |
+| FOLLOW-UP | `isFollowableRedirect` accepts `http:` for the local mock; make it `https:`-only with VS-032 | documented |
+| ACCEPTED | `img-src https:` so `/media` may live on a separate HTTPS origin | images cannot execute script |
+| ACCEPTED | `console.error` kept in development builds | dev diagnostics only |
+
+### Phase 6F gate
+
+| Command | Result |
+|---|---|
+| `npm run lint` | **0 errors, 0 warnings** |
+| `npm run typecheck` | clean |
+| `npm run test` | **2199/2199** (230 files) |
+| `npm run build` | pass |
+| `npm run test:e2e` | **176/176** (52 s) |
+
+### Security review
+
+- **Automated:** `/security-review` needs `origin/HEAD`; this repository has no remote (`git remote -v` is empty), so it could not run.
+- **Manual (deployment configuration):** no secret in the repository or in any `NEXT_PUBLIC_` variable; Turnstile has no production fallback; the backend origin is never exposed to the browser; private storage is never routed; cookies stay same-origin `Lax` with CSRF; the CSP allows one third party; the payment limitation is explicit in the env file and the deployment doc. No open frontend BLOCKER.
+
+---
+
 ## Phase 6E: UX, accessibility, performance and security hardening, 2026-11-12
 
 Not a redesign: an audit of every mounted route, fixing only confirmed defects.
