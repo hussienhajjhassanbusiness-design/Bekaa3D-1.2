@@ -46,7 +46,7 @@ test.describe("Shop catalogue (/shop)", () => {
 
     await page.goto("/shop");
 
-    await expect(page.getByRole("link", { name: /Articulated Dragon/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^(?!Sign in to save).*Articulated Dragon/ })).toBeVisible();
     await expect(page.getByText("$18.00")).toBeVisible();
   });
 
@@ -59,7 +59,7 @@ test.describe("Shop catalogue (/shop)", () => {
     });
 
     await page.goto("/shop");
-    await expect(page.getByRole("link", { name: /Articulated Dragon/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^(?!Sign in to save).*Articulated Dragon/ })).toBeVisible();
     // A plain click, not .check(): checking the box triggers a client-side
     // URL navigation that re-renders this exact checkbox element from
     // fresh data, so the URL (the real source of truth here, per
@@ -108,12 +108,12 @@ test.describe("Shop catalogue (/shop)", () => {
     });
 
     await page.goto("/shop");
-    await expect(page.getByRole("link", { name: /Articulated Dragon/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^(?!Sign in to save).*Articulated Dragon/ })).toBeVisible();
 
     await page.getByRole("button", { name: /load more/i }).click();
 
-    await expect(page.getByRole("link", { name: /Articulated Knight/ })).toBeVisible();
-    await expect(page.getByRole("link", { name: /Articulated Dragon/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^(?!Sign in to save).*Articulated Knight/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^(?!Sign in to save).*Articulated Dragon/ })).toBeVisible();
   });
 
   test("search suggestions appear after 3 characters and link to the real product-detail route", async ({ page }) => {

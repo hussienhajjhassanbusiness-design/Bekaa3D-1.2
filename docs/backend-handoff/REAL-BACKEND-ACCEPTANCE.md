@@ -1,5 +1,76 @@
 # Real Backend Acceptance
 
+## Phase 6D: Wishlist (VS-038), 2026-11-12
+
+| Item | Value |
+|---|---|
+| Frontend commit tested | `f7bb79a` (wishlist). Committed before the run |
+| Backend | `C:\My projects\Bekaa3D-backend`, branch `main`, commit **`2dfb27b`** (unchanged) |
+| Contract check | running `/openapi.json` identical to the handoff copy (checked in 6C, same backend process); then `engagement/api/wishlist.py`, `engagement/api/schemas.py` (`WishlistItemRead.of`) |
+| Runtime | Docker Compose backend on :8000; `npm run dev` on :3000 for the run only |
+| Method | real Edge through Playwright, real frontend and backend, **no route mocking**; admin through the frontend proxy (password + TOTP) only to create, hide and soft-delete one disposable STL product. Script in the session scratchpad, never committed |
+| Identities | fresh customers `accept-wish-a-<ts>` and `accept-wish-b-<ts>@example.com`; admin from `%USERPROFILE%\.bekaa3d\dev-admin.json` (never printed) |
+| Rate limits | the reruns spent the per-IP `register` budget; the dev Redis keys `ratelimit:auth:{register,verify,login,mfa:verify}:172.18.0.1` were deleted before the final run. No backend code or setting changed |
+| Data | the disposable `accept-wish-stl-<ts>` products (one per run, four runs aborted on script bugs) were soft-deleted through `DELETE /api/v1/admin/products/{id}`; the disposable customers' wishlist rows remain |
+
+**Overall: PASS, 11/11** (final run). Earlier runs stopped on script problems, not app defects: "Log out" looked for on the product page (it is in the account layout), a count read before the anonymous heart rendered, a reused TOTP code within one 30 s step, and the register rate limit.
+
+### Current contract (as implemented)
+
+- `GET /api/v1/me/wishlist?cursor&limit(1-100, default 20)` → `{items: WishlistItemRead[], next_cursor}`, the caller's own active rows, newest first; session only. `WishlistItemRead`: `product_id`, `created_at`, `available`, `name`, and `slug`, `type`, `price_cents`, `currency`. `available` is false once the product is soft-deleted or hidden (`is_visible = false`): the row stays, reduced to `name`. It is **not** the stock flag (an out-of-stock product is still `available`).
+- `PUT /api/v1/me/wishlist/{product_id}` → `204`, idempotent; `404` for an unknown or non-public product. `DELETE …` → `204`, idempotent (no `404`). Both: verified email (`403 EMAIL_VERIFICATION_REQUIRED`), CSRF (`403 CSRF_INVALID`), one 120/h per-user bucket (`429`).
+- There is **no** per-product "is it saved?" route and no product field for it. `GET /admin/analytics/wishlist` and `AdminProductDetail.wishlist_count` exist for the administrator and are not used in this phase.
+
+### Frontend behaviour
+
+- **One canonical query**, `["wishlist", "all"]` (`lib/wishlist`): `wishlistApi.listAll()` reads 100 per page and follows `next_cursor` (capped at 20 pages), so every heart on a page and `/account/wishlist` share one read and no per-product request is made. Enabled only for a signed-in viewer; the root is in `userScopedQueries` (cleared on logout, cross-tab logout and user switch).
+- **Writes:** `PUT`/`DELETE` with CSRF, then the list is re-read before the mutation settles (a removal also drops the row at once, since the `204` confirms it). Nothing is set optimistically; never auto-retried.
+- **Hearts:** on every `ProductCard` (shop grid and featured products) as a **sibling** of the card link, never nested in it; a toggle with a constant name ("Save {name} to your wishlist") and `aria-pressed`, 44 px target, not `disabled` while busy (so focus stays). On the product page a labelled button ("Save to wishlist" / "Remove from wishlist") with a status line linking the wishlist. Anonymous viewers get a sign-in link with the safe `returnTo`; there is no guest wishlist and no browser storage. Unverified viewers: no card heart; the product page points to verification. Not offered until the list has loaded, so it never shows a wrong state.
+- **`/account/wishlist`** (new account nav entry): loading, retryable error, empty state with a shop link, and the list (type badge, name linked to the product, price, saved date, Remove). An `available: false` row shows its name and "No longer available", with no link and only Remove. After a removal focus moves to the result message.
+- **Mocked E2E self-containment:** `stubEmptyCart` now also stubs the wishlist read, so signed-in specs never reach :8000 for it.
+
+### Results
+
+| # | Check | Result | Evidence |
+|---|---|---|---|
+| 1 | Empty wishlist | PASS | fresh customer → empty state; 0 rows |
+| 2 | Add from a product card | PASS | 13 hearts on `/shop` from one list read per page load; `PUT` (CSRF) → `204`; 1 row; heart pressed |
+| 3 | Persistence and card/detail sync | PASS | after reload the card heart is pressed; the product page shows "Remove from wishlist" and "Saved to your wishlist." |
+| 4 | Account wishlist, remove, reload | PASS | product-page remove → `DELETE 204`, re-add; `/account/wishlist` links `/shop/phone-stand-stl`; Remove → `204`; after reload empty; 0 rows |
+| 5 | Remove is idempotent | PASS | `DELETE` of an absent item → `204` |
+| 6 | `CSRF_INVALID` | PASS | stale cookie → `PUT 403`; safe copy; 0 rows |
+| 7 | Session refresh | PASS | `access_token` cookie dropped → `PUT 401`, refresh, `204`; 1 row |
+| 8 | Logout and re-login | PASS | after logout the heart is a sign-in link; after a real UI login it is pressed again |
+| 9 | Different-user isolation | PASS | B in the same tab: empty wishlist, heart not pressed; A keeps 1 row |
+| 10 | Hidden product | PASS | saved, then hidden by the admin (`PATCH 200`) → listed by name, "No longer available", no link; `PUT` of the hidden product → `404`; Remove still works |
+| 11 | No page errors | PASS | 0 `pageerror` |
+
+### Not tested against the real backend
+
+- `429` (120 changes per hour) and `403 EMAIL_VERIFICATION_REQUIRED`: unit-tested (the unverified UI never offers the write).
+- More than 100 saved items (multi-page): mocked E2E reads two pages with a page size of 1; the cursor cap is unit-tested.
+
+### Defects found
+
+- **Fixed during the gate:** three `shop.spec.ts` locators (`/Articulated Dragon/`) also matched the new anonymous heart link; they now exclude it. Test-only.
+
+### Phase 6D gate
+
+| Command | Result |
+|---|---|
+| `npm run lint` | 0 errors, 4 warnings (the known `<img>` warnings) |
+| `npm run typecheck` | clean |
+| `npm run test` | **2194/2194** (229 files) |
+| `npm run build` | pass (`/account/wishlist` static) |
+| `npm run test:e2e` | **176/176** (51 s), including `e2e/wishlist.spec.ts` 6/6. The first gate run had the 3 `shop.spec.ts` locator failures above; fixed and re-run once |
+
+### Security review
+
+- **Automated:** `/security-review` cannot run (no remote), as in 6B and 6C.
+- **Manual:** writes carry `X-CSRF-Token`; product ids are path-encoded; names are plain React text; the anonymous link uses the shared `returnTo` helper; no browser storage; the cache root is user-scoped (unit-tested); a hidden product exposes only its name, as the server sends it. No open finding.
+
+---
+
 ## Phase 6C: Offers / Make an Offer (VS-039, VS-040, VS-041), 2026-11-12
 
 | Item | Value |
