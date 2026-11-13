@@ -158,6 +158,8 @@
   --spacing-topbar: 64px; /* app top bar height (h-topbar) */
   --container-content: 1440px; /* main content cap (max-w-content) */
   --container-form: 1200px; /* admin long-form cap (max-w-form) */
+  --container-auth: 440px; /* auth card (COMPONENT-SPECS §38 login; forgot 448 unified to 440) */
+  --container-auth-wide: 640px; /* registration / MFA enrolment auth card (§38 register) */
 
   /* ---- Shape (DESIGN-TOKENS §6, DESIGN-SYSTEM §12.10) ----
      Semantic radii — prefer these in components. Tailwind defaults keep

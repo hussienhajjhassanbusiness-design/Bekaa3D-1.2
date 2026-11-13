@@ -117,3 +117,25 @@ describe("CaptchaWidget", () => {
     expect(document.querySelector("script[data-turnstile-loader]")).toBeNull();
   });
 });
+
+// Redesign Batch 4 — align="center" is presentation only.
+describe("CaptchaWidget — Batch 4 align", () => {
+  it("centred, it renders the same single widget and forwards the token exactly as before", async () => {
+    const fake = installFakeTurnstile();
+    const onToken = vi.fn();
+    render(<CaptchaWidget siteKey="k" onToken={onToken} align="center" />);
+
+    await waitFor(() => expect(fake.api.render).toHaveBeenCalledTimes(1));
+    expect(screen.getAllByTestId("captcha-widget")).toHaveLength(1);
+    act(() => fake.options().callback("t1"));
+    expect(onToken).toHaveBeenLastCalledWith("t1");
+  });
+
+  it("centred with no site key, it still shows the safe unavailable state and loads nothing", () => {
+    render(<CaptchaWidget siteKey={null} onToken={vi.fn()} align="center" />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent(/verification is unavailable/i);
+    expect(screen.queryByTestId("captcha-widget")).toBeNull();
+    expect(document.querySelector("script[data-turnstile-loader]")).toBeNull();
+  });
+});

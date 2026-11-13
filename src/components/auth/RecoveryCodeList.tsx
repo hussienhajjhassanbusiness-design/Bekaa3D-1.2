@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/forms/Button";
 import { Alert } from "@/components/feedback/Alert";
+import { Icon } from "@/components/ui/Icon";
 
 export interface RecoveryCodeListProps {
   codes: readonly string[];
@@ -51,21 +52,29 @@ export function RecoveryCodeList({ codes }: RecoveryCodeListProps) {
     window.print();
   }
 
+  // Batch 4: mono code grid in a tonal panel (2 columns from 640px), with
+  // neutral outline actions. Presentation only.
   return (
-    <div>
-      <p className="text-body text-text-primary">
+    <div className="flex flex-col gap-4">
+      <p className="text-body-md text-on-surface">
         Save these codes now — each is a one-time recovery credential, and they may not be shown again.
       </p>
-      <ul className="mt-2 list-none">
+      <ul className="grid list-none grid-cols-1 gap-x-6 gap-y-2 rounded-card border border-outline-variant/40 bg-surface-container-low p-4 sm:grid-cols-2">
         {codes.map((code) => (
-          <li key={code}>
-            <code className="text-body">{code}</code>
+          <li key={code} className="min-w-0">
+            <code className="break-all font-label text-body-md text-on-surface">{code}</code>
           </li>
         ))}
       </ul>
-      <div className="mt-4 flex gap-2">
-        <Button onClick={handleCopy}>Copy codes</Button>
-        <Button onClick={handlePrint}>Print codes</Button>
+      <div className="flex flex-wrap gap-3">
+        <Button variant="outline" onClick={handleCopy}>
+          <Icon name="content-copy" className="h-4 w-4" />
+          Copy codes
+        </Button>
+        <Button variant="outline" onClick={handlePrint}>
+          <Icon name="print" className="h-4 w-4" />
+          Print codes
+        </Button>
       </div>
       {copyFeedback === "success" && <Alert variant="success" message={COPY_SUCCESS_MESSAGE} />}
       {copyFeedback === "error" && <Alert variant="error" message={COPY_ERROR_MESSAGE} />}

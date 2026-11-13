@@ -71,3 +71,25 @@ describe("TextField", () => {
     expect(ref.current).toBe(screen.getByLabelText("Email address"));
   });
 });
+
+// Redesign Batch 4 — presentation-only props.
+describe("TextField — Batch 4 leadingIcon / mono", () => {
+  it("renders a decorative leading icon without changing the accessible name or value", async () => {
+    const { container } = render(<TextField label="Email" leadingIcon="mail" defaultValue="ada@example.com" />);
+
+    const input = screen.getByRole("textbox", { name: "Email" });
+    expect(input).toHaveValue("ada@example.com");
+    expect(container.querySelector('svg[data-icon="mail"]')).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("renders no icon by default and keeps native props (inputMode/autoComplete) when mono", () => {
+    const { container } = render(
+      <TextField label="Verification code" mono inputMode="numeric" autoComplete="one-time-code" />
+    );
+
+    const input = screen.getByLabelText("Verification code");
+    expect(input).toHaveAttribute("inputmode", "numeric");
+    expect(input).toHaveAttribute("autocomplete", "one-time-code");
+    expect(container.querySelector("svg[data-icon]")).toBeNull();
+  });
+});

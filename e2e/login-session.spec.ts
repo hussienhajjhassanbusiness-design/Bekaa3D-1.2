@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { stubEmptyCart } from "./support/stubCart";
 import { E2E_ORIGIN } from "./support/origin";
+import { stubGuest } from "./support/stubGuest";
 
 // Phase 5C: keep the header cart read inside the browser (no :8000).
 test.beforeEach(async ({ page }) => {
@@ -121,6 +122,26 @@ test.describe("Login flow (FVS-003 BATCH 4 T12)", () => {
 });
 
 test.describe("returnTo security (FVS-003 BATCH 4 Section E)", () => {
+  // Redesign Batch 4 — the Batch 2 header Sign in entry, end to end through
+  // the restyled login card: the current page becomes a safe returnTo and
+  // a successful login lands back on it.
+  test("header Sign in on /about -> /login?returnTo=%2Fabout -> log in -> back on /about", async ({ page }) => {
+    await stubGuest(page);
+    await page.goto("/about");
+
+    const signIn = page.getByRole("banner").getByRole("link", { name: "Sign in" });
+    await expect(signIn).toHaveAttribute("href", "/login?returnTo=%2Fabout");
+    await signIn.click();
+    await expect(page).toHaveURL(/\/login\?returnTo=%2Fabout$/);
+    await expect(page.getByRole("heading", { level: 1, name: /log in/i })).toBeVisible();
+
+    await mockSuccessfulLogin(page);
+    await fillValidForm(page);
+    await submitAndWaitForMe(page);
+
+    await expect(page).toHaveURL(/\/about$/, { timeout: 15_000 });
+  });
+
   test("a safe relative returnTo (with its own query string) is honored", async ({ page }) => {
     await mockSuccessfulLogin(page);
 
@@ -231,17 +252,26 @@ test.describe("Login real-browser accessibility & responsive check (FVS-003 BATC
       ]);
       expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
 
+      // Redesign Batch 4 — deliberate geometry update (BEKAA3D-REDESIGN-PLAN
+      // "Auth geometry"). The form now sits inside the Stitch 440px auth
+      // card, whose padding the old "<= 420 / >= viewport-10" numbers did not
+      // allow for. The intent is unchanged and asserted directly: centred,
+      // a readable capped width on wide screens, nearly full width on
+      // phones, and not hidden under the sticky 64px header.
       const formBox = await page.locator("form").boundingBox();
       expect(formBox).not.toBeNull();
-      if (width >= 768) {
-        // Desktop: capped at ~420px and horizontally centered.
-        expect(formBox!.width).toBeLessThanOrEqual(420);
-        const expectedX = (width - formBox!.width) / 2;
-        expect(Math.abs(formBox!.x - expectedX)).toBeLessThan(2);
+      const formCenter = formBox!.x + formBox!.width / 2;
+      expect(Math.abs(formCenter - width / 2)).toBeLessThan(2);
+      if (width >= 640) {
+        // Card capped at 440px (minus its 40px side padding): no long lines.
+        expect(formBox!.width).toBeLessThanOrEqual(440);
+        expect(formBox!.width).toBeGreaterThanOrEqual(300);
       } else {
-        // Mobile: single column, full width.
-        expect(formBox!.width).toBeGreaterThan(width - 10);
+        // Full-bleed card with a 16px gutter on each side.
+        expect(formBox!.width).toBeGreaterThanOrEqual(width - 40);
       }
+      const headingBox = await page.getByRole("heading", { level: 1 }).boundingBox();
+      expect(headingBox!.y).toBeGreaterThanOrEqual(64);
     });
   }
 
@@ -282,7 +312,7 @@ test.describe("Login real-browser accessibility & responsive check (FVS-003 BATC
     await expect(passwordInput).toHaveValue("correct-horse-battery");
   });
 
-  test("keyboard walkthrough: SkipLink -> Email -> Password -> show/hide -> submit, with visible focus and no trap", async ({
+  test("keyboard walkthrough: SkipLink -> Email -> Password -> show/hide -> Forgot password -> submit, with visible focus and no trap", async ({
     page,
   }) => {
     await page.goto("/login");
@@ -337,6 +367,13 @@ test.describe("Login real-browser accessibility & responsive check (FVS-003 BATC
     await page.keyboard.press("Tab");
     const toggle = page.getByRole("button", { name: /show password/i });
     await expect(toggle).toBeFocused();
+
+    // Redesign Batch 4 — the Stitch actions row puts "Forgot password?"
+    // between the password field and the submit button.
+    await page.keyboard.press("Tab");
+    const forgotLink = page.getByRole("link", { name: /forgot password/i });
+    await expect(forgotLink).toBeFocused();
+    await expect(forgotLink).not.toHaveCSS("box-shadow", "none");
 
     await page.keyboard.press("Tab");
     const submitButton = page.getByRole("button", { name: /log ?in/i });

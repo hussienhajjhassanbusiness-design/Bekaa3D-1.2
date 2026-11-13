@@ -193,6 +193,29 @@ describe("Register (/register)", () => {
     expect(await screen.findByText(/check your email/i)).toBeInTheDocument();
   });
 
+  it("Batch 4: the success card links to the existing resend-verification route", async () => {
+    const user = userEvent.setup();
+    mockedUseRegister.mockReturnValue({ mutateAsync: vi.fn().mockResolvedValue({}) } as never);
+    render(<Register />);
+
+    await fillValidForm(user);
+    await user.click(screen.getByRole("button", { name: /create account/i }));
+
+    await screen.findByText(/check your email/i);
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(screen.getByRole("link", { name: /request a new link/i })).toHaveAttribute("href", "/verify-email/resend");
+  });
+
+  it("Batch 4: the form keeps only email + password (no Stitch-only fields) and links to /login", () => {
+    mockedUseRegister.mockReturnValue({ mutateAsync: vi.fn() } as never);
+    render(<Register />);
+
+    expect(screen.getAllByRole("textbox")).toHaveLength(1);
+    expect(screen.queryByRole("checkbox")).toBeNull();
+    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(screen.getByRole("link", { name: /log in/i })).toHaveAttribute("href", "/login");
+  });
+
   it("moves focus to the success heading after a successful submit, so it never silently lands on <body>", async () => {
     const user = userEvent.setup();
     const mutateAsync = vi.fn().mockResolvedValue({ message: "check your email" });

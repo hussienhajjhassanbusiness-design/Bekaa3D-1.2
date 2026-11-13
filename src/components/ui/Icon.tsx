@@ -85,6 +85,27 @@ const PATHS = {
     </>
   ),
   "arrow-forward": <path d="M5 12h14M13 6l6 6-6 6" />,
+  "arrow-back": <path d="M19 12H5M11 6l-6 6 6 6" />,
+  lock: (
+    <>
+      <rect x="5" y="10.5" width="14" height="10" rx="2" />
+      <path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3" />
+      <path d="M12 14.5v2" />
+    </>
+  ),
+  "content-copy": (
+    <>
+      <rect x="8.5" y="8.5" width="11" height="12" rx="2" />
+      <path d="M15.5 8.5V5.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h2" />
+    </>
+  ),
+  print: (
+    <>
+      <path d="M7 8.5V3.5h10v5" />
+      <rect x="3.5" y="8.5" width="17" height="8" rx="2" />
+      <path d="M7 14h10v6.5H7z" />
+    </>
+  ),
   image: (
     <>
       <rect x="3.5" y="4.5" width="17" height="15" rx="2" />

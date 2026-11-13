@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { z } from "zod";
 import { useFormContext } from "react-hook-form";
 import { Form } from "@/components/forms/Form";
@@ -14,6 +13,8 @@ import type { ReactNode } from "react";
 import { CaptchaWidget } from "@/components/forms/CaptchaWidget";
 import { useCaptchaToken } from "@/lib/captcha/useCaptchaToken";
 import { captchaFailureMessage, classifyCaptchaFailure } from "@/lib/captcha/captchaErrors";
+import { AuthBackToLogin, AuthShell } from "@/components/auth/AuthShell";
+import { Icon } from "@/components/ui/Icon";
 
 // Phase 2 auth/account batch (FVS-004, request half) — same generic,
 // non-authoritative email-shape rule already established by registration/
@@ -65,7 +66,7 @@ function failureMessage(error: unknown): string {
 function ForgotPasswordFields({ captcha }: { captcha: ReactNode }) {
   const {
     register,
-    formState: { errors },
+    formState: { errors, isSubmitting },
   } = useFormContext<ForgotPasswordFormValues>();
 
   return (
@@ -75,12 +76,14 @@ function ForgotPasswordFields({ captcha }: { captcha: ReactNode }) {
         type="text"
         inputMode="email"
         autoComplete="email"
+        leadingIcon="mail"
         error={errors.email?.message}
         {...register("email")}
       />
       {captcha}
-      <Button type="submit" className="mt-4 w-full">
+      <Button type="submit" size="lg" isLoading={isSubmitting} className="w-full">
         Send reset link
+        <Icon name="arrow-forward" className="h-4 w-4" />
       </Button>
     </>
   );
@@ -121,11 +124,21 @@ export default function ForgotPassword() {
     }
   }
 
+  // Batch 4: Stitch A3 card (left-aligned heading, leading-icon email
+  // field, "Back to log in"). The description stays enumeration-safe: it
+  // never implies that the address belongs to an account.
   return (
-    <>
-      <h1 ref={headingRef} tabIndex={-1} className="text-h1 font-bold text-text-primary">
-        Reset your password
-      </h1>
+    <AuthShell
+      align="start"
+      title="Reset your password"
+      titleRef={headingRef}
+      status={isSubmitted ? { icon: "mail", tone: "success" } : undefined}
+      description={
+        isSubmitted
+          ? undefined
+          : "Enter the email address you use for Bekaa3D. If it matches an account, we\u2019ll send a link to choose a new password."
+      }
+    >
       {isSubmitted ? (
         <Alert variant="success" message={SUCCESS_MESSAGE} />
       ) : (
@@ -135,20 +148,17 @@ export default function ForgotPassword() {
             schema={forgotPasswordSchema}
             defaultValues={{ email: "" }}
             onSubmit={handleSubmit}
-            className="mt-4 max-w-[420px]"
+            className="flex flex-col gap-5"
           >
             <ForgotPasswordFields
-              captcha={<CaptchaWidget ref={captchaWidgetRef} siteKey={captchaSiteKey} onToken={onCaptchaToken} />}
+              captcha={
+                <CaptchaWidget ref={captchaWidgetRef} siteKey={captchaSiteKey} onToken={onCaptchaToken} align="center" />
+              }
             />
           </Form>
         </>
       )}
-      <p className="mt-4 text-body text-text-secondary">
-        Remembered your password?{" "}
-        <Link href="/login" className="text-text-link underline">
-          Log in
-        </Link>
-      </p>
-    </>
+      <AuthBackToLogin />
+    </AuthShell>
   );
 }

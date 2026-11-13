@@ -14,6 +14,8 @@ import { usePasswordResetConfirm } from "@/lib/auth/usePasswordResetConfirm";
 import { extractResetToken, removeTokenFromUrl } from "@/lib/auth/passwordResetToken";
 import { mapValidationErrorsToFields } from "@/lib/api/validationErrors";
 import type { ApiError } from "@/lib/api/ApiError";
+import { AuthBackToLogin, AuthShell, type AuthCardProps } from "@/components/auth/AuthShell";
+import { buttonLinkClassName } from "@/components/forms/Button";
 
 // Phase 2 auth/account batch (FVS-004, confirm half) — identical
 // code-point-counted password rule to registration (8-256 Unicode code
@@ -112,7 +114,7 @@ function resolveFailure(error: unknown): Failure {
 function ResetPasswordFields() {
   const {
     register,
-    formState: { errors },
+    formState: { errors, isSubmitting },
   } = useFormContext<ResetPasswordFormValues>();
 
   return (
@@ -121,10 +123,11 @@ function ResetPasswordFields() {
         label="New password"
         hint="Use 8-256 characters."
         autoComplete="new-password"
+        leadingIcon="lock"
         error={errors.new_password?.message}
         {...register("new_password")}
       />
-      <Button type="submit" className="mt-4 w-full">
+      <Button type="submit" size="lg" isLoading={isSubmitting} className="w-full">
         Reset password
       </Button>
     </>
@@ -193,18 +196,39 @@ export default function ResetPassword() {
   const showInvalidLink = token === null || failure?.kind === "invalid";
   const showExpired = failure?.kind === "expired";
 
-  return (
-    <>
-      <h1 ref={headingRef} tabIndex={-1} className="text-h1 font-bold text-text-primary">
-        Reset your password
-      </h1>
+  // Batch 4 (DERIVED from the A3 forgot-password card). Presentation only:
+  // the first render (server and hydration) is still the neutral spinner,
+  // and the token is never rendered, stored or put in a URL. The status
+  // glyph and description follow the state already computed above; the
+  // description never repeats the state words the alerts carry.
+  const status: AuthCardProps["status"] =
+    token === undefined
+      ? undefined
+      : isSubmitted
+        ? { icon: "check-circle", tone: "success" }
+        : showExpired
+          ? { icon: "warning", tone: "warning" }
+          : showInvalidLink
+            ? { icon: "error", tone: "error" }
+            : undefined;
+  const showForm = token !== undefined && !isSubmitted && !showInvalidLink && !showExpired;
 
+  return (
+    <AuthShell
+      align="start"
+      title="Reset your password"
+      titleRef={headingRef}
+      status={status}
+      description={showForm ? "Choose a new password for your Bekaa3D account." : undefined}
+    >
       {token === undefined ? (
-        <LoadingSpinner />
+        <div className="flex justify-center py-6">
+          <LoadingSpinner />
+        </div>
       ) : isSubmitted ? (
         <>
           <Alert variant="success" message={SUCCESS_MESSAGE} />
-          <Button onClick={() => router.push("/login")} className="mt-4">
+          <Button onClick={() => router.push("/login")} size="lg" className="w-full">
             Log in
           </Button>
         </>
@@ -214,9 +238,10 @@ export default function ResetPassword() {
             variant="error"
             message={showExpired ? EXPIRED_MESSAGE : token === null ? INVALID_LINK_MESSAGE : USED_OR_INVALID_MESSAGE}
           />
-          <Link href="/forgot-password" className="mt-4 inline-block text-text-link underline">
+          <Link href="/forgot-password" className={`w-full ${buttonLinkClassName("primary", "lg")}`}>
             Request a new link
           </Link>
+          <AuthBackToLogin />
         </>
       ) : (
         <>
@@ -225,12 +250,13 @@ export default function ResetPassword() {
             schema={resetPasswordSchema}
             defaultValues={{ new_password: "" }}
             onSubmit={handleSubmit}
-            className="mt-4 max-w-[420px]"
+            className="flex flex-col gap-5"
           >
             <ResetPasswordFields />
           </Form>
+          <AuthBackToLogin />
         </>
       )}
-    </>
+    </AuthShell>
   );
 }

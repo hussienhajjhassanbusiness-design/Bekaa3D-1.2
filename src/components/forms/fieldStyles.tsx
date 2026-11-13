@@ -22,10 +22,15 @@ export const FIELD_LABEL_CLASSES =
 
 // No outer margin: the field adds `mt-2` itself (on the control, or on the
 // wrapper when the control sits inside one — select chevron, password toggle).
-export function fieldControlClasses(hasError: boolean): string {
+// `mono` (Batch 4): JetBrains Mono with wide tracking for one-time codes
+// (the MFA verification step, COMPONENT-SPECS §38 admin card). Chosen here
+// rather than by appending a conflicting `font-*` class at the call site,
+// because Tailwind resolves same-property conflicts by stylesheet order.
+export function fieldControlClasses(hasError: boolean, options: { mono?: boolean } = {}): string {
   return (
     "block w-full min-h-12 rounded-control border bg-surface-container-lowest px-4 py-3 " +
-    "font-body text-body-md text-on-surface placeholder:text-outline " +
+    (options.mono ? "font-label tracking-widest " : "font-body ") +
+    "text-body-md text-on-surface placeholder:text-outline " +
     "transition-colors duration-200 ease-standard focus:border-primary " +
     "disabled:cursor-not-allowed disabled:bg-surface-container-low disabled:opacity-50 " +
     (hasError ? "border-error ring-2 ring-error/20" : "border-outline enabled:hover:border-on-surface-variant")
@@ -35,6 +40,12 @@ export function fieldControlClasses(hasError: boolean): string {
 export const FIELD_HINT_CLASSES = "mt-2 text-caption text-on-surface-variant";
 
 export const FIELD_ERROR_CLASSES = "mt-2 flex items-start gap-1.5 text-caption text-error";
+
+// Decorative leading icon inside the control (COMPONENT-SPECS §27 "leading
+// icon": Stitch login/forgot email and password fields). The control adds
+// `pl-11` so typed text clears it; the label still names the field.
+export const FIELD_LEADING_ICON_CLASSES =
+  "pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-outline";
 
 // Decorative leading icon for an error message — the text is the message.
 export function FieldErrorIcon() {

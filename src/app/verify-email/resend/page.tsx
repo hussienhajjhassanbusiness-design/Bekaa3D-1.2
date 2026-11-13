@@ -14,6 +14,7 @@ import { CaptchaWidget } from "@/components/forms/CaptchaWidget";
 import { useCaptchaToken } from "@/lib/captcha/useCaptchaToken";
 import { captchaFailureMessage, classifyCaptchaFailure } from "@/lib/captcha/captchaErrors";
 import type { ReactNode } from "react";
+import { AuthBackToLogin, AuthShell } from "@/components/auth/AuthShell";
 
 // FVS-002-IMPLEMENTATION-PLAN.md §1 row 14 (confirmed at BATCH 2): a fixed
 // 120-second cooldown starts after EVERY successful 202 — never inferred
@@ -75,7 +76,7 @@ type Failure = "network" | "timeout" | "failed" | "rateLimitedNoDuration" | null
 function ResendFields({ disabled, captcha }: { disabled: boolean; captcha: ReactNode }) {
   const {
     register,
-    formState: { errors },
+    formState: { errors, isSubmitting },
   } = useFormContext<ResendFormValues>();
 
   return (
@@ -88,11 +89,12 @@ function ResendFields({ disabled, captcha }: { disabled: boolean; captcha: React
         type="text"
         inputMode="email"
         autoComplete="email"
+        leadingIcon="mail"
         error={errors.email?.message}
         {...register("email")}
       />
       {captcha}
-      <Button type="submit" className="mt-4 w-full" disabled={disabled}>
+      <Button type="submit" size="lg" isLoading={isSubmitting} className="w-full" disabled={disabled}>
         Resend verification email
       </Button>
     </>
@@ -206,10 +208,15 @@ export default function ResendVerification() {
     }
   }
 
+  // Batch 4 (DERIVED from the A3 card). Markup only: the alerts, the single
+  // two-announcement live region and the non-live ticking countdown are the
+  // same elements as before, inside the shared auth card.
   return (
-    <>
-      <h1 className="text-h1 font-bold text-text-primary">Resend verification email</h1>
-
+    <AuthShell
+      align="start"
+      title="Resend verification email"
+      description="Enter the email address you signed up with. If it belongs to an account that still needs confirming, we&rsquo;ll send a new link."
+    >
       {showSuccess && (
         <div ref={successRef} tabIndex={-1}>
           <Alert variant="success" message={SUCCESS_MESSAGE} />
@@ -230,23 +237,31 @@ export default function ResendVerification() {
         {liveAnnouncement}
       </div>
 
-      <Form schema={resendSchema} defaultValues={{ email: "" }} onSubmit={handleSubmit} className="mt-4 max-w-[420px]">
-        <ResendFields
-          disabled={isActive}
-          captcha={<CaptchaWidget ref={captchaWidgetRef} siteKey={captchaSiteKey} onToken={onCaptchaToken} />}
-        />
-      </Form>
+      <div>
+        <Form schema={resendSchema} defaultValues={{ email: "" }} onSubmit={handleSubmit} className="flex flex-col gap-5">
+          <ResendFields
+            disabled={isActive}
+            captcha={
+              <CaptchaWidget ref={captchaWidgetRef} siteKey={captchaSiteKey} onToken={onCaptchaToken} align="center" />
+            }
+          />
+        </Form>
 
-      {isActive && (
-        // Visible ticking countdown — deliberately NOT an aria-live region,
-        // so it never spams screen readers on every tick (the live region
-        // above is the only aria-live element on this page).
-        <p data-testid="resend-countdown-ticking" className="mt-2 text-caption text-text-secondary">
-          {deadlineReason === "rateLimit"
-            ? `You can try again in about ${formatWaitDuration(remainingSeconds)}.`
-            : `Resend available in ${remainingSeconds} seconds.`}
-        </p>
-      )}
-    </>
+        {isActive && (
+          // Visible ticking countdown — deliberately NOT an aria-live region,
+          // so it never spams screen readers on every tick (the live region
+          // above is the only aria-live element on this page).
+          <p
+            data-testid="resend-countdown-ticking"
+            className="mt-3 text-center font-label text-label-caps uppercase tabular-nums text-on-surface-variant"
+          >
+            {deadlineReason === "rateLimit"
+              ? `You can try again in about ${formatWaitDuration(remainingSeconds)}.`
+              : `Resend available in ${remainingSeconds} seconds.`}
+          </p>
+        )}
+      </div>
+      <AuthBackToLogin />
+    </AuthShell>
   );
 }

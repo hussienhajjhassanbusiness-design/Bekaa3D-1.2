@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { z } from "zod";
 import { useFormContext } from "react-hook-form";
 import { Form } from "@/components/forms/Form";
@@ -13,6 +14,8 @@ import { CaptchaWidget } from "@/components/forms/CaptchaWidget";
 import { useCaptchaToken } from "@/lib/captcha/useCaptchaToken";
 import { captchaFailureMessage, classifyCaptchaFailure } from "@/lib/captcha/captchaErrors";
 import type { ReactNode } from "react";
+import { AuthShell, AUTH_INLINE_LINK_CLASSES } from "@/components/auth/AuthShell";
+import { Icon } from "@/components/ui/Icon";
 
 // FVS-002-IMPLEMENTATION-PLAN.md §1 row 3 (confirmed at BATCH 2): 8-256
 // Unicode code points, counted via [...password].length (never
@@ -93,7 +96,7 @@ function failureMessage(error: unknown): string {
 function RegisterFields({ captcha }: { captcha: ReactNode }) {
   const {
     register,
-    formState: { errors },
+    formState: { errors, isSubmitting },
   } = useFormContext<RegisterFormValues>();
 
   return (
@@ -108,6 +111,7 @@ function RegisterFields({ captcha }: { captcha: ReactNode }) {
         type="text"
         inputMode="email"
         autoComplete="email"
+        leadingIcon="mail"
         error={errors.email?.message}
         {...register("email")}
       />
@@ -115,12 +119,14 @@ function RegisterFields({ captcha }: { captcha: ReactNode }) {
         label="Password"
         hint="Use 8-256 characters."
         autoComplete="new-password"
+        leadingIcon="lock"
         error={errors.password?.message}
         {...register("password")}
       />
       {captcha}
-      <Button type="submit" className="mt-4 w-full">
+      <Button type="submit" size="lg" isLoading={isSubmitting} className="w-full">
         Create account
+        <Icon name="arrow-forward" className="h-4 w-4" />
       </Button>
     </>
   );
@@ -166,31 +172,58 @@ export default function Register() {
     }
   }
 
+  // Batch 4: Stitch A2 card (640px, divided header). Only the fields the
+  // backend accepts (email, password); Stitch's name / phone / country /
+  // confirm-password / terms fields are not added. The success state is an
+  // inline card (COMPONENT-SPECS §48 styling), not a timed overlay.
   if (isSubmitted) {
     return (
-      <>
-        <h1 ref={successHeadingRef} tabIndex={-1} className="text-h1 font-bold text-text-primary">
-          Create your account
-        </h1>
+      <AuthShell
+        width="wide"
+        showBrand
+        title="Create your account"
+        titleRef={successHeadingRef}
+        status={{ icon: "mail", tone: "success" }}
+      >
         <Alert variant="success" message={SUCCESS_MESSAGE} />
-      </>
+        <p className="text-center text-body-md text-on-surface-variant">
+          Didn&rsquo;t get the email?{" "}
+          <Link href="/verify-email/resend" className={AUTH_INLINE_LINK_CLASSES}>
+            Request a new link
+          </Link>
+        </p>
+      </AuthShell>
     );
   }
 
   return (
-    <>
-      <h1 className="text-h1 font-bold text-text-primary">Create your account</h1>
+    <AuthShell
+      width="wide"
+      showBrand
+      headerDivider
+      eyebrow="New customer"
+      title="Create your account"
+      description="Sign up with your email address to place orders, track them and keep a wishlist."
+    >
       {failure && <Alert variant="error" message={failure} />}
       <Form
         schema={registerSchema}
         defaultValues={{ email: "", password: "" }}
         onSubmit={handleSubmit}
-        className="mt-4 max-w-[420px]"
+        className="flex flex-col gap-5"
       >
         <RegisterFields
-          captcha={<CaptchaWidget ref={captchaWidgetRef} siteKey={captchaSiteKey} onToken={onCaptchaToken} />}
+          captcha={
+            <CaptchaWidget ref={captchaWidgetRef} siteKey={captchaSiteKey} onToken={onCaptchaToken} align="center" />
+          }
         />
       </Form>
-    </>
+      <p className="text-center text-body-md text-on-surface-variant">
+        Already have an account?{" "}
+        <Link href="/login" className={AUTH_INLINE_LINK_CLASSES}>
+          Log in
+        </Link>
+      </p>
+    </AuthShell>
   );
 }

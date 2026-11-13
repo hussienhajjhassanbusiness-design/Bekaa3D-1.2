@@ -6,6 +6,8 @@ import { LoadingSpinner } from "@/components/feedback/LoadingSpinner";
 import { Alert } from "@/components/feedback/Alert";
 import { useVerifyEmail } from "@/lib/auth/useVerifyEmail";
 import type { ApiError } from "@/lib/api/ApiError";
+import { AuthBackToLogin, AuthShell, type AuthCardProps } from "@/components/auth/AuthShell";
+import { buttonLinkClassName } from "@/components/forms/Button";
 
 // FVS-002-IMPLEMENTATION-PLAN.md §1 row 8 (confirmed at BATCH 2): the
 // verification token travels in the URL FRAGMENT (#token=...), never a
@@ -159,99 +161,82 @@ export default function VerifyEmail() {
     }
   }, [status]);
 
-  if (status === "verifying") {
-    return (
-      <>
-        <h1 className="text-h1 font-bold text-text-primary">Verify your email</h1>
-        <LoadingSpinner />
-      </>
-    );
-  }
+  // Batch 4 (DERIVED: A3 card + COMPONENT-SPECS §48 success circle). One
+  // card for every state; only the glyph and body change. The heading text
+  // is identical in every state, and the success heading still receives
+  // focus. While verifying, the spinner stays the only status region.
+  const STATUS_GLYPH: Record<Exclude<Status, "verifying">, NonNullable<AuthCardProps["status"]>> = {
+    success: { icon: "verified", tone: "success" },
+    expired: { icon: "warning", tone: "warning" },
+    rateLimited: { icon: "warning", tone: "warning" },
+    invalid: { icon: "error", tone: "error" },
+    network: { icon: "error", tone: "error" },
+    timeout: { icon: "error", tone: "error" },
+    failed: { icon: "error", tone: "error" },
+  };
 
-  if (status === "success") {
-    return (
-      <>
-        <h1 ref={successHeadingRef} tabIndex={-1} className="text-h1 font-bold text-text-primary">
-          Verify your email
-        </h1>
-        <Alert variant="success" message="Your email is verified." />
-        <p className="mt-4">
-          <Link href="/login" className="text-text-link underline">
+  return (
+    <AuthShell
+      title="Verify your email"
+      titleRef={status === "success" ? successHeadingRef : undefined}
+      status={status === "verifying" ? undefined : STATUS_GLYPH[status]}
+    >
+      {status === "verifying" && (
+        <div className="flex flex-col items-center gap-3 py-4">
+          <LoadingSpinner />
+          <p className="font-label text-label-caps uppercase text-on-surface-variant">Checking your link</p>
+        </div>
+      )}
+
+      {status === "success" && (
+        <>
+          <Alert variant="success" message="Your email is verified." />
+          <Link href="/login" className={`w-full ${buttonLinkClassName("primary", "lg")}`}>
             Log in
           </Link>
-        </p>
-      </>
-    );
-  }
+        </>
+      )}
 
-  if (status === "expired") {
-    return (
-      <>
-        <h1 className="text-h1 font-bold text-text-primary">Verify your email</h1>
-        <Alert variant="error" message={EXPIRED_MESSAGE} />
-        <p className="mt-4 flex gap-4">
-          <Link href="/login" className="text-text-link underline">
-            Log in
-          </Link>
-          <Link href="/verify-email/resend" className="text-text-link underline">
-            Request a new link
-          </Link>
-        </p>
-      </>
-    );
-  }
+      {status === "expired" && (
+        <>
+          <Alert variant="error" message={EXPIRED_MESSAGE} />
+          <div className="flex flex-col gap-3">
+            <Link href="/login" className={`w-full ${buttonLinkClassName("primary", "lg")}`}>
+              Log in
+            </Link>
+            <Link href="/verify-email/resend" className={`w-full ${buttonLinkClassName("secondary", "lg")}`}>
+              Request a new link
+            </Link>
+          </div>
+        </>
+      )}
 
-  if (status === "rateLimited") {
-    return (
-      <>
-        <h1 className="text-h1 font-bold text-text-primary">Verify your email</h1>
+      {status === "rateLimited" && (
         <Alert
           variant="warning"
           message={retryAfterSeconds !== undefined ? RATE_LIMIT_MESSAGE_WITH_WAIT(retryAfterSeconds) : RATE_LIMIT_MESSAGE}
         />
-      </>
-    );
-  }
+      )}
 
-  if (status === "network") {
-    return (
-      <>
-        <h1 className="text-h1 font-bold text-text-primary">Verify your email</h1>
-        <Alert variant="error" message={NETWORK_MESSAGE} />
-      </>
-    );
-  }
+      {status === "network" && <Alert variant="error" message={NETWORK_MESSAGE} />}
+      {status === "timeout" && <Alert variant="error" message={TIMEOUT_MESSAGE} />}
+      {status === "failed" && <Alert variant="error" message={GENERIC_FAILURE_MESSAGE} />}
 
-  if (status === "timeout") {
-    return (
-      <>
-        <h1 className="text-h1 font-bold text-text-primary">Verify your email</h1>
-        <Alert variant="error" message={TIMEOUT_MESSAGE} />
-      </>
-    );
-  }
+      {/* status === "invalid" also covers local-validation failure and 400
+          INVALID_TOKEN (invalid / used / already-verified all intentionally
+          collapse here per §13's confirmed mapping, never a separate state). */}
+      {status === "invalid" && (
+        <>
+          <Alert variant="error" message={INVALID_MESSAGE} />
+          <Link href="/verify-email/resend" className={`w-full ${buttonLinkClassName("primary", "lg")}`}>
+            Request a new link
+          </Link>
+        </>
+      )}
 
-  if (status === "failed") {
-    return (
-      <>
-        <h1 className="text-h1 font-bold text-text-primary">Verify your email</h1>
-        <Alert variant="error" message={GENERIC_FAILURE_MESSAGE} />
-      </>
-    );
-  }
-
-  // status === "invalid" — also covers local-validation failure, 400
-  // INVALID_TOKEN (invalid/used/already-verified all intentionally
-  // collapse here per §13's confirmed mapping — never a separate state).
-  return (
-    <>
-      <h1 className="text-h1 font-bold text-text-primary">Verify your email</h1>
-      <Alert variant="error" message={INVALID_MESSAGE} />
-      <p className="mt-4">
-        <Link href="/verify-email/resend" className="text-text-link underline">
-          Request a new link
-        </Link>
-      </p>
-    </>
+      {(status === "rateLimited" || status === "network" || status === "timeout" || status === "failed") && (
+        <AuthBackToLogin />
+      )}
+    </AuthShell>
   );
 }

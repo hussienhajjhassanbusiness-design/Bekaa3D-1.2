@@ -1,10 +1,23 @@
-import { FIELD_ERROR_CLASSES, FIELD_HINT_CLASSES, FIELD_LABEL_CLASSES, FieldErrorIcon, fieldControlClasses } from "./fieldStyles";
+import {
+  FIELD_ERROR_CLASSES,
+  FIELD_HINT_CLASSES,
+  FIELD_LABEL_CLASSES,
+  FIELD_LEADING_ICON_CLASSES,
+  FieldErrorIcon,
+  fieldControlClasses,
+} from "./fieldStyles";
+import { Icon, type IconName } from "@/components/ui/Icon";
 import { useId, type InputHTMLAttributes, type Ref } from "react";
 
 export interface TextFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "id"> {
   label: string;
   hint?: string;
   error?: string;
+  // Presentation only (Batch 4): a decorative icon inside the control, and a
+  // monospace face for one-time codes. Neither changes the input's value,
+  // name, type or accessible name.
+  leadingIcon?: IconName;
+  mono?: boolean;
   // React 19 passes `ref` to plain function components as a regular prop
   // (no forwardRef wrapper needed) — declared explicitly here so RHF's
   // register()/setFocus (FVS002-T08) can reach the real <input> node. It
@@ -19,7 +32,7 @@ export interface TextFieldProps extends Omit<InputHTMLAttributes<HTMLInputElemen
 // it's linked via aria-describedby only, so it's announced when focus
 // reaches the field rather than as a second, redundant live region on top
 // of Form's own error-summary announcement (T05).
-export function TextField({ label, hint, error, className, ...rest }: TextFieldProps) {
+export function TextField({ label, hint, error, leadingIcon, mono, className, ...rest }: TextFieldProps) {
   const inputId = useId();
   const hintId = useId();
   const errorId = useId();
@@ -31,13 +44,16 @@ export function TextField({ label, hint, error, className, ...rest }: TextFieldP
       <label htmlFor={inputId} className={FIELD_LABEL_CLASSES}>
         {label}
       </label>
-      <input
-        id={inputId}
-        aria-describedby={describedBy}
-        aria-invalid={error ? true : undefined}
-        className={`mt-2 ${fieldControlClasses(Boolean(error))} ${className ?? ""}`}
-        {...rest}
-      />
+      <div className="relative mt-2">
+        {leadingIcon && <Icon name={leadingIcon} className={FIELD_LEADING_ICON_CLASSES} />}
+        <input
+          id={inputId}
+          aria-describedby={describedBy}
+          aria-invalid={error ? true : undefined}
+          className={`${fieldControlClasses(Boolean(error), { mono })} ${leadingIcon ? "pl-11" : ""} ${className ?? ""}`}
+          {...rest}
+        />
+      </div>
       {hint && (
         <p id={hintId} className={FIELD_HINT_CLASSES}>
           {hint}

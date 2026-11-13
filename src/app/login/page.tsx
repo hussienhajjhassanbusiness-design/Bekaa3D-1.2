@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { z } from "zod";
 import { useFormContext } from "react-hook-form";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -17,6 +18,7 @@ import { useCooldown } from "@/lib/auth/useCooldown";
 import { AUTH_SESSION_QUERY_KEY } from "@/lib/auth/authSession";
 import { clearUserScopedQueries } from "@/lib/auth/userScopedQueries";
 import { resolveReturnTo } from "@/lib/auth/returnTo";
+import { AuthShell, AUTH_INLINE_LINK_CLASSES } from "@/components/auth/AuthShell";
 
 // FVS-003-IMPLEMENTATION-PLAN.md §2 rows 2/3/4b (confirmed BATCH 3B) —
 // email is trimmed before submission (the one field-level transformation
@@ -113,11 +115,19 @@ function MfaVerifyStep({ challenge, onVerified, onResetToLogin }: MfaVerifyStepP
   const [code, setCode] = useState("");
   const [recoveryCode, setRecoveryCode] = useState("");
   const [failure, setFailure] = useState<string | null>(null);
+  // Pending state for the Verify button (Batch 4). It also stops a second
+  // click from re-sending the same single-use challenge while the first
+  // request is in flight; the request itself is unchanged.
+  const [isVerifying, setIsVerifying] = useState(false);
   const { remainingSeconds, isActive } = useCooldown(challenge.deadline);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    if (isVerifying) {
+      return;
+    }
     setFailure(null);
+    setIsVerifying(true);
     try {
       if (mode === "code") {
         await mutateAsync({ challenge_id: challenge.challengeId, code });
@@ -132,19 +142,34 @@ function MfaVerifyStep({ challenge, onVerified, onResetToLogin }: MfaVerifyStepP
       } else {
         setFailure(message);
       }
+    } finally {
+      setIsVerifying(false);
     }
   }
 
+  // Batch 4: same auth card as the password step (A1), with the A4 admin
+  // card's lock glyph and a mono code input (BEKAA3D-ROUTE-MIGRATION row
+  // 10). Copy avoids the word "verification" outside the field label: the
+  // label is the one place that names the code.
   return (
-    <>
-      <h1 className="text-h1 font-bold text-text-primary">Log in</h1>
+    <AuthShell
+      showBrand
+      title="Two-factor authentication"
+      status={{ icon: "lock", tone: "info" }}
+      description={
+        mode === "code"
+          ? "Enter the code from your authenticator app to finish logging in."
+          : "Enter one of the recovery codes you saved when you set up two-factor authentication."
+      }
+    >
       {failure && <Alert variant="error" message={failure} />}
-      <form onSubmit={handleSubmit} className="mt-4 max-w-[420px] mx-auto">
+      <form onSubmit={handleSubmit} className="flex flex-col">
         {mode === "code" ? (
           <TextField
             label="Verification code"
             inputMode="numeric"
             autoComplete="one-time-code"
+            mono
             value={code}
             onChange={(event) => setCode(event.target.value)}
           />
@@ -152,25 +177,27 @@ function MfaVerifyStep({ challenge, onVerified, onResetToLogin }: MfaVerifyStepP
           <TextField
             label="Recovery code"
             autoComplete="off"
+            mono
             value={recoveryCode}
             onChange={(event) => setRecoveryCode(event.target.value)}
           />
         )}
-        <p className="mt-2 text-caption text-text-secondary" role="status">
+        <p className="mt-2 text-caption text-on-surface-variant" role="status">
           {isActive ? `Code expires in ${remainingSeconds} seconds.` : "This code has expired."}
         </p>
-        <Button type="submit" className="mt-4 w-full">
+        <Button type="submit" size="lg" isLoading={isVerifying} className="mt-6 w-full">
           Verify
         </Button>
         <Button
           type="button"
-          className="mt-2 w-full bg-transparent text-text-link"
+          variant="ghost"
+          className="mt-2 w-full"
           onClick={() => setMode((current) => (current === "code" ? "recovery" : "code"))}
         >
           {mode === "code" ? "Use a recovery code instead" : "Use my verification code instead"}
         </Button>
       </form>
-    </>
+    </AuthShell>
   );
 }
 
@@ -211,7 +238,7 @@ function failureMessage(error: unknown): string {
 function LoginFields() {
   const {
     register,
-    formState: { errors },
+    formState: { errors, isSubmitting },
   } = useFormContext<LoginFormValues>();
 
   return (
@@ -221,16 +248,27 @@ function LoginFields() {
         type="text"
         inputMode="email"
         autoComplete="email"
+        leadingIcon="mail"
         error={errors.email?.message}
         {...register("email")}
       />
       <PasswordField
         label="Password"
         autoComplete="current-password"
+        leadingIcon="lock"
         error={errors.password?.message}
         {...register("password")}
       />
-      <Button type="submit" className="mt-4 w-full">
+      {/* Stitch A1 actions row, without "Remember me" (no such feature):
+          a plain link to the existing reset flow. */}
+      <div className="-mt-2 flex justify-end">
+        <Link href="/forgot-password" className={`inline-flex min-h-11 items-center text-body-md ${AUTH_INLINE_LINK_CLASSES}`}>
+          Forgot password?
+        </Link>
+      </div>
+      {/* isLoading only shows the spinner; Form's <fieldset disabled> stays
+          the double-submit guard. */}
+      <Button type="submit" size="lg" isLoading={isSubmitting} className="w-full">
         Log in
       </Button>
     </>
@@ -310,18 +348,32 @@ function LoginPage() {
     );
   }
 
+  // Batch 4: Stitch A1 auth card. No social login, no remember-me and no
+  // status bar: none exist in the app. returnTo is still read only in
+  // navigateAfterAuthentication above, unchanged.
   return (
-    <>
-      <h1 className="text-h1 font-bold text-text-primary">Log in</h1>
+    <AuthShell
+      showBrand
+      title="Log in"
+      description="Welcome back. Enter your email and password to continue."
+      footer={
+        <>
+          New to Bekaa3D?{" "}
+          <Link href="/register" className={AUTH_INLINE_LINK_CLASSES}>
+            Create an account
+          </Link>
+        </>
+      }
+    >
       {failure && <Alert variant="error" message={failure} />}
       <Form
         schema={loginSchema}
         defaultValues={{ email: "", password: "" }}
         onSubmit={handleSubmit}
-        className="mt-4 max-w-[420px] mx-auto"
+        className="flex flex-col gap-5"
       >
         <LoginFields />
       </Form>
-    </>
+    </AuthShell>
   );
 }

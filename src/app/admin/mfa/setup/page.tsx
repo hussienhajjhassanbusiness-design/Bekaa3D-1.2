@@ -9,6 +9,7 @@ import { Alert } from "@/components/feedback/Alert";
 import { RecoveryCodeList } from "@/components/auth/RecoveryCodeList";
 import { useMfaSetup, type MfaSetupResponse } from "@/lib/auth/useMfaSetup";
 import { useMfaSetupConfirm } from "@/lib/auth/useMfaSetupConfirm";
+import { AuthCard } from "@/components/auth/AuthShell";
 
 // Phase 3 (FVS-005/P1-2) — MFA enrolment for an administrator whose
 // enrolment is incomplete. Reached either directly or via AdminGuard's
@@ -90,69 +91,100 @@ export default function MfaSetupPage() {
     }
   }
 
+  // Batch 4 (DERIVED: A4 admin auth card styling, rendered inside
+  // AdminShell, so the card only, no canvas). Markup only: the secret is
+  // still shown once in step 2 and never again, the otpauth URI is still
+  // redacted, and recovery codes still need the acknowledgment. The
+  // shell itself is Batch 9.
   if (step.kind === "password") {
     return (
-      <>
-        <h1 className="text-h1 font-bold text-text-primary">Set up two-factor authentication</h1>
-        {failure && <Alert variant="error" message={failure} />}
-        <form onSubmit={handleBeginSetup} className="mt-4 max-w-[420px]">
-          <PasswordField
-            label="Current password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-          />
-          <Button type="submit" className="mt-4 w-full">
-            Begin setup
-          </Button>
-        </form>
-      </>
+      <div className="flex justify-center py-6">
+        <AuthCard
+          eyebrow="Step 1 of 3"
+          title="Set up two-factor authentication"
+          status={{ icon: "lock", tone: "info" }}
+          description="Confirm your current password to start. Administrator accounts need two-factor authentication."
+        >
+          {failure && <Alert variant="error" message={failure} />}
+          <form onSubmit={handleBeginSetup} className="flex flex-col gap-6">
+            <PasswordField
+              label="Current password"
+              autoComplete="current-password"
+              leadingIcon="lock"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+            />
+            <Button type="submit" size="lg" className="w-full">
+              Begin setup
+            </Button>
+          </form>
+        </AuthCard>
+      </div>
     );
   }
 
   if (step.kind === "code") {
     return (
-      <>
-        <h1 className="text-h1 font-bold text-text-primary">Set up two-factor authentication</h1>
-        {failure && <Alert variant="error" message={failure} />}
-        <p className="mt-4 text-body text-text-primary">
-          Scan this QR code with your authenticator app, or enter the secret manually:
-        </p>
-        <p className="mt-2 break-all text-body font-mono text-text-primary">{step.setup.secret}</p>
-        <p className="mt-2 break-all text-caption text-text-secondary">
-          {redactOtpauthSecret(step.setup.otpauth_uri, step.setup.secret)}
-        </p>
-        <form onSubmit={handleConfirm} className="mt-4 max-w-[420px]">
-          <TextField
-            label="Verification code"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            value={code}
-            onChange={(event) => setCode(event.target.value)}
-          />
-          <Button type="submit" className="mt-4 w-full">
-            Confirm
-          </Button>
-        </form>
-      </>
+      <div className="flex justify-center py-6">
+        <AuthCard
+          width="wide"
+          eyebrow="Step 2 of 3"
+          title="Set up two-factor authentication"
+          status={{ icon: "lock", tone: "info" }}
+        >
+          {failure && <Alert variant="error" message={failure} />}
+          <div className="flex flex-col gap-3">
+            <p className="text-body-md text-on-surface">
+              Scan this QR code with your authenticator app, or enter the secret manually:
+            </p>
+            <div className="rounded-card border border-outline-variant/40 bg-surface-container-low p-4">
+              <p className="font-label text-label-caps uppercase text-on-surface-variant">Setup key</p>
+              <p className="mt-2 break-all font-label text-body-md text-on-surface">{step.setup.secret}</p>
+            </div>
+            <p className="break-all text-caption text-on-surface-variant">
+              {redactOtpauthSecret(step.setup.otpauth_uri, step.setup.secret)}
+            </p>
+          </div>
+          <form onSubmit={handleConfirm} className="flex flex-col gap-6">
+            <TextField
+              label="Verification code"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              mono
+              value={code}
+              onChange={(event) => setCode(event.target.value)}
+            />
+            <Button type="submit" size="lg" className="w-full">
+              Confirm
+            </Button>
+          </form>
+        </AuthCard>
+      </div>
     );
   }
 
   return (
-    <>
-      <h1 className="text-h1 font-bold text-text-primary">Save your recovery codes</h1>
-      <RecoveryCodeList codes={step.codes} />
-      <label className="mt-4 flex items-center gap-2 text-body text-text-primary">
-        <input
-          type="checkbox"
-          checked={acknowledged}
-          onChange={(event) => setAcknowledged(event.target.checked)}
-        />
-        I&rsquo;ve saved these codes somewhere safe
-      </label>
-      <Button className="mt-4 w-full" disabled={!acknowledged} onClick={() => router.replace("/admin")}>
-        Continue
-      </Button>
-    </>
+    <div className="flex justify-center py-6">
+      <AuthCard
+        width="wide"
+        eyebrow="Step 3 of 3"
+        title="Save your recovery codes"
+        status={{ icon: "check-circle", tone: "success" }}
+      >
+        <RecoveryCodeList codes={step.codes} />
+        <label className="flex min-h-11 items-center gap-3 text-body-md text-on-surface">
+          <input
+            type="checkbox"
+            className="h-5 w-5 shrink-0"
+            checked={acknowledged}
+            onChange={(event) => setAcknowledged(event.target.checked)}
+          />
+          I&rsquo;ve saved these codes somewhere safe
+        </label>
+        <Button size="lg" className="w-full" disabled={!acknowledged} onClick={() => router.replace("/admin")}>
+          Continue
+        </Button>
+      </AuthCard>
+    </div>
   );
 }

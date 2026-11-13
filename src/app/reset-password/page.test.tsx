@@ -301,3 +301,42 @@ describe("ResetPassword hydration (Phase 5A defect 6)", () => {
     await waitFor(() => expect(mutateAsync).toHaveBeenCalledWith({ token: "abc123", new_password: "newpassword1" }));
   });
 });
+
+// Redesign Batch 4 — the auth card must not change where the token lives.
+describe("ResetPassword (/reset-password) — Batch 4 auth card", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+  });
+
+  it("never renders the token or writes it to browser storage, before or after a submit", async () => {
+    const user = userEvent.setup();
+    setHash("#token=TOKEN_SECRET_VALUE_123");
+    const mutateAsync = vi.fn().mockResolvedValue(undefined);
+    mockedUsePasswordResetConfirm.mockReturnValue({ mutateAsync } as never);
+    const setItem = vi.spyOn(Storage.prototype, "setItem");
+
+    render(<ResetPassword />);
+    expect(document.body.innerHTML).not.toContain("TOKEN_SECRET_VALUE_123");
+
+    await fillAndSubmit(user);
+    await screen.findByText(/password has been reset/i);
+
+    expect(mutateAsync).toHaveBeenCalledWith({ token: "TOKEN_SECRET_VALUE_123", new_password: "newpassword1" });
+    expect(document.body.innerHTML).not.toContain("TOKEN_SECRET_VALUE_123");
+    expect(window.location.href).not.toContain("TOKEN_SECRET_VALUE_123");
+    for (const call of setItem.mock.calls) {
+      expect(JSON.stringify(call)).not.toContain("TOKEN_SECRET_VALUE_123");
+    }
+    expect(JSON.stringify({ ...window.localStorage, ...window.sessionStorage })).not.toContain("TOKEN_SECRET_VALUE_123");
+    setItem.mockRestore();
+  });
+
+  it("keeps one h1 in every state and offers a way back to log in from the form", () => {
+    mockedUsePasswordResetConfirm.mockReturnValue({ mutateAsync: vi.fn() } as never);
+    render(<ResetPassword />);
+
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(screen.getByRole("link", { name: /back to log in/i })).toHaveAttribute("href", "/login");
+  });
+});

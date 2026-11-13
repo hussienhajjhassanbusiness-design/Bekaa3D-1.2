@@ -540,3 +540,118 @@ describe("Login (/login) — MFA verification step", () => {
     expect(document.body.innerHTML).not.toContain("secret-challenge-id");
   });
 });
+
+// Redesign Batch 4 — the Stitch auth card. Navigation and pending-state
+// additions only; every auth behavior above is unchanged.
+describe("Login (/login) — Batch 4 auth card", () => {
+  it("renders one h1, a forgot-password link and a create-account link to the existing routes", () => {
+    mockedUseLogin.mockReturnValue({ mutateAsync: vi.fn() } as never);
+    render(<Login />);
+
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(screen.getByRole("link", { name: /forgot password/i })).toHaveAttribute("href", "/forgot-password");
+    expect(screen.getByRole("link", { name: /create an account/i })).toHaveAttribute("href", "/register");
+  });
+
+  it("offers no social login, remember-me or other unsupported auth options", () => {
+    mockedUseLogin.mockReturnValue({ mutateAsync: vi.fn() } as never);
+    render(<Login />);
+
+    expect(screen.queryByRole("button", { name: /google|facebook/i })).toBeNull();
+    expect(screen.queryByRole("checkbox")).toBeNull();
+    expect(screen.queryByText(/remember me/i)).toBeNull();
+  });
+
+  it("the auth-page links never carry or alter the returnTo destination", async () => {
+    const user = userEvent.setup();
+    mockSearchParams = new URLSearchParams("returnTo=%2Faccount%2Forders");
+    const mutateAsync = vi.fn().mockResolvedValue({ kind: "session", data: {} });
+    mockedUseLogin.mockReturnValue({ mutateAsync } as never);
+    render(<Login />);
+
+    expect(screen.getByRole("link", { name: /forgot password/i })).toHaveAttribute("href", "/forgot-password");
+    await fillValidForm(user);
+    await user.click(screen.getByRole("button", { name: /log ?in|sign ?in/i }));
+
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/account/orders"));
+  });
+
+  it.each(["https://evil.example/x", "//evil.example", "javascript:alert(1)", "/\\evil.example"])(
+    "rejects the unsafe returnTo %s and navigates to / instead",
+    async (unsafe) => {
+      const user = userEvent.setup();
+      mockSearchParams = new URLSearchParams({ returnTo: unsafe });
+      mockedUseLogin.mockReturnValue({ mutateAsync: vi.fn().mockResolvedValue({ kind: "session", data: {} }) } as never);
+      render(<Login />);
+
+      await fillValidForm(user);
+      await user.click(screen.getByRole("button", { name: /log ?in|sign ?in/i }));
+
+      await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/"));
+    }
+  );
+
+  it("shows a busy, disabled submit while the login request is pending", async () => {
+    const user = userEvent.setup();
+    mockedUseLogin.mockReturnValue({ mutateAsync: vi.fn(() => new Promise(() => {})) } as never);
+    render(<Login />);
+
+    await fillValidForm(user);
+    await user.click(screen.getByRole("button", { name: /log ?in|sign ?in/i }));
+
+    const submit = screen.getByRole("button", { name: /log ?in|sign ?in/i });
+    await waitFor(() => expect(submit).toHaveAttribute("aria-busy", "true"));
+    expect(submit).toBeDisabled();
+  });
+
+  it("MFA step: a single h1, a numeric one-time-code input, and a busy Verify that cannot resubmit the challenge", async () => {
+    const user = userEvent.setup();
+    mockedUseLogin.mockReturnValue({
+      mutateAsync: vi.fn().mockResolvedValue({
+        kind: "mfaChallenge",
+        data: { challenge_id: "secret-challenge-id", expires_in_seconds: 300 },
+      }),
+    } as never);
+    const verifyMutateAsync = vi.fn(() => new Promise(() => {}));
+    mockedUseMfaVerify.mockReturnValue({ mutateAsync: verifyMutateAsync } as never);
+    render(<Login />);
+
+    await fillValidForm(user);
+    await user.click(screen.getByRole("button", { name: /log ?in|sign ?in/i }));
+    const codeInput = await screen.findByLabelText(/verification code/i);
+
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(codeInput).toHaveAttribute("inputmode", "numeric");
+    expect(codeInput).toHaveAttribute("autocomplete", "one-time-code");
+
+    await user.type(codeInput, "123456");
+    const verify = screen.getByRole("button", { name: /verify/i });
+    await user.click(verify);
+    await waitFor(() => expect(verify).toHaveAttribute("aria-busy", "true"));
+    await user.click(verify);
+
+    expect(verifyMutateAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it("MFA step: a recoverable failure (rate limit) re-enables Verify for another attempt", async () => {
+    const user = userEvent.setup();
+    mockedUseLogin.mockReturnValue({
+      mutateAsync: vi.fn().mockResolvedValue({
+        kind: "mfaChallenge",
+        data: { challenge_id: "c1", expires_in_seconds: 300 },
+      }),
+    } as never);
+    mockedUseMfaVerify.mockReturnValue({
+      mutateAsync: vi.fn().mockRejectedValue(httpError(429, "RATE_LIMITED")),
+    } as never);
+    render(<Login />);
+
+    await fillValidForm(user);
+    await user.click(screen.getByRole("button", { name: /log ?in|sign ?in/i }));
+    await user.type(await screen.findByLabelText(/verification code/i), "123456");
+    await user.click(screen.getByRole("button", { name: /verify/i }));
+
+    expect(await screen.findByText(/too many attempts/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /verify/i })).toBeEnabled();
+  });
+});

@@ -103,3 +103,15 @@ describe("PasswordField", () => {
     expect(ref.current).toBe(screen.getByLabelText("Password"));
   });
 });
+
+// Redesign Batch 4 — presentation-only leading icon.
+describe("PasswordField — Batch 4 leadingIcon", () => {
+  it("renders a decorative lock icon while the show/hide toggle keeps working", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<PasswordField label="Password" leadingIcon="lock" />);
+
+    expect(container.querySelector('svg[data-icon="lock"]')).toHaveAttribute("aria-hidden", "true");
+    await user.click(screen.getByRole("button", { name: "Show password" }));
+    expect(screen.getByLabelText("Password")).toHaveAttribute("type", "text");
+  });
+});

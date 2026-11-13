@@ -1,11 +1,21 @@
-import { FIELD_ERROR_CLASSES, FIELD_HINT_CLASSES, FIELD_LABEL_CLASSES, FieldErrorIcon, fieldControlClasses } from "./fieldStyles";
-import { Icon } from "@/components/ui/Icon";
+import {
+  FIELD_ERROR_CLASSES,
+  FIELD_HINT_CLASSES,
+  FIELD_LABEL_CLASSES,
+  FIELD_LEADING_ICON_CLASSES,
+  FieldErrorIcon,
+  fieldControlClasses,
+} from "./fieldStyles";
+import { Icon, type IconName } from "@/components/ui/Icon";
 import { useId, useState, type InputHTMLAttributes, type Ref } from "react";
 
 export interface PasswordFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "id" | "type"> {
   label: string;
   hint?: string;
   error?: string;
+  // Presentation only (Batch 4): decorative icon inside the control (Stitch
+  // login's `lock`). The toggle and accessible name are unchanged.
+  leadingIcon?: IconName;
   // React 19 passes `ref` to plain function components as a regular prop
   // (no forwardRef wrapper needed) — declared explicitly here so RHF's
   // register()/setFocus (FVS002-T08) can reach the real <input> node. It
@@ -22,7 +32,7 @@ export interface PasswordFieldProps extends Omit<InputHTMLAttributes<HTMLInputEl
 // separate prop, and deliberately no specific rule copy hardcoded here: the
 // backend's real password rules are unconfirmed, so any wording is this
 // field's *consumer*'s decision, not this primitive's.
-export function PasswordField({ label, hint, error, className, ...rest }: PasswordFieldProps) {
+export function PasswordField({ label, hint, error, leadingIcon, className, ...rest }: PasswordFieldProps) {
   const [isVisible, setIsVisible] = useState(false);
   const inputId = useId();
   const hintId = useId();
@@ -39,12 +49,13 @@ export function PasswordField({ label, hint, error, className, ...rest }: Passwo
           "trailing action"). Its accessible name is still the visible-to-AT
           text "Show password" / "Hide password", plus aria-pressed. */}
       <div className="relative mt-2">
+        {leadingIcon && <Icon name={leadingIcon} className={FIELD_LEADING_ICON_CLASSES} />}
         <input
           id={inputId}
           type={isVisible ? "text" : "password"}
           aria-describedby={describedBy}
           aria-invalid={error ? true : undefined}
-          className={`${fieldControlClasses(Boolean(error))} pr-14 ${className ?? ""}`}
+          className={`${fieldControlClasses(Boolean(error))} pr-14 ${leadingIcon ? "pl-11" : ""} ${className ?? ""}`}
           {...rest}
         />
         <button

@@ -7,6 +7,7 @@ import { Button } from "@/components/forms/Button";
 import { Alert } from "@/components/feedback/Alert";
 import { RecoveryCodeList } from "@/components/auth/RecoveryCodeList";
 import { useMfaRecoveryRegenerate } from "@/lib/auth/useMfaRecoveryRegenerate";
+import { AuthCard } from "@/components/auth/AuthShell";
 
 // P1-2 (POST /api/v1/auth/mfa/recovery-codes/regenerate) — invalidates
 // every existing recovery code and issues ten new ones, shown exactly
@@ -47,45 +48,56 @@ export default function MfaRecoveryCodesPage() {
     }
   }
 
+  // Batch 4 (DERIVED: A4 admin auth card styling inside AdminShell).
+  // Markup only; the one-time reveal and acknowledgment are unchanged.
   if (codes) {
     return (
-      <>
-        <h1 className="text-h1 font-bold text-text-primary">New recovery codes</h1>
-        <p className="mt-2 text-body text-text-secondary">
-          Your previous recovery codes no longer work. Save these new ones now.
-        </p>
-        <div className="mt-4">
+      <div className="flex justify-center py-6">
+        <AuthCard
+          width="wide"
+          title="New recovery codes"
+          status={{ icon: "check-circle", tone: "success" }}
+          description="Your previous recovery codes no longer work. Save these new ones now."
+        >
           <RecoveryCodeList codes={codes} />
-        </div>
-        <label className="mt-4 flex items-center gap-2 text-body text-text-primary">
-          <input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} />
-          I&rsquo;ve saved these codes somewhere safe
-        </label>
-        <Button className="mt-4 w-full" disabled={!acknowledged} onClick={() => router.replace("/admin/settings")}>
-          Done
-        </Button>
-      </>
+          <label className="flex min-h-11 items-center gap-3 text-body-md text-on-surface">
+            <input
+              type="checkbox"
+              className="h-5 w-5 shrink-0"
+              checked={acknowledged}
+              onChange={(event) => setAcknowledged(event.target.checked)}
+            />
+            I&rsquo;ve saved these codes somewhere safe
+          </label>
+          <Button size="lg" className="w-full" disabled={!acknowledged} onClick={() => router.replace("/admin/settings")}>
+            Done
+          </Button>
+        </AuthCard>
+      </div>
     );
   }
 
   return (
-    <>
-      <h1 className="text-h1 font-bold text-text-primary">Regenerate recovery codes</h1>
-      <p className="mt-2 text-body text-text-secondary">
-        This replaces all of your existing recovery codes. The old codes will stop working immediately.
-      </p>
-      {failure && <Alert variant="error" message={failure} />}
-      <form onSubmit={handleSubmit} className="mt-4 max-w-[420px]">
-        <PasswordField
-          label="Current password"
-          autoComplete="current-password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-        />
-        <Button type="submit" className="mt-4 w-full">
-          Regenerate codes
-        </Button>
-      </form>
-    </>
+    <div className="flex justify-center py-6">
+      <AuthCard
+        title="Regenerate recovery codes"
+        status={{ icon: "warning", tone: "warning" }}
+        description="This replaces all of your existing recovery codes. The old codes will stop working immediately."
+      >
+        {failure && <Alert variant="error" message={failure} />}
+        <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+          <PasswordField
+            label="Current password"
+            autoComplete="current-password"
+            leadingIcon="lock"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
+          <Button type="submit" size="lg" className="w-full">
+            Regenerate codes
+          </Button>
+        </form>
+      </AuthCard>
+    </div>
   );
 }

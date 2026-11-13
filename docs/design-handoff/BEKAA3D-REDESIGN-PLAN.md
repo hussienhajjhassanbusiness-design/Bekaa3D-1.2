@@ -241,6 +241,40 @@ These are product-owner calls. The plan proceeds with the **default** shown unle
 
 The dev-server cold-compile flake above (Batch 2 `/login`, Batch 3 admin routes) is fixed at the source: `npm run test:e2e` now runs against its own **production build** (`next build` + `next start` on `:3100`, output in `.next-e2e/`) instead of `next dev` on `:3000`, so no route compiles on demand during a run. Application timeouts, workers and retries are unchanged. No application code changed. Result: the previously flaky admin/auth group 58/58, then 135/135 over three repeats; full suite 199/199. Details: `docs/setup/frontend-setup.md` → "Default E2E Smoke Tests".
 
+### Batch 4 — Authentication and verification surfaces: COMPLETE
+
+**Route inventory (current mounted routes only; nothing added because Stitch has a design for it):**
+
+| Route | Stitch | Captcha | Security-sensitive behaviour kept as-is |
+|---|---|---|---|
+| `/login` (+ MFA verify step in the same page) | A1 HIGH; MFA step DERIVED (A4 styling) | no | returnTo validator, `/me` invalidation + user-scoped cache clear before navigation, challenge_id in memory only, burned/expired challenge forces a fresh login, Problem.code → safe copy |
+| `/register` | A2 HIGH | yes | single-use token reset after every attempt, enumeration-safe success, 429 copy, success-heading focus |
+| `/forgot-password` | A3 HIGH | yes | enumeration-safe success, captcha reset, 429 with Retry-After |
+| `/reset-password` | DERIVED (A3 card) | no | neutral first render, fragment read + sanitised in one client effect, token in memory only, 400/410/422/429 mapping |
+| `/verify-email` | DERIVED (A3 card + §48) | no | one-shot ref guard, fragment cleared, invalid/used/already-verified collapse to one state |
+| `/verify-email/resend` | DERIVED (A3 card) | yes | fixed 120s cooldown, two-announcement live region, non-live ticking countdown |
+| `/admin/mfa/setup`, `/admin/mfa/recovery-codes` (inside AdminShell) | DERIVED (A4 card styling) | no | secret shown once, otpauth URI redacted, recovery codes one-time with acknowledgment |
+
+Not built: the Stitch Admin Login (admins use `/login` + MFA), social login, remember-me, magic links, passkeys.
+
+**Shared presentation:** new `components/auth/AuthShell.tsx` — `AuthShell` (blueprint canvas + centred card inside the existing storefront chrome) and `AuthCard` (card only; used inside AdminShell for the MFA pages), plus `AuthBackToLogin` and `AUTH_INLINE_LINK_CLASSES`. Layout only: optional split wordmark (`aria-hidden`), status glyph (§48 circle, decorative), mono eyebrow, the page's single `h1` (programmatic focus target only when the page passes a ref), description, body, footer strip. It owns no form, request, validation, captcha or live region. Tokens `max-w-auth` (440) / `max-w-auth-wide` (640). Field primitives gained presentation-only props: `TextField`/`PasswordField` `leadingIcon` and `TextField` `mono` (one-time codes). `CaptchaWidget` gained `align="center"` (default `start` keeps Contact/BYI unchanged). Icons + `arrow-back`, `lock`, `content-copy`, `print`.
+
+**Chrome decision (Task 11):** auth pages keep the storefront Header and Footer (BEKAA3D-ROUTE-MIGRATION "Auth" shell) so users can navigate away; no route-group change. The MFA pages stay inside AdminShell (Batch 9).
+
+**Per page:** Login — 440 card, split wordmark, "Log in", leading-icon email/password, "Forgot password?" (→ `/forgot-password`) between password and submit, full-width lg submit with pending spinner, footer strip "New to Bekaa3D? Create an account" (→ `/register`). MFA step — same card, lock glyph, "Two-factor authentication", mono code input (`inputmode=numeric`, `autocomplete=one-time-code`, single field, unchanged payload), Verify shows busy and ignores a second click while the single-use challenge is in flight, ghost "Use a recovery code instead". Register — 640 card with divided header, eyebrow, only email + password + captcha, success card with a link to the existing resend route. Forgot / Reset / Resend — left-aligned A3 card, "Back to log in" mono link. Verify — one card, state glyph per state, primary/secondary link buttons. MFA setup — "Step N of 3" eyebrow, setup key in a mono tonal panel. RecoveryCodeList — mono 2-column code grid, outline Copy/Print.
+
+**Deviations from Stitch:** one canvas texture (green 40px blueprint grid, DESIGN-SYSTEM §12.20) instead of per-page patterns; forgot card 448 → 440; one 16px card radius; solid primary CTA instead of the login/forgot gradient (§12.9); all auth `h1`s use `headline-lg` (Stitch login used `headline-md`); no social buttons/divider, remember-me, Stitch-only registration fields (name, phone, country, confirm password, terms), status bar claims ("servers online", "AES-256"), rotating rings, parallax, side photo, decorative icon strip or timed success overlay; Stitch headings replaced by the app's real titles ("Log in", "Create your account", "Reset your password"); below 640px the card is full-bleed with a 16px gutter so the provider's fixed 300px captcha frame fits at 320 (it centres and spills ≤6px into the card padding rather than overflowing the page).
+
+**Login geometry E2E (deliberate update):** `login-session.spec.ts` asserted form ≤420 at ≥768 and ≥ viewport−10 below. The card's padding makes those numbers obsolete; the spec now asserts the intent directly: form centred at every width, ≤440 and ≥300 from 640px, ≥ viewport−40 below, `h1` clear of the 64px sticky header, no overflow. The keyboard walkthrough now includes "Forgot password?" (with a visible focus ring) between show/hide and submit.
+
+**Targeted tests:** unit 2290 → 2314 (+24): new `AuthShell.test` (5: one h1, ref-only focus target, decorative brand/glyph, owns no form/live region, back link); Login (+9: one h1 + forgot/register links, no social/remember-me, links never alter returnTo, four unsafe returnTo forms → `/`, pending submit busy/disabled, MFA single h1 + numeric one-time-code + no second verify while pending, recoverable MFA failure re-enables Verify); Register (+2: success links to resend; only email/password, link to /login); Reset (+2: token never rendered/stored/in URL across submit; one h1 + back link); TextField (+2), PasswordField (+1), CaptchaWidget (+2: centred widget unchanged; centred unavailable state loads nothing). E2E 199 → 206: header Sign in on `/about` → `/login?returnTo=%2Fabout` → log in → back on `/about`; new `auth-pages-responsive.spec.ts` (6 routes × 320/375/768/1024/1280/1440: one visible h1 below the header, no overflow, every control in the viewport, a simulated 300×65 captcha frame unclipped).
+
+**Visual QA** (Edge, production build, mocked anonymous session; 320 / 1280 plus the E2E widths): login, register, forgot, reset, verify (invalid), resend, login validation errors, MFA step, forgot success. 1280 vs Stitch: login and register match the A1/A2 card composition (wordmark, centred heading, mono labels, leading icons, full-width green CTA, footer strip / divided header); forgot matches A3 (left heading, description, captcha, CTA with arrow, divider, "Back to log in"). Derived pages share the same card, glyph and link family. Bug found and fixed in QA: the resend description rendered a literal `\u2019` (JSX attribute strings do not decode JS escapes) — now `&rsquo;`.
+
+**Known, unchanged:** the MFA countdown `<p role="status">` updates every second (pre-existing; the resend page already shows the non-spamming pattern) — worth aligning in Batch 11.
+
+**Gate:** lint ✓ (0 errors / 0 warnings) · typecheck ✓ · unit **2314/2314** (234 files) · build ✓ · E2E (smoke, production build) **206/206**, first run, no retries needed.
+
 ---
 
 ## 1. High-risk areas and how to restyle them safely
