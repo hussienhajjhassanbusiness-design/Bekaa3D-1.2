@@ -89,7 +89,9 @@ test.describe("Product detail (/shop/[slug])", () => {
     await page.goto("/shop/dragon-stl");
 
     await expect(page.getByRole("heading", { name: "Articulated Dragon" })).toBeVisible();
-    await expect(page.getByText("STL")).toBeVisible();
+    // The type badge itself (exact text): the Batch 2 footer copy also
+    // mentions "STL files".
+    await expect(page.getByRole("main").getByText("STL", { exact: true })).toBeVisible();
     await expect(page.getByText(/material:/i)).toHaveCount(0);
     await expect(page.getByText(/colour:/i)).toHaveCount(0);
     await expect(page.getByRole("link", { name: /chat on whatsapp/i })).toHaveCount(0);

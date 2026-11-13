@@ -28,8 +28,12 @@ function Heart({ filled }: { filled: boolean }) {
   );
 }
 
+// Icon: the Stitch card heart (COMPONENT-SPECS §11a/§11c) — a translucent
+// white circle over the image corner, always visible (never hover-only, so
+// touch and keyboard users get it too); saved = filled heart in the Stitch
+// favourite colour. Kept at 44px (Stitch: 40px) for the touch-target size.
 const ICON_CLASS =
-  "inline-flex h-11 w-11 items-center justify-center rounded-pill border border-border-default bg-white/95 text-brand-dark-green shadow-elevation-1 hover:bg-white";
+  "inline-flex h-11 w-11 items-center justify-center rounded-full bg-surface-container-lowest/90 text-on-surface-variant shadow-sm backdrop-blur-sm transition-colors duration-200 hover:text-error aria-pressed:text-error";
 const FULL_CLASS =
   "inline-flex items-center gap-2 rounded-md border border-brand-dark-green px-4 py-2 text-brand-dark-green hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-60";
 

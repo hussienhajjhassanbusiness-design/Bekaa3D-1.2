@@ -2,7 +2,7 @@
 
 **Goal:** current working Bekaa3D **plus** the Stitch "Precision Engineering System" design language. This is a re-skin, not a rebuild.
 
-**Status:** Batch 1 (tokens, fonts, global foundation, shared primitives) **complete** — see "Batch status" below. Batches 2–11 not started.
+**Status:** Batch 1 (tokens, fonts, global foundation, shared primitives) and Batch 2 (storefront Header, mobile navigation, Footer, ProductCard) **complete** — see "Batch status" below. Batches 3–11 not started.
 
 Companion documents:
 - [BEKAA3D-TOKEN-MIGRATION.md](./BEKAA3D-TOKEN-MIGRATION.md): what every token becomes, and the alias-first strategy
@@ -97,6 +97,81 @@ These are product-owner calls. The plan proceeds with the **default** shown unle
 **Gate:** lint ✓ (0 errors/0 warnings) · typecheck ✓ · unit 2212/2212 (230 files; baseline 2199 + 13 new) · build ✓ · E2E (smoke) 176/176. Production check: `next start` under the real CSP serves all three fonts from the same origin with no CSP errors. Note: typecheck first failed on a stale `.next/dev/types` entry for the deleted QA page (a generated artifact); after clearing `.next/dev` it passed.
 
 **Deferred to Batch 2+:** Header (incl. the Login/Account entry, D6), Footer, mobile navigation, ProductCard, `Container`, `PageHeader`, `Skeleton`; per-call-site promotion of `text-body` → `body-md` and `text-h2` → `headline-lg`/`headline-md`; checkbox/radio sizing and radio cards (inline in pages today); `FileUploader`, `CaptchaWidget`, `SuccessReceipt`, `LoadMore` restyles; admin shell (D5); alias removal (Batch 11).
+
+### Batch 2 — Storefront chrome and product card: COMPLETE
+
+**Decision applied:** D6 approved (product owner, Batch 2) — the header gets a Login / Account entry using the existing routes, with returnTo preserved. No dropdown, no new account features.
+
+**Header** (`components/layout/Header.tsx`, COMPONENT-SPECS §1 canonical / DESIGN-SYSTEM §12.5–§12.7):
+- 64px bar, content capped at 1440px (`max-w-content`), gutters 16 / 32 / 64px. Glass surface `bg-surface/80` + `backdrop-blur-xl` + `border-outline-variant/30` hairline + `shadow-sm`, painted on its own absolutely positioned layer, so `backdrop-filter` never becomes the containing block of a fixed descendant.
+- Sticky: `AppLayout`'s `<header>` landmark is `sticky top-0 z-40` (Stitch uses `fixed` + content offset; sticky needs no offset). z-40 keeps dialogs, toasts and the skip link (z-50) above it. `html { scroll-padding-top: 72px }` keeps focused elements and anchors clear of it (WCAG 2.4.11).
+- Logo: new shared `BrandMark` — the **real** logo glyph (`public/brand/bekaa3d-mark.png`, 129×144, cropped from `docs/assets/…jpg` with white converted to alpha; no hue change, never recoloured) beside the §12.6 standard wordmark (Hanken 20px / 800 / `primary`). The image is decorative (`alt=""`), so the home link's name stays exactly "Bekaa3D".
+- Desktop nav (≥1024): logo + links left (`gap-8`), Inter 16px `on-surface-variant` → hover `primary` (200ms); active = `primary` bold with a 2px `primary` underline and `aria-current="page"`. Same five real routes; Stitch link sets not used.
+- Right group: cart icon button (40px, round hover tint, 16px `primary` count badge capped "99+", count only in the accessible name, as before), then the auth entry, then (below 1024) the menu button.
+
+**Login / Account** (`components/layout/HeaderAccountLink.tsx`):
+- Signed out: "Sign in" → `/login?returnTo=<current path>` built with the shared `buildLoginRedirectPath` (same validator as everywhere else). On `/login`, `/register`, `/forgot-password`, `/reset-password`, `/verify-email/*` it links to plain `/login` (an auth page is never a returnTo). `aria-current="page"` on `/login`.
+- Signed in: "Account" → `/account` (redirects to the profile and owns its own protection); `aria-current="true"` anywhere under `/account`.
+- While the session resolves: an inert `aria-hidden` placeholder of the same size — no flash of the wrong state, no layout shift.
+- One element at every width: below 768px the label is `sr-only` (icon-only 40px button), from 768px icon + mono caps label in an outline pill. The accessible name never depends on layout. Logout stays where it already lives (account area); none added to the header.
+
+**Mobile navigation** (below 1024px; Stitch has none — RESPONSIVE-SPECS §1 recommendation):
+- Menu button (40px, `aria-label="Open menu"`, `aria-expanded`, `aria-haspopup="dialog"`, `aria-controls="mobile-nav"`) opens a right-hand full-height sheet (`max-w-sm`, `bg-surface`, `shadow-2xl`) built on the **existing `DialogShell`** (focus trap, Escape, backdrop click, focus return) via `panelClassName` — no second modal system. Portaled to `<body>` (the sticky header is its own stacking context), mounted client-only through `useSyncExternalStore`, and kept mounted while closed because `DialogShell` restores focus on the open→closed transition.
+- Inside: brand + "Close menu" button (receives focus on open), the same five links in a `nav "Main"` (`id="mobile-nav"`, Inter 18px, 56px rows, active `primary` bold on `surface-container-low`), and a full-width primary auth entry (Sign in / Account) at the foot.
+- Closes on: Close button, Escape, backdrop, following a link, any route change (render-time pathname comparison), and growing past 1024px (`matchMedia` listener). Page scroll is locked while open (`documentElement.style.overflow`, restored on close).
+- Cart stays in the bar at every width; the auth entry is in the bar at every width **and** in the sheet.
+
+**Footer** (`components/layout/Footer.tsx`, DESIGN-SYSTEM §12.8 / COMPONENT-SPECS §6):
+- `surface-container-low`, `border-t outline-variant`, `pt-24 pb-12` (`pt-16 pb-8` below 768), content capped at 1440 with the header's gutters.
+- Brand column (BrandMark in `on-surface` + one line condensed from the approved `/about` copy) + `nav "Footer"` with three headed lists (mono caps `label-caps` `h2`s, Inter 16px links `on-surface-variant` → `primary`): **Shop** (Shop, Bring your idea) · **Company** (About, Contact) · **Your account** (My account → `/account`, Wishlist → `/account/wishlist`, Cart → `/cart`; each route already protects itself, so the footer needs no auth state).
+- Bottom bar: `© <current year> Bekaa3D. All rights reserved.` + the real tagline in mono caps. Layout: 4 columns ≥1024, brand above a 3-column link grid at 768, brand above a 2-column link grid below 768.
+- The footer wordmark is plain text, not a second "Bekaa3D" link. No admin links.
+
+**ProductCard** (`components/catalog/ProductCard.tsx`, COMPONENT-SPECS §11b recommended canonical, DESIGN-SYSTEM §12.10/§12.11):
+- Still **one link** to `/shop/{slug}`; the wishlist heart is still a sibling over the image corner (nothing interactive nested). White `surface-container-lowest`, `rounded-card` 12px, `border-outline-variant/30`, `shadow-sm`.
+- Hover: the *wrapper* lifts 4px (300ms standard easing) so the heart moves with the card; the link gets `shadow-xl`; the image zooms to 105% over 500ms; the title turns `primary`; the CTA goes `primary-container`. All transforms off under `prefers-reduced-motion`.
+- Media: square `aspect-square` on `surface-container-low`, real backend `coverImage` with its alt, `object-cover` (never tiled), `loading="lazy"`. No image → image glyph + "No image available" (mono caps), never a broken image.
+- Over the image: category pill (`primary`, mono 10px bold caps `tracking-widest`, truncated before the heart's corner) and, when `is_featured`, a square "Featured" badge (§18 overlay badge, `on-surface-variant`).
+- Body `p-6`: format tag (Physical / STL) and — only when `review_count > 0` — a rating (filled star + "4.5 (12)", spoken once as "Rated 4.5 out of 5 from 12 reviews"); Hanken 20px title clamped to 2 lines (full name stays in the DOM and the link name); price via `PriceDisplay size="card"` (Hanken 20 / `primary`); an "Unavailable" warning pill when `!is_available`; then a full-width solid primary **"View details →"** CTA that is part of the link (no add-to-cart action added: the card has no cart behaviour today).
+- `WishlistButton` icon variant restyled only: translucent white circle, `shadow-sm`, `backdrop-blur-sm`, `on-surface-variant`, hover/saved `error` (Stitch favourite colour), always visible. `aria-pressed`, labels, sign-in link with returnTo, busy handling unchanged. `ProductGrid` gap → `gap-gutter` (24px) at every width.
+
+**Shared components:** new `BrandMark` (2 call sites: header, footer) and `HeaderAccountLink` (2 call sites: bar, sheet). Reused `DialogShell`, `Icon` (+ `menu`, `shopping-cart`, `person`, `login`, `arrow-forward`, `image`, `star`), `PriceDisplay`, `ProductTypeBadge`, `buildLoginRedirectPath`. No `Container`, nav-item or icon-button abstraction was added (no second real call site yet).
+
+**Deviations from Stitch (and why):**
+- Inline nav from **1024px**, not Stitch's 768: Stitch's link sets had 4 short labels; the app's 5 (incl. "Bring your idea") + logo + labelled auth entry crowded the 768px gutter (measured: 1px overflow). The sheet covers 768–1023.
+- Logo: real glyph + wordmark instead of Stitch's text-only wordmark (product decision: use the real logo).
+- Sticky instead of fixed (no content offset needed); no scroll-shrink (§12.5 says optional).
+- No header search pill (§1 canonical has one at lg+): it would be a new feature; `/shop` keeps its own search (Batch 3).
+- Signed-out shows one "Sign in" entry, not Stitch's LOGIN + REGISTER pair (the locked header decision asks for one entry; `/login` links to registration).
+- Footer: no newsletter, social circles, payment logos or Documentation/Privacy/Terms links (no real source); bottom bar shows the tagline instead of payment icons.
+- ProductCard CTA is "View details" (navigation), not "Add to cart" — no card-level cart behaviour exists and adding one would nest a second action. Price uses the §17 card role (`primary` 20px) rather than the shop screenshot's `on-surface-variant` 18px (Batch 1 `PriceDisplay size="card"`). Title clamps to 2 lines instead of `truncate`, so long names stay readable. No hover-only quick-view overlay (hover-only controls are not reachable on touch/keyboard). Category pill is always `primary` (no per-category colour data).
+- Rating star uses `warning` (amber-600, 3.2:1 on white) instead of amber-400 (2.1:1, below the 3:1 graphics minimum).
+- Wishlist heart stays 44px (Stitch 40px) for the touch-target size.
+- `CheckoutView` summary aside: `desktop:top-4` → `desktop:top-20` (one class), so the sticky summary is not hidden under the now-sticky header. Not a checkout redesign.
+
+**Admin scope:** `/admin/*` still renders inside the storefront chrome exactly as before Batch 2 (nothing new was added to admin); the `SiteChrome` switch that removes it lands with the admin shell in Batch 9, so admin never shows half a shell. The Footer has no admin links.
+
+**Account nav test constraint (account-profile.spec.ts):** that test protects the *account sidebar* `navigation "Account"` (present and bounded at 320–1920, narrower than the viewport from 768). Batch 2 does not touch it and it still passes unchanged. The new header entry is a link named "Account", never a `navigation` landmark, so it cannot collide with that locator; the header itself has no overflow at any width.
+
+**Targeted tests:**
+- `Header.test` rewritten (18): brand link + decorative real logo; landmark ownership; exact real nav hrefs; `aria-current`; signed-out Sign in with returnTo; signed-in Account; loading shows neither; cart → auth DOM order; menu closed state + `aria-controls`; open → labelled modal sheet, same links, focus on Close, scroll lock; auth state inside the sheet; Close returns focus + restores scroll; Escape; Tab wrap; link closes; route change closes; breakpoint growth closes.
+- New `HeaderAccountLink.test` (13): returnTo of the current page; plain `/login` on each auth page; `aria-current`; unsafe path `//evil.example` → `returnTo=%2F`; signed-in Account + section current; label always in the DOM; loading placeholder; `onNavigate`.
+- `Footer.test` (7): exact real link list, 7 links all inside `nav "Footer"`, no form/newsletter/legal text, no admin hrefs, headed lists, decorative logo, current year.
+- `ProductCard.test` (17, +8): unavailable pill now asserts the `on-warning-container` token (same AA intent); no rating at 0 reviews; real rating with spoken summary when > 0; one link holds image/name/price/CTA and no nested control; heart is a sibling with the product returnTo; real image + alt + lazy + `object-cover` in a square; reduced-motion classes; category shown; long name kept in full under a 2-line clamp.
+- `AppLayout.test`: header auth entry stubbed; sticky `z-40` header asserted; tab-walk bound raised for the extra stops.
+- E2E: new `storefront-chrome.spec.ts` (11, added to the smoke project): per width 320/375/768/1024/1280/1440 — 64px header, visible Sign in with returnTo, Cart, the right nav pattern, ≥40px bar targets below 1024, footer nav, no overflow; signed-in Account at 320 and 1280; header stays at y=0 after scrolling; keyboard-open sheet with focus inside, 5 links, sheet within the viewport, scroll locked, Escape returns focus; link navigation closes the sheet; footer hrefs. `login-session.spec.ts` keyboard walkthrough now includes the header Sign in stop after Cart (deliberate: a new real tab stop). Two page-wide text checks were made precise because the new footer copy contains "order" / "STL": `admin-orders.spec.ts` checks `<main>` for leaked order text; `product-detail.spec.ts` matches the STL badge exactly inside `<main>`. Intent unchanged in both.
+
+**Visual QA** (Edge, mocked catalogue with real-shaped data incl. a square image, a 16:9 image, no image, a long name, a long category, unavailable, featured, rated, saved-to-wishlist; signed out and signed in; 320 / 375 / 768 / 1024 / 1280 / 1440):
+- No horizontal overflow at any width in either auth state (after moving the inline nav to 1024; it was 1px over at 768 signed in). Header 64px everywhere.
+- 1280 vs `shop_…/screen.png`: same 64px glass bar, logo + links left (canonical) with the Shop underline, cart + auth on the right; 3-up cards at 296px with square media, category pill top-left, heart top-right, 24px body, Hanken title, price, full-width green CTA; footer brand + columns + bottom bar. Differences are the listed deviations.
+- Cards: equal heights in a row; 16:9 image cropped square, never tiled; no-image placeholder; 2-line clamp with ellipsis; unavailable pill wraps under the price when narrow; long category pill truncates before the heart (full name stays in the link name). Card widths 288 (320) · 343 (375) · 208 (768) · 211 (1024) · 296 (1280/1440); the narrow 768/1024 cards come from the current shop filter column (Batch 3 moves filters to a drawer below 1024).
+- Mobile: bar fits at 320 (logo, cart, sign-in icon, menu); sheet full-width at 320/375, 56px rows, clear Close, primary Account/Sign in at the foot.
+- Cart badge renders on the icon corner with "Cart, 3 items" as the name; keyboard focus shows the 2px white + 4px primary ring on the round cart button, links, the menu button and card links.
+- Reduced motion: lift, zoom and transitions disabled through `motion-reduce:` (asserted in unit tests) plus the global Batch 1 block.
+
+**Gate:** lint ✓ (0 errors / 0 warnings) · typecheck ✓ · unit **2248/2248** (231 files; 2212 + 36) · build ✓ · E2E (smoke) **187/187** (176 + 11 new). The single gate run had 3 E2E failures: two were the page-wide text checks above (fixed in the specs only, re-run green); one (`account-profile` anonymous redirect) was a cold dev-server compile of `/login` under parallel load — the header had already resolved, the redirect was pending — and passed 3/3 in isolation and in the targeted re-run. No application code changed after the gate, so per §4 only the affected specs were re-run (25/25).
+
+**Deferred to Batch 3+:** WhatsApp FAB restyle and its contrast decision (token doc), `SkipLink` restyle, `PageHeader`, `Container`, filter drawer and shop/home/PDP composition (Batch 3), header search (not planned without a product decision), wishlist page cards (`WishlistList`, Batch 7), admin chrome removal (Batch 9).
 
 ---
 

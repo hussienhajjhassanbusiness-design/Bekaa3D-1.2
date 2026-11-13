@@ -208,7 +208,9 @@ test.describe("Admin orders + fulfillment (Phase 5H / FVS-030)", () => {
     await install(page, CUSTOMER_ME);
     await page.goto(`/admin/orders/${CASH_ID}`);
     await expect(page.getByText(/404/)).toBeVisible();
-    expect((await page.evaluate(() => document.body.innerText)).toLowerCase()).not.toContain("order");
+    // No admin order content leaks into the page body. Scoped to <main>: the
+    // static storefront footer copy ("made to order", Batch 2) is not data.
+    expect((await page.getByRole("main").innerText()).toLowerCase()).not.toContain("order");
   });
 
   test("queue: nav entry, server rows, filters sent to the backend", async ({ page }) => {

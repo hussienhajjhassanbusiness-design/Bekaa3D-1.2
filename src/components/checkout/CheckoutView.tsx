@@ -478,7 +478,7 @@ export function CheckoutView() {
         />
       </div>
 
-      <aside className="flex h-fit flex-col gap-4 desktop:sticky desktop:top-4">
+      <aside className="flex h-fit flex-col gap-4 desktop:sticky desktop:top-20">
         <CheckoutItems cart={cart} />
         <Button type="submit" isLoading={submitting} disabled={submitting || priceBlocked}>
           Place order

@@ -283,6 +283,12 @@
     }
   }
 
+  /* Batch 2: the storefront header is sticky (64px, h-topbar). Keyboard
+     focus and in-page anchors scroll clear of it (WCAG 2.4.11). */
+  html {
+    scroll-padding-top: calc(var(--spacing-topbar) + 8px);
+  }
+
   body {
     background-color: var(--color-background);
     color: var(--color-on-surface);

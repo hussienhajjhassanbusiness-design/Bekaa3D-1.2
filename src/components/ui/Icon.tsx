@@ -62,6 +62,37 @@ const PATHS = {
       <path d="M20 20l-3.2-3.2" />
     </>
   ),
+  // Batch 2 — storefront chrome and product card.
+  menu: <path d="M4 7h16M4 12h16M4 17h16" />,
+  "shopping-cart": (
+    <>
+      <path d="M3 4h2l2.4 10.2a1 1 0 0 0 1 .8h8.9a1 1 0 0 0 1-.8L20 8H6.2" />
+      <circle cx="9" cy="19" r="1.4" />
+      <circle cx="17" cy="19" r="1.4" />
+    </>
+  ),
+  person: (
+    <>
+      <circle cx="12" cy="8" r="3.75" />
+      <path d="M4.75 19.5c.9-3.4 3.8-5.5 7.25-5.5s6.35 2.1 7.25 5.5" />
+    </>
+  ),
+  login: (
+    <>
+      <path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4" />
+      <path d="M10 8l4 4-4 4" />
+      <path d="M14 12H4" />
+    </>
+  ),
+  "arrow-forward": <path d="M5 12h14M13 6l6 6-6 6" />,
+  image: (
+    <>
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2" />
+      <circle cx="9" cy="10" r="1.75" />
+      <path d="M20.5 16l-5-5-8.5 8.5" />
+    </>
+  ),
+  star: <path d="M12 3.5l2.6 5.3 5.9.85-4.25 4.15 1 5.85L12 16.9l-5.25 2.75 1-5.85L3.5 9.65l5.9-.85z" />,
 } as const;
 
 export type IconName = keyof typeof PATHS;

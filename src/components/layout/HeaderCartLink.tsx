@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Icon } from "@/components/ui/Icon";
 import { cartItemCount } from "@/lib/cart/cartModel";
 import { useCart } from "@/lib/cart/useCart";
 
@@ -12,6 +13,10 @@ import { useCart } from "@/lib/cart/useCart";
 // from the ONE canonical cart query (useCart, enabled only when signed
 // in), the same cache /cart and Add to cart use. There is no cart-count
 // endpoint, and this does not add a second cart cache.
+//
+// Stitch header icon button + cart badge (COMPONENT-SPECS §4): 40px hit
+// area, 24px glyph, round hover tint, 16px primary count badge. The count
+// is visual only; the accessible name carries it.
 export function HeaderCartLink() {
   const pathname = usePathname();
   const cartQuery = useCart();
@@ -23,22 +28,17 @@ export function HeaderCartLink() {
       href="/cart"
       aria-current={isActive ? "page" : undefined}
       aria-label={count > 0 ? `Cart, ${count} item${count === 1 ? "" : "s"}` : "Cart"}
-      className={`flex h-10 items-center gap-2 rounded-md px-2 text-body ${
-        isActive ? "font-semibold text-brand-dark-green" : "text-text-primary hover:text-brand-dark-green"
+      className={`relative inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors duration-200 hover:bg-surface-container hover:text-primary ${
+        isActive ? "text-primary" : "text-on-surface-variant"
       }`}
     >
-      <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h2l2.4 10.2a1 1 0 0 0 1 .8h8.9a1 1 0 0 0 1-.8L20 8H6.2" />
-        <circle cx="9" cy="19" r="1.4" />
-        <circle cx="17" cy="19" r="1.4" />
-      </svg>
-      <span aria-hidden="true">Cart</span>
+      <Icon name="shopping-cart" />
       {count > 0 && (
         <span
           aria-hidden="true"
-          className="min-w-6 rounded-pill bg-brand-dark-green px-2 text-center text-caption font-semibold text-text-on-brand"
+          className="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 font-body text-label-micro font-bold leading-none text-on-primary tabular-nums"
         >
-          {count}
+          {count > 99 ? "99+" : count}
         </span>
       )}
     </Link>

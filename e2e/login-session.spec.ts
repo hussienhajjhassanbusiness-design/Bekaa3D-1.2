@@ -293,7 +293,7 @@ test.describe("Login real-browser accessibility & responsive check (FVS-003 BATC
 
     // The real Header (FVS-022 follow-up) now contributes its own tab
     // stops before main content: the brand link, then Home/Shop/About (and, from phase 6B, Bring your idea/Contact).
-    // The mobile menu toggle is `tablet:hidden` and genuinely not in the
+    // The menu toggle is `desktop:hidden` and genuinely not in the
     // tab order at this (desktop) viewport, so it's not listed here.
     await page.keyboard.press("Tab");
     await expect(page.getByRole("link", { name: "Bekaa3D" })).toBeFocused();
@@ -312,6 +312,14 @@ test.describe("Login real-browser accessibility & responsive check (FVS-003 BATC
     // Phase 5C — the header cart link follows the main nav.
     await page.keyboard.press("Tab");
     await expect(page.getByRole("banner").getByRole("link", { name: "Cart" })).toBeFocused();
+    // Redesign Batch 2 (decision D6) — the header's Sign in entry follows the
+    // cart link. It appears once the session resolves as anonymous; on
+    // /login it is the current page and carries no returnTo.
+    const headerSignIn = page.getByRole("banner").getByRole("link", { name: "Sign in" });
+    await expect(headerSignIn).toHaveAttribute("href", "/login");
+    await expect(headerSignIn).toHaveAttribute("aria-current", "page");
+    await page.keyboard.press("Tab");
+    await expect(headerSignIn).toBeFocused();
 
     await page.keyboard.press("Tab");
     const emailInput = page.getByLabel(/email/i);

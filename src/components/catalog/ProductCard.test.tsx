@@ -5,7 +5,14 @@ import type { ProductCardModel } from "@/lib/catalog/productAdapters";
 
 // Phase 6D: the wishlist heart needs the auth context; it has its own tests
 // (src/components/wishlist), so it is stubbed out of these card tests.
-vi.mock("@/components/wishlist/WishlistButton", () => ({ WishlistButton: () => null }));
+// The stub is a real control so the no-nesting rule below can be checked.
+vi.mock("@/components/wishlist/WishlistButton", () => ({
+  WishlistButton: ({ productName, returnToPath }: { productName: string; returnToPath: string }) => (
+    <button type="button" data-return-to={returnToPath}>
+      Save {productName} to your wishlist
+    </button>
+  ),
+}));
 
 const baseProduct: ProductCardModel = {
   id: "p1",
@@ -57,7 +64,7 @@ describe("ProductCard", () => {
     render(<ProductCard product={{ ...baseProduct, isAvailable: false }} />);
     expect(screen.getByText(/unavailable/i)).toBeInTheDocument();
     // Phase 6E: AA contrast on the warning tint.
-    expect(screen.getByText(/unavailable/i)).toHaveClass("text-warning-text");
+    expect(screen.getByText(/unavailable/i)).toHaveClass("text-on-warning-container");
   });
 
   it("does not show an Unavailable badge for an available product", () => {
@@ -73,13 +80,62 @@ describe("ProductCard", () => {
     expect(screen.getByText(/featured/i)).toBeInTheDocument();
   });
 
-  it("never renders a star rating — reviews are always zero until VS-036 ships", () => {
-    render(<ProductCard product={baseProduct} />);
-    expect(screen.queryByText(/★|☆|review/i)).not.toBeInTheDocument();
+  it("never renders a star rating while there are no reviews (review_count 0)", () => {
+    const { container } = render(<ProductCard product={baseProduct} />);
+    expect(screen.queryByText(/★|☆|review|rated/i)).not.toBeInTheDocument();
+    expect(container.querySelector("[data-icon=star]")).toBeNull();
+  });
+
+  it("renders the real rating only when review_count is above zero, with a spoken summary", () => {
+    render(<ProductCard product={{ ...baseProduct, averageRating: 4.5, reviewCount: 12 }} />);
+    expect(screen.getByRole("link")).toHaveAccessibleName(/Rated 4\.5 out of 5 from 12 reviews/);
   });
 
   it("never renders a stock quantity — no such field exists in the contract", () => {
     render(<ProductCard product={baseProduct} />);
     expect(screen.queryByText(/in stock|stock:/i)).not.toBeInTheDocument();
+  });
+
+  it("the card link holds the image, name, price and a View details call to action — and no nested control", () => {
+    render(<ProductCard product={baseProduct} />);
+    const link = screen.getByRole("link");
+    expect(link).toHaveTextContent("View details");
+    expect(link).toContainElement(screen.getByRole("img", { name: "Articulated Dragon, view 1" }));
+    expect(link.querySelector("a, button, input, select, textarea")).toBeNull();
+  });
+
+  it("renders the wishlist heart as a sibling of the card link (never inside it), with the product page as returnTo", () => {
+    render(<ProductCard product={baseProduct} />);
+    const heart = screen.getByRole("button", { name: "Save Articulated Dragon to your wishlist" });
+    expect(screen.getByRole("link")).not.toContainElement(heart);
+    expect(heart).toHaveAttribute("data-return-to", "/shop/dragon");
+  });
+
+  it("uses the real cover image with its alt text, cropped to a square (never tiled)", () => {
+    render(<ProductCard product={baseProduct} />);
+    const img = screen.getByRole("img", { name: "Articulated Dragon, view 1" });
+    expect(img).toHaveAttribute("src", "/media/products/dragon.png");
+    expect(img).toHaveAttribute("loading", "lazy");
+    expect(img).toHaveClass("object-cover");
+    expect(img.parentElement).toHaveClass("aspect-square");
+  });
+
+  it("turns its hover zoom and lift off under prefers-reduced-motion", () => {
+    render(<ProductCard product={baseProduct} />);
+    expect(screen.getByRole("img")).toHaveClass("motion-reduce:transition-none", "motion-reduce:group-hover:scale-100");
+    expect(screen.getByRole("link").parentElement).toHaveClass("motion-reduce:transition-none", "motion-reduce:hover:translate-y-0");
+  });
+
+  it("shows the category name on the card", () => {
+    render(<ProductCard product={baseProduct} />);
+    expect(screen.getByText("Toys and Figures")).toBeInTheDocument();
+  });
+
+  it("keeps the full product name in the heading even when it is visually clamped", () => {
+    const longName = "Articulated Dragon With Extra Long Tail And Fully Posable Wings, Limited Desk Edition";
+    render(<ProductCard product={{ ...baseProduct, name: longName }} />);
+    const heading = screen.getByRole("heading", { level: 3 });
+    expect(heading).toHaveTextContent(longName);
+    expect(heading).toHaveClass("line-clamp-2");
   });
 });

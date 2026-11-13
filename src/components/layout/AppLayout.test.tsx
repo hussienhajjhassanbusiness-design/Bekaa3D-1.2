@@ -13,6 +13,8 @@ vi.mock("next/navigation", () => ({ usePathname: () => "/" }));
 // The header cart link reads the canonical cart query (needs auth/query
 // providers); a plain link keeps this a landmark/tab-order test.
 vi.mock("./HeaderCartLink", () => ({ HeaderCartLink: () => <a href="/cart">Cart</a> }));
+// The header auth entry reads the auth session (HeaderAccountLink.test.tsx).
+vi.mock("./HeaderAccountLink", () => ({ HeaderAccountLink: () => <a href="/login">Sign in</a> }));
 
 describe("AppLayout", () => {
   it("renders exactly one header, one main, and one footer landmark", () => {
@@ -25,6 +27,12 @@ describe("AppLayout", () => {
     expect(screen.getAllByRole("banner")).toHaveLength(1); // native <header>
     expect(screen.getAllByRole("main")).toHaveLength(1); // native <main>
     expect(screen.getAllByRole("contentinfo")).toHaveLength(1); // native <footer>
+  });
+
+  it("keeps the header landmark in view while scrolling (sticky, below dialogs/toasts at z-50)", () => {
+    render(<AppLayout header={<span>Header</span>}>Content</AppLayout>);
+
+    expect(screen.getByRole("banner")).toHaveClass("sticky", "top-0", "z-40");
   });
 
   it("gives <main> the stable id 'main-content'", () => {
@@ -128,7 +136,7 @@ describe("AppLayout", () => {
     expect(screen.getByRole("link", { name: "Skip to main content" })).toHaveFocus();
 
     const mainActionButton = screen.getByRole("button", { name: "Main action" });
-    for (let i = 0; i < 10 && document.activeElement !== mainActionButton; i++) {
+    for (let i = 0; i < 20 && document.activeElement !== mainActionButton; i++) {
       await user.tab();
     }
     expect(mainActionButton).toHaveFocus();

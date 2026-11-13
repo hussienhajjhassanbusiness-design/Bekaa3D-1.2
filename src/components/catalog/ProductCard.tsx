@@ -2,87 +2,122 @@ import Link from "next/link";
 import { PriceDisplay } from "./PriceDisplay";
 import { ProductTypeBadge } from "./ProductTypeBadge";
 import type { ProductCardModel } from "@/lib/catalog/productAdapters";
+import { Icon } from "@/components/ui/Icon";
 import { WishlistButton } from "@/components/wishlist/WishlistButton";
 
 export interface ProductCardProps {
   product: ProductCardModel;
 }
 
+const RATING_FORMAT = new Intl.NumberFormat("en", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
 // #FVS013-PRODUCT-CARD
 //
 // Built against the CONFIRMED `ProductListItem` contract (B2) — every
 // field below traces directly to productAdapters.ts's ProductCardModel,
 // itself a 1:1 map of the real wire shape. Never shows: stock quantity
-// (no such field exists — B3's own "No stock" note), an invented
-// discount, or a star rating — `average_rating`/`review_count` are real
-// fields but are unconditionally 0 for every product until reviews ship
-// (VS-036, B2's own note), so rendering a permanent "☆☆☆☆☆ 0.0 (0)" on
-// every card would look like a broken/fake widget rather than real data;
-// omitted until review_count can ever be non-zero.
+// (no such field exists — B3's own "No stock" note) or an invented
+// discount. The rating row renders only when `review_count` is above zero
+// (it is 0 for every product until reviews ship, VS-036): a permanent
+// "☆☆☆☆☆ (0)" on every card would look like a broken/fake widget.
 //
 // The whole card is ONE link (bekaa3d-brand-ui: "primary link wraps the
-// whole clickable card without nesting interactive elements") — no
-// separate "View" button, no nested anchors.
+// whole clickable card without nesting interactive elements") — the
+// "View details" call to action is part of that link, not a second
+// control, and there are no nested anchors.
 //
 // Phase 6D: the wishlist heart is a SIBLING of the card link, positioned
 // over the image corner, so the card stays one link with nothing
 // interactive nested inside it.
+//
+// Batch 2 — Stitch catalog card (COMPONENT-SPECS §11b, recommended
+// canonical): white surface, 12px radius, outline-variant/30 border,
+// shadow-sm; square image on the lavender container with a slow zoom;
+// category pill over the image; 24px body; Hanken 20px title; card price
+// role; full-width solid primary CTA. Hover lifts the card 4px with a
+// stronger shadow — on the wrapper, so the heart moves with it — and every
+// transform is off under prefers-reduced-motion.
 export function ProductCard({ product }: ProductCardProps) {
+  const hasRating = product.reviewCount > 0;
+
   return (
-    <div className="relative h-full">
+    <div className="group relative h-full transition-transform duration-300 ease-standard hover:-translate-y-1 motion-reduce:transition-none motion-reduce:hover:translate-y-0">
       <Link
         href={`/shop/${product.slug}`}
-        className="group flex h-full flex-col overflow-hidden rounded-md border border-border-default bg-surface-base transition-shadow hover:shadow-elevation-1"
+        className="flex h-full flex-col overflow-hidden rounded-card border border-outline-variant/30 bg-surface-container-lowest shadow-sm transition-shadow duration-300 ease-standard group-hover:shadow-xl"
       >
-        <div className="relative aspect-square w-full overflow-hidden bg-surface-sunken">
+        <div className="relative aspect-square w-full overflow-hidden bg-surface-container-low">
           {product.coverImage ? (
             // Plain <img>: the real image host's remote-pattern allowlist
             // can't be configured yet (FRONTEND-VERTICAL-SLICE-PLAN.md §17
             // image-URL item; matches ProductImageGallery's own same-gap
-            // decision).
+            // decision). object-cover in a fixed square: never tiled.
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={product.coverImage.src}
               alt={product.coverImage.alt}
-              className="h-full w-full object-cover transition-transform group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+              className="h-full w-full object-cover transition-transform duration-500 ease-standard group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
               loading="lazy"
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center text-caption text-text-disabled">
-              No image available
+            <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-on-surface-variant">
+              <Icon name="image" className="h-10 w-10 text-outline" />
+              <span className="font-label text-label-caps uppercase">No image available</span>
             </div>
           )}
-          <div className="absolute left-2 top-2 flex gap-1.5">
-            <ProductTypeBadge type={product.type} />
+          {/* Leaves the top-right corner to the wishlist heart. */}
+          <div className="absolute left-4 top-4 flex max-w-[calc(100%-5.5rem)] flex-col items-start gap-1.5">
+            <span className="max-w-full truncate rounded-full bg-primary px-3 py-1 font-label text-label-micro font-bold uppercase tracking-widest text-on-primary">
+              {product.category.name}
+            </span>
             {product.isFeatured && (
-              <span className="inline-block rounded-pill bg-brand-dark-green px-2 py-0.5 text-caption font-semibold text-text-on-brand">
+              <span className="rounded-badge bg-on-surface-variant px-2 py-1 font-label text-label-micro font-bold uppercase text-on-primary">
                 Featured
               </span>
             )}
           </div>
         </div>
 
-        <div className="flex flex-1 flex-col gap-1 p-3">
-          <span className="text-caption uppercase tracking-label text-text-secondary">
-            {product.category.name}
-          </span>
-          <h3 className="text-body-lg font-semibold text-text-primary">
+        <div className="flex flex-1 flex-col p-6">
+          <div className="mb-3 flex min-h-6 flex-wrap items-center justify-between gap-2">
+            <ProductTypeBadge type={product.type} />
+            {hasRating && (
+              <span className="font-body text-sm text-on-surface-variant">
+                {/* Spoken as one sentence; the compact visual is hidden from
+                    assistive tech so it is not read twice. */}
+                <span className="sr-only">
+                  {`Rated ${RATING_FORMAT.format(product.averageRating)} out of 5 from ${product.reviewCount} ${
+                    product.reviewCount === 1 ? "review" : "reviews"
+                  }`}
+                </span>
+                <span aria-hidden="true" className="inline-flex items-center gap-1">
+                  {/* Amber-600 (the warning token): Stitch's amber-400 is
+                      2.1:1 on white, below the 3:1 graphics minimum. */}
+                  <Icon name="star" fill="currentColor" strokeWidth={1} className="h-4 w-4 text-warning" />
+                  <span className="font-semibold text-on-surface">{RATING_FORMAT.format(product.averageRating)}</span>
+                  <span>({product.reviewCount})</span>
+                </span>
+              </span>
+            )}
+          </div>
+          <h3 className="line-clamp-2 font-headline text-headline-md text-on-surface transition-colors duration-200 group-hover:text-primary">
             {product.name}
           </h3>
-          <div className="mt-auto flex items-center justify-between pt-2">
-            <PriceDisplay
-              amountCents={product.price.amountCents}
-              currency={product.price.currency}
-            />
+          <div className="mb-6 mt-2 flex flex-wrap items-center justify-between gap-2">
+            <PriceDisplay amountCents={product.price.amountCents} currency={product.price.currency} size="card" />
             {!product.isAvailable && (
-              <span className="rounded-pill bg-warning-bg px-2 py-0.5 text-caption font-semibold text-warning-text">
+              <span className="rounded-full bg-warning-container px-3 py-1 font-label text-label-sm font-bold uppercase text-on-warning-container">
                 Unavailable
               </span>
             )}
           </div>
+          <span className="mt-auto flex min-h-11 w-full items-center justify-center gap-2 rounded-control bg-primary px-4 font-label text-label-caps uppercase text-on-primary transition-colors duration-200 group-hover:bg-primary-container">
+            View details
+            <Icon name="arrow-forward" className="h-4 w-4" />
+          </span>
         </div>
       </Link>
-      <div className="absolute right-2 top-2">
+      <div className="absolute right-4 top-4">
         <WishlistButton
           productId={product.id}
           productName={product.name}

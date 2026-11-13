@@ -60,6 +60,7 @@ export default defineConfig({
         "bring-your-idea.spec.ts",
         "offers.spec.ts",
         "wishlist.spec.ts",
+        "storefront-chrome.spec.ts",
       ],
       // Uses the system-installed Microsoft Edge (Chromium-based) via
       // Playwright's "channel" option instead of Playwright's own bundled

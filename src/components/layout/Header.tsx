@@ -1,8 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { DialogShell } from "@/components/feedback/DialogShell";
+import { Icon } from "@/components/ui/Icon";
+import { BrandMark } from "./BrandMark";
+import { HeaderAccountLink } from "./HeaderAccountLink";
 import { HeaderCartLink } from "./HeaderCartLink";
 
 interface NavItem {
@@ -14,7 +19,8 @@ interface NavItem {
 // — PHASE 1) — never a link to an unbuilt route (smoke.spec.ts's own
 // "no dead Shop/BYI/Contact CTA" rule from FVS-001/FVS-022 applied the
 // opposite way now that /shop and /about are real: a dead link would be
-// just as wrong as a premature one).
+// just as wrong as a premature one). Stitch's own link sets ("STL Store",
+// "Materials", …) are not used (DESIGN-SYSTEM §12.7).
 const NAV_ITEMS: readonly NavItem[] = [
   { href: "/", label: "Home" },
   { href: "/shop", label: "Shop" },
@@ -23,26 +29,91 @@ const NAV_ITEMS: readonly NavItem[] = [
   { href: "/contact", label: "Contact" },
 ];
 
+// false during SSR and hydration, true afterwards: the portal target
+// (document.body) only exists in the browser.
+const subscribeNever = () => () => {};
+function useIsClient(): boolean {
+  return useSyncExternalStore(subscribeNever, () => true, () => false);
+}
+
+// Same value as the `desktop` breakpoint: the inline nav takes over from here.
+const DESKTOP_QUERY = "(min-width: 1024px)";
+
 // Content for AppLayout's <header> landmark — not a second <header>
-// element. Text/token-based brand treatment only; the real logo asset
-// placement is still a deferred content decision, not this slice's job.
+// element (AppLayout makes that landmark sticky).
 //
-// Desktop: a plain inline nav. Mobile (bekaa3d-brand-ui breakpoints): a
-// disclosure button toggles the same nav list — no separate mobile-only
-// link set, no duplicated markup.
+// Stitch storefront top navigation, recommended canonical (COMPONENT-SPECS
+// §1 / DESIGN-SYSTEM §12.5): 64px, glass surface (surface 80% + blur) with
+// an outline-variant/30 hairline, content capped at 1440px with 16 / 32 /
+// 64px gutters, logo + links on the left, icon actions on the right.
+//
+// From 1024px: the inline nav. Below 1024px (Stitch has no mobile header, so
+// this is derived — RESPONSIVE-SPECS §1): a menu button opens a right-hand
+// sheet built on the shared DialogShell (focus trap, Escape, backdrop
+// click, focus return), so there is no second modal system. Stitch shows
+// its links from 768px, but its sets had four short labels; the app's five
+// (incl. "Bring your idea") plus the logo and the labelled auth entry do
+// not fit 768px without crowding the gutter, so the sheet covers tablets.
 export function Header() {
   const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [menuPathname, setMenuPathname] = useState(pathname);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const menuTitleId = useId();
+  const isClient = useIsClient();
+
+  // Any route change closes the menu (covers link clicks, back/forward and
+  // programmatic navigation alike). Adjusting state while rendering is
+  // React's documented alternative to a reset-in-effect.
+  if (menuPathname !== pathname) {
+    setMenuPathname(pathname);
+    setIsMenuOpen(false);
+  }
+
+  useEffect(() => {
+    if (!isMenuOpen) return;
+
+    // Focus moves into the sheet; DialogShell returns it to the menu button
+    // on close.
+    closeButtonRef.current?.focus();
+
+    // The page behind a modal sheet should not scroll.
+    const root = document.documentElement;
+    const previousOverflow = root.style.overflow;
+    root.style.overflow = "hidden";
+
+    // Growing past the breakpoint (rotation, resize) leaves no menu button
+    // to return to, so the sheet closes itself.
+    const media = window.matchMedia(DESKTOP_QUERY);
+    const handleChange = (event: MediaQueryListEvent) => {
+      if (event.matches) setIsMenuOpen(false);
+    };
+    media.addEventListener("change", handleChange);
+
+    return () => {
+      root.style.overflow = previousOverflow;
+      media.removeEventListener("change", handleChange);
+    };
+  }, [isMenuOpen]);
+
+  const closeMenu = () => setIsMenuOpen(false);
 
   return (
-    <div className="border-b border-border-default px-4 py-3 tablet:px-6 desktop:px-8">
-      <div className="flex items-center justify-between">
-        <Link href="/" className="text-h3 font-semibold text-text-primary">
-          Bekaa3D
+    <div className="relative">
+      {/* The glass surface lives on its own layer, not on an ancestor of the
+          content: backdrop-filter on an ancestor would become the containing
+          block for any position:fixed descendant. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 border-b border-outline-variant/30 bg-surface/80 shadow-sm backdrop-blur-xl"
+      />
+      <div className="relative mx-auto flex h-16 max-w-content items-center gap-4 px-margin-mobile tablet:px-8 desktop:px-margin-desktop">
+        <Link href="/" className="shrink-0 rounded-control">
+          <BrandMark />
         </Link>
 
-        <nav aria-label="Main" className="hidden tablet:block">
-          <ul className="flex items-center gap-6">
+        <nav aria-label="Main" className="hidden desktop:ml-8 desktop:block">
+          <ul className="flex items-center gap-8">
             {NAV_ITEMS.map((item) => {
               const isActive = pathname === item.href;
               return (
@@ -50,11 +121,11 @@ export function Header() {
                   <Link
                     href={item.href}
                     aria-current={isActive ? "page" : undefined}
-                    className={
+                    className={`block whitespace-nowrap border-b-2 pb-1 pt-1.5 font-body text-body-md transition-colors duration-200 ${
                       isActive
-                        ? "border-b-2 border-brand-dark-green pb-1 text-body font-semibold text-brand-dark-green"
-                        : "pb-1 text-body text-text-primary hover:text-brand-dark-green"
-                    }
+                        ? "border-primary font-bold text-primary"
+                        : "border-transparent text-on-surface-variant hover:text-primary"
+                    }`}
                   >
                     {item.label}
                   </Link>
@@ -64,52 +135,82 @@ export function Header() {
           </ul>
         </nav>
 
-        <div className="flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-1 tablet:gap-3">
           <HeaderCartLink />
+          <HeaderAccountLink variant="bar" />
           <button
             type="button"
-            onClick={() => setIsMenuOpen((open) => !open)}
+            onClick={() => setIsMenuOpen(true)}
             aria-expanded={isMenuOpen}
             aria-controls="mobile-nav"
-            aria-label={isMenuOpen ? "Close menu" : "Open menu"}
-            className="flex h-10 w-10 items-center justify-center rounded-md border border-border-default tablet:hidden"
+            aria-haspopup="dialog"
+            aria-label="Open menu"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-on-surface-variant transition-colors duration-200 hover:bg-surface-container hover:text-primary desktop:hidden"
           >
-            <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
-              {isMenuOpen ? (
-                <path strokeLinecap="round" d="M6 6l12 12M18 6L6 18" />
-              ) : (
-                <path strokeLinecap="round" d="M4 7h16M4 12h16M4 17h16" />
-              )}
-            </svg>
+            <Icon name="menu" />
           </button>
         </div>
       </div>
 
-      {isMenuOpen && (
-        <nav id="mobile-nav" aria-label="Main" className="tablet:hidden">
-          <ul className="mt-3 flex flex-col gap-1 border-t border-border-default pt-3">
-            {NAV_ITEMS.map((item) => {
-              const isActive = pathname === item.href;
-              return (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    aria-current={isActive ? "page" : undefined}
-                    onClick={() => setIsMenuOpen(false)}
-                    className={
-                      isActive
-                        ? "block rounded-sm px-2 py-2 text-body font-semibold text-brand-dark-green"
-                        : "block rounded-sm px-2 py-2 text-body text-text-primary"
-                    }
-                  >
-                    {item.label}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
-      )}
+      {/* Portaled to <body> so the sheet stacks above everything (the sticky
+          header is its own z-40 context). The shell stays mounted while
+          closed (it renders nothing) because it restores focus to the menu
+          button on the open → closed transition. */}
+      {isClient
+        ? createPortal(
+            <DialogShell
+              open={isMenuOpen}
+              onClose={closeMenu}
+              labelledBy={menuTitleId}
+              panelClassName="fixed inset-y-0 right-0 flex h-dvh w-full max-w-sm flex-col overflow-y-auto border-l border-outline-variant/30 bg-surface shadow-2xl"
+            >
+              <div className="flex h-16 shrink-0 items-center justify-between gap-4 border-b border-outline-variant/30 px-margin-mobile">
+                <h2 id={menuTitleId} className="sr-only">
+                  Menu
+                </h2>
+                <BrandMark />
+                <button
+                  ref={closeButtonRef}
+                  type="button"
+                  onClick={closeMenu}
+                  aria-label="Close menu"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full text-on-surface-variant transition-colors duration-200 hover:bg-surface-container hover:text-primary"
+                >
+                  <Icon name="close" />
+                </button>
+              </div>
+
+              <nav id="mobile-nav" aria-label="Main" className="px-margin-mobile py-4">
+                <ul className="flex flex-col gap-1">
+                  {NAV_ITEMS.map((item) => {
+                    const isActive = pathname === item.href;
+                    return (
+                      <li key={item.href}>
+                        <Link
+                          href={item.href}
+                          aria-current={isActive ? "page" : undefined}
+                          onClick={closeMenu}
+                          className={`flex min-h-14 items-center rounded-control px-4 font-body text-body-lg transition-colors duration-200 ${
+                            isActive
+                              ? "bg-surface-container-low font-bold text-primary"
+                              : "text-on-surface hover:bg-surface-container hover:text-primary"
+                          }`}
+                        >
+                          {item.label}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </nav>
+
+              <div className="mt-auto border-t border-outline-variant/30 p-margin-mobile">
+                <HeaderAccountLink variant="menu" onNavigate={closeMenu} />
+              </div>
+            </DialogShell>,
+            document.body
+          )
+        : null}
     </div>
   );
 }
