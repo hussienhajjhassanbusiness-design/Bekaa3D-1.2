@@ -30,4 +30,19 @@ describe("CheckoutReturnPage (/checkout/return)", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Check your orders for the latest status.");
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
+
+  it("is one neutral result card: one h1, orders as the single primary action, no success or failure mark (Batch 7)", () => {
+    const { container } = render(<CheckoutReturnPage />);
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(screen.getAllByRole("link").map((link) => link.textContent)).toEqual([
+      "View your orders",
+      "View notifications",
+      "Continue shopping",
+    ]);
+    const icons = Array.from(container.querySelectorAll("svg[data-icon]")).map((svg) => svg.getAttribute("data-icon"));
+    expect(icons).not.toContain("check-circle");
+    expect(icons).not.toContain("error");
+    expect(container.querySelectorAll("svg")).toHaveLength(icons.length);
+  });
 });
+

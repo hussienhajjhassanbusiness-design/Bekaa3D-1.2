@@ -1,12 +1,17 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo } from "react";
 import { useParams } from "next/navigation";
 import { OrderCustomerActions } from "@/components/account/OrderCustomerActions";
 import { OrderDetailView } from "@/components/account/OrderDetailView";
-import { LoadingSpinner } from "@/components/feedback/LoadingSpinner";
-import { Button } from "@/components/forms/Button";
+import {
+  ACCOUNT_CARD,
+  AccountErrorCard,
+  AccountListSkeleton,
+  AccountSessionCard,
+} from "@/components/account/accountUi";
+import { EmptyState } from "@/components/feedback/EmptyState";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { pickupOption } from "@/lib/checkout/checkoutEligibility";
 import { adaptOrderDetail, isOrderId } from "@/lib/orders/orderModel";
 import { classifyOrderError, ORDER_ERROR_COPY } from "@/lib/orders/orderErrors";
@@ -68,38 +73,45 @@ export default function AccountOrderDetailPage() {
     }
     if (kind === "auth") {
       return (
-        <div role="alert" className="flex flex-col items-start gap-3 rounded-md border-l-4 border-l-warning bg-warning-bg p-4">
-          <p className="text-body text-text-primary">{ORDER_ERROR_COPY.sessionExpired}</p>
-          <Link
+        <>
+          <PageHeader eyebrow="Order details" title="Order" />
+          <AccountSessionCard
+            message={ORDER_ERROR_COPY.sessionExpired}
             href={`/login?returnTo=${encodeURIComponent(`/account/orders/${orderId}`)}`}
-            className="font-semibold text-brand-dark-green underline"
-          >
-            Sign in
-          </Link>
-        </div>
+          />
+        </>
       );
     }
     return (
-      <div role="alert" className="flex flex-col items-start gap-3 rounded-md border-l-4 border-l-danger bg-danger-bg p-4">
-        <p className="text-body text-text-primary">{ORDER_ERROR_COPY.detailFailed}</p>
-        <Button type="button" variant="secondary" onClick={() => void query.refetch()}>
-          Try again
-        </Button>
-      </div>
+      <>
+        <PageHeader eyebrow="Order details" title="Order" />
+        <AccountErrorCard message={ORDER_ERROR_COPY.detailFailed} onRetry={() => void query.refetch()} />
+      </>
     );
   }
 
-  return <LoadingSpinner />;
+  return (
+    <>
+      <PageHeader eyebrow="Order details" title="Order" />
+      <AccountListSkeleton label="Loading this order…" rows={2} />
+    </>
+  );
 }
 
+// Batch 7: the page keeps one h1 in every state. Not found reuses the §49
+// empty state; the copy (which reveals nothing about ownership) is unchanged.
 function OrderNotFound() {
   return (
-    <div className="flex flex-col items-start gap-3">
-      <h1 className="text-h1 font-bold text-text-primary">{ORDER_ERROR_COPY.notFoundTitle}</h1>
-      <p className="text-body text-text-secondary">{ORDER_ERROR_COPY.notFoundBody}</p>
-      <Link href="/account/orders" className="font-semibold text-brand-dark-green underline">
-        View your orders
-      </Link>
-    </div>
+    <>
+      <PageHeader eyebrow="Order details" title={ORDER_ERROR_COPY.notFoundTitle} />
+      <div className={ACCOUNT_CARD}>
+        <EmptyState
+          icon="receipt-long"
+          message={ORDER_ERROR_COPY.notFoundBody}
+          actionLabel="View your orders"
+          actionHref="/account/orders"
+        />
+      </div>
+    </>
   );
 }

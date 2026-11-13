@@ -59,17 +59,22 @@ export function HoldCountdown({ expiresAt, onElapsed }: HoldCountdownProps) {
 
   if (done) {
     return (
-      <p className="text-body text-text-primary">
-        The time to complete payment is up. If your payment wasn&apos;t completed, this order may be released; its status
-        here updates once that happens.
+      <p className="rounded-control bg-surface-container-lowest/70 px-3 py-2 text-body-md">
+        The time to complete payment is up. If your payment wasn&apos;t completed, this order may be released; its
+        status here updates once that happens.
       </p>
     );
   }
 
+  // Batch 7: the remaining time in a mono readout. Still plain text — not a
+  // live region and not the order's status (the server decides that).
   return (
-    <p className="text-body text-text-primary">
+    <p className="flex flex-wrap items-baseline gap-x-2 rounded-control bg-surface-container-lowest/70 px-3 py-2 text-body-md">
       Time left to complete payment:{" "}
-      <span className="font-semibold tabular-nums" aria-label={`about ${Math.ceil(left / 60_000)} minutes`}>
+      <span
+        className="font-label text-headline-md font-bold tabular-nums"
+        aria-label={`about ${Math.ceil(left / 60_000)} minutes`}
+      >
         {format(left)}
       </span>
     </p>

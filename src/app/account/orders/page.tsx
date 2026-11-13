@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { OrderHistoryList } from "@/components/account/OrderHistoryList";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { adaptOrderSummary } from "@/lib/orders/orderModel";
 import { useMyOrders } from "@/lib/orders/useMyOrders";
 
@@ -18,8 +19,12 @@ export default function AccountOrdersPage() {
 
   return (
     <>
-      <h1 className="text-h1 font-bold text-text-primary">Orders</h1>
-      <div className="mt-4">
+      <PageHeader
+        eyebrow="Account"
+        title="Orders"
+        description="Every order you've placed, newest first. Open one to see its items, payment and updates."
+      />
+      <div>
         <OrderHistoryList
           orders={orders}
           isLoading={query.isLoading}

@@ -193,4 +193,60 @@ describe("WishlistList", () => {
     expect(await screen.findByText(/Your wishlist is empty/)).toBeInTheDocument();
     expect(list).toHaveBeenCalledTimes(3);
   });
+
+  // Batch 7 (Stitch C5 cards): presentation contract.
+  it("renders each saved product as a card with one link, a named remove control and no nested controls", async () => {
+    viewer("verified");
+    vi.spyOn(wishlistApi, "listAll").mockResolvedValue([
+      item(),
+      item({ product_id: P2, available: false, name: "Old vase", slug: null, type: null, price_cents: null, currency: null }),
+    ]);
+    renderWithQuery(<WishlistList />);
+    const title = await screen.findByRole("heading", { level: 2, name: "Dragon STL" });
+    expect(screen.getByRole("heading", { level: 2, name: "Old vase" })).toBeInTheDocument();
+    expect(screen.getByText("Showing 2 items")).toBeInTheDocument();
+    const card = title.closest("li")!;
+    expect(within(card).getAllByRole("link")).toHaveLength(1);
+    const remove = within(card).getByRole("button", { name: "Remove Dragon STL from your wishlist" });
+    expect(remove.closest("a")).toBeNull();
+    expect(within(card).getByRole("link").querySelector("button")).toBeNull();
+    expect(within(card).getByText(/^Saved /)).toBeInTheDocument();
+    // The unavailable product keeps its record, stated in text, with only Remove.
+    const old = screen.getByText("Old vase").closest("li")!;
+    expect(within(old).getByText("No longer available")).toBeInTheDocument();
+    expect(within(old).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual([
+      "Remove Old vase from your wishlist",
+    ]);
+  });
+
+  it("disables every remove control while one removal is in flight", async () => {
+    viewer("verified");
+    vi.spyOn(wishlistApi, "listAll").mockResolvedValue([item(), item({ product_id: P2, name: "Vase", slug: "vase" })]);
+    let finish: () => void = () => {};
+    const remove = vi.spyOn(wishlistApi, "remove").mockImplementation(() => new Promise<void>((resolve) => (finish = resolve)));
+    renderWithQuery(<WishlistList />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Remove Dragon STL from your wishlist" }));
+    expect(screen.getByRole("button", { name: "Remove Dragon STL from your wishlist" })).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByRole("button", { name: "Remove Vase from your wishlist" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Remove Vase from your wishlist" }));
+    expect(remove).toHaveBeenCalledTimes(1);
+    finish();
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Removed Dragon STL"));
+  });
+
+  it("states a loading status and a signed-out state with a returnTo sign-in link", async () => {
+    viewer("verified");
+    vi.spyOn(wishlistApi, "listAll").mockReturnValueOnce(new Promise(() => {}));
+    renderWithQuery(<WishlistList />);
+    expect(screen.getByRole("status")).toHaveTextContent("Loading your wishlist…");
+  });
+
+  it("shows the session-expired card with a sign-in link back to the wishlist", async () => {
+    viewer("verified");
+    vi.spyOn(wishlistApi, "listAll").mockRejectedValue(http(401, "AUTHENTICATION_REQUIRED"));
+    renderWithQuery(<WishlistList />);
+    expect(await screen.findByRole("alert", {}, { timeout: 4000 })).toHaveTextContent(/session has expired/i);
+    expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", buildLoginRedirectPath("/account/wishlist"));
+  });
 });

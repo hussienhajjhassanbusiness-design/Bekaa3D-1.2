@@ -1,8 +1,10 @@
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { PriceDisplay } from "@/components/catalog/PriceDisplay";
+import { Icon } from "@/components/ui/Icon";
 import type { OrderLineModel } from "@/lib/orders/orderModel";
 import { describeLineStatus } from "@/lib/orders/orderStatus";
 import { formatOrderDate } from "@/lib/orders/orderFormat";
+import { AccountThumb } from "./accountUi";
 
 export interface OrderLineItemProps {
   line: OrderLineModel;
@@ -23,30 +25,30 @@ export interface OrderLineItemProps {
 // (awaiting_delivery = paid, not yet emailed; fulfilled_at = when emailed).
 // Receipt/problem timestamps are shown read-only; their actions are
 // FVS-031 and are not mounted here.
+//
+// Batch 7: Batch 6 line language — 64px media tile (decorative fallback
+// glyph, image / deployed-code for STL), title-sm name, mono line total,
+// the fulfilment state as a text status pill, and the line's dated notes.
 export function OrderLineItem({ line, awaitingPayment }: OrderLineItemProps) {
   const status = describeLineStatus(line.fulfillmentStatus, line.productType);
   const isStl = line.productType === "stl";
 
   return (
-    <div className="flex gap-3 border-b border-border-default py-3 last:border-b-0">
-      <div className="h-16 w-16 shrink-0 overflow-hidden rounded-sm bg-neutral-100">
-        {line.imageUrl && (
-          // Plain <img>, matching CartLineItem/ProductCard: the media host is
-          // not configured for next/image.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={line.imageUrl} alt="" className="h-full w-full object-cover" />
-        )}
-      </div>
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <p className="text-body font-semibold text-text-primary">{line.name}</p>
-          <span className="font-semibold text-text-primary">
+    <div className="flex gap-4">
+      <AccountThumb src={line.imageUrl} fallbackIcon={isStl ? "deployed-code" : "image"} />
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
+          <p className="min-w-0 break-words text-title-sm text-on-surface">{line.name}</p>
+          <span className="font-label text-title-sm font-bold text-on-surface">
             <PriceDisplay amountCents={line.lineTotal.amountCents} currency={line.lineTotal.currency} />
           </span>
         </div>
-        <p className="text-caption text-text-secondary">
-          {isStl ? "STL file, sent by email" : "Physical item"} · Qty {line.quantity} ×{" "}
-          <PriceDisplay amountCents={line.unitPrice.amountCents} currency={line.unitPrice.currency} />
+        <p className="flex flex-wrap items-center gap-x-2 text-body text-on-surface-variant">
+          <Icon name={isStl ? "mail" : "deployed-code"} className="h-4 w-4 shrink-0" />
+          <span>
+            {isStl ? "STL file, sent by email" : "Physical item"} · Qty {line.quantity} ×{" "}
+            <PriceDisplay amountCents={line.unitPrice.amountCents} currency={line.unitPrice.currency} />
+          </span>
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <StatusBadge label={status.label} tone={status.tone} />
@@ -75,9 +77,11 @@ function LineNotes({ line, awaitingPayment }: OrderLineItemProps) {
 
   if (notes.length === 0) return null;
   return (
-    <ul className="flex flex-col gap-0.5 text-caption text-text-secondary">
+    <ul className="flex flex-col gap-1 rounded-control bg-surface-container-low px-3 py-2 text-body text-on-surface-variant">
       {notes.map((note) => (
-        <li key={note}>{note}</li>
+        <li key={note} className="break-words">
+          {note}
+        </li>
       ))}
     </ul>
   );

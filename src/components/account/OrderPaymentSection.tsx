@@ -5,11 +5,13 @@ import type { ReactNode } from "react";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { PriceDisplay } from "@/components/catalog/PriceDisplay";
 import { Button } from "@/components/forms/Button";
+import { Icon } from "@/components/ui/Icon";
 import type { OrderDetailModel } from "@/lib/orders/orderModel";
 import { describePaymentStatus } from "@/lib/orders/orderStatus";
 import { formatOrderDateTime, paymentMethodLabel } from "@/lib/orders/orderFormat";
 import { onlinePaymentState, type OnlinePaymentState } from "@/lib/orders/paymentVerification";
 import type { RetryPaymentState } from "@/lib/orders/useRetryPayment";
+import { ACCOUNT_TERM, ACCOUNT_TEXT_LINK, AccountSection } from "./accountUi";
 import { HoldCountdown } from "./HoldCountdown";
 
 // Live controls the page owns (usePolledOrder, useRetryPayment). Without
@@ -39,21 +41,27 @@ export interface OrderPaymentControls {
 //     again", and "Retry payment" only while can_retry_payment is true.
 //   - paid / refunded / partially refunded: what the server says; refund
 //     rows are listed by the page's Refunds section. No refund action.
+//
+// Batch 7: restyled only (Stitch card + §56 callouts). Every condition,
+// copy string, role and handler is unchanged; the polling status is still
+// the one polite role="status", and the countdown is plain text (never
+// announced, never authoritative).
+const CALLOUT = "flex items-start gap-3 rounded-card border p-4 text-body-md";
+
 export function OrderPaymentSection({ order, controls }: { order: OrderDetailModel; controls?: OrderPaymentControls }) {
   const cash = order.paymentMethod === "cash";
   const descriptor = order.payment ? describePaymentStatus(order.payment.status) : null;
 
   return (
-    <section aria-label="Payment" className="flex flex-col gap-3 rounded-md border border-border-default bg-white p-4">
-      <h2 className="text-h3 font-bold text-text-primary">Payment</h2>
-      <dl className="flex flex-col gap-2 text-body text-text-primary">
-        <div className="flex justify-between gap-2">
-          <dt className="text-text-secondary">Method</dt>
-          <dd>{paymentMethodLabel(order.paymentMethod)}</dd>
+    <AccountSection title="Payment" icon="payments">
+      <dl className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <dt className={ACCOUNT_TERM}>Method</dt>
+          <dd className="text-body-md text-on-surface">{paymentMethodLabel(order.paymentMethod)}</dd>
         </div>
         {descriptor && (
-          <div className="flex items-center justify-between gap-2">
-            <dt className="text-text-secondary">Payment status</dt>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <dt className={ACCOUNT_TERM}>Payment status</dt>
             <dd>
               <StatusBadge label={descriptor.label} tone={descriptor.tone} />
             </dd>
@@ -61,7 +69,7 @@ export function OrderPaymentSection({ order, controls }: { order: OrderDetailMod
         )}
       </dl>
       {cash ? <CashPayment order={order} /> : <OnlinePayment order={order} controls={controls} />}
-    </section>
+    </AccountSection>
   );
 }
 
@@ -70,13 +78,16 @@ function CashPayment({ order }: { order: OrderDetailModel }) {
     order.fulfillmentMethod === "pickup" ? "when you pick up your order" : "to the courier on delivery";
   if (!order.paymentDue || !order.amountDue) return null;
   return (
-    <p className="rounded-md border-l-4 border-l-info bg-info-bg p-3 text-body text-text-primary">
-      Payment due in cash {where}:{" "}
-      <span className="font-semibold">
-        <PriceDisplay amountCents={order.amountDue.amountCents} currency={order.amountDue.currency} />
-      </span>
-      . This order hasn&apos;t been paid yet.
-    </p>
+    <div className={`${CALLOUT} border-info-outline bg-info-container text-on-info-container`}>
+      <Icon name="info" className="mt-0.5 h-5 w-5 shrink-0 text-info" />
+      <p className="min-w-0">
+        Payment due in cash {where}:{" "}
+        <span className="font-semibold">
+          <PriceDisplay amountCents={order.amountDue.amountCents} currency={order.amountDue.currency} />
+        </span>
+        . This order hasn&apos;t been paid yet.
+      </p>
+    </div>
   );
 }
 
@@ -110,38 +121,60 @@ function OnlinePayment({ order, controls }: { order: OrderDetailModel; controls?
     const copy = SETTLED_COPY[state];
     return (
       <>
-        {copy && <p className="text-body text-text-primary">{copy}</p>}
-        {!order.payment && <p className="text-body text-text-secondary">No payment has been recorded for this order.</p>}
-        {retry && retry.state.kind !== "idle" && <RetryOutcome state={retry.state} onResume={retry.onResume} orderId={order.id} />}
+        {copy && <p className="text-body-md text-on-surface">{copy}</p>}
+        {!order.payment && (
+          <p className="text-body-md text-on-surface-variant">No payment has been recorded for this order.</p>
+        )}
+        {retry && retry.state.kind !== "idle" && (
+          <RetryOutcome state={retry.state} onResume={retry.onResume} orderId={order.id} />
+        )}
       </>
     );
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-2 rounded-md border-l-4 border-l-warning bg-warning-bg p-3 text-body text-text-primary">
-        <p>{UNPAID_COPY[state] ?? UNPAID_FALLBACK}</p>
-        {order.holdExpiresAt && (
-          <>
-            <p>If it&apos;s still unpaid, this order may be released after {formatOrderDateTime(order.holdExpiresAt)}.</p>
-            {controls && (
-              <HoldCountdown key={order.holdExpiresAt} expiresAt={order.holdExpiresAt} onElapsed={controls.onHoldElapsed} />
-            )}
-          </>
-        )}
+    <div className="flex flex-col gap-4">
+      <div className={`${CALLOUT} border-warning-outline bg-warning-container text-on-warning-container`}>
+        <Icon name="schedule" className="mt-0.5 h-5 w-5 shrink-0" />
+        <div className="flex min-w-0 flex-col gap-2">
+          <p>{UNPAID_COPY[state] ?? UNPAID_FALLBACK}</p>
+          {order.holdExpiresAt && (
+            <>
+              <p>
+                If it&apos;s still unpaid, this order may be released after {formatOrderDateTime(order.holdExpiresAt)}.
+              </p>
+              {controls && (
+                <HoldCountdown
+                  key={order.holdExpiresAt}
+                  expiresAt={order.holdExpiresAt}
+                  onElapsed={controls.onHoldElapsed}
+                />
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       {controls && (controls.polling || controls.timedOut) && (
-        <div role="status" className="flex flex-col items-start gap-2 text-body text-text-secondary">
+        <div
+          role="status"
+          className="flex flex-col items-start gap-3 rounded-card bg-surface-container-low p-4 text-body-md text-on-surface-variant"
+        >
           {controls.polling ? (
-            <p>Checking for a payment update…</p>
+            <p className="flex items-center gap-2">
+              <span
+                aria-hidden="true"
+                className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-primary/30 border-t-primary motion-reduce:animate-none"
+              />
+              Checking for a payment update…
+            </p>
           ) : (
             <>
               <p>
                 We haven&apos;t received a confirmation from our payment provider yet. It can take a few minutes; this
                 order shows the latest status we have.
               </p>
-              <Button type="button" variant="secondary" onClick={controls.onCheckAgain}>
+              <Button type="button" variant="outline" onClick={controls.onCheckAgain}>
                 Check again
               </Button>
             </>
@@ -150,7 +183,7 @@ function OnlinePayment({ order, controls }: { order: OrderDetailModel; controls?
       )}
 
       {retry && showRetry && (
-        <div className="flex flex-col items-start gap-2">
+        <div className="flex flex-col items-stretch gap-3 tablet:items-start">
           {order.canRetryPayment && <RetryButton state={retry.state} onRetry={retry.onRetry} />}
           <RetryOutcome state={retry.state} onResume={retry.onResume} orderId={order.id} />
         </div>
@@ -188,8 +221,14 @@ function RetryOutcome({
 }): ReactNode {
   if (state.kind === "started") {
     return (
-      <p role="status" className="text-body text-text-primary">
-        Your new payment was started. This order updates once our payment provider confirms it.
+      <p
+        role="status"
+        className="flex items-start gap-3 rounded-card border border-primary/20 bg-secondary-container/40 p-4 text-body-md text-on-surface"
+      >
+        <Icon name="check-circle" className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+        <span className="min-w-0">
+          Your new payment was started. This order updates once our payment provider confirms it.
+        </span>
       </p>
     );
   }
@@ -197,8 +236,14 @@ function RetryOutcome({
   const { outcome } = state;
   const resumeUrl = outcome.resumeUrl;
   return (
-    <div role="alert" className="flex flex-col items-start gap-2 rounded-md border-l-4 border-l-danger bg-danger-bg p-3">
-      <p className="text-body text-text-primary">{outcome.message}</p>
+    <div
+      role="alert"
+      className="flex flex-col items-start gap-3 rounded-card border border-error/20 bg-error-container p-4 text-on-error-container"
+    >
+      <p className="flex items-start gap-3 text-body-md">
+        <Icon name="error" className="mt-0.5 h-5 w-5 shrink-0 text-error" />
+        <span className="min-w-0 break-words">{outcome.message}</span>
+      </p>
       {resumeUrl && (
         <Button type="button" variant="secondary" onClick={() => onResume(resumeUrl)}>
           Continue to payment
@@ -207,13 +252,13 @@ function RetryOutcome({
       {outcome.kind === "session-expired" && (
         <Link
           href={`/login?returnTo=${encodeURIComponent(`/account/orders/${orderId}`)}`}
-          className="font-semibold text-brand-dark-green underline"
+          className={ACCOUNT_TEXT_LINK}
         >
           Sign in
         </Link>
       )}
       {outcome.kind === "verify-email" && (
-        <Link href="/verify-email/resend" className="font-semibold text-brand-dark-green underline">
+        <Link href="/verify-email/resend" className={ACCOUNT_TEXT_LINK}>
           Resend verification email
         </Link>
       )}

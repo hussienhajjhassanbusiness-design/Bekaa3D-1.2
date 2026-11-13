@@ -3,12 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import { Alert } from "@/components/feedback/Alert";
 import { Button } from "@/components/forms/Button";
+import { Icon } from "@/components/ui/Icon";
 import { orderActionAvailability } from "@/lib/orders/orderActions";
 import { formatOrderDate } from "@/lib/orders/orderFormat";
 import type { OrderDetailModel } from "@/lib/orders/orderModel";
 import { useOrderAction, type OrderActionState } from "@/lib/orders/useOrderActions";
 import { CancelOrderDialog } from "./CancelOrderDialog";
 import { ReportProblemDialog } from "./ReportProblemDialog";
+import { AccountSection } from "./accountUi";
 
 // #FVS031-CUSTOMER-ACTIONS (phase 5G)
 //
@@ -24,6 +26,9 @@ import { ReportProblemDialog } from "./ReportProblemDialog";
 // order model. Nothing is appended or marked locally; the success notice
 // only says the request went through. Focus moves to that notice, since
 // the control that triggered it may no longer be offered.
+//
+// Batch 7: restyled into the shared account section card (one primary
+// action, the rest outlined); availability, handlers and focus unchanged.
 const SUCCESS = {
   cancel: "Your cancellation went through. The order below shows its updated status.",
   "confirm-receipt": "Thanks. We've recorded that you received your items.",
@@ -83,9 +88,7 @@ export function OrderCustomerActions({ order }: { order: OrderDetailModel }) {
   }
 
   return (
-    <section aria-label="Order actions" className="flex flex-col gap-3 rounded-md border border-border-default bg-white p-4">
-      <h2 className="text-h3 font-bold text-text-primary">Order actions</h2>
-
+    <AccountSection title="Order actions" icon="shopping-bag">
       {notice && (
         <div ref={noticeRef} tabIndex={-1} className="outline-none">
           <Alert variant="success" message={SUCCESS[notice]} />
@@ -93,12 +96,14 @@ export function OrderCustomerActions({ order }: { order: OrderDetailModel }) {
       )}
 
       {available.receiptConfirmedAt && (
-        <p className="text-body text-text-primary">
+        <p className="flex items-start gap-2 text-body-md text-on-surface">
+          <Icon name="check-circle" className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
           You confirmed you received your items on {formatOrderDate(available.receiptConfirmedAt)}.
         </p>
       )}
       {available.problemReportedAt && (
-        <p className="text-body text-text-primary">
+        <p className="flex items-start gap-2 text-body-md text-on-surface">
+          <Icon name="mail" className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
           You reported a problem on {formatOrderDate(available.problemReportedAt)}. Our team will reply by email.
         </p>
       )}
@@ -106,7 +111,11 @@ export function OrderCustomerActions({ order }: { order: OrderDetailModel }) {
       {receiptError && <Alert variant="error" message={receiptError} />}
 
       {offersAny && (
-        <div className="flex flex-col gap-2 tablet:flex-row tablet:flex-wrap">
+        <div
+          className={`flex flex-col gap-3 tablet:flex-row tablet:flex-wrap ${
+            recordsAny || notice || receiptError ? "border-t border-outline-variant/30 pt-4" : ""
+          }`}
+        >
           {available.canConfirmReceipt && (
             <Button type="button" onClick={() => void confirmReceipt()} isLoading={receipt.state.kind === "pending"}>
               I received my items
@@ -127,7 +136,7 @@ export function OrderCustomerActions({ order }: { order: OrderDetailModel }) {
           {available.canCancel && (
             <Button
               type="button"
-              variant="secondary"
+              variant="outline"
               onClick={() => {
                 setNotice(null);
                 cancel.reset();
@@ -159,6 +168,6 @@ export function OrderCustomerActions({ order }: { order: OrderDetailModel }) {
         onSubmit={(message) => void sendReport(message)}
         onClose={() => setReportOpen(false)}
       />
-    </section>
+    </AccountSection>
   );
 }

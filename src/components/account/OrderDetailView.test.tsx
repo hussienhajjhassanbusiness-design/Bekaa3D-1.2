@@ -411,4 +411,47 @@ describe("OrderDetailView", () => {
       expect(payment).not.toHaveTextContent(/time left|checking|confirmation|new payment/i);
     });
   });
+
+  // Batch 7 (DERIVED detail layout): structure the redesign relies on.
+  describe("layout (Batch 7)", () => {
+    it("has one h1 with the status pill in the same parent and h2 sections in a task-first order", () => {
+      renderOrder(
+        detailDTO({
+          refunds: [{ kind: "cancellation", status: "processing", amount: usd(1250), created_at: "2026-11-12T10:00:00Z" }],
+        } as Partial<OrderDetailReadDTO>)
+      );
+      const h1 = screen.getByRole("heading", { level: 1 });
+      expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+      expect(h1.parentElement).toHaveTextContent("In progress");
+      const h2s = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
+      expect(h2s).toEqual(["Payment", "Summary", "Refunds", "Items", "Delivery", "Your note", "Order updates"]);
+    });
+
+    it("lists status history as an ordered list with readable entries", () => {
+      renderOrder(
+        detailDTO({
+          lines: [lineDTO(), stlLineDTO()],
+          status_history: [
+            { order_item_id: null, from_status: null, to_status: "in_progress", at: "2026-11-10T09:30:00Z" },
+            { order_item_id: null, from_status: "in_progress", to_status: "completed", at: "2026-11-11T09:30:00Z" },
+          ],
+        })
+      );
+      const list = within(section("Order updates")).getByRole("list");
+      expect(list.tagName).toBe("OL");
+      const entries = within(list).getAllByRole("listitem").map((li) => li.textContent ?? "");
+      expect(entries[0]).toContain("Order: In progress");
+      expect(entries[1]).toContain("Order: Completed");
+    });
+
+    it("shows a pending online order's countdown as plain text, not as a live status", () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-11-10T09:50:00Z"));
+      renderWithControls(pendingOnlineDetailDTO());
+      const countdown = screen.getByText(/time left to complete payment/i);
+      expect(countdown.closest("[role=status],[aria-live]")).toBeNull();
+      expect(screen.queryByRole("status")).toBeNull();
+      vi.useRealTimers();
+    });
+  });
 });

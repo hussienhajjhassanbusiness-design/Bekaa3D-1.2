@@ -48,4 +48,10 @@ describe("EmptyState", () => {
     expect(container.querySelector("svg")).toHaveAttribute("data-icon", "notifications");
     expect(container.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
   });
+
+  it("renders a navigation action as a link when actionHref is given (Batch 7)", () => {
+    render(<EmptyState message="Nothing saved yet." actionLabel="Browse the shop" actionHref="/shop" />);
+    expect(screen.getByRole("link", { name: "Browse the shop" })).toHaveAttribute("href", "/shop");
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
 });

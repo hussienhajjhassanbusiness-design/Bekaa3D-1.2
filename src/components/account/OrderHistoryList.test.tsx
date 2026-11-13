@@ -115,4 +115,29 @@ describe("OrderHistoryList", () => {
     expect(screen.getByRole("listitem")).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent(/couldn't load more orders/i);
   });
+
+  // Batch 7 (Stitch C2 rows): presentation contract.
+  it("gives each row exactly one link, its status in text and labelled facts", () => {
+    renderList({
+      orders: [
+        adaptOrderSummary(summaryDTO()),
+        adaptOrderSummary(summaryDTO({ id: "b", order_number: "B3D-2026-000124", status: "cancelled" })),
+      ],
+    });
+    const rows = screen.getAllByRole("listitem");
+    for (const row of rows) {
+      expect(within(row).getAllByRole("link")).toHaveLength(1);
+      expect(within(row).getByText("Total")).toBeInTheDocument();
+      expect(within(row).getByText("Payment")).toBeInTheDocument();
+      expect(within(row).getByText("Fulfillment")).toBeInTheDocument();
+    }
+    expect(rows[1]).toHaveTextContent("Cancelled");
+    // The "View details" cue is decoration inside the row's one link area.
+    expect(screen.queryByRole("link", { name: /view details/i })).toBeNull();
+  });
+
+  it("labels the loading state and keeps the empty state's shop link", () => {
+    renderList({ isLoading: true });
+    expect(screen.getByRole("status")).toHaveTextContent("Loading your orders…");
+  });
 });

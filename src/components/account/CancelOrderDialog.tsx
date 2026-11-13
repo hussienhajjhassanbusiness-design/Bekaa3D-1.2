@@ -5,6 +5,7 @@ import { Alert } from "@/components/feedback/Alert";
 import { DialogShell } from "@/components/feedback/DialogShell";
 import { Button } from "@/components/forms/Button";
 import { TextAreaField } from "@/components/forms/TextAreaField";
+import { Icon } from "@/components/ui/Icon";
 import type { OrderDetailModel } from "@/lib/orders/orderModel";
 
 export interface CancelOrderDialogProps {
@@ -46,16 +47,25 @@ export function CancelOrderDialog({ open, order, pending, error, onConfirm, onCl
 
   return (
     <DialogShell open={open} onClose={onClose} isBusy={pending} labelledBy={titleId} describedBy={descriptionId}>
-      <h2 id={titleId} className="text-h3 font-bold text-text-primary">
+      <p aria-hidden="true" className="mb-1 font-label text-label-sm uppercase tracking-widest text-error">
+        Order {order.orderNumber}
+      </p>
+      <h2 id={titleId} className="font-headline text-headline-md text-on-surface">
         Cancel this order?
       </h2>
-      <div id={descriptionId} className="mt-2 flex flex-col gap-2 text-body text-text-secondary">
+      <div id={descriptionId} className="mt-3 flex flex-col gap-2 text-body-md text-on-surface-variant">
         <p>The printed items in this order will be cancelled before we start making them. This can&apos;t be undone.</p>
         {order.containsStl && <p>STL files in this order aren&apos;t affected and will still be emailed to you.</p>}
         {paid && <p>You paid online, so the cancelled items will be refunded. The refund will show on this page.</p>}
         {order.paymentMethod === "cash" && !paid && <p>You won&apos;t need to pay for the cancelled items.</p>}
         {order.paymentMethod === "cash" && (
-          <p>After cancelling, you may not be able to choose cash payment for a new order for 24 hours.</p>
+          // Batch 7: kept verbatim and made more prominent, never softened.
+          <p className="flex items-start gap-3 rounded-card border border-warning-outline bg-warning-container p-3 text-on-warning-container">
+            <Icon name="warning" className="mt-0.5 h-5 w-5 shrink-0" />
+            <span className="min-w-0">
+              After cancelling, you may not be able to choose cash payment for a new order for 24 hours.
+            </span>
+          </p>
         )}
       </div>
       <div className="mt-4">
@@ -73,8 +83,8 @@ export function CancelOrderDialog({ open, order, pending, error, onConfirm, onCl
           <Alert variant="error" message={error} />
         </div>
       )}
-      <div className="mt-4 flex flex-wrap justify-end gap-2">
-        <Button ref={keepRef} type="button" variant="secondary" onClick={onClose} disabled={pending}>
+      <div className="mt-6 flex flex-col-reverse gap-3 border-t border-outline-variant/30 pt-4 tablet:flex-row tablet:flex-wrap tablet:justify-end">
+        <Button ref={keepRef} type="button" variant="outline" onClick={onClose} disabled={pending}>
           Keep my order
         </Button>
         <Button type="button" variant="destructive" onClick={() => onConfirm(reason)} isLoading={pending}>

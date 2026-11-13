@@ -53,10 +53,10 @@ export function ReportProblemDialog({ open, pending, error, onSubmit, onClose }:
     <DialogShell open={open} onClose={onClose} isBusy={pending} labelledBy={titleId} describedBy={descriptionId}>
       <form noValidate onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div>
-          <h2 id={titleId} className="text-h3 font-bold text-text-primary">
+          <h2 id={titleId} className="font-headline text-headline-md text-on-surface">
             Report a problem
           </h2>
-          <p id={descriptionId} className="mt-2 text-body text-text-secondary">
+          <p id={descriptionId} className="mt-3 text-body-md text-on-surface-variant">
             Tell us what&apos;s wrong with the items you received. Our team will read your message and reply by email.
           </p>
         </div>
@@ -75,8 +75,8 @@ export function ReportProblemDialog({ open, pending, error, onSubmit, onClose }:
           disabled={pending}
         />
         {error && <Alert variant="error" message={error} />}
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onClose} disabled={pending}>
+        <div className="flex flex-col-reverse gap-3 border-t border-outline-variant/30 pt-4 tablet:flex-row tablet:flex-wrap tablet:justify-end">
+          <Button type="button" variant="outline" onClick={onClose} disabled={pending}>
             Cancel
           </Button>
           <Button type="submit" isLoading={pending}>

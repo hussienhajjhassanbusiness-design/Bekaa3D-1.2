@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { OfferList } from "@/components/offers/OfferList";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { useMyOffers } from "@/lib/offers/useOffers";
 
 // FVS (phase 6C) — the customer's offers, GET /api/v1/me/offers (newest
@@ -14,11 +15,12 @@ export default function AccountOffersPage() {
 
   return (
     <>
-      <h1 className="text-h1 font-bold text-text-primary">Offers</h1>
-      <p className="mt-2 text-body text-text-secondary">
-        Your price offers on STL files. When it&apos;s your turn, reply before the deadline or the offer expires.
-      </p>
-      <div className="mt-4">
+      <PageHeader
+        eyebrow="Account"
+        title="Offers"
+        description="Your price offers on STL files. When it's your turn, reply before the deadline or the offer expires."
+      />
+      <div>
         <OfferList
           offers={offers}
           isLoading={query.isLoading}

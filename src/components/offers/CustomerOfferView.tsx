@@ -5,8 +5,18 @@ import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { Alert } from "@/components/feedback/Alert";
-import { LoadingSpinner } from "@/components/feedback/LoadingSpinner";
-import { Button } from "@/components/forms/Button";
+import {
+  ACCOUNT_CARD,
+  AccountBackLink,
+  AccountErrorCard,
+  AccountListSkeleton,
+  AccountSection,
+  AccountSessionCard,
+} from "@/components/account/accountUi";
+import { EmptyState } from "@/components/feedback/EmptyState";
+import { Button, buttonLinkClassName } from "@/components/forms/Button";
+import { Icon } from "@/components/ui/Icon";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { AUTH_SESSION_QUERY_KEY } from "@/lib/auth/authSession";
 import { buildLoginRedirectPath } from "@/lib/auth/returnTo";
 import { describeOfferError, type OfferErrorOutcome } from "@/lib/offers/offerErrors";
@@ -38,6 +48,12 @@ const SUCCESS: Partial<Record<OfferMove, string>> = {
 // `allowed_actions`; the checkout panel appears only for `accepted`.
 // An unknown id, a malformed id and another customer's offer are the same
 // "not found" (the backend's own 404 hides ownership).
+//
+// Batch 7 (DERIVED: account shell + PageHeader + Stitch C3 language). The
+// h1 and the status pill share one parent (PageHeader `meta`); facts card,
+// then the reply actions (still exactly `allowed_actions`, one primary),
+// the checkout panel for `accepted`, and the history timeline last.
+// Handlers, guards, error mapping and query invalidation are unchanged.
 export function CustomerOfferView({ offerId }: { offerId: string }) {
   const validId = isOrderId(offerId);
   const queryClient = useQueryClient();
@@ -49,27 +65,36 @@ export function CustomerOfferView({ offerId }: { offerId: string }) {
   const [success, setSuccess] = useState<string | null>(null);
 
   if (!validId) return <OfferNotFound />;
-  if (query.isPending) return <LoadingSpinner />;
+  if (query.isPending) {
+    return (
+      <>
+        <PageHeader eyebrow="Offer details" title="Offer" />
+        <AccountListSkeleton label="Loading this offer…" rows={2} />
+      </>
+    );
+  }
   if (query.isError) {
     const e = query.error;
     if (e.kind === "http" && (e.status === 404 || e.status === 422)) return <OfferNotFound />;
     if (e.kind === "http" && e.status === 401) {
       return (
-        <div role="alert" className="flex flex-col items-start gap-3 rounded-md border-l-4 border-l-warning bg-warning-bg p-4">
-          <p className="text-body text-text-primary">Your session has expired. Please sign in again to see your offers.</p>
-          <Link href={buildLoginRedirectPath(`/account/offers/${offerId}`)} className="font-semibold text-brand-dark-green underline">
-            Sign in
-          </Link>
-        </div>
+        <>
+          <PageHeader eyebrow="Offer details" title="Offer" />
+          <AccountSessionCard
+            message="Your session has expired. Please sign in again to see your offers."
+            href={buildLoginRedirectPath(`/account/offers/${offerId}`)}
+          />
+        </>
       );
     }
     return (
-      <div role="alert" className="flex flex-col items-start gap-3 rounded-md border-l-4 border-l-danger bg-danger-bg p-4">
-        <p className="text-body text-text-primary">We couldn&apos;t load this offer. Please try again.</p>
-        <Button type="button" variant="secondary" onClick={() => void query.refetch()}>
-          Try again
-        </Button>
-      </div>
+      <>
+        <PageHeader eyebrow="Offer details" title="Offer" />
+        <AccountErrorCard
+          message="We couldn't load this offer. Please try again."
+          onRetry={() => void query.refetch()}
+        />
+      </>
     );
   }
 
@@ -112,70 +137,77 @@ export function CustomerOfferView({ offerId }: { offerId: string }) {
   const dialogOpen = move !== null;
 
   return (
-    <div className="flex flex-col gap-6">
-      <p>
-        <Link href="/account/offers" className="font-semibold text-brand-dark-green underline">
-          ← Your offers
-        </Link>
-      </p>
-      <div className="flex flex-col gap-2">
-        <h1 className="break-words text-h1 font-bold text-text-primary">Offer on {productName}</h1>
-        <div>
-          <StatusBadge label={status.label} tone={status.tone} />
-        </div>
-        {offer.product.slug && (
-          <Link href={`/shop/${encodeURIComponent(offer.product.slug)}`} className="text-body text-brand-dark-green underline">
-            View product
-          </Link>
-        )}
+    <div className="flex min-w-0 flex-col">
+      <div>
+        <AccountBackLink href="/account/offers">Your offers</AccountBackLink>
       </div>
+      <PageHeader
+        eyebrow="Offer details"
+        title={`Offer on ${productName}`}
+        meta={<StatusBadge label={status.label} tone={status.tone} />}
+        actions={
+          offer.product.slug ? (
+            <Link href={`/shop/${encodeURIComponent(offer.product.slug)}`} className={buttonLinkClassName("outline")}>
+              View product
+            </Link>
+          ) : undefined
+        }
+      />
 
-      {success && (
-        <p role="status" className="rounded-md border-l-4 border-l-success bg-success-bg p-3 text-body text-text-primary">
-          {success}
-        </p>
-      )}
-      {failure && !dialogOpen && <Alert variant="error" message={failure.message} />}
+      <div className="flex min-w-0 flex-col gap-6">
+        {success && (
+          <p
+            role="status"
+            className="flex items-start gap-3 rounded-card border border-primary/20 bg-secondary-container/40 p-4 text-body-md text-on-surface"
+          >
+            <Icon name="check-circle" className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+            <span className="min-w-0">{success}</span>
+          </p>
+        )}
+        {failure && !dialogOpen && <Alert variant="error" message={failure.message} />}
 
-      <OfferFacts offer={offer} />
+        <AccountSection title="Offer details" icon="sell">
+          <OfferFacts offer={offer} appearance="account" />
+        </AccountSection>
 
-      {moves.length > 0 && (
-        <section aria-labelledby="offer-actions-heading" className="flex flex-col gap-2">
-          <h2 id="offer-actions-heading" className="text-h3 font-semibold text-text-primary">
-            Your reply
-          </h2>
-          <div className="flex flex-wrap gap-2">
-            {moves.map((item, index) => (
-              <Button
-                key={item}
-                type="button"
-                variant={item === "withdraw" ? "secondary" : index === 0 ? "primary" : "secondary"}
-                onClick={() => {
-                  answer.reset();
-                  setFailure(null);
-                  setSuccess(null);
-                  setMove(item);
-                }}
-              >
-                {MOVE_LABELS[item]}
-              </Button>
-            ))}
-          </div>
-        </section>
-      )}
+        {moves.length > 0 && (
+          <AccountSection title="Your reply">
+            <div className="flex flex-col gap-3 tablet:flex-row tablet:flex-wrap">
+              {moves.map((item, index) => (
+                <Button
+                  key={item}
+                  type="button"
+                  variant={item === "withdraw" ? "outline" : index === 0 ? "primary" : "secondary"}
+                  onClick={() => {
+                    answer.reset();
+                    setFailure(null);
+                    setSuccess(null);
+                    setMove(item);
+                  }}
+                >
+                  {MOVE_LABELS[item]}
+                </Button>
+              ))}
+            </div>
+          </AccountSection>
+        )}
 
-      {offer.status === "accepted" && <OfferCheckoutPanel offer={offer} />}
-      {offer.status === "paid" && (
-        <p className="text-body text-text-secondary">
-          This offer has been paid. Your STL file is delivered by email; see{" "}
-          <Link href="/account/orders" className="font-semibold text-brand-dark-green underline">
-            your orders
-          </Link>{" "}
-          for the order.
-        </p>
-      )}
+        {offer.status === "accepted" && <OfferCheckoutPanel offer={offer} />}
+        {offer.status === "paid" && (
+          <p className="flex items-start gap-3 rounded-card border border-info-outline bg-info-container p-4 text-body-md text-on-info-container">
+            <Icon name="mail" className="mt-0.5 h-5 w-5 shrink-0 text-info" />
+            <span className="min-w-0">
+              This offer has been paid. Your STL file is delivered by email; see{" "}
+              <Link href="/account/orders" className="font-semibold underline">
+                your orders
+              </Link>{" "}
+              for the order.
+            </span>
+          </p>
+        )}
 
-      <OfferHistory rounds={offer.rounds} perspective="customer" />
+        <OfferHistory rounds={offer.rounds} perspective="customer" appearance="account" />
+      </div>
 
       <OfferMoveDialog
         move={move}
@@ -196,12 +228,16 @@ export function CustomerOfferView({ offerId }: { offerId: string }) {
 
 export function OfferNotFound() {
   return (
-    <div className="flex flex-col items-start gap-3">
-      <h1 className="text-h1 font-bold text-text-primary">Offer not found</h1>
-      <p className="text-body text-text-secondary">We couldn&apos;t find this offer in your account. Check the link, or find it in your offers.</p>
-      <Link href="/account/offers" className="font-semibold text-brand-dark-green underline">
-        View your offers
-      </Link>
-    </div>
+    <>
+      <PageHeader eyebrow="Offer details" title="Offer not found" />
+      <div className={ACCOUNT_CARD}>
+        <EmptyState
+          icon="sell"
+          message="We couldn't find this offer in your account. Check the link, or find it in your offers."
+          actionLabel="View your offers"
+          actionHref="/account/offers"
+        />
+      </div>
+    </>
   );
 }

@@ -290,3 +290,43 @@ describe("OrderCustomerActions — report a problem", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(ORDER_ACTION_MESSAGES.invalidMessage);
   });
 });
+
+describe("OrderCustomerActions — presentation (Batch 7)", () => {
+  it("names the section by its h2 and offers one primary action", () => {
+    renderActions(detailDTO({ can_cancel: true }));
+    const region = screen.getByRole("region", { name: "Order actions" });
+    expect(within(region).getByRole("heading", { level: 2, name: "Order actions" })).toBeInTheDocument();
+  });
+
+  it("keeps the cash 24-hour warning as its own visible callout in the cancel dialog", async () => {
+    const user = userEvent.setup();
+    renderActions(detailDTO({ can_cancel: true }));
+    await user.click(screen.getByRole("button", { name: "Cancel order" }));
+    const dialog = screen.getByRole("dialog", { name: "Cancel this order?" });
+    const warning = within(dialog).getByText(/may not be able to choose cash payment for a new order for 24 hours/);
+    expect(warning).toBeVisible();
+    // Part of the dialog's description, so it is read with the dialog.
+    const description = document.getElementById(dialog.getAttribute("aria-describedby") ?? "");
+    expect(description).toContainElement(warning);
+  });
+
+  it("labels the report textarea and keeps typed text after a failed send", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(ordersApi, "reportProblem").mockRejectedValue({ kind: "network", message: "offline" });
+    renderActions(
+      detailDTO({
+        status: "completed",
+        can_cancel: false,
+        lines: [lineDTO({ fulfillment_status: "delivered", receipt_confirmed_at: "2026-11-12T10:00:00Z" })],
+      } as Partial<OrderDetailReadDTO>)
+    );
+    await user.click(screen.getByRole("button", { name: "Report a problem" }));
+    const dialog = screen.getByRole("dialog", { name: "Report a problem" });
+    const field = within(dialog).getByLabelText("What's the problem?");
+    await user.type(field, "The planter arrived cracked.");
+    await user.click(within(dialog).getByRole("button", { name: "Send report" }));
+    expect(await within(dialog).findByRole("alert")).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("What's the problem?")).toHaveValue("The planter arrived cracked.");
+  });
+});
+

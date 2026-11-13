@@ -6,6 +6,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ConsentCheckboxGroup, type ConsentKey } from "@/components/checkout/ConsentCheckboxGroup";
 import { Alert } from "@/components/feedback/Alert";
 import { Button } from "@/components/forms/Button";
+import { ACCOUNT_TEXT_LINK } from "@/components/account/accountUi";
+import { Icon } from "@/components/ui/Icon";
 import { AUTH_SESSION_QUERY_KEY } from "@/lib/auth/authSession";
 import { buildLoginRedirectPath } from "@/lib/auth/returnTo";
 import { useCheckoutAttemptTracker } from "@/lib/checkout/checkoutIdempotency";
@@ -41,6 +43,10 @@ const BODY: OfferCheckoutRequestDTO = { accept_terms: true, accept_digital_final
 // unknown outcome locks to a same-key retry, and an online order goes to the
 // server's redirect_url as given. The payment result is the order page's
 // (FVS-027); the offer becomes `paid` only after the backend verifies it.
+//
+// Batch 7: classes and wrappers only (primary-bordered card, Batch 6 consent
+// rows, agreed price in the bold primary offer role). The submit, phases,
+// idempotency tracker and redirect are byte-for-byte unchanged.
 export function OfferCheckoutPanel({ offer }: { offer: OfferDetailReadDTO }) {
   const queryClient = useQueryClient();
   const checkout = useOfferCheckout(offer.id);
@@ -110,17 +116,17 @@ export function OfferCheckoutPanel({ offer }: { offer: OfferDetailReadDTO }) {
   }
 
   const heading = (text: string) => (
-    <h3 ref={focusRef} tabIndex={-1} className="text-h3 font-semibold text-text-primary outline-none">
+    <h3 ref={focusRef} tabIndex={-1} className="font-headline text-headline-md text-on-surface outline-none">
       {text}
     </h3>
   );
   const orderLink = (orderId: string | null) =>
     orderId ? (
-      <Link href={`/account/orders/${encodeURIComponent(orderId)}`} className="font-semibold text-brand-dark-green underline">
+      <Link href={`/account/orders/${encodeURIComponent(orderId)}`} className={ACCOUNT_TEXT_LINK}>
         View order
       </Link>
     ) : (
-      <Link href="/account/orders" className="font-semibold text-brand-dark-green underline">
+      <Link href="/account/orders" className={ACCOUNT_TEXT_LINK}>
         View your orders
       </Link>
     );
@@ -129,11 +135,11 @@ export function OfferCheckoutPanel({ offer }: { offer: OfferDetailReadDTO }) {
   if (phase.kind === "redirecting") {
     content = (
       <div role="status" className="flex flex-col items-start gap-3">
-        <p className="text-body text-text-primary">
-          Order <span className="font-semibold">{phase.result.orderNumber}</span> is awaiting payment. Taking you to the payment
-          page…
+        <p className="text-body-md text-on-surface">
+          Order <span className="font-semibold">{phase.result.orderNumber}</span> is awaiting payment. Taking you to the
+          payment page…
         </p>
-        <a href={phase.result.payment?.redirectUrl ?? ""} className="font-semibold text-brand-dark-green underline">
+        <a href={phase.result.payment?.redirectUrl ?? ""} className={ACCOUNT_TEXT_LINK}>
           Continue to payment
         </a>
       </div>
@@ -142,16 +148,19 @@ export function OfferCheckoutPanel({ offer }: { offer: OfferDetailReadDTO }) {
     content = (
       <div className="flex flex-col items-start gap-3">
         {heading("Your order is awaiting payment")}
-        <p className="text-body text-text-primary">
+        <p className="text-body-md text-on-surface">
           Order <span className="font-semibold">{phase.result.orderNumber}</span>, total{" "}
           <span className="font-semibold">
             {formatMoney({ amount_cents: phase.result.total.amountCents, currency: phase.result.total.currency })}
           </span>
           .
         </p>
-        <p role="alert" className="rounded-md border-l-4 border-l-warning bg-warning-bg p-3 text-body text-text-primary">
-          The payment page isn&apos;t available right now, so nothing has been charged. You can retry the payment from the order
-          page.
+        <p
+          role="alert"
+          className="rounded-card border border-warning-outline bg-warning-container p-4 text-body-md text-on-warning-container"
+        >
+          The payment page isn&apos;t available right now, so nothing has been charged. You can retry the payment from
+          the order page.
         </p>
         {orderLink(phase.result.orderId)}
       </div>
@@ -160,13 +169,13 @@ export function OfferCheckoutPanel({ offer }: { offer: OfferDetailReadDTO }) {
     content = (
       <div className="flex flex-col items-start gap-3">
         {heading("Payment not started")}
-        <p className="text-body text-text-primary">{phase.message}</p>
+        <p className="text-body-md text-on-surface">{phase.message}</p>
         {phase.orderNumber && (
-          <p className="text-body text-text-primary">
+          <p className="text-body-md text-on-surface">
             Order number <span className="font-semibold">{phase.orderNumber}</span>
           </p>
         )}
-        <p className="text-body text-text-secondary">You can retry the payment from the order page.</p>
+        <p className="text-body-md text-on-surface-variant">You can retry the payment from the order page.</p>
         {orderLink(phase.orderId)}
       </div>
     );
@@ -174,7 +183,7 @@ export function OfferCheckoutPanel({ offer }: { offer: OfferDetailReadDTO }) {
     content = (
       <div className="flex flex-col items-start gap-3">
         {heading("Payment already in progress")}
-        <p className="text-body text-text-primary">{phase.message}</p>
+        <p className="text-body-md text-on-surface">{phase.message}</p>
         {phase.resumeUrl ? (
           <Button type="button" onClick={() => followPaymentRedirect(phase.resumeUrl!)}>
             Continue to payment
@@ -187,7 +196,7 @@ export function OfferCheckoutPanel({ offer }: { offer: OfferDetailReadDTO }) {
     content = (
       <div className="flex flex-col items-start gap-3">
         {heading("Checking your order")}
-        <p role="alert" className="text-body text-text-primary">
+        <p role="alert" className="text-body-md text-on-surface">
           {phase.message}
         </p>
         <Button type="button" onClick={() => void submit()}>
@@ -199,30 +208,30 @@ export function OfferCheckoutPanel({ offer }: { offer: OfferDetailReadDTO }) {
     const submitting = phase.kind === "submitting";
     content = (
       <form noValidate onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <p className="text-body text-text-primary">
+        <p className="text-body-md text-on-surface">
           Agreed price:{" "}
-          <span className="font-semibold">{offer.agreed_amount ? formatMoney(offer.agreed_amount) : formatMoney(offer.current_amount)}</span>
+          <span className="font-label text-headline-md font-bold text-primary">
+            {offer.agreed_amount ? formatMoney(offer.agreed_amount) : formatMoney(offer.current_amount)}
+          </span>
           . Paid online; the STL file is delivered by email after payment.
         </p>
         {offer.checkout_expires_at && (
-          <p className="text-body text-text-secondary">
-            Check out by <time dateTime={offer.checkout_expires_at}>{formatOrderDateTime(offer.checkout_expires_at)}</time> to
-            keep this price.
+          <p className="text-body-md text-on-surface-variant">
+            Check out by{" "}
+            <time dateTime={offer.checkout_expires_at}>{formatOrderDateTime(offer.checkout_expires_at)}</time> to keep
+            this price.
           </p>
         )}
         {problem && (
           <div className="flex flex-col items-start gap-2">
             <Alert variant="error" message={problem.message} />
             {problem.kind === "session-expired" && (
-              <Link
-                href={buildLoginRedirectPath(`/account/offers/${offer.id}`)}
-                className="font-semibold text-brand-dark-green underline"
-              >
+              <Link href={buildLoginRedirectPath(`/account/offers/${offer.id}`)} className={ACCOUNT_TEXT_LINK}>
                 Sign in again
               </Link>
             )}
             {problem.kind === "verify-email" && (
-              <Link href="/verify-email/resend" className="font-semibold text-brand-dark-green underline">
+              <Link href="/verify-email/resend" className={ACCOUNT_TEXT_LINK}>
                 Resend the verification email
               </Link>
             )}
@@ -241,7 +250,7 @@ export function OfferCheckoutPanel({ offer }: { offer: OfferDetailReadDTO }) {
           disabled={submitting}
         />
         <div>
-          <Button type="submit" isLoading={submitting} disabled={submitting}>
+          <Button type="submit" size="lg" isLoading={submitting} disabled={submitting}>
             Check out and pay
           </Button>
         </div>
@@ -250,8 +259,15 @@ export function OfferCheckoutPanel({ offer }: { offer: OfferDetailReadDTO }) {
   }
 
   return (
-    <section aria-labelledby="offer-checkout-heading" className="flex flex-col gap-3 rounded-md border border-border-default bg-white p-4">
-      <h2 id="offer-checkout-heading" className="text-h3 font-semibold text-text-primary">
+    <section
+      aria-labelledby="offer-checkout-heading"
+      className="flex flex-col gap-4 rounded-card border-2 border-primary/40 bg-surface-container-lowest p-5 shadow-sm tablet:p-6"
+    >
+      <h2
+        id="offer-checkout-heading"
+        className="flex items-center gap-2 font-headline text-headline-md text-on-surface"
+      >
+        <Icon name="shopping-cart" className="h-5 w-5 shrink-0 text-primary" />
         Check out at the agreed price
       </h2>
       {content}
