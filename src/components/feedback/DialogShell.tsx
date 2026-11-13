@@ -22,7 +22,15 @@ export interface DialogShellProps {
   panelClassName?: string;
 }
 
-const DEFAULT_PANEL_CLASSNAME = "w-full max-w-md max-h-[90vh] overflow-y-auto rounded-lg bg-white p-6 shadow-elevation-3";
+// Stitch modal card (COMPONENT-SPECS §48, COMPONENT-MIGRATION "DialogShell"):
+// white card, 12px radius, soft outline-variant border, shadow-2xl, 24px
+// padding (32px from tablet). Width and the 90vh scroll cap are unchanged
+// (e2e asserts the dialog never exceeds the viewport).
+const DEFAULT_PANEL_CLASSNAME =
+  "w-full max-w-md max-h-[90vh] overflow-y-auto rounded-card border border-outline-variant/30 bg-surface-container-lowest p-6 shadow-2xl tablet:p-8";
+
+// Scrim: on-surface at 40% with a light blur (Stitch drawer/modal overlay).
+const BACKDROP_CLASSNAME = "fixed inset-0 z-50 flex items-center justify-center bg-on-surface/40 p-4 backdrop-blur-sm";
 
 const FOCUSABLE_SELECTOR = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
@@ -118,7 +126,7 @@ export function DialogShell({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4" onClick={handleBackdropClick}>
+    <div className={BACKDROP_CLASSNAME} onClick={handleBackdropClick}>
       <div
         ref={dialogRef}
         role="dialog"

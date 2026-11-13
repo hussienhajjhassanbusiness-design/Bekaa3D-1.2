@@ -69,7 +69,7 @@ export function Form<Schema extends ZodType<FieldValues, FieldValues>>({
     <FormProvider {...methods}>
       <form onSubmit={handleSubmit(onSubmit, focusFirstInvalidField)} noValidate className={className}>
         {errorItems.length > 0 && (
-          <div role="status" aria-live="polite" className="mb-4 rounded-md border-l-4 border-l-danger bg-danger-bg p-4 text-text-primary">
+          <div role="status" aria-live="polite" className="mb-6 rounded-card border border-error/20 bg-error-container p-4 text-on-error-container">
             <p className="text-body font-semibold">Please fix the following:</p>
             <ul className="mt-1 list-inside list-disc text-body">
               {errorItems.map(({ name, message }) => (

@@ -1,3 +1,5 @@
+import { FIELD_ERROR_CLASSES, FIELD_HINT_CLASSES, FIELD_LABEL_CLASSES, FieldErrorIcon, fieldControlClasses } from "./fieldStyles";
+import { Icon } from "@/components/ui/Icon";
 import { useId, type ReactNode, type SelectHTMLAttributes } from "react";
 
 export interface SelectFieldProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, "id"> {
@@ -20,27 +22,34 @@ export function SelectField({ label, hint, error, className, children, ...rest }
 
   return (
     <div>
-      <label htmlFor={selectId} className="block text-label font-semibold uppercase tracking-label text-text-primary">
+      <label htmlFor={selectId} className={FIELD_LABEL_CLASSES}>
         {label}
       </label>
-      <select
-        id={selectId}
-        aria-describedby={describedBy}
-        aria-invalid={error ? true : undefined}
-        className={`mt-1 w-full rounded-sm border px-3 py-2 text-body text-text-primary ${
-          error ? "border-danger" : "border-border-default"
-        } ${className ?? ""}`}
-        {...rest}
-      >
-        {children}
-      </select>
+      {/* Native <select> kept (keyboard, screen readers, mobile pickers);
+          only its arrow is replaced by a decorative chevron. */}
+      <div className="relative mt-2">
+        <select
+          id={selectId}
+          aria-describedby={describedBy}
+          aria-invalid={error ? true : undefined}
+          className={`${fieldControlClasses(Boolean(error))} appearance-none pr-10 ${className ?? ""}`}
+          {...rest}
+        >
+          {children}
+        </select>
+        <Icon
+          name="chevron-down"
+          className="pointer-events-none absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-on-surface-variant"
+        />
+      </div>
       {hint && (
-        <p id={hintId} className="mt-1 text-caption text-text-secondary">
+        <p id={hintId} className={FIELD_HINT_CLASSES}>
           {hint}
         </p>
       )}
       {error && (
-        <p id={errorId} className="mt-1 text-caption text-danger">
+        <p id={errorId} className={FIELD_ERROR_CLASSES}>
+          <FieldErrorIcon />
           {error}
         </p>
       )}

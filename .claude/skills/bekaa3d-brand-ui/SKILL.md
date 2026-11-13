@@ -5,91 +5,94 @@ description: Use when building or reviewing any Bekaa3D frontend UI — pages, c
 
 # Bekaa3D Brand UI
 
+## Authority (read this first)
+
+| Layer | Role |
+|---|---|
+| **Stitch design handoff** — `docs/design-handoff/` (`DESIGN-SYSTEM.md`, `DESIGN-TOKENS.md`, `design-tokens.json`, `COMPONENT-SPECS.md`, `RESPONSIVE-SPECS.md`) and the `bekaa3d-stitch-design` skill | **Current visual authority.** Colours, type, spacing, radius, elevation, component patterns. When anything here disagrees with it, the handoff wins. |
+| **This skill + `tokens.md`** | Implementation guidance aligned with Stitch: which token to use, the legacy-alias map, accessibility rules the static mockups do not cover. |
+| `src/app/globals.css` | The single source of truth for token **values** in code. |
+
+Above all visual rules sit functional correctness, security and accessibility (priority order in `bekaa3d-stitch-design`).
+
 ## Overview
 
-Bekaa3D is an engineering/3D-printing company. The brand — confirmed from `bekaa3d-logo.jpg` (hexagonal "B" mark, lime-to-forest-green gradient, near-black wordmark, tagline "Engineered Grade 3D Solutions") — reads as **engineered, precise, technological, professional, clean, trustworthy**. Every screen should look like it belongs to the same product, built by the same team, with the same restraint.
+Bekaa3D is an engineering/3D-printing company. The Stitch "Precision Engineering System" reads as **engineered, precise, technological, clean, trustworthy**: a cool off-white canvas (`#f9f9ff`), white cards with soft green-grey borders, lavender containers, one solid green action colour, Hanken Grotesk headings, Inter body text and JetBrains Mono uppercase labels.
 
-**Core principle:** green is an accent and identity marker, not a background color. Most surfaces are neutral; brand color appears at intentional decision points (primary actions, active/selected states, key data highlights, the logo itself).
+**Core principle:** green is the action and identity colour, not a background. Most surfaces are neutral (canvas, white cards, lavender containers); `primary` appears at decision points — primary actions, active/selected states, prices, links, focus.
+
+The logo asset keeps its own embedded green and is never recoloured to match the UI tokens.
 
 ## When to Use
 
-- Before styling any new component, page, or admin screen.
+- Before styling any new component, page, or admin screen (together with `bekaa3d-stitch-design` for page redesigns).
 - When reviewing a PR that adds UI and you're unsure if it matches the system.
-- When a design decision isn't covered here — extend `tokens.md`, don't invent a one-off value inline.
+- When a design decision isn't covered — add a token centrally (handoff docs → `globals.css`), never an inline one-off value.
 
-**Not for:** backend contract questions (see `bekaa3d-api-contract`) or commerce domain logic (see `bekaa3d-commerce-ux`).
+**Not for:** backend contract questions (`bekaa3d-api-contract`) or commerce domain logic (`bekaa3d-commerce-ux`).
 
 ## What to Avoid
 
-Generic dropshipping-store look, excessive gradients/animation/glassmorphism, random one-off colors, inconsistent card styles per page, oversized decorative UI, and unnecessary visual effects. If a design choice doesn't earn its place (communicates hierarchy, state, or brand), leave it out.
+Generic dropshipping-store look, random one-off colours, inconsistent card styles per page, oversized decorative UI, and effects that don't earn their place.
 
-## Full Token Reference
+**Glass and gradients:** use glass/gradient effects only where specified by the approved Stitch design system (e.g. the sticky glass header, the documented gradient CTA variant, the home H1 text-gradient accent, the blueprint shell backgrounds). They are never a general visual style; the default CTA is solid `primary`. Utilities: `glass-panel`, `bg-blueprint`, `text-gradient-primary`, `--gradient-primary` (globals.css).
 
-The complete color/typography/spacing/component-state system is in `tokens.md` (this directory) — load it before implementing any component. Quick summary below for fast lookup.
+## Token quick reference (full list in `tokens.md`)
 
-### Brand colors (source: logo)
-
-| Token | Hex | Use |
+| Role | Token | Value |
 |---|---|---|
-| `brand-dark-green` | `#195B2D` | Primary brand color — headers, primary buttons, active nav, links |
-| `brand-lime` | `#8AC143` | Accent — highlights, success accents, secondary CTA, hover glow on primary actions |
-| `brand-green` | `#3D793A` | Supporting — secondary buttons, icons, tag/badge backgrounds |
-| `ink` | `#21201F` | Near-black — primary text, wordmark-matching headings |
-| `white` | `#FFFFFF` | Base surface |
+| Primary action / brand | `primary` | `#0d631b` |
+| Primary hover | `primary-container` | `#2e7d32` |
+| Lime accent (chip backgrounds only) | `secondary-container` | `#b9f474` |
+| Raspberry accent | `tertiary` | `#923357` |
+| Error | `error` / `error-container` / `on-error-container` | `#ba1a1a` / `#ffdad6` / `#93000a` |
+| Warning | `warning` / `warning-container` / `on-warning-container` | `#d97706` / `#fef3c7` / `#92400e` |
+| Info | `info` / `info-container` / `on-info-container` | `#2563eb` / `#dbeafe` / `#1e40af` |
+| Page canvas | `background` | `#f9f9ff` |
+| Card | `surface-container-lowest` | `#ffffff` |
+| Lavender range | `surface-container-low` → `surface-container-highest` | `#f1f3ff` → `#dce2f7` |
+| Heading text | `on-surface` | `#141b2b` |
+| Body text | `on-surface-variant` | `#40493d` |
+| Muted text | `outline` | `#707a6c` |
+| Border | `outline-variant` | `#bfcaba` |
 
-These are initial tokens approximated from the supplied logo asset, not an exact brand spec — see `tokens.md` for the confirmation note and how to update them if an official brand guide arrives.
+Type roles: `text-display` (48, 36 on mobile) · `text-headline-lg` (32, 24 on mobile) · `text-headline-md` (20) · `text-title-sm` (16/600) · `text-body-lg` (18) · `text-body-md` (16) · `text-body` (14, secondary/compact) · `text-caption` (12) · `font-label text-label-caps uppercase` (12 mono). Families: `font-headline`/`font-display`, `font-body`, `font-label`.
 
-### Semantic colors (built from the above + standard status hues)
+Shape: `rounded-badge` 4 · `rounded-control` 8 · `rounded-card` 12 · `rounded-panel` 16 · `rounded-banner` 24 · `rounded-full` pills.
 
-| Token | Hex | Use |
-|---|---|---|
-| `success` | `#3D793A` (= brand-green) | Success states, paid/delivered badges |
-| `warning` | `#B8860B` (amber, not brand) | Pending/awaiting states, cooldowns |
-| `danger` | `#B3261E` (red, not brand) | Errors, destructive actions, rejected/cancelled |
-| `info` | `#2B6CB0` (blue, not brand) | Neutral informational banners |
-
-Status colors deliberately do **not** reuse brand green for "success" alone — see `tokens.md` for why (a rejected offer and a paid order must never look alike just because both happen to touch green).
-
-### Neutrals
-
-`neutral-50` `#FAFAFA` → `neutral-900` `#21201F` (10-step gray scale, `ink` is the 900 step) — full scale in `tokens.md`.
-
-### Typography, spacing, radius, shadow, breakpoints, component states
-
-See `tokens.md` §§2–9 for: type scale (display/h1–h4/body/caption), 4px-based spacing scale, radius scale (sm/md/lg/pill), a two-tier shadow system (flat-by-default, elevation only for overlays), the four standard breakpoints, and the full hover/focus/active/disabled state contract (including the 2px `brand-lime`-derived focus ring used everywhere for keyboard visibility).
-
-## Component Quick Reference
+## Component quick reference
 
 | Component | Key rule |
 |---|---|
-| Button hierarchy | Primary = solid `brand-dark-green`; Secondary = outline `brand-dark-green`; Tertiary = text-only `ink`; destructive = solid `danger`. Never more than one primary button per view. |
-| Product card | White surface, 1px `neutral-200` border, `radius-md`, image top, no drop shadow at rest — shadow only on hover (`elevation-1`). |
-| STL card | Same base as product card + a small dark badge (`brand-dark-green` bg, white text) reading the file type, distinguishing it from physical cards at a glance without full-card color. |
-| Admin UI | Denser spacing (`space-2`/`space-3` instead of `space-4`/`space-6`), neutral surfaces throughout, brand color reserved for primary actions and active nav item only — admin is a tool, not a storefront. |
-| Badges | Pill radius, semantic color background at 15% opacity + full-opacity text/border of the same hue — never color-only, always paired with text. |
-| Rating | Filled/outline star icons in `brand-lime` (not `brand-dark-green` — lime reads better at small sizes), numeric value always shown alongside stars, never stars alone. |
-| Alerts | Left border (4px, semantic color) + tinted background (semantic color at 8%) + `ink` body text — never a fully-colored alert block. |
-| Empty state | Centered icon (neutral, not brand-colored) + one-line explanation + one primary action. Never brand-green decorative illustration filling the space. |
-| Loading/skeleton | Neutral gray shimmer blocks matching the real content's shape — never a spinner for list/grid content, spinners only for full-page/full-action blocking waits. |
-| Error state | Same alert pattern as above (`danger`), plus a retry action when the error is retryable. |
-| Navigation | White/neutral-50 bar, `brand-dark-green` for the active link (text + 2px underline), `ink` for inactive links. |
-| Breadcrumbs | `neutral-500` separators, `ink` for all but the current page, current page in `brand-dark-green` and not a link. |
-| Modal/dialog | Centered, `radius-lg`, `elevation-3` shadow, scrim `ink` at 50% opacity, focus-trapped, `Escape` dismisses (see `bekaa3d-frontend-slice-dod` for the full a11y checklist this feeds). |
-| Tables | Neutral-50 header row, `ink` header text (not brand-colored), zebra striping only if the table is dense/long, row hover = `neutral-50`. |
+| Button hierarchy | `Button` variants: `primary` (solid `primary`, hover `primary-container`, green-tinted shadow) · `secondary` (2px `primary` outline) · `outline` (neutral `outline-variant`) · `ghost` (text-only `primary`) · `destructive` (solid `error`). Mono uppercase label via CSS. **At most one primary per view**, rightmost in action bars. |
+| Form fields | Use `TextField` / `PasswordField` / `SelectField` / `TextAreaField` / `MoneyInput` (shared `fieldStyles`). 48px, 8px radius, white, resting border `outline` (≥3:1 — deliberate deviation from Stitch's `outline-variant`), focus border `primary` + the global ring, error `border-error ring-error/20` + text with icon. |
+| Cards | White, 1px `outline-variant` (`/30` in soft storefront cards), `rounded-card`, `shadow-sm`, 24px padding. Large panels `rounded-panel`. |
+| Status badges | `StatusBadge` tones (DESIGN-SYSTEM §9): pill, mono 11px bold uppercase, MD3 container + on-container text. Never colour-only — always a text label. |
+| Alerts | `Alert`: 12px radius, tinted border, MD3 container, leading icon; error = `role="alert"`, others `role="status"`. No dismiss. |
+| Toast | `Toast`: `inverse-surface`, 12px radius, `shadow-2xl`, leading icon, bottom-right (centred on mobile). |
+| Modal/dialog | `DialogShell` only (focus trap, Escape/backdrop unless busy, focus return). Panel `rounded-card shadow-2xl`, scrim `on-surface/40` + light blur. Never write a second focus trap. |
+| Empty state | `EmptyState`: 96px lavender circle with a neutral icon, one line, at most one primary action. |
+| Loading | Spinner `text-primary` for blocking waits; skeletons `bg-surface-container-low animate-pulse` for lists/grids. |
+| Icons | `components/ui/Icon` (local inline SVG, `aria-hidden`). No remote icon fonts (Material Symbols CDN is blocked by CSP). |
+| Tables | `surface-container-low` header row, mono uppercase headers, `divide-outline-variant` rows, `hover:bg-primary/5`. Row actions always visible. |
 
 ## Responsive & States
 
-Breakpoints: mobile ≤767px, tablet 768–1023px, desktop ≥1024px (matches `docs/plans/frontend-slices/FRONTEND-VERTICAL-SLICE-PLAN.md` §14 — do not introduce a second breakpoint system).
+Breakpoints: mobile ≤767px, `tablet:` 768–1023px, `desktop:` ≥1024px (= Stitch `md` / `lg`). Do not introduce a second breakpoint system.
 
-Every interactive element needs distinct, visible: default → hover → focus-visible → active → disabled treatments. Focus indicator is **always** a visible 2px outline (brand-lime-derived, never removed via `outline: none` without an equivalent replacement) — this is a hard requirement, not a nice-to-have, per WCAG 2.4.7.
+Every interactive element needs distinct, visible default → hover → focus-visible → active → disabled treatments.
+
+**Focus is non-negotiable:** the global `:focus-visible` ring is a box-shadow (2px white + 4px `primary`), never removed and never replaced by a weaker treatment to match a mockup (WCAG 2.4.7). E2E specs assert a non-`none` box-shadow on focus. Respect `prefers-reduced-motion` (globals.css base block plus `motion-reduce:` variants).
 
 ## Common Mistakes
 
 | Mistake | Fix |
 |---|---|
-| Making a whole page/section background brand green "for identity" | Use neutral backgrounds; green appears on buttons, active states, and small accents only. |
-| Inventing a new shade of green per component | Use only the 3 brand green tokens + semantic colors from `tokens.md`; if none fit, that's a signal to revisit the token set, not to add an inline hex value. |
-| Using brand-green for both "success" and generic decoration | Reserve brand-green-as-success for actual success states; decorative accents use `brand-lime` sparingly. |
-| Color-only status (a green dot, no text) | Always pair color with a text label or icon+label. |
-| Removing focus outlines for aesthetics | Never — replace with an equally visible custom focus style, don't delete it. |
-| Drop shadows everywhere "to look modern" | Flat by default; shadow only signals elevation (modals, dropdowns, hover-lift on interactive cards). |
+| Making a whole section background brand green "for identity" | Neutral canvas/cards; green on actions, active states, prices and small accents (Stitch brand cards/CTA banners only where the handoff specifies them). |
+| Inventing a new shade per component | Use the Stitch tokens; if none fit, add one centrally (handoff → `globals.css`), never an inline hex. |
+| Lime text on a light background | Lime (`secondary-container`) is a background; text on it is `on-secondary-container`. |
+| `outline` (#707a6c) for required small text | It is 4.27:1 on the canvas; use `on-surface-variant` for anything essential. |
+| Colour-only status | Always pair colour with a text label (and an icon shape where used). |
+| Removing focus rings for aesthetics | Never — the global ring stays. |
+| Rewriting a label's casing to get UPPERCASE | Use the `uppercase` class; source text (and accessible names) stay as written. |
+| Using a legacy alias in new code (`brand-dark-green`, `text-text-primary`, `danger`, `text-h1`…) | Use the Stitch name. Aliases exist only so un-migrated screens keep working; Batch 11 removes them. |

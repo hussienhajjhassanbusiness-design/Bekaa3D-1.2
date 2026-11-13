@@ -17,7 +17,8 @@ const LABELS: Record<ProductTypeUi, string> = {
 
 export function ProductTypeBadge({ type }: ProductTypeBadgeProps) {
   return (
-    <span className="inline-block rounded-pill bg-neutral-100 px-2 py-0.5 text-caption font-semibold text-text-primary">
+    // Stitch format tag (COMPONENT-SPECS §18): 4px badge radius, mono label.
+    <span className="inline-flex items-center rounded-badge bg-surface-container-highest px-2 py-1 font-label text-label-sm font-bold uppercase leading-4 text-on-surface-variant">
       {LABELS[type]}
     </span>
   );

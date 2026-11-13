@@ -1,4 +1,4 @@
-export type StatusBadgeTone = "neutral" | "positive" | "negative" | "warning";
+export type StatusBadgeTone = "neutral" | "positive" | "negative" | "warning" | "info";
 
 export interface StatusBadgeProps {
   label: string;
@@ -17,16 +17,24 @@ export interface StatusBadgeProps {
 // about the backend's real enum literal, which stays
 // NEEDS BACKEND CONFIRMATION per domain. Status is always conveyed as
 // visible text, never by color alone.
+//
+// Stitch canonical status pill (DESIGN-SYSTEM §9 mapping, §12.13): full
+// pill, JetBrains Mono 11px bold uppercase (CSS only — the text node keeps
+// its source casing for tests and assistive tech). Every pair is >= 4.5:1.
+// `info` (added for the offer "countered" state, Batch 7) is additive.
 const TONE_CLASSES: Record<StatusBadgeTone, string> = {
-  neutral: "bg-neutral-100 text-text-primary",
-  positive: "bg-success-bg text-success",
-  negative: "bg-danger-bg text-danger",
-  warning: "bg-warning-bg text-warning-text",
+  neutral: "bg-surface-container-highest text-on-surface-variant",
+  positive: "bg-secondary-container text-on-secondary-container",
+  negative: "bg-error-container text-on-error-container",
+  warning: "bg-warning-container text-on-warning-container",
+  info: "bg-info-container text-on-info-container",
 };
 
 export function StatusBadge({ label, tone }: StatusBadgeProps) {
   return (
-    <span className={`inline-block rounded-pill px-2 py-0.5 text-caption font-semibold ${TONE_CLASSES[tone]}`}>
+    <span
+      className={`inline-flex items-center rounded-full px-3 py-1 font-label text-label-sm font-bold uppercase leading-4 ${TONE_CLASSES[tone]}`}
+    >
       {label}
     </span>
   );

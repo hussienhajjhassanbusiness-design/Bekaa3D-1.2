@@ -7,7 +7,7 @@ export function LoadingSpinner() {
     <div role="status" aria-labelledby={labelId}>
       <svg
         aria-hidden="true"
-        className="h-6 w-6 animate-spin motion-reduce:animate-none text-brand-dark-green"
+        className="h-6 w-6 animate-spin motion-reduce:animate-none text-primary"
         viewBox="0 0 24 24"
         fill="none"
       >

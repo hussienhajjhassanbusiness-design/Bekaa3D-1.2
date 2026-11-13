@@ -1,172 +1,191 @@
 # Bekaa3D Design Token Reference
 
-Source: `docs/assets/ChatGPT Image Sep 26, 2026, 04_34_37 PM.jpg` (the supplied Bekaa3D logo — hexagonal "B" mark, lime→forest-green gradient, near-black "BEKAA" wordmark, dark-green "3D," tagline "Engineered Grade 3D Solutions" in mid-green).
+**Status: aligned with the approved Stitch design handoff (Redesign Batch 1).**
 
-**Status: initial proposal, not an approved brand spec.** These tokens are visually sampled/approximated from the one logo asset provided. If an official brand guideline (exact hex values, approved type family, usage rules) becomes available, update this file and treat it as the new source of truth — do not keep both versions in circulation.
+The visual authority is the Stitch handoff in `docs/design-handoff/` (`DESIGN-TOKENS.md`, `design-tokens.json`, `DESIGN-SYSTEM.md` §12 recommendations). This file is the implementation guide: which token to reach for, the accessibility rules, and the map from the pre-Stitch names that still exist as aliases. Token **values** live in `src/app/globals.css`; if this file and the handoff ever disagree, the handoff wins and this file is corrected.
 
-## 1. Brand Colors
+History: the previous palette (`#195B2D` dark green, `#8AC143` lime, `#21201F` ink, neutral greys) was sampled from the logo JPEG as an unapproved v1. It is superseded by the Stitch palette (product-owner decision, Batch 1). The logo asset itself is unchanged and keeps its own embedded green.
 
-| Token | Hex | Sampled from | Use |
-|---|---|---|---|
-| `brand-dark-green` | `#195B2D` | Logo's upper-right hexagon facet (darkest green) | Primary actions, headers, active nav/links, primary text accents |
-| `brand-lime` | `#8AC143` | Logo's lower-left hexagon facet (lightest green) | Accents, ratings, hover glow, secondary highlights — used sparingly |
-| `brand-green` | `#3D793A` | Mid-tone between the two facets / tagline text color | Secondary buttons, icons, tag backgrounds, "3D" wordmark color |
-| `ink` | `#21201F` | "BEKAA" wordmark | Primary text, headings |
-| `white` | `#FFFFFF` | Logo background | Base surface |
+## 1. Colour (Stitch MD3 roles)
 
-**Given confidence:** high on hue family (three-stop green gradient + near-black wordmark is unambiguous in the source image); medium on exact hex precision (sampled from a JPEG, not a vector/brand-book source) — treat these as "close enough to ship a consistent v1," not pixel-exact brand values.
+Use these names in new code (`bg-primary`, `text-on-surface-variant`, `border-outline-variant`, …).
 
-## 2. Semantic Colors
-
-Deliberately **not** all derived from brand green — status meaning must stay legible independent of brand identity (a green "paid" badge and a green "brand accent" button must never be visually confusable as the same signal).
+### Brand roles
 
 | Token | Hex | Use |
 |---|---|---|
-| `success` | `#3D793A` (`brand-green`) | Paid, delivered, accepted, completed states |
-| `success-bg` | `#3D793A` at 8% opacity | Success alert/badge background |
-| `warning` | `#B8860B` | Pending, awaiting response, cooldown-active, in-production |
-| `warning-bg` | `#B8860B` at 8% opacity | Warning alert/badge background |
-| `warning-text` | `#805B07` | Warning **text** (badges, inline notes). `#B8860B` text is ~3:1 on `warning-bg` and fails WCAG AA for small text; this darker amber is 5.6:1. Keep `warning` for borders, icons and fills (phase 6E) |
-| `danger` | `#B3261E` | Errors, destructive actions, rejected, cancelled, failed payment |
-| `danger-bg` | `#B3261E` at 8% opacity | Error alert/badge background |
-| `info` | `#2B6CB0` | Neutral informational banners, "verifying," in-transit |
-| `info-bg` | `#2B6CB0` at 8% opacity | Info alert/badge background |
+| `primary` | `#0d631b` | Solid CTAs, active nav, links, prices, focus ring. 7.45:1 on white, 7.11:1 on canvas. |
+| `on-primary` | `#ffffff` | Text/icons on primary |
+| `primary-container` | `#2e7d32` | **Primary hover** (Stitch lightens on hover) |
+| `on-primary-container` | `#cbffc2` | Text on primary-container |
+| `primary-fixed` / `-dim` | `#a3f69c` / `#88d982` | Pale green chips, selection highlight, toast success icon |
+| `on-primary-fixed` / `-variant` | `#002204` / `#005312` | Text on primary-fixed |
+| `inverse-primary` | `#88d982` | Accent on dark surfaces |
+| `surface-tint` | `#1b6d24` | Gradient end colour |
+| `secondary` | `#3e6a00` | Olive: category badges, "in stock" text |
+| `secondary-container` | `#b9f474` | **Lime accent — backgrounds only** (success chips). Never lime text on light. |
+| `on-secondary-container` | `#437000` | Text on lime (4.66:1) |
+| `secondary-fixed` / `-dim` | `#b9f474` / `#9ed75b` | Promo CTA background, rating on admin |
+| `on-secondary-fixed` / `-variant` | `#0f2000` / `#2e4f00` | Text on secondary-fixed |
+| `tertiary` | `#923357` | **Raspberry**: discounts, low stock |
+| `tertiary-container` | `#b14b6f` | |
+| `tertiary-fixed` / `on-tertiary-fixed-variant` | `#ffd9e2` / `#7f2448` | "Pending" chip |
 
-## 3. Neutral Palette
+### Surfaces & text
 
-10-step gray scale, `ink` (`#21201F`) anchors the darkest step so text always ties back to brand identity rather than a generic pure-black.
+| Token | Hex | Use |
+|---|---|---|
+| `background` / `surface` / `surface-bright` | `#f9f9ff` | Page canvas (body background) |
+| `surface-container-lowest` | `#ffffff` | Cards, dialogs, inputs |
+| `surface-container-low` | `#f1f3ff` | Table headers, muted panels, skeletons, image placeholders |
+| `surface-container` | `#e9edff` | Icon tiles, chips, empty-state circle |
+| `surface-container-high` | `#e1e8fd` | **Dominant hover background** |
+| `surface-container-highest` / `surface-variant` | `#dce2f7` | Format tags, neutral badges |
+| `surface-dim` | `#d3daef` | Map/avatar placeholder |
+| `inverse-surface` / `inverse-on-surface` | `#293040` / `#edf0ff` | Toast, dark cards |
+| `on-surface` / `on-background` | `#141b2b` | Headings, primary text |
+| `on-surface-variant` | `#40493d` | Body text (most used) |
+| `outline` | `#707a6c` | Muted text, **resting input border**. 4.27:1 on canvas — not for essential small text. |
+| `outline-variant` | `#bfcaba` | Default border & divider (1.7:1 — decorative borders only, never a control boundary) |
 
-| Token | Hex |
+### Semantic
+
+| Token | Hex | Use |
+|---|---|---|
+| `error` | `#ba1a1a` | Destructive buttons, error text, invalid border |
+| `error-container` / `on-error-container` | `#ffdad6` / `#93000a` | Error alerts, negative badges |
+| `warning` | `#d97706` | Icons, borders, dots only (3.2:1 — not text) |
+| `warning-container` / `on-warning-container` | `#fef3c7` / `#92400e` | Warning alerts & badges (6.4:1) |
+| `warning-outline` | `#fde68a` | Warning border |
+| `info` | `#2563eb` | Info icons/borders |
+| `info-container` / `on-info-container` | `#dbeafe` / `#1e40af` | Info alerts & badges, offer "countered" |
+| `info-outline` | `#bfdbfe` | Info border |
+| `whatsapp` | `#25d366` | WhatsApp brand. White text on it fails contrast (1.98:1): use the glyph with an `aria-label`, or `on-surface` text. |
+
+Success has no dedicated Stitch token: badges use `secondary-container` + `on-secondary-container`; alerts use `secondary-container/40` + an icon in `primary`.
+
+### Status mapping (DESIGN-SYSTEM §9) — `StatusBadge` tones
+
+| Tone | Background | Text |
+|---|---|---|
+| `positive` (success, delivered, active) | `secondary-container` | `on-secondary-container` |
+| `warning` (pending, awaiting) | `warning-container` | `on-warning-container` |
+| `negative` (error, cancelled, failed) | `error-container` | `on-error-container` |
+| `info` (countered, informational) | `info-container` | `on-info-container` |
+| `neutral` (archived, hidden) | `surface-container-highest` | `on-surface-variant` |
+
+## 2. Typography
+
+Families are self-hosted with `next/font/local` (`src/app/fonts.ts`, vendored OFL woff2). No Google request at build or run time.
+
+| Family | Utility | Use |
+|---|---|---|
+| Hanken Grotesk | `font-headline`, `font-display` | All headings (applied to `h1`–`h6` globally), prices, KPI numbers |
+| Inter | `font-body` (also `font-sans`, set on `body`) | Body and UI text |
+| JetBrains Mono | `font-label` | Labels, buttons, table headers, chips, IDs — UPPERCASE via the `uppercase` class |
+
+| Token | Size / line-height / weight / tracking | Use |
+|---|---|---|
+| `display` | 48 / 1.1 / 800 / -0.02em — **36px below 768** | Storefront page title / hero |
+| `headline-lg` | 32 / 1.2 / 700 / -0.01em — **24px below 768** | Section heading, account/admin page title |
+| `headline-md` | 20 / 1.3 / 600 | Card heading, dialog title |
+| `title-sm` | 16 / 1.5 / 600 | Compact card / row title |
+| `body-lg` | 18 / 1.6 | Intro / lead paragraph |
+| `body-md` | 16 / 1.5 | Body paragraphs, form input text |
+| `body` | 14 / 20 | Secondary body, compact UI, table cells (Stitch `text-sm`) |
+| `caption` | 12 / 16 | Helper, meta, error text |
+| `label-caps` | 12 / 1.0 / 600 / 0.05em | Labels, buttons (pair with `font-label uppercase`; use `leading-4` where text can wrap) |
+| `label-sm` | 11 / 1.0 / 600 / 0.05em | Status badges, chips |
+| `label-micro` | 10 / 1.0 / 600 / 0.05em | Micro labels — never in `outline` colour |
+
+Do not promote every 14px caption/helper/compact control to 16px: pick the role.
+
+## 3. Spacing & layout
+
+4px base unit (Tailwind default, unchanged).
+
+| Token | Value | Utility |
+|---|---|---|
+| `gutter` | 24px | `gap-gutter` — common grid gap |
+| `margin-mobile` | 16px | `px-margin-mobile` — page gutter <768 |
+| `margin-desktop` | 64px | `px-margin-desktop` — storefront page gutter ≥1024 (32px recommended at tablet) |
+| `section` / `section-mobile` | 96px / 64px | `py-section` — storefront section rhythm |
+| `sidebar` | 256px | `w-sidebar` — app sidebar |
+| `topbar` | 64px | `h-topbar` — app top bar |
+| `container-content` | 1440px | `max-w-content` — main content cap |
+| `container-form` | 1200px | `max-w-form` — admin long-form cap |
+
+Card padding 24px (`p-6`), form/summary cards 32px (`p-8`), compact 16px. Form rhythm 24px between fields, 8px label → input.
+
+## 4. Shape
+
+| Token | Value | Use |
+|---|---|---|
+| `rounded-badge` | 4px | Badges, tags |
+| `rounded-control` | 8px | Buttons, inputs, selects, icon tiles |
+| `rounded-card` | 12px | Standard card, dialog, alert, toast |
+| `rounded-panel` | 16px | Large / summary panels |
+| `rounded-banner` | 24px | Promo / CTA banners |
+| `rounded-full` | pill | Status badges, avatars, icon buttons |
+
+Nested radii decrease inward (a 12px card holds 8px controls and 4px badges). Tailwind's `rounded-lg` is now 8px (Stitch); use `rounded-xl` for 12px.
+
+## 5. Elevation & effects
+
+| Level | Value | Use |
+|---|---|---|
+| e0 | border only | Tables, admin cards, inputs |
+| e1 | `shadow-sm` | Resting card |
+| e2 | `shadow-ambient` | Account dashboard / category cards |
+| e3 | `shadow-md` → `shadow-xl` on hover | Card hover |
+| e4 | `shadow-lg shadow-primary/20` | Primary CTA |
+| e5 | `shadow-2xl` | Dialog, toast, dropdown, FAB |
+
+Glass (`glass-panel`: white 80% + 20px blur, opaque fallback), gradients (`--gradient-primary`, `--gradient-signature`, `text-gradient-primary`) and the blueprint grid (`bg-blueprint`) exist **only for the places the Stitch handoff specifies them**.
+
+## 6. Motion
+
+Colours 200ms (Tailwind default duration is set to 200ms), cards 300ms, image zoom 500–700ms, easing `ease-standard` (`cubic-bezier(.4,0,.2,1)`), press `scale .95` (`enabled:active:scale-95`). A global `prefers-reduced-motion` block neutralises animations and transitions; keep `motion-reduce:` variants on component-level motion too.
+
+## 7. Focus & accessibility contract
+
+- Global `:focus-visible` = `0 0 0 2px #fff, 0 0 0 4px primary` (box-shadow; E2E asserts it). Never removed, never replaced by Stitch's weaker `ring-primary/20`.
+- Inputs: resting border `outline` (≥3:1), focus border `primary` + global ring, error `border-error ring-2 ring-error/20` + caption-size error text with an icon, linked by `aria-describedby`.
+- Disabled: `opacity-50 cursor-not-allowed`, no hover change; pair with a reason where one exists.
+- Status never by colour alone.
+
+## 8. Legacy aliases (remove in Batch 11)
+
+These pre-Stitch names still compile so un-migrated screens keep working. Each is a `var()` pointer to a Stitch token in `globals.css` — not a second value. New code must use the Stitch name.
+
+| Legacy | → Stitch |
 |---|---|
-| `neutral-50` | `#FAFAFA` |
-| `neutral-100` | `#F2F2F1` |
-| `neutral-200` | `#E4E3E1` |
-| `neutral-300` | `#CBC9C6` |
-| `neutral-400` | `#A6A4A0` |
-| `neutral-500` | `#7D7B77` |
-| `neutral-600` | `#5C5A57` |
-| `neutral-700` | `#413F3D` |
-| `neutral-800` | `#2D2C2A` |
-| `neutral-900` (= `ink`) | `#21201F` |
+| `brand-dark-green` | `primary` |
+| `brand-green` | `secondary` |
+| `brand-lime` | `secondary-container` |
+| `ink`, `text-primary`, `neutral-800/900` | `on-surface` |
+| `text-secondary`, `neutral-600/700` | `on-surface-variant` |
+| `text-disabled`, `neutral-400/500`, `border-strong` | `outline` |
+| `text-on-brand` | `on-primary` |
+| `text-link`, `border-focus` | `primary` |
+| `surface-base` | `surface-container-lowest` |
+| `surface-subtle`, `neutral-50` | `surface-container-low` |
+| `surface-sunken`, `neutral-100` | `surface-container` |
+| `neutral-200` | `surface-container-high` |
+| `border-default`, `neutral-300` | `outline-variant` |
+| `success` | `primary` |
+| `success-bg` | `secondary-container` at 40% |
+| `danger` / `danger-bg` | `error` / `error-container` |
+| `warning-bg` / `warning-text` | `warning-container` / `on-warning-container` |
+| `info-bg` | `info-container` |
+| `text-h1` | `headline-lg` (incl. mobile step-down) |
+| `text-h3` / `text-h4` | `headline-md` / `title-sm` |
+| `text-h2` | kept 24/32 until each call site picks `headline-lg` or `headline-md` |
+| `text-label` + `tracking-label` | 12/16, 0.05em (pair with `font-label` when migrating) |
+| `rounded-sm` / `rounded-md` / `rounded-pill` | `rounded-badge` / `rounded-control` / `rounded-full` |
+| `shadow-elevation-1/2/3` | e1 / `shadow-lg` / `shadow-2xl` |
 
-## 4. Text Colors
+## Open items
 
-| Token | Value | Use |
-|---|---|---|
-| `text-primary` | `ink` (`#21201F`) | Headings, primary body text |
-| `text-secondary` | `neutral-600` | Supporting text, captions, metadata |
-| `text-disabled` | `neutral-400` | Disabled control labels |
-| `text-on-brand` | `white` | Text on `brand-dark-green`/`brand-green` solid surfaces |
-| `text-link` | `brand-dark-green` | Inline links, underline on hover |
-
-## 5. Surfaces & Borders
-
-| Token | Value | Use |
-|---|---|---|
-| `surface-base` | `white` | Page background |
-| `surface-subtle` | `neutral-50` | Section alternation, table header row, input backgrounds |
-| `surface-sunken` | `neutral-100` | Well/inset areas (e.g., code blocks, quoted content) |
-| `border-default` | `neutral-200` | Card/table/input borders |
-| `border-strong` | `neutral-300` | Emphasized dividers |
-| `border-focus` | `brand-lime` (2px, see §9) | Focus ring on all interactive elements |
-
-## 6. Typography
-
-Assumption (flag if the team has a licensed brand typeface): a clean geometric/grotesk sans for UI (e.g., Inter or similar system-adjacent sans) for all interface text, reserving the logo's own lettering strictly for the logo itself — **never recreate or approximate the logo's custom lettering as a UI font**.
-
-| Token | Size / Line-height | Weight | Use |
-|---|---|---|---|
-| `display` | 40px / 48px | 700 | Hero/landing headline only |
-| `h1` | 32px / 40px | 700 | Page title |
-| `h2` | 24px / 32px | 600 | Section heading |
-| `h3` | 20px / 28px | 600 | Card/subsection heading |
-| `h4` | 16px / 24px | 600 | Small heading, table section label |
-| `body-lg` | 16px / 24px | 400 | Primary body text |
-| `body` | 14px / 20px | 400 | Default UI text |
-| `caption` | 12px / 16px | 400 | Metadata, timestamps, helper text |
-| `label` | 12px / 16px | 600, uppercase, +0.04em tracking | Form field labels, table headers |
-
-Admin UI uses `body`/`caption` as its default density; storefront leans on `body-lg` for readability.
-
-## 7. Spacing
-
-4px base unit — every margin/padding/gap value is a multiple of it, no arbitrary in-between values.
-
-| Token | Value |
-|---|---|
-| `space-1` | 4px |
-| `space-2` | 8px |
-| `space-3` | 12px |
-| `space-4` | 16px |
-| `space-5` | 20px |
-| `space-6` | 24px |
-| `space-8` | 32px |
-| `space-10` | 40px |
-| `space-12` | 48px |
-| `space-16` | 64px |
-
-Storefront default gap: `space-4`/`space-6`. Admin default gap: `space-2`/`space-3` (denser, tool-like — matches `bekaa3d-brand-ui`'s admin density rule).
-
-## 8. Radius
-
-| Token | Value | Use |
-|---|---|---|
-| `radius-sm` | 4px | Inputs, small badges |
-| `radius-md` | 8px | Cards, buttons, dialogs' inner elements |
-| `radius-lg` | 12px | Modals, large panels |
-| `radius-pill` | 999px | Pills, status badges, avatar |
-
-No sharper-than-4px or fully-square interactive elements — softens the "engineered" look without going playful/rounded-bubbly (avoid >12px on anything but a pill).
-
-## 9. Elevation (Shadow)
-
-Flat by default — shadow exists only to signal something is floating above the page, never as decoration.
-
-| Token | Value | Use |
-|---|---|---|
-| `elevation-0` | none | Default resting state for cards, inputs, buttons |
-| `elevation-1` | `0 1px 3px rgba(33,32,31,0.08)` | Hover-lift on interactive cards only |
-| `elevation-2` | `0 4px 12px rgba(33,32,31,0.10)` | Dropdowns, popovers |
-| `elevation-3` | `0 12px 32px rgba(33,32,31,0.16)` | Modals/dialogs |
-| `focus-ring` | `0 0 0 2px white, 0 0 0 4px #8AC143` | Keyboard focus on any interactive element (double-ring so it's visible on both light and colored backgrounds) |
-
-## 10. Container Widths & Breakpoints
-
-| Token | Value |
-|---|---|
-| `breakpoint-mobile` | ≤ 767px |
-| `breakpoint-tablet` | 768–1023px |
-| `breakpoint-desktop` | ≥ 1024px |
-| `container-max` (storefront) | 1280px, centered, `space-4` side gutter minimum on mobile |
-| `container-max` (admin) | fluid up to 1600px — admin tables/dashboards benefit from more width than storefront content |
-
-Matches `docs/plans/frontend-slices/FRONTEND-VERTICAL-SLICE-PLAN.md` §14 exactly — this is the single breakpoint system for the whole app, not a second competing scale.
-
-## 11. Button Variants
-
-| Variant | Background | Text | Border | Use |
-|---|---|---|---|---|
-| Primary | `brand-dark-green` | `white` | none | The one primary action per view (submit, buy, confirm) |
-| Secondary | `white` | `brand-dark-green` | 1px `brand-dark-green` | Secondary actions (cancel-but-safe, view details) |
-| Tertiary/ghost | transparent | `ink` | none | Low-emphasis actions (dismiss, skip) |
-| Destructive | `danger` | `white` | none | Irreversible/destructive actions only (cancel order, delete, revoke) |
-| Disabled | `neutral-200` | `neutral-400` | none | Any variant in a disabled state — always paired with a reason (`aria-describedby`), never a bare grey-out |
-
-Hover: darken background 8%. Active: darken 12% + scale 0.98 (subtle, no bounce). Focus: `focus-ring` token, always. Never more than one Primary button visible in the same view/section.
-
-## 12. Field States
-
-| State | Border | Background | Notes |
-|---|---|---|---|
-| Default | `border-default` | `surface-subtle` | |
-| Hover | `neutral-400` | `surface-subtle` | |
-| Focus | `border-focus` (2px) | `white` | `focus-ring` shadow applied |
-| Error | `danger` (2px) | `danger-bg` | Paired with inline error text below the field, `aria-describedby` |
-| Disabled | `border-default` | `neutral-100` | `text-disabled` for both label and value |
-| Success (rare — e.g., verified address) | `success` (1px) | `white` | Used sparingly, only where positive confirmation adds real value |
-
-## Open Items
-
-- Exact hex precision should be re-verified against a vector/brand-book source if one becomes available (see Status note above).
-- No licensed/approved UI typeface has been specified — this document assumes a system-adjacent geometric sans as a placeholder; confirm with brand/marketing before final implementation.
-- Dark-mode tokens are intentionally not defined — nothing in `docs/plans/frontend-slices/FRONTEND-VERTICAL-SLICE-PLAN.md` or `docs/plans/backend/vertical-slice-plan.md` requires dark mode for V1; add a token set here if that requirement appears.
+- Only the Latin font subsets are vendored; add other subsets if a locale needs them.
+- No dark theme: Stitch designed light only.

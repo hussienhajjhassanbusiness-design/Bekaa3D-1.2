@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+
+<html class="scroll-smooth" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>About Us | Bekaa3D - Precision Engineered Manufacturing</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700;800&amp;family=Inter:wght@400;500&amp;family=JetBrains+Mono:wght@600&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@100..900&amp;family=Inter:wght@100..900&amp;family=JetBrains+Mono:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-tint": "#1b6d24",
+                    "secondary-container": "#b9f474",
+                    "on-tertiary-container": "#ffedf0",
+                    "surface-container-high": "#e1e8fd",
+                    "on-secondary": "#ffffff",
+                    "tertiary-fixed-dim": "#ffb1c7",
+                    "inverse-on-surface": "#edf0ff",
+                    "primary": "#0d631b",
+                    "on-tertiary-fixed": "#3f001c",
+                    "surface-variant": "#dce2f7",
+                    "on-tertiary-fixed-variant": "#7f2448",
+                    "on-secondary-fixed": "#0f2000",
+                    "on-primary-fixed-variant": "#005312",
+                    "surface-container-lowest": "#ffffff",
+                    "on-tertiary": "#ffffff",
+                    "on-background": "#141b2b",
+                    "inverse-surface": "#293040",
+                    "on-secondary-container": "#437000",
+                    "tertiary-container": "#b14b6f",
+                    "secondary-fixed-dim": "#9ed75b",
+                    "inverse-primary": "#88d982",
+                    "surface-dim": "#d3daef",
+                    "primary-fixed-dim": "#88d982",
+                    "surface-container": "#e9edff",
+                    "outline": "#707a6c",
+                    "surface-bright": "#f9f9ff",
+                    "on-surface": "#141b2b",
+                    "surface-container-low": "#f1f3ff",
+                    "on-error": "#ffffff",
+                    "primary-container": "#2e7d32",
+                    "outline-variant": "#bfcaba",
+                    "on-secondary-fixed-variant": "#2e4f00",
+                    "on-surface-variant": "#40493d",
+                    "secondary": "#3e6a00",
+                    "surface-container-highest": "#dce2f7",
+                    "tertiary": "#923357",
+                    "on-primary": "#ffffff",
+                    "on-error-container": "#93000a",
+                    "surface": "#f9f9ff",
+                    "on-primary-container": "#cbffc2",
+                    "error-container": "#ffdad6",
+                    "error": "#ba1a1a",
+                    "on-primary-fixed": "#002204",
+                    "background": "#f9f9ff",
+                    "secondary-fixed": "#b9f474",
+                    "tertiary-fixed": "#ffd9e2",
+                    "primary-fixed": "#a3f69c"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "max-width": "1440px",
+                    "margin-desktop": "64px",
+                    "gutter": "24px",
+                    "margin-mobile": "16px",
+                    "unit": "4px"
+            },
+            "fontFamily": {
+                    "display": ["Hanken Grotesk"],
+                    "headline-lg-mobile": ["Hanken Grotesk"],
+                    "headline-lg": ["Hanken Grotesk"],
+                    "headline-md": ["Hanken Grotesk"],
+                    "label-caps": ["JetBrains Mono"],
+                    "body-md": ["Inter"],
+                    "body-lg": ["Inter"]
+            },
+            "fontSize": {
+                    "display": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                    "headline-lg": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                    "headline-md": ["20px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                    "label-caps": ["12px", {"lineHeight": "1.0", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                    "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                    "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .glass-panel {
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        .text-gradient {
+            background: linear-gradient(135deg, #0d631b 0%, #3e6a00 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .btn-gradient {
+            background: linear-gradient(135deg, #2e7d32 0%, #1b6d24 100%);
+        }
+        .masonry-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            grid-auto-rows: 200px;
+            gap: 24px;
+        }
+        .masonry-item-large { grid-row: span 2; }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body-md selection:bg-primary-fixed-dim selection:text-on-primary-fixed overflow-x-hidden">
+<!-- TopNavBar -->
+<nav class="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-xl border-b border-outline-variant/30 shadow-sm">
+<div class="flex justify-between items-center max-w-spacing-max-width mx-auto px-spacing-margin-desktop h-16">
+<div class="font-headline-md text-headline-md font-black tracking-tighter text-on-surface">
+                Bekaa3D
+            </div>
+<div class="hidden md:flex items-center gap-8">
+<a class="font-label-caps text-label-caps text-on-surface-variant hover:text-primary transition-colors" href="#">Printers</a>
+<a class="font-label-caps text-label-caps text-on-surface-variant hover:text-primary transition-colors" href="#">Materials</a>
+<a class="font-label-caps text-label-caps text-on-surface-variant hover:text-primary transition-colors" href="#">Software</a>
+<a class="font-label-caps text-label-caps text-primary border-b-2 border-primary pb-1" href="#">Industry</a>
+<a class="font-label-caps text-label-caps text-on-surface-variant hover:text-primary transition-colors" href="#">Support</a>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 hover:bg-surface-container rounded-full transition-all duration-200 active:scale-95">
+<span class="material-symbols-outlined">shopping_cart</span>
+</button>
+<button class="p-2 hover:bg-surface-container rounded-full transition-all duration-200 active:scale-95">
+<span class="material-symbols-outlined">account_circle</span>
+</button>
+</div>
+</div>
+</nav>
+<main class="pt-16">
+<!-- Hero Section -->
+<section class="relative h-[819px] flex items-center overflow-hidden">
+<div class="absolute inset-0 z-0">
+<div class="absolute inset-0 bg-gradient-to-r from-on-surface/80 to-transparent z-10"></div>
+<div class="w-full h-full" data-alt="A cinematic, high-angle wide shot of a futuristic precision manufacturing floor with automated robotic arms and rows of sleek, white Bambu Lab 3D printers. The lighting is clean, bright, and clinical with soft green accent lights reflecting off polished concrete floors. The atmosphere is quiet, high-tech, and professional, embodying functional luxury and industrial mastery." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBrFqSBYTNA7pUj1gXzo3MvLiIUMUMs6WozuCSU_Mrz6QeoZqFS8R4SiUUw72cg-VMKZL7oQj4MhkBCvNnCZmxpMSiGjYlOqsnucOePi4EN_loS6gdUyBNXtWzBtBDPg8GoKn_ulkIWD75yFQr1YvHiv96-nCeDdsajF_CKwPJSJ2W0NRJs4Jhz3NW3GZdQ2ZoFkh1DZwm0rndsfEXYUUfKCZ0O7e9VbfXkOuYg03xuW26v9vrJ_D0zoA')"></div>
+</div>
+<div class="relative z-20 max-w-spacing-max-width mx-auto px-spacing-margin-desktop w-full">
+<div class="max-w-2xl">
+<span class="font-label-caps text-label-caps text-primary-fixed-dim tracking-[0.2em] mb-4 block">ESTABLISHED 2014</span>
+<h1 class="font-display text-display text-white mb-6">Engineering the future of manufacturing.</h1>
+<p class="font-body-lg text-body-lg text-surface-container-low mb-8 leading-relaxed">
+                        We bridge the gap between digital design and industrial-scale reality. From rapid prototyping to end-use production, Bekaa3D delivers precision that moves industries.
+                    </p>
+<div class="flex gap-4">
+<button class="btn-gradient px-8 py-4 rounded-lg font-label-caps text-label-caps text-white hover:shadow-lg transition-all active:scale-95">
+                            CONSULT AN ENGINEER
+                        </button>
+<button class="px-8 py-4 rounded-lg font-label-caps text-label-caps text-white border border-white/30 hover:bg-white/10 transition-all active:scale-95">
+                            VIEW CAPABILITIES
+                        </button>
+</div>
+</div>
+</div>
+</section>
+<!-- Company Story Section -->
+<section class="py-24 bg-surface">
+<div class="max-w-spacing-max-width mx-auto px-spacing-margin-desktop">
+<div class="grid md:grid-cols-2 gap-16 items-center">
+<div class="order-2 md:order-1">
+<h2 class="font-headline-lg text-headline-lg mb-8">From a single prototype to a global fleet.</h2>
+<div class="space-y-6 text-on-surface-variant font-body-md">
+<p>Founded in a modest engineering workshop, Bekaa3D began with a simple mission: to make high-fidelity manufacturing accessible to the world's most ambitious designers.</p>
+<p>Over the last decade, we have evolved into a technology-first leader, operating one of the most advanced additive manufacturing fleets in the industry. Our journey is marked by a relentless pursuit of the 0.1mm—the margin where excellence is defined.</p>
+<p>Today, we serve Fortune 500 aerospace firms, automotive pioneers, and medical device innovators, providing the physical infrastructure for tomorrow's breakthroughs.</p>
+</div>
+</div>
+<div class="order-1 md:order-2 relative aspect-square rounded-2xl overflow-hidden shadow-xl">
+<div class="absolute inset-0 bg-primary/10"></div>
+<img class="w-full h-full object-cover" data-alt="A vintage black and white photograph of a small, meticulous engineering workshop from 2014, showing drafting tools, early 3D printer skeletons, and blueprints. The image fades subtly into a vibrant, modern color photo of a high-tech cleanroom facility. This visual transition represents the company's decade of evolution and growth into an industrial leader." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCri_-3Md6OvfE3bDZL9PCT0QMBfh-PaWcdNkAE31CORsaHMyHbOK1uJIqpw1eg3qr_qaRvl82DRb1NvQTwMRQ5sy4DYUKKiXPhDz_VmhsBBYvNsQmLsx7jfRQb9JCWX_53AiRtvlMheXqtNZskzE94iWlNWr8fDIKl0Y5-geK-s4tKzTRmEf63djkpFr7X_tfsuWohiATbi4o0bVQG_wFGMy16bLu16DZRLoc-P2RTKVQqa3SnYrZLNg"/>
+</div>
+</div>
+</div>
+</section>
+<!-- Mission & Vision -->
+<section class="py-24 bg-surface-container-low">
+<div class="max-w-spacing-max-width mx-auto px-spacing-margin-desktop">
+<div class="grid md:grid-cols-2 gap-8">
+<!-- Mission -->
+<div class="bg-white p-12 rounded-2xl shadow-sm border border-outline-variant/30 flex flex-col justify-between group hover:border-primary transition-colors">
+<div>
+<span class="material-symbols-outlined text-4xl text-primary mb-6" style="font-variation-settings: 'FILL' 1;">precision_manufacturing</span>
+<h3 class="font-headline-lg text-headline-lg mb-4">Our Mission</h3>
+<p class="font-body-md text-on-surface-variant leading-relaxed">
+                                To empower global innovation by providing a seamless, high-precision gateway from digital concept to industrial-grade reality, maintaining the highest standards of materials engineering and structural integrity.
+                            </p>
+</div>
+<div class="mt-12 h-1 w-24 bg-primary/20 group-hover:w-full transition-all duration-500"></div>
+</div>
+<!-- Vision -->
+<div class="bg-inverse-surface p-12 rounded-2xl shadow-sm flex flex-col justify-between group">
+<div>
+<span class="material-symbols-outlined text-4xl text-inverse-primary mb-6" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+<h3 class="font-headline-lg text-headline-lg text-white mb-4">Our Vision</h3>
+<p class="font-body-md text-surface-variant leading-relaxed">
+                                To define the standard for decentralized, high-fidelity manufacturing, where every designer has the power to manifest complex mechanical systems with the press of a button, anywhere in the world.
+                            </p>
+</div>
+<div class="mt-12 h-1 w-24 bg-inverse-primary/20 group-hover:w-full transition-all duration-500"></div>
+</div>
+</div>
+</div>
+</section>
+<!-- Services & Tech (Bento Grid) -->
+<section class="py-24 bg-surface">
+<div class="max-w-spacing-max-width mx-auto px-spacing-margin-desktop">
+<div class="text-center mb-16">
+<h2 class="font-headline-lg text-headline-lg mb-4">Technical Capabilities</h2>
+<p class="font-body-md text-on-surface-variant max-w-xl mx-auto">Operating at the intersection of high-speed throughput and micron-level accuracy.</p>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+<!-- Card 1: The Fleet -->
+<div class="md:col-span-2 bg-white rounded-2xl border border-outline-variant/30 p-8 flex flex-col md:flex-row gap-8 items-center">
+<div class="flex-1">
+<span class="font-label-caps text-[10px] text-primary tracking-widest uppercase mb-2 block">The Hardware</span>
+<h4 class="font-headline-md text-headline-md mb-3">Industrial Bambu Fleet</h4>
+<p class="text-on-surface-variant mb-6">Our facility houses 200+ synchronized Bambu Lab X1E units, providing unmatched parallel production speed and multi-material versatility.</p>
+<div class="flex flex-wrap gap-2">
+<span class="px-3 py-1 bg-surface-container rounded-full font-label-caps text-[10px]">600MM/S SPEED</span>
+<span class="px-3 py-1 bg-surface-container rounded-full font-label-caps text-[10px]">AMS SUPPORT</span>
+<span class="px-3 py-1 bg-surface-container rounded-full font-label-caps text-[10px]">AI INSPECTION</span>
+</div>
+</div>
+<div class="w-full md:w-64 aspect-square rounded-xl overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A clean, minimalist macro shot of a white Bambu Lab X1 Carbon printer head in motion, with a subtle green status LED glowing. The background is a soft-focus laboratory setting, emphasizing clean lines and high-performance engineering aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC1Bld4s-4ZFyL6tBucn6sSlbCK2psr6n97xOUBZtZluATL_WsFiyIIH00eDduvOS5pl_48U11SWOfAgPAjdo6-USDmvkqDH_d9dBSx39yErRaytRILL2f__Ei_IeQ_IdsTK0HweYT5xeJxKDLG0gSEAsuMaqOIwuGoWorKbWV_H2X8Ei9YscGQ-vbWFfFNM77LhpNG-RgkFPi1xx0mMOajS6zD3lBluAz6NXQQ_6N6_JDtRDpBEdLxtg"/>
+</div>
+</div>
+<!-- Card 2: Materials -->
+<div class="bg-surface-container-highest rounded-2xl p-8 flex flex-col justify-center">
+<h4 class="font-headline-md text-headline-md mb-3">Material Science</h4>
+<p class="text-on-surface-variant mb-6 text-sm">Engineered polymers ranging from PPA-CF and PPS to bio-compatible resins.</p>
+<ul class="space-y-3 font-label-caps text-[11px] text-primary">
+<li class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">check_circle</span> HIGH-TEMP POLYMERS</li>
+<li class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">check_circle</span> ESD-SAFE MATERIALS</li>
+<li class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">check_circle</span> CARBON FIBER COMPOSITES</li>
+</ul>
+</div>
+<!-- Card 3: Post Processing -->
+<div class="bg-white rounded-2xl border border-outline-variant/30 p-8">
+<h4 class="font-headline-md text-headline-md mb-3">Surface Fidelity</h4>
+<p class="text-on-surface-variant text-sm mb-4">Vapor smoothing, bead blasting, and precision painting for consumer-ready finishes.</p>
+<img class="w-full h-32 object-cover rounded-lg" data-alt="A close-up shot of several 3D printed mechanical gears with various finishes: one matte raw, one vapor-smoothed to a high gloss, and one coated in a metallic industrial paint. The lighting is focused and dramatic, highlighting the different surface textures on a dark gray minimalist background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCyN-yx93cd4e7uI4GM6r_oyPzgF-nvp1pwaguga-3GT4ZY2OzVdFTw3fENuZSEFYJqfjyVjA_UDeJC3C4Wu84Ifncfijtfj8TlrE0HILTnWU3JrD5L3x--KBxCVKKmztLwhHVeOyNvazvSJ9QTNwKIZabkdYrbnfddC8YedhaGnL16NCoXW8AjFR7QL99WGEcWVlw1IvcvrVFcVqugFTaWw9p_3eZvoJ4NYVN-u92QViT91SFXdLd8Qw"/>
+</div>
+<!-- Card 4: Design for Additive -->
+<div class="md:col-span-2 bg-inverse-surface text-white rounded-2xl p-8 flex flex-col md:flex-row gap-8 items-center overflow-hidden">
+<div class="flex-1 z-10">
+<h4 class="font-headline-md text-headline-md mb-3">DfAM Consultation</h4>
+<p class="text-surface-variant mb-6">Our engineers optimize your CAD files for additive manufacturing, reducing weight and increasing structural performance through generative design.</p>
+<button class="text-primary-fixed font-label-caps text-label-caps hover:underline">LEARN MORE</button>
+</div>
+<div class="w-full md:w-1/2 h-full absolute right-0 top-0 opacity-30 md:opacity-100">
+
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Statistics -->
+<section class="py-16 bg-primary-container text-on-primary-container">
+<div class="max-w-spacing-max-width mx-auto px-spacing-margin-desktop">
+<div class="grid grid-cols-2 md:grid-cols-4 gap-12 text-center">
+<div>
+<div class="font-display text-[40px] mb-1">10k+</div>
+<div class="font-label-caps text-[10px] tracking-widest opacity-80 uppercase">Projects Delivered</div>
+</div>
+<div>
+<div class="font-display text-[40px] mb-1">99.9%</div>
+<div class="font-label-caps text-[10px] tracking-widest opacity-80 uppercase">Precision Rate</div>
+</div>
+<div>
+<div class="font-display text-[40px] mb-1">50+</div>
+<div class="font-label-caps text-[10px] tracking-widest opacity-80 uppercase">Industrial Materials</div>
+</div>
+<div>
+<div class="font-display text-[40px] mb-1">24h</div>
+<div class="font-label-caps text-[10px] tracking-widest opacity-80 uppercase">Global Dispatch</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Our Team -->
+<section class="py-24 bg-surface">
+<div class="max-w-spacing-max-width mx-auto px-spacing-margin-desktop">
+<div class="flex justify-between items-end mb-16">
+<div>
+<h2 class="font-headline-lg text-headline-lg mb-2">The Engineering Mindset</h2>
+<p class="text-on-surface-variant font-body-md">Leading with technical expertise and creative problem-solving.</p>
+</div>
+<button class="hidden md:block font-label-caps text-label-caps text-primary border border-primary px-6 py-2 rounded-lg hover:bg-primary/5 transition-all">JOIN OUR TEAM</button>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+<!-- Team Member 1 -->
+<div class="group">
+<div class="aspect-[4/5] rounded-xl overflow-hidden mb-4 bg-surface-container shadow-sm">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A professional headshot of a female mechanical engineer in her 30s, wearing a modern gray lab coat, standing in front of an out-of-focus 3D printer fleet. She has a confident, warm expression. The lighting is soft and natural, emphasizing the clean, high-tech engineering environment." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBFXKSdnxV6TbhS-bIiQL2S8LT2X_SPG09Bp0Kzm3FCTcKbzXJ4Fs-7hNMdL2UUsgiONIqKLDoXniiif_PYrfTgwdwU3tmxva43MP3tZA1WD2-Zh0dcfGzQ_h-FjQPn4Ulk9PagnmyyZj08NrXbgMeymBblFnNFNgZX5Sg6R7rAnJ6Kbdub_l5PfNi7k2LZiOe1nVFUh6oQViMCR-FqJF8UibkM5HX3KehBhmya968tgMrZhW30M0V1Rw"/>
+</div>
+<h5 class="font-headline-md text-headline-md">Dr. Sarah Chen</h5>
+<p class="font-label-caps text-[10px] text-primary tracking-widest uppercase">Chief Engineering Officer</p>
+</div>
+<!-- Team Member 2 -->
+<div class="group">
+<div class="aspect-[4/5] rounded-xl overflow-hidden mb-4 bg-surface-container shadow-sm">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A professional headshot of a male materials scientist in his 40s with glasses, holding a spool of carbon-fiber filament. He is in a brightly lit lab with industrial testing equipment in the background. The aesthetic is professional, expert-led, and precise." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCaysU4hKIXp-_63U_Bw6Ja4uefrv1JuyhKd2pRJYthOJUwc1ja5t2G61OnWo_XuiWXOtNLhoo_sphLpu0T2tZdDMRuSBXtgjjRGCDbJ_emgxzGbh13Yw86wxbG6w754bBG1LJcm3r9i8P1pcP_XWN1qs3Ehfimci6JCG2WwrsVBNey_MdwFgZLxltYmayni_IWiP-SOnIato68tmMPZRz-uKFxQwY23Q9LMGbIvslcBBIeNYVwXiWAnA"/>
+</div>
+<h5 class="font-headline-md text-headline-md">Marcus Thorne</h5>
+<p class="font-label-caps text-[10px] text-primary tracking-widest uppercase">Head of Materials Science</p>
+</div>
+<!-- Team Member 3 -->
+<div class="group">
+<div class="aspect-[4/5] rounded-xl overflow-hidden mb-4 bg-surface-container shadow-sm">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A professional headshot of a younger male industrial designer in a minimalist black turtleneck, sitting at a workstation with high-end CAD software visible on monitors behind him. The atmosphere is sleek, modern, and creative." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCTPCMeE3m2DrVooiz645qQqxicdxMWZW8YczbI-qfe8j9SNoVLHXXYjIdIcd80EVIns9DyFSTTrpcrXzSzGnz_baxq4hsdevT3Y_TTkS-03pnHxGWhrDTeIOBmqAK3XwvxLbDpV8U7dVMnX_XzXWujLI9EZfaMC5w_D3rEH8MNjIXvZnZ8jBniwmoGjEIb_YL0yiByazWwBXiep6dhU8xAvN-uspRBoIUmMAFGRYgw5c8rBmZoWgS1hg"/>
+</div>
+<h5 class="font-headline-md text-headline-md">Leo Aris</h5>
+<p class="font-label-caps text-[10px] text-primary tracking-widest uppercase">Lead Product Designer</p>
+</div>
+<!-- Team Member 4 -->
+<div class="group">
+<div class="aspect-[4/5] rounded-xl overflow-hidden mb-4 bg-surface-container shadow-sm">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A professional headshot of a female operations director in an industrial facility, wearing high-visibility accents and holding a digital tablet. The background shows rows of printers, symbolizing scale and logistics. The lighting is bright and industrial." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCbng31O-BL_s_muskdTnDUjdyAdSmezYYeTvJEPsDuRtWoxWzoAV4e4VIUcjFQ_4IAv3Hx9cqa83XHb9uUkNLerkYcTN5EUseezXkWWcWsTyaf-xFcTpD_QbCaQGnJVPC5CbAYPlUwxbAXnOo7EaXm0WHumVeGs-UetyoVW_8fSX3mhXvlSgZHEMq2SDGM7TJNvMjKQIzM5_NtwXc0klCb30PRDlxYMeHNiC_b7UR-Y6tB6zlTpTmELg"/>
+</div>
+<h5 class="font-headline-md text-headline-md">Elena Rodriguez</h5>
+<p class="font-label-caps text-[10px] text-primary tracking-widest uppercase">Director of Operations</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Gallery Section (Masonry) -->
+<section class="py-24 bg-surface-container-low overflow-hidden">
+<div class="max-w-spacing-max-width mx-auto px-spacing-margin-desktop">
+<h2 class="font-headline-lg text-headline-lg mb-12 text-center">Portfolio of Precision</h2>
+<div class="masonry-grid">
+<div class="masonry-item-large rounded-2xl overflow-hidden shadow-md">
+<img class="w-full h-full object-cover" data-alt="A high-detail macro photograph of a complex, white lattice structure 3D printed with SLS technology, showcasing intricate internal geometry that is impossible with traditional manufacturing. The piece is lit from the side to create deep, dramatic shadows, emphasizing its organic yet technical form." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBCgSsFW-bgELargKKLwT3iEkBcyqskM801DteyR_Uy19F3OvksQODmRCnelsHnBSmyWJKv2QDR0wZLX9VBLhC-YI_GkaG2T3p6wyjJGBWY2x2p7B5mvOfnPM5PjLLDmdX2L4iyfDkRFdojF1kCY9QEAejCJaMTp1Ge8WeU9HqwZxwu2iIjb83wa688tk-gzD8E5V7qCIMPmrOCVf7eJzyAIgUHAQKHqA9QMFsVfJV7t-YHMReHCyxa1g"/>
+</div>
+<div class="rounded-2xl overflow-hidden shadow-md">
+<img class="w-full h-full object-cover" data-alt="A grid of multiple identical industrial turbine parts, printed in a metallic-gray carbon-fiber composite, laid out on a professional inspection table. The focus is sharp on the foreground part, showing perfect layer adhesion and crisp edges." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC9E7CqMajFcTXWX-BIcz2l0dDruziCNhqyet4oisL9FsE70B8ZQkwXVgsoobfEWvb0qKIxsMEwTaamLL7LV3iT3ZCA6i8Z-85bHDp2lQNCAN39taoCl8YXS_xIZA4h5hXbeZCoi7ShCt4tl9k9YWcT6FXX9k2RmR7xT6v-2YqRY-cGX7vbKgo-hDI2Eg25s1UGUJhl2VtYCOP2UWcUULz6Svr5GtV3X4R0s7i5QXJVx0bDfGs9EA9cCA"/>
+</div>
+<div class="rounded-2xl overflow-hidden shadow-md">
+<img class="w-full h-full object-cover" data-alt="A wide view of the Bekaa3D manufacturing floor at night, where hundreds of status lights from 3D printers create a digital nebula effect. The space is immaculately clean and organized, representing industrial-scale efficiency." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAQSe2pMKRrAHa5n3nWM6_-x9L0RmmsDCf_cj8ntiJWIq_QNpYFXn42OprgByP9Foozl-WPv47XG85qVpV-4lr78sY5FdlfIKFI2NqwHZ-rwBvG__EbP_VmgQjnHbnPOlCH5g1cSUu9BH4_kap9BQ2LiSwRRzyihAQSbQzRQX0VFDllt_vZiii8DvcfbJdX96yMZ76l_628eCRF3AXm45L4okMZEEXAzCopsYE0BDRDaFUO0Mj3U4CDEw"/>
+</div>
+<div class="masonry-item-large rounded-2xl overflow-hidden shadow-md">
+<img class="w-full h-full object-cover" data-alt="A close-up shot of a robotic arm holding a freshly printed aerospace bracket made of high-temperature polymer. The lighting is high-key white, creating a clinical and futuristic aesthetic that reflects professional reliability." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA5OH8EcGM0JLRuXDRqKN5RmBSubkp_W8h9KYMyG94YS3UOR1amn2CCWPI-Qgz2DLbCVaUOEWpDaZHS2ZboWIy7YisaBHOeoXJoCa_W4AySZ8n0Ha5bm0HENf4BvXhZ_Lg6vqG3ztnIhauVPaXgmPR_45iDQoM4tzB6znxzm-TRwvTLfXYk3z8WQCOlRGy2K1Vu3Whu82fZUcO2NbwJi9ohVAzJrmNqh8KTn9_KhLLS4fInk2auTiZsjg"/>
+</div>
+<div class="rounded-2xl overflow-hidden shadow-md">
+<img class="w-full h-full object-cover" data-alt="An assortment of colorful, multi-material 3D printed orthopedic models, showcasing the anatomical accuracy and complex color blending capabilities of the Bekaa3D fleet. The setting is a clean medical research lab." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBwr5lTiQ-p1Zn87vYoaFwpwykrXMaOEDGFWmz_VzjBxE0t-alfTI2LmMchBP3ZN-xcHr_imsxmTi-sIopgBK4gbRxUEe2f782FYGp2l-lmOT3jhLFE0znD63PfeYRJMdycyqVSHeNCelcQyf-gUirMW1Ce9qvlgJztCqp4DW_rAvD3olzzjMTCQsalTXg57fCLcupMk2Z739By6CkMNHblx2EVc-KfXJaLAq_bXIExBnIJIXY3FycrqQ"/>
+</div>
+</div>
+</div>
+</section>
+<!-- CTA Section -->
+<section class="py-24">
+<div class="max-w-spacing-max-width mx-auto px-spacing-margin-desktop">
+<div class="bg-primary-container rounded-[2rem] p-12 md:p-24 text-center text-white relative overflow-hidden">
+<div class="absolute inset-0 opacity-10 pointer-events-none">
+<div class="absolute inset-0" style="background-image: radial-gradient(circle, white 1px, transparent 1px); background-size: 32px 32px;"></div>
+</div>
+<h2 class="font-display text-display mb-8 relative z-10">Scale your production.</h2>
+<p class="font-body-lg text-body-lg text-on-primary-container max-w-2xl mx-auto mb-12 relative z-10">
+                        Join hundreds of enterprises that rely on Bekaa3D for mission-critical parts and rapid scaling. Our engineers are ready to review your next project.
+                    </p>
+<div class="flex flex-col sm:flex-row justify-center gap-4 relative z-10">
+<button class="bg-white text-primary px-10 py-5 rounded-full font-label-caps text-label-caps hover:bg-surface-container-low transition-all shadow-xl active:scale-95">
+                            REQUEST B2B QUOTE
+                        </button>
+<button class="border border-white/40 text-white px-10 py-5 rounded-full font-label-caps text-label-caps hover:bg-white/10 transition-all active:scale-95">
+                            DOWNLOAD CAPABILITIES PDF
+                        </button>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="bg-surface-container-highest border-t border-outline-variant w-full mt-auto">
+<div class="grid grid-cols-1 md:grid-cols-4 gap-gutter max-w-spacing-max-width mx-auto py-12 px-spacing-margin-desktop">
+<div class="flex flex-col gap-6">
+<div class="font-headline-md text-headline-md font-bold text-on-surface">Bekaa3D</div>
+<p class="text-on-surface-variant text-sm leading-relaxed">Precision-first additive manufacturing for global industry and aerospace applications.</p>
+<div class="flex gap-4">
+<a class="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container hover:bg-primary hover:text-white transition-all" href="#"><span class="material-symbols-outlined text-sm">share</span></a>
+<a class="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container hover:bg-primary hover:text-white transition-all" href="#"><span class="material-symbols-outlined text-sm">public</span></a>
+</div>
+</div>
+<div class="flex flex-col gap-4">
+<div class="font-label-caps text-label-caps text-primary mb-2">SOLUTIONS</div>
+<a class="text-on-surface-variant hover:text-primary hover:underline decoration-primary decoration-2 underline-offset-4 transition-all" href="#">3D Printers</a>
+<a class="text-on-surface-variant hover:text-primary hover:underline decoration-primary decoration-2 underline-offset-4 transition-all" href="#">Filaments &amp; Resins</a>
+<a class="text-on-surface-variant hover:text-primary hover:underline decoration-primary decoration-2 underline-offset-4 transition-all" href="#">Parts &amp; Accessories</a>
+</div>
+<div class="flex flex-col gap-4">
+<div class="font-label-caps text-label-caps text-primary mb-2">RESOURCES</div>
+<a class="text-on-surface-variant hover:text-primary hover:underline decoration-primary decoration-2 underline-offset-4 transition-all" href="#">Technical Documentation</a>
+<a class="text-on-surface-variant hover:text-primary hover:underline decoration-primary decoration-2 underline-offset-4 transition-all" href="#">Case Studies</a>
+<a class="text-on-surface-variant hover:text-primary hover:underline decoration-primary decoration-2 underline-offset-4 transition-all" href="#">Contact Support</a>
+</div>
+<div class="flex flex-col gap-4">
+<div class="font-label-caps text-label-caps text-primary mb-2">LEGAL</div>
+<a class="text-on-surface-variant hover:text-primary hover:underline decoration-primary decoration-2 underline-offset-4 transition-all" href="#">Privacy Policy</a>
+<a class="text-on-surface-variant hover:text-primary hover:underline decoration-primary decoration-2 underline-offset-4 transition-all" href="#">Terms of Service</a>
+<p class="text-[10px] text-on-surface-variant mt-8">© 2024 Bekaa3D. Precision Engineered.</p>
+</div>
+</div>
+</footer>
+<script>
+        // Micro-interactions for scrolling effects
+        const observerOptions = {
+            threshold: 0.1
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('opacity-100', 'translate-y-0');
+                    entry.target.classList.remove('opacity-0', 'translate-y-10');
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('section > div').forEach(el => {
+            el.classList.add('transition-all', 'duration-1000', 'opacity-0', 'translate-y-10');
+            observer.observe(el);
+        });
+    </script>
+</body></html>

@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+
+<html class="scroll-smooth" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Planetary Gear System - Bekaa3D STL Marketplace</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@100..900&family=Inter:wght@100..900&family=JetBrains+Mono:wght@100..900&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-variant": "#dce2f7",
+                    "inverse-primary": "#88d982",
+                    "background": "#f9f9ff",
+                    "on-error-container": "#93000a",
+                    "inverse-on-surface": "#edf0ff",
+                    "outline-variant": "#bfcaba",
+                    "on-secondary": "#ffffff",
+                    "surface-container-low": "#f1f3ff",
+                    "error-container": "#ffdad6",
+                    "secondary-fixed": "#b9f474",
+                    "on-secondary-fixed": "#0f2000",
+                    "on-secondary-container": "#437000",
+                    "error": "#ba1a1a",
+                    "tertiary": "#923357",
+                    "surface-tint": "#1b6d24",
+                    "tertiary-fixed": "#ffd9e2",
+                    "surface-container-lowest": "#ffffff",
+                    "surface-container-highest": "#dce2f7",
+                    "on-background": "#141b2b",
+                    "surface-dim": "#d3daef",
+                    "on-primary-fixed-variant": "#005312",
+                    "inverse-surface": "#293040",
+                    "secondary-fixed-dim": "#9ed75b",
+                    "primary-fixed-dim": "#88d982",
+                    "on-error": "#ffffff",
+                    "surface-container": "#e9edff",
+                    "primary-container": "#2e7d32",
+                    "tertiary-container": "#b14b6f",
+                    "surface-container-high": "#e1e8fd",
+                    "on-secondary-fixed-variant": "#2e4f00",
+                    "tertiary-fixed-dim": "#ffb1c7",
+                    "surface-bright": "#f9f9ff",
+                    "surface": "#f9f9ff",
+                    "secondary-container": "#b9f474",
+                    "on-primary": "#ffffff",
+                    "on-tertiary": "#ffffff",
+                    "primary-fixed": "#a3f69c",
+                    "on-surface": "#141b2b",
+                    "primary": "#0d631b",
+                    "on-tertiary-fixed-variant": "#7f2448",
+                    "on-primary-container": "#cbffc2",
+                    "on-tertiary-fixed": "#3f001c",
+                    "on-surface-variant": "#40493d",
+                    "outline": "#707a6c",
+                    "on-primary-fixed": "#002204",
+                    "on-tertiary-container": "#ffedf0",
+                    "secondary": "#3e6a00"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "gutter": "24px",
+                    "margin-mobile": "16px",
+                    "margin-desktop": "64px",
+                    "unit": "4px",
+                    "max-width": "1440px"
+            },
+            "fontFamily": {
+                    "headline-md": ["Hanken Grotesk"],
+                    "body-md": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "label-caps": ["JetBrains Mono"],
+                    "headline-lg-mobile": ["Hanken Grotesk"],
+                    "headline-lg": ["Hanken Grotesk"],
+                    "display": ["Hanken Grotesk"]
+            },
+            "fontSize": {
+                    "headline-md": ["20px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                    "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                    "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                    "label-caps": ["12px", {"lineHeight": "1.0", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                    "headline-lg": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                    "display": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "800"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        .btn-primary-gradient {
+            background: linear-gradient(135deg, #2e7d32 0%, #0d631b 100%);
+            transition: all 0.3s ease;
+        }
+        .btn-primary-gradient:hover {
+            filter: brightness(1.1);
+            transform: translateY(-1px);
+        }
+        .bento-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .bento-card:hover {
+            box-shadow: 0 20px 40px -20px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body-md selection:bg-primary-fixed-dim selection:text-on-primary-fixed">
+<!-- TopNavBar -->
+<nav class="fixed top-0 w-full z-50 bg-surface/80 dark:bg-inverse-surface/80 backdrop-blur-xl border-b border-outline-variant/30 shadow-sm h-16">
+<div class="flex justify-between items-center max-w-spacing-max-width mx-auto px-spacing-margin-desktop h-full">
+<div class="flex items-center gap-8">
+<span class="font-headline-md text-headline-md font-black tracking-tighter text-on-surface dark:text-inverse-on-surface">Bekaa3D</span>
+<div class="hidden md:flex gap-6">
+<a class="font-body-md text-body-md font-label-caps text-label-caps text-on-surface-variant dark:text-surface-variant hover:text-primary dark:hover:text-inverse-primary transition-colors" href="#">Printers</a>
+<a class="font-body-md text-body-md font-label-caps text-label-caps text-primary dark:text-inverse-primary border-b-2 border-primary dark:border-inverse-primary pb-1" href="#">Materials</a>
+<a class="font-body-md text-body-md font-label-caps text-label-caps text-on-surface-variant dark:text-surface-variant hover:text-primary dark:hover:text-inverse-primary transition-colors" href="#">Software</a>
+<a class="font-body-md text-body-md font-label-caps text-label-caps text-on-surface-variant dark:text-surface-variant hover:text-primary dark:hover:text-inverse-primary transition-colors" href="#">Support</a>
+<a class="font-body-md text-body-md font-label-caps text-label-caps text-on-surface-variant dark:text-surface-variant hover:text-primary dark:hover:text-inverse-primary transition-colors" href="#">Industry</a>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 hover:bg-surface-container dark:hover:bg-surface-container-highest transition-all duration-200 active:scale-95 text-on-surface-variant">
+<span class="material-symbols-outlined">search</span>
+</button>
+<button class="p-2 hover:bg-surface-container dark:hover:bg-surface-container-highest transition-all duration-200 active:scale-95 text-on-surface-variant">
+<span class="material-symbols-outlined">shopping_cart</span>
+</button>
+<button class="p-2 hover:bg-surface-container dark:hover:bg-surface-container-highest transition-all duration-200 active:scale-95 text-on-surface-variant">
+<span class="material-symbols-outlined">account_circle</span>
+</button>
+</div>
+</div>
+</nav>
+<main class="pt-24 pb-20 max-w-spacing-max-width mx-auto px-4 md:px-spacing-margin-desktop">
+<!-- Breadcrumbs -->
+<nav class="flex items-center gap-2 mb-8 text-on-surface-variant font-label-caps text-label-caps">
+<a class="hover:text-primary" href="#">MARKETPLACE</a>
+<span class="material-symbols-outlined text-[14px]">chevron_right</span>
+<a class="hover:text-primary" href="#">MECHANICAL MODELS</a>
+<span class="material-symbols-outlined text-[14px]">chevron_right</span>
+<span class="text-on-surface">PLANETARY GEAR SYSTEM</span>
+</nav>
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+<!-- Left Column: Gallery -->
+<div class="lg:col-span-7 space-y-4">
+<div class="relative aspect-[4/3] rounded-xl overflow-hidden bg-surface-container shadow-sm border border-outline-variant/20">
+<div class="absolute inset-0 z-0 bg-cover bg-center" data-alt="A highly detailed 3D CAD rendering of a complex planetary gear system featuring multiple interlocking brass and steel gears. The lighting is crisp and industrial, highlighting the mechanical precision and metallic textures. The scene is set in a professional engineering studio environment with a subtle blueprint grid visible in the background, reinforcing the tech-focused, high-fidelity engineering aesthetic of Bekaa3D." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBlHDf6tKtY0talXjLx8xLQ2n_qjjXLUF9Ov6EVn2vQYtyP3NoUefbxtez4Czst2ipte6iQYvvmCwZstg_BrGC17gkfDxLL9FqwxmFNerIp42v_cQyx6t42BtDWoVEf9BOLSaY84Pu8EGygnnDsvapRpnsFj_CDNMc2rfJ1M-uyPujFO_xrDB1j27mzeOXWkllixIXzr4a_EuXHF1aKmLjEzWMVG8tSNGuzfINusm6gAqmFyazuAMlGPw')"></div>
+<!-- Viewport Controls -->
+<div class="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-3 glass-panel p-2 rounded-full border border-outline-variant/30">
+<button class="w-10 h-10 flex items-center justify-center rounded-full bg-surface hover:bg-primary-container hover:text-on-primary-container transition-all shadow-sm">
+<span class="material-symbols-outlined">3d_rotation</span>
+</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-full bg-surface hover:bg-primary-container hover:text-on-primary-container transition-all shadow-sm">
+<span class="material-symbols-outlined">zoom_in</span>
+</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-full bg-surface hover:bg-primary-container hover:text-on-primary-container transition-all shadow-sm">
+<span class="material-symbols-outlined">fullscreen</span>
+</button>
+</div>
+<div class="absolute top-4 right-4">
+<span class="bg-primary-container text-on-primary-container font-label-caps text-[10px] px-3 py-1 rounded-full border border-primary/20">VERIFIED DESIGN</span>
+</div>
+</div>
+<!-- Thumbnails -->
+<div class="grid grid-cols-5 gap-3">
+<div class="aspect-square rounded-lg border-2 border-primary overflow-hidden cursor-pointer">
+<div class="w-full h-full bg-cover bg-center" data-alt="Close-up detail shot of the sun gear within the planetary gear system, showing intricate tooth profiles and high-precision machining marks in a professional studio lighting setup." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBOV_XLtK-4_YsRosoXH8uumf4CNlhO00BuX70drIozehu8I6eLIwXDYiDwrkEVVBiIV7tijaI0c-DO12KFhns2cvGZsq-rk3_iaHNl2nQAln3_ecpBMwoKbuyB5AABIG1s6TEdDazZ1x4kFA5w8ybQxYs1o7ochdLTiWuwKKc6QiR_7X3tX5Y04okb-ZFSVmYGCvwmJ83m4Fla4cK-U4lR-yyJfJgLIGdgBfBkOvvqve7q9EG8ylENUQ')"></div>
+</div>
+<div class="aspect-square rounded-lg border border-outline-variant/30 overflow-hidden cursor-pointer hover:border-primary transition-all">
+<div class="w-full h-full bg-cover bg-center" data-alt="Exploded view diagram of the planetary gear assembly, showing each component floating in space with technical callouts and high-fidelity textures." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCG6SL4-RRuXsqbNCFUwboChUpCtFQ1nsxdcBUsINZ85TwdF730Nz-1juPQYXVGVw788KEiHsCURr-uVFnMKHiNfo3G5vo4JS2G36Lc-qexlioYVCJxT4rDxSr9HdgqQNa1Uqnv7ra6XQMPJ_fhR2eFbV919yrrde89ErluMxyaejIL9ljTU9SvQKuMbJEIpb-LShLGYi6f9aFaXDSsYnx2MXQ9OBgYAtEoCnRJXnd0wIUGoetC-wKQ2g')"></div>
+</div>
+<div class="aspect-square rounded-lg border border-outline-variant/30 overflow-hidden cursor-pointer hover:border-primary transition-all">
+<div class="w-full h-full bg-cover bg-center" data-alt="A 3D printer bed visualizing the planetary gear system components neatly arranged for an optimal printing session on a Bambu Lab X1." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuD6nOdJ4yRKLmu0Xbeq2GbPT2f8Gb_Ppus__3ztXbNoUDMLQDpdU0bf9OnLcY36ccvG1t2oMhYsuP5xLTdw6W-eFPPT321HPXZYkAwrAC9yN2MutPY59JJF9uMyJo6C1p93a8iAW7RMHOR82PIqxLJOaN1DsOEgQvHAjgHgJkgethqdJu51JRWsPFYTjLIDfMfb_1TVCPjJ1sya16WJLXkhhKLOYUX7PEu-prpMLqGK-9B1-xEIOo1wgw')"></div>
+</div>
+<div class="aspect-square rounded-lg border border-outline-variant/30 overflow-hidden cursor-pointer hover:border-primary transition-all">
+<div class="w-full h-full bg-cover bg-center" data-alt="A macro photo of the physical 3D printed planetary gear system in high-quality PLA, demonstrating the fine layer lines and mechanical functionality." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuD9BjMt2khQmm335jyeJ-17L7A7KGgliYyh9-fX9rtj8UqB95GBAN5RK-epAXMSDNYxzGdnLpdZGx9F1jzg8zFIyc8O3OTd91DI6HQI0tXorOzfnG2Qkt5r2UKYbX2_PMuBf5sOM_-_kszyQuvikjG4XBeUTou_Fx0u7OoWRivlvw7o_eCVPM7i1K8YN_K5JceyVSjYcHk_S0w7VkerCtkBiLqvniA41bVW-Ub4ziokgzKe_sOqZegmaw')"></div>
+</div>
+<div class="aspect-square rounded-lg border border-outline-variant/30 overflow-hidden relative cursor-pointer hover:border-primary transition-all">
+<div class="w-full h-full bg-cover bg-center filter blur-sm" data-alt="Technical drawing schematic of the planetary gear system overlaid with mathematical dimensions and tolerances." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCfmUnAoi4AKirT4gp6juRwxypw7Gl_cHNtHuaVQBJNLMMZr2hpq8X_Bw27l8EncVYDAH9n96S79obIP6kKQMexoLfz5fFUTC86AjTsSfl29Qms14rbrVvpLYGpjzl-6q7O3wcxBE3YQ_t2wTQB8dy9DxLrotp2DOZaywzgGCqQ-MGMjb_lsEb7U7uXG0SQWJ1Vdj0Lo_cxMQU5uEfWW93dPhnzyl4WQtFRI3-HbCf7FISS9RLs_-9tQA')"></div>
+<div class="absolute inset-0 flex items-center justify-center bg-black/40 text-white font-bold">+8</div>
+</div>
+</div>
+</div>
+<!-- Right Column: Info & CTA -->
+<div class="lg:col-span-5 space-y-6">
+<div class="bg-surface-container-lowest p-8 rounded-xl border border-outline-variant/20 shadow-sm space-y-6">
+<div class="space-y-2">
+<div class="flex justify-between items-start">
+<h1 class="font-headline-lg text-headline-lg text-on-surface">Planetary Gear System</h1>
+<button class="p-2 text-on-surface-variant hover:text-error transition-colors">
+<span class="material-symbols-outlined">favorite</span>
+</button>
+</div>
+<div class="flex items-center gap-3">
+<span class="text-2xl font-bold text-primary font-headline-md">$49.00</span>
+<span class="bg-secondary-container text-on-secondary-container font-label-caps text-[11px] px-2 py-0.5 rounded">COMMERCIAL LICENSE</span>
+</div>
+</div>
+<p class="text-on-surface-variant font-body-md leading-relaxed">
+                        Precision-engineered industrial planetary gear assembly designed for high-torque applications. Features optimized tooth geometry for 3D printing and includes both fixed and rotating mounting options.
+                    </p>
+<!-- Technical Specs Bento -->
+<div class="grid grid-cols-2 gap-4">
+<div class="bg-surface-container p-3 rounded-lg border border-outline-variant/10">
+<div class="text-[10px] font-label-caps text-on-surface-variant mb-1 uppercase">File Formats</div>
+<div class="font-bold text-on-surface">STL, STEP, SLDPRT</div>
+</div>
+<div class="bg-surface-container p-3 rounded-lg border border-outline-variant/10">
+<div class="text-[10px] font-label-caps text-on-surface-variant mb-1 uppercase">File Size</div>
+<div class="font-bold text-on-surface">45 MB</div>
+</div>
+<div class="bg-surface-container p-3 rounded-lg border border-outline-variant/10">
+<div class="text-[10px] font-label-caps text-on-surface-variant mb-1 uppercase">Layer Height</div>
+<div class="font-bold text-on-surface">0.12mm Recommended</div>
+</div>
+<div class="bg-surface-container p-3 rounded-lg border border-outline-variant/10">
+<div class="text-[10px] font-label-caps text-on-surface-variant mb-1 uppercase">Print Time</div>
+<div class="font-bold text-on-surface">4h 12m (Est.)</div>
+</div>
+</div>
+<!-- Compatibility Chips -->
+<div class="space-y-3">
+<h4 class="text-[11px] font-label-caps text-on-surface-variant uppercase tracking-wider">Compatible Printers</h4>
+<div class="flex flex-wrap gap-2">
+<span class="px-3 py-1 rounded-full bg-surface-container-high border border-outline-variant/30 text-[12px] font-medium text-on-surface">Bambu Lab X1</span>
+<span class="px-3 py-1 rounded-full bg-surface-container-high border border-outline-variant/30 text-[12px] font-medium text-on-surface">Prusa MK4</span>
+<span class="px-3 py-1 rounded-full bg-surface-container-high border border-outline-variant/30 text-[12px] font-medium text-on-surface">Ender 3 S1</span>
+</div>
+</div>
+<!-- CTAs -->
+<div class="space-y-3 pt-2">
+<button class="w-full btn-primary-gradient text-white py-4 rounded-lg font-label-caps text-label-caps flex items-center justify-center gap-2 shadow-lg shadow-primary/20">
+<span class="material-symbols-outlined">download</span>
+                            BUY NOW & DOWNLOAD
+                        </button>
+<div class="grid grid-cols-2 gap-3">
+<button class="w-full py-3 rounded-lg border-2 border-outline-variant/30 text-on-surface font-label-caps text-label-caps hover:bg-surface-container transition-all">
+                                MAKE AN OFFER
+                            </button>
+<button class="w-full py-3 rounded-lg border-2 border-[#25D366]/30 text-[#25D366] font-label-caps text-label-caps hover:bg-[#25D366]/5 transition-all flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[18px]">chat</span>
+                                WHATSAPP
+                            </button>
+</div>
+</div>
+<div class="flex items-center justify-center gap-6 pt-4 border-t border-outline-variant/20">
+<div class="text-center">
+<div class="text-xl font-bold text-on-surface">1,240</div>
+<div class="text-[10px] font-label-caps text-on-surface-variant uppercase">Downloads</div>
+</div>
+<div class="w-px h-8 bg-outline-variant/30"></div>
+<div class="text-center">
+<div class="text-xl font-bold text-on-surface">4.9/5</div>
+<div class="text-[10px] font-label-caps text-on-surface-variant uppercase">Rating</div>
+</div>
+<div class="w-px h-8 bg-outline-variant/30"></div>
+<div class="text-center">
+<div class="text-xl font-bold text-on-surface">Instant</div>
+<div class="text-[10px] font-label-caps text-on-surface-variant uppercase">Delivery</div>
+</div>
+</div>
+</div>
+<!-- Secure Download Info -->
+<div class="bg-surface-container-high p-4 rounded-xl border border-primary/20 flex items-start gap-4">
+<span class="material-symbols-outlined text-primary mt-1">verified_user</span>
+<div>
+<h4 class="font-bold text-sm text-on-surface">Secure Download Information</h4>
+<p class="text-xs text-on-surface-variant mt-1 leading-relaxed">
+                            Files are scanned for vulnerabilities and stored in an encrypted vault. Your purchase includes lifetime updates and technical support for this specific model.
+                        </p>
+</div>
+</div>
+</div>
+</div>
+<!-- Details Sections Tabs -->
+<div class="mt-16 border-b border-outline-variant/30">
+<div class="flex gap-8">
+<button class="pb-4 border-b-2 border-primary text-primary font-label-caps text-label-caps">DESCRIPTION</button>
+<button class="pb-4 border-b-2 border-transparent text-on-surface-variant font-label-caps text-label-caps hover:text-on-surface transition-all">REVIEWS (42)</button>
+<button class="pb-4 border-b-2 border-transparent text-on-surface-variant font-label-caps text-label-caps hover:text-on-surface transition-all">PRINT SETTINGS</button>
+<button class="pb-4 border-b-2 border-transparent text-on-surface-variant font-label-caps text-label-caps hover:text-on-surface transition-all">LICENSE DETAILS</button>
+</div>
+</div>
+<!-- Description Content -->
+<div class="mt-8 grid grid-cols-1 md:grid-cols-3 gap-12">
+<div class="md:col-span-2 space-y-6">
+<h3 class="font-headline-md text-headline-md text-on-surface">Engineering Details</h3>
+<p class="text-on-surface-variant leading-relaxed">
+                    The Planetary Gear System is designed for mechanical hobbyists and industrial prototyping. Unlike standard gear designs, this model incorporates modified involute profiles to ensure smooth rotation even when printed with consumer-grade FDM printers. The assembly is fully modular, allowing you to swap out planet gears to change reduction ratios.
+                </p>
+<ul class="space-y-3">
+<li class="flex items-center gap-3 text-on-surface-variant">
+<span class="material-symbols-outlined text-primary text-[18px]">check_circle</span>
+                        Optimized for PETG, ABS, and Carbon Fiber filaments.
+                    </li>
+<li class="flex items-center gap-3 text-on-surface-variant">
+<span class="material-symbols-outlined text-primary text-[18px]">check_circle</span>
+                        Internal clearance of 0.15mm for press-fit bearings.
+                    </li>
+<li class="flex items-center gap-3 text-on-surface-variant">
+<span class="material-symbols-outlined text-primary text-[18px]">check_circle</span>
+                        Includes assembly guide PDF and technical data sheets.
+                    </li>
+</ul>
+</div>
+<div class="space-y-6">
+<h3 class="font-headline-md text-headline-md text-on-surface">Review Summary</h3>
+<div class="space-y-4">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-surface-container flex items-center justify-center overflow-hidden">
+<div class="w-full h-full bg-cover bg-center" data-alt="A professional studio portrait of a mechanical engineer with a minimalist gray background, conveying expertise and trust for the user profile." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCOA3qTZLQn14VmQQVrKsV7j-bcxlCYXn_lKJpwQ4NAGbCQjdcS79jVpgp4wSIhzBdpBWiH09SxWHsLEFmZ_oWmB8Fs3vGZwcSjGBT_mJtNEkqxMtdMX5oIujEmxpfrWL_pyHgRwdKIioUL3nKnfEG7o4X63P1YNNPLN4Hy41rV0DwVGER-l-6LTPT3eKApNxfsImwpP02SAyRGd8rCE4Gro1HRWM2KE7NdoO_rqbUQ_WThxh_xOPtqSA')"></div>
+</div>
+<div>
+<div class="font-bold text-sm">Marcus V.</div>
+<div class="flex text-amber-500">
+<span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">star</span>
+</div>
+</div>
+</div>
+<p class="text-xs text-on-surface-variant italic leading-relaxed">
+                        "Incredible precision. The STEP files allowed me to modify the mount for my specific project effortlessly. Best STL investment this year."
+                    </p>
+<a class="text-xs text-primary font-bold hover:underline" href="#">READ ALL 42 REVIEWS</a>
+</div>
+</div>
+</div>
+<!-- Related Files Section -->
+<div class="mt-24 space-y-8">
+<div class="flex justify-between items-end">
+<div>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">Related STL Files</h2>
+<p class="text-on-surface-variant mt-2">More mechanical designs by Bekaa3D Engineering</p>
+</div>
+<a class="font-label-caps text-label-caps text-primary hover:underline flex items-center gap-2" href="#">
+                    VIEW ALL DESIGNS <span class="material-symbols-outlined">arrow_forward</span>
+</a>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-gutter">
+<!-- Related Card 1 -->
+<div class="bento-card group bg-surface-container-lowest rounded-xl border border-outline-variant/30 overflow-hidden">
+<div class="aspect-square relative overflow-hidden bg-surface-container">
+<div class="absolute inset-0 bg-cover bg-center group-hover:scale-105 transition-transform duration-500" data-alt="Technical 3D render of a high-torque worm gear assembly, presented in a clean white industrial environment with sharp shadows and metallic material finishes." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDuFufL-3TUtMQ2APGIDOsSnelTu0A8Xd_UL8CO9wsYZjCZ1adtLH8JTSye7qGGtCsvUfFEA6Iet5KxA8MICaR4ZqlTnDuKvUR_Ha26wlNCnT4O-8Rr-87PZoJYydQe6Vw6pe3WUgDhcnJF6KpxB5dxo8GPwAtNF3ztH7qCNm4PkNp8o3z6VfbGXVKSidbyBDqmyaHXXclRgOKFXW4zP-c2pGG6RowtuR2WynM93qKMkSByhRUqzx-0Jg')"></div>
+<div class="absolute top-2 right-2 px-2 py-1 bg-surface/80 backdrop-blur-md rounded font-label-caps text-[10px]">$24</div>
+</div>
+<div class="p-4 space-y-2">
+<h4 class="font-bold text-on-surface group-hover:text-primary transition-colors">Worm Gear Drive</h4>
+<p class="text-xs text-on-surface-variant line-clamp-1">Compact 40:1 reduction unit.</p>
+<div class="flex items-center justify-between pt-2">
+<span class="text-[10px] font-label-caps text-on-surface-variant">STL / STEP</span>
+<span class="text-[10px] font-label-caps text-on-surface-variant flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px]">download</span> 842
+                            </span>
+</div>
+</div>
+</div>
+<!-- Related Card 2 -->
+<div class="bento-card group bg-surface-container-lowest rounded-xl border border-outline-variant/30 overflow-hidden">
+<div class="aspect-square relative overflow-hidden bg-surface-container">
+<div class="absolute inset-0 bg-cover bg-center group-hover:scale-105 transition-transform duration-500" data-alt="Precision digital model of a dual-axis mechanical gimbals system, rendered with carbon fiber and aluminum textures in a futuristic engineering setting." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAU-M1bMygLGZLazHbMef8Bjo4TSsiSS1pogpxASxdnmzF_EpRXXHTruac5XJdLI8CPpkfPNut6s3aOQKBNIEqnJFnY8wlAn30Blrw3ZACg7I8-rPi-ZdwsQR5H0AI3dKNWqDIZ0ITE7vdu2jy81gSZ4kSJHpuySHxKpsOntosJN9_a3PIaF2BIATStMF14JqBGpoVk6fewwjV6woP3jT84F_19SSA4hySPbiN2JqTWZr2Bw5LVSrnZWw')"></div>
+<div class="absolute top-2 right-2 px-2 py-1 bg-surface/80 backdrop-blur-md rounded font-label-caps text-[10px]">$32</div>
+</div>
+<div class="p-4 space-y-2">
+<h4 class="font-bold text-on-surface group-hover:text-primary transition-colors">Dual Axis Gimbal</h4>
+<p class="text-xs text-on-surface-variant line-clamp-1">Heavy-duty camera stabilization.</p>
+<div class="flex items-center justify-between pt-2">
+<span class="text-[10px] font-label-caps text-on-surface-variant">STL</span>
+<span class="text-[10px] font-label-caps text-on-surface-variant flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px]">download</span> 315
+                            </span>
+</div>
+</div>
+</div>
+<!-- Related Card 3 -->
+<div class="bento-card group bg-surface-container-lowest rounded-xl border border-outline-variant/30 overflow-hidden">
+<div class="aspect-square relative overflow-hidden bg-surface-container">
+<div class="absolute inset-0 bg-cover bg-center group-hover:scale-105 transition-transform duration-500" data-alt="High-detail 3D model of a structural extrusion bracket for CNC machines, showing precise dimensions and reinforced structural ribs in a workshop lighting." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDbFkumtLHwM5xTldeIHg_IqUBjThd6-q6CZvbwk8VgIZHt8pd5g3jNvqmPrvVKYvTFjbgLQTZU66uzIslNhwy079CqfDMatBm1GO_zkOh9FJuYDatwlKXkidkrPs153DL7e7cF1g5HbPnQWroigbNJrnk1K-Na8F5ZW1wwNSApQ-fUWUG6unGHfh0UNWOsMdVKaqsJQ794V_LcmoAit79Q9UAcjN3PLTSegzkWTwWCO571ysBJ-gOW3w')"></div>
+<div class="absolute top-2 right-2 px-2 py-1 bg-primary text-white rounded font-label-caps text-[10px]">FREE</div>
+</div>
+<div class="p-4 space-y-2">
+<h4 class="font-bold text-on-surface group-hover:text-primary transition-colors">2020 Corner Bracket</h4>
+<p class="text-xs text-on-surface-variant line-clamp-1">Reinforced industrial mounting.</p>
+<div class="flex items-center justify-between pt-2">
+<span class="text-[10px] font-label-caps text-on-surface-variant">STL / STEP</span>
+<span class="text-[10px] font-label-caps text-on-surface-variant flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px]">download</span> 5.2k
+                            </span>
+</div>
+</div>
+</div>
+<!-- Related Card 4 -->
+<div class="bento-card group bg-surface-container-lowest rounded-xl border border-outline-variant/30 overflow-hidden">
+<div class="aspect-square relative overflow-hidden bg-surface-container">
+<div class="absolute inset-0 bg-cover bg-center group-hover:scale-105 transition-transform duration-500" data-alt="Digital assembly view of a modular filament spool rack system for 3D printing workshops, rendered in a modern clean garage setting." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCbXF3zyG3eqBpZux3GWlV3KgPJbywk4qn91WlLDMNb9ZXdpydpeMY4gMuXGpxBAIZGWrwPNwPPtwneFJQAjWJWmQ99XWswug6GuLlIgdWb0wmfgvHB4XrkwZhNnIXjaHrRgOnisOZlfsu5Ty_wd80dM57tXcpHGP3LRexkEEAKSBYc24P2yNJ-IDUgS4WwLoagbgrC8Q8aBDF2P6I8IfuEq66E-npEdXDsJkEYRJK-BjsdIbcOxoxm5A')"></div>
+<div class="absolute top-2 right-2 px-2 py-1 bg-surface/80 backdrop-blur-md rounded font-label-caps text-[10px]">$15</div>
+</div>
+<div class="p-4 space-y-2">
+<h4 class="font-bold text-on-surface group-hover:text-primary transition-colors">Modular Spool Rack</h4>
+<p class="text-xs text-on-surface-variant line-clamp-1">Stackable filament management.</p>
+<div class="flex items-center justify-between pt-2">
+<span class="text-[10px] font-label-caps text-on-surface-variant">STL / 3MF</span>
+<span class="text-[10px] font-label-caps text-on-surface-variant flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px]">download</span> 1.1k
+                            </span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Footer -->
+<footer class="w-full mt-auto bg-surface-container-highest dark:bg-inverse-surface border-t border-outline-variant">
+<div class="grid grid-cols-1 md:grid-cols-4 gap-gutter max-w-spacing-max-width mx-auto py-12 px-spacing-margin-desktop">
+<div class="space-y-4">
+<span class="font-headline-md text-headline-md font-bold text-on-surface dark:text-inverse-on-surface">Bekaa3D</span>
+<p class="text-on-surface-variant font-body-md leading-relaxed">
+                    Precision-engineered components for the next generation of manufacturing.
+                </p>
+<div class="flex gap-4">
+<a class="text-on-surface-variant hover:text-primary" href="#"><span class="material-symbols-outlined">terminal</span></a>
+<a class="text-on-surface-variant hover:text-primary" href="#"><span class="material-symbols-outlined">share</span></a>
+</div>
+</div>
+<div class="space-y-4">
+<h4 class="font-label-caps text-label-caps font-bold text-on-surface">Products</h4>
+<div class="flex flex-col gap-2">
+<a class="text-on-surface-variant font-label-caps text-label-caps hover:underline decoration-primary decoration-2 underline-offset-4 transition-all" href="#">3D Printers</a>
+<a class="text-on-surface-variant font-label-caps text-label-caps hover:underline decoration-primary decoration-2 underline-offset-4 transition-all" href="#">Filaments & Resins</a>
+<a class="text-on-surface-variant font-label-caps text-label-caps hover:underline decoration-primary decoration-2 underline-offset-4 transition-all" href="#">Parts & Accessories</a>
+</div>
+</div>
+<div class="space-y-4">
+<h4 class="font-label-caps text-label-caps font-bold text-on-surface">Resources</h4>
+<div class="flex flex-col gap-2">
+<a class="text-on-surface-variant font-label-caps text-label-caps hover:underline decoration-primary decoration-2 underline-offset-4 transition-all" href="#">Technical Documentation</a>
+<a class="text-on-surface-variant font-label-caps text-label-caps hover:underline decoration-primary decoration-2 underline-offset-4 transition-all" href="#">Contact Support</a>
+</div>
+</div>
+<div class="space-y-4">
+<h4 class="font-label-caps text-label-caps font-bold text-on-surface">Legal</h4>
+<div class="flex flex-col gap-2">
+<a class="text-on-surface-variant font-label-caps text-label-caps hover:underline decoration-primary decoration-2 underline-offset-4 transition-all" href="#">Privacy Policy</a>
+<a class="text-on-surface-variant font-label-caps text-label-caps hover:underline decoration-primary decoration-2 underline-offset-4 transition-all" href="#">Terms of Service</a>
+</div>
+</div>
+</div>
+<div class="max-w-spacing-max-width mx-auto px-spacing-margin-desktop py-6 border-t border-outline-variant/30 flex justify-between items-center text-on-surface-variant font-label-caps text-[10px]">
+<span>© 2024 Bekaa3D. Precision Engineered.</span>
+<span>PROUDLY MADE FOR THE DIGITAL FORGE.</span>
+</div>
+</footer>
+<!-- FAB (Suppressed on Details Page based on logic, but added for system completeness if needed for quick interaction) -->
+<!-- <button class="fixed bottom-8 right-8 w-16 h-16 rounded-full bg-primary text-white shadow-xl flex items-center justify-center active:scale-95 duration-150 z-50">
+        <span class="material-symbols-outlined">shopping_cart</span>
+    </button> -->
+<script>
+        // Micro-interaction for gallery thumbnails
+        document.querySelectorAll('.aspect-square.cursor-pointer').forEach(thumb => {
+            thumb.addEventListener('click', function() {
+                // In a real app, this would swap the main image
+                this.parentElement.querySelectorAll('div').forEach(el => el.classList.remove('border-primary'));
+                this.parentElement.querySelectorAll('div').forEach(el => el.classList.add('border-outline-variant/30'));
+                this.classList.add('border-primary');
+                this.classList.remove('border-outline-variant/30');
+            });
+        });
+
+        // Simple scroll observer for sticky effect or fade-ins
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('opacity-100');
+                    entry.target.classList.remove('opacity-0', 'translate-y-4');
+                }
+            });
+        }, { threshold: 0.1 });
+
+        document.querySelectorAll('.bento-card').forEach(card => {
+            card.classList.add('opacity-0', 'translate-y-4', 'transition-all', 'duration-700');
+            observer.observe(card);
+        });
+    </script>
+</body></html>

@@ -111,7 +111,7 @@ export function NotificationBell({ unreadCount, open, onOpenChange, children }: 
           id={panelId}
           role="dialog"
           aria-label="Notifications"
-          className="fixed inset-0 z-50 overflow-y-auto bg-white p-4 tablet:absolute tablet:inset-auto tablet:right-0 tablet:top-full tablet:mt-2 tablet:w-96 tablet:rounded-lg tablet:border tablet:border-border-default tablet:shadow-elevation-3"
+          className="fixed inset-0 z-50 overflow-y-auto bg-white p-4 tablet:absolute tablet:inset-auto tablet:right-0 tablet:top-full tablet:mt-2 tablet:w-96 tablet:rounded-xl tablet:border tablet:border-border-default tablet:shadow-elevation-3"
         >
           {children}
         </div>

@@ -32,6 +32,9 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "./src"),
+      // next/font/local is a compile-time transform in Next builds; its
+      // runtime module is empty. Unit tests get a shape-compatible stub.
+      "next/font/local": path.resolve(import.meta.dirname, "./src/test/nextFontLocalStub.ts"),
     },
   },
 });

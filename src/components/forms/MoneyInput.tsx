@@ -1,5 +1,6 @@
 "use client";
 
+import { FIELD_ERROR_CLASSES, FIELD_HINT_CLASSES, FIELD_LABEL_CLASSES, FieldErrorIcon, fieldControlClasses } from "./fieldStyles";
 import { useEffect, useId, useRef, useState, type ChangeEvent } from "react";
 
 export interface MoneyInputProps {
@@ -132,7 +133,7 @@ export function MoneyInput({ label, currencyLabel, valueCents, onChangeCents, hi
 
   return (
     <div>
-      <label htmlFor={inputId} className="block text-label font-semibold uppercase tracking-label text-text-primary">
+      <label htmlFor={inputId} className={FIELD_LABEL_CLASSES}>
         {label} ({currencyLabel})
       </label>
       <input
@@ -143,17 +144,16 @@ export function MoneyInput({ label, currencyLabel, valueCents, onChangeCents, hi
         onChange={handleChange}
         aria-describedby={describedBy}
         aria-invalid={displayedError ? true : undefined}
-        className={`mt-1 w-full rounded-sm border px-3 py-2 text-body text-text-primary ${
-          displayedError ? "border-danger" : "border-border-default"
-        }`}
+        className={`mt-2 ${fieldControlClasses(Boolean(displayedError))}`}
       />
       {hint && (
-        <p id={hintId} className="mt-1 text-caption text-text-secondary">
+        <p id={hintId} className={FIELD_HINT_CLASSES}>
           {hint}
         </p>
       )}
       {displayedError && (
-        <p id={errorId} role="alert" className="mt-1 text-caption text-danger">
+        <p id={errorId} role="alert" className={FIELD_ERROR_CLASSES}>
+          <FieldErrorIcon />
           {displayedError}
         </p>
       )}

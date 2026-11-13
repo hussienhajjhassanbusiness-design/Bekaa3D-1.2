@@ -1,173 +1,372 @@
 @import "tailwindcss";
 
 /*
- * Bekaa3D design tokens.
- * Source of truth: .claude/skills/bekaa3d-brand-ui/tokens.md — every value
- * below is a direct transcription of that document. Do not add a token here
- * that tokens.md does not define; extend tokens.md first (see the
- * bekaa3d-brand-ui skill), then this file.
+ * Bekaa3D design tokens — Stitch "Precision Engineering System".
  *
- * Tailwind v4's @theme block is the CSS-first equivalent of tailwind.config.*
- * (no config file is used in this project) — every custom property declared
- * here under a recognized namespace (--color-*, --text-*, --radius-*,
- * --shadow-*, --tracking-*) automatically generates the matching Tailwind
- * utility classes (e.g. --color-brand-dark-green below generates
- * bg-brand-dark-green / text-brand-dark-green / border-brand-dark-green).
+ * Visual authority: docs/design-handoff/ (DESIGN-TOKENS.md, design-tokens.json,
+ * DESIGN-SYSTEM.md §12 recommendations). Every Stitch value below is a direct
+ * transcription of that handoff; .claude/skills/bekaa3d-brand-ui/tokens.md is
+ * the implementation guide aligned with it. Do not add a hex value here that
+ * the handoff does not define — add the token to the handoff docs first.
+ *
+ * Tailwind v4 CSS-first config: every custom property under a recognised
+ * namespace (--color-*, --text-*, --font-*, --radius-*, --shadow-*,
+ * --spacing-*, --container-*, --ease-*, --breakpoint-*) generates the matching
+ * utility (e.g. --color-primary -> bg-primary / text-primary / border-primary).
+ *
+ * Structure:
+ *   1. Stitch tokens under their Stitch/MD3 names (use these in new code).
+ *   2. LEGACY ALIASES — the pre-Stitch semantic names (brand-dark-green,
+ *      text-primary, border-default, danger, h1…). Each is a var() pointer to
+ *      a Stitch token, never a second hex value, so there is one source of
+ *      truth and every un-migrated screen picks up the Stitch palette.
+ *      Batches 2–10 move call sites to the Stitch names; Batch 11 deletes an
+ *      alias once `grep` shows it unused (BEKAA3D-TOKEN-MIGRATION.md §0).
  */
 @theme {
-  /* ---- Brand colors — tokens.md §1 ---- */
-  --color-brand-dark-green: #195b2d;
-  --color-brand-lime: #8ac143;
-  --color-brand-green: #3d793a;
-  --color-ink: #21201f;
-  --color-white: #ffffff;
+  /* ================================================================
+   * 1. STITCH TOKENS
+   * ================================================================ */
 
-  /* ---- Semantic status colors — tokens.md §2
-     "-bg" variants are 8% of the base color, derived via color-mix() so the
-     base token stays the single source of truth (no duplicated hex). ---- */
-  --color-success: var(--color-brand-green); /* = brand-green, tokens.md §2 */
-  --color-success-bg: color-mix(in srgb, var(--color-success) 8%, transparent);
-  --color-warning: #b8860b;
-  --color-warning-bg: color-mix(in srgb, var(--color-warning) 8%, transparent);
-  --color-warning-text: #805b07; /* AA text on warning-bg (5.6:1), tokens.md */
-  --color-danger: #b3261e;
-  --color-danger-bg: color-mix(in srgb, var(--color-danger) 8%, transparent);
-  --color-info: #2b6cb0;
-  --color-info-bg: color-mix(in srgb, var(--color-info) 8%, transparent);
+  /* ---- Colour: brand roles (DESIGN-TOKENS §1.1) ---- */
+  --color-primary: #0d631b;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #2e7d32; /* primary hover (DESIGN-SYSTEM §9.1) */
+  --color-on-primary-container: #cbffc2;
+  --color-primary-fixed: #a3f69c;
+  --color-primary-fixed-dim: #88d982;
+  --color-on-primary-fixed: #002204;
+  --color-on-primary-fixed-variant: #005312;
+  --color-inverse-primary: #88d982;
+  --color-surface-tint: #1b6d24;
 
-  /* ---- Neutral scale — tokens.md §3 ---- */
-  --color-neutral-50: #fafafa;
-  --color-neutral-100: #f2f2f1;
-  --color-neutral-200: #e4e3e1;
-  --color-neutral-300: #cbc9c6;
-  --color-neutral-400: #a6a4a0;
-  --color-neutral-500: #7d7b77;
-  --color-neutral-600: #5c5a57;
-  --color-neutral-700: #413f3d;
-  --color-neutral-800: #2d2c2a;
-  --color-neutral-900: var(--color-ink); /* = ink, tokens.md §3 */
+  --color-secondary: #3e6a00;
+  --color-on-secondary: #ffffff;
+  --color-secondary-container: #b9f474; /* lime accent — chip backgrounds only, never lime text on light */
+  --color-on-secondary-container: #437000;
+  --color-secondary-fixed: #b9f474;
+  --color-secondary-fixed-dim: #9ed75b;
+  --color-on-secondary-fixed: #0f2000;
+  --color-on-secondary-fixed-variant: #2e4f00;
 
-  /* ---- Text colors — tokens.md §4 (semantic aliases over the raw palette,
-     each derived via var() so the palette above remains the one source of
-     truth) ---- */
-  --color-text-primary: var(--color-ink);
-  --color-text-secondary: var(--color-neutral-600);
-  --color-text-disabled: var(--color-neutral-400);
-  --color-text-on-brand: var(--color-white);
-  --color-text-link: var(--color-brand-dark-green);
+  --color-tertiary: #923357; /* raspberry */
+  --color-on-tertiary: #ffffff;
+  --color-tertiary-container: #b14b6f;
+  --color-on-tertiary-container: #ffedf0;
+  --color-tertiary-fixed: #ffd9e2;
+  --color-tertiary-fixed-dim: #ffb1c7;
+  --color-on-tertiary-fixed: #3f001c;
+  --color-on-tertiary-fixed-variant: #7f2448;
 
-  /* ---- Surfaces & borders — tokens.md §5 ---- */
-  --color-surface-base: var(--color-white);
-  --color-surface-subtle: var(--color-neutral-50);
-  --color-surface-sunken: var(--color-neutral-100);
-  --color-border-default: var(--color-neutral-200);
-  --color-border-strong: var(--color-neutral-300);
-  --color-border-focus: var(--color-brand-lime);
+  /* ---- Colour: surfaces & neutrals (DESIGN-TOKENS §1.2) ---- */
+  --color-background: #f9f9ff;
+  --color-on-background: #141b2b;
+  --color-surface: #f9f9ff;
+  --color-surface-bright: #f9f9ff;
+  --color-surface-dim: #d3daef;
+  --color-surface-container-lowest: #ffffff; /* cards */
+  --color-surface-container-low: #f1f3ff; /* lavender range start */
+  --color-surface-container: #e9edff;
+  --color-surface-container-high: #e1e8fd; /* dominant hover background */
+  --color-surface-container-highest: #dce2f7; /* lavender range end */
+  --color-surface-variant: #dce2f7;
+  --color-inverse-surface: #293040;
+  --color-inverse-on-surface: #edf0ff;
+  --color-on-surface: #141b2b; /* headings / primary text */
+  --color-on-surface-variant: #40493d; /* body text */
+  --color-outline: #707a6c; /* muted text; resting input border (>=3:1) */
+  --color-outline-variant: #bfcaba; /* default border & divider */
 
-  /* ---- Typography — tokens.md §6. Size + line-height only: Tailwind's
-     --text-* namespace does not carry font-weight, and tokens.md's own
-     weight column already maps cleanly onto Tailwind's built-in font-*
-     utilities (700=font-bold, 600=font-semibold, 400=font-normal), so
-     weight is applied via those existing utilities, not duplicated here.
-     No custom font-family is set — tokens.md §6 explicitly flags the
-     typeface as an unconfirmed assumption pending brand/marketing sign-off
-     (see tokens.md "Open Items"), so this file relies on Tailwind
-     Preflight's default system-sans stack rather than inventing or
-     committing to a specific typeface T03 was not given. ---- */
-  --text-display: 40px;
-  --text-display--line-height: 48px;
-  --text-h1: 32px;
-  --text-h1--line-height: 40px;
+  /* ---- Colour: semantic (DESIGN-TOKENS §1.3) ---- */
+  --color-error: #ba1a1a;
+  --color-on-error: #ffffff;
+  --color-error-container: #ffdad6;
+  --color-on-error-container: #93000a;
+  /* Stitch uses Tailwind amber/blue for warning/info ("off-palette");
+     named here as tokens with the exact handoff values
+     (design-tokens.json "recommended-semantic"). */
+  --color-warning: #d97706; /* amber-600: icons, borders, dots — not small text */
+  --color-warning-container: #fef3c7; /* amber-100 */
+  --color-warning-outline: #fde68a; /* amber-200 */
+  --color-on-warning-container: #92400e; /* amber-800 */
+  --color-info: #2563eb; /* blue-600 */
+  --color-info-container: #dbeafe; /* blue-100 */
+  --color-info-outline: #bfdbfe; /* blue-200 */
+  --color-on-info-container: #1e40af; /* blue-800 */
+  --color-whatsapp: #25d366; /* brand-external; white text on it fails contrast */
+
+  /* ---- Typography: families (DESIGN-TOKENS §2.1) ----
+     The --font-*-face variables are set on <html> by next/font/local
+     (src/app/fonts.ts, self-hosted woff2, no runtime Google request); the
+     named stacks after them are the documented fallbacks. */
+  --font-sans: var(--font-inter-face), "Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
+    "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-body: var(--font-inter-face), "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-headline: var(--font-hanken-grotesk-face), "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-hanken-grotesk-face), "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-label: var(--font-jetbrains-mono-face), "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* ---- Typography: scale (DESIGN-TOKENS §2.2 / §2.5) ----
+     display and headline-lg step down below 768px (RESPONSIVE-SPECS §1) —
+     see the @media block in the base layer. */
+  --text-display: 48px; /* page title / hero */
+  --text-display--line-height: 1.1;
+  --text-display--letter-spacing: -0.02em;
+  --text-display--font-weight: 800;
+  --text-headline-lg: 32px; /* section heading / app page title */
+  --text-headline-lg--line-height: 1.2;
+  --text-headline-lg--letter-spacing: -0.01em;
+  --text-headline-lg--font-weight: 700;
+  --text-headline-md: 20px; /* card heading */
+  --text-headline-md--line-height: 1.3;
+  --text-headline-md--font-weight: 600;
+  --text-title-sm: 16px; /* compact card / row title (DESIGN-SYSTEM §12.3) */
+  --text-title-sm--line-height: 1.5;
+  --text-title-sm--font-weight: 600;
+  --text-body-lg: 18px; /* intro / lead paragraph */
+  --text-body-lg--line-height: 1.6;
+  --text-body-md: 16px; /* body */
+  --text-body-md--line-height: 1.5;
+  --text-label-caps: 12px; /* labels, buttons, table headers (pair with font-label + uppercase) */
+  --text-label-caps--line-height: 1;
+  --text-label-caps--letter-spacing: 0.05em;
+  --text-label-caps--font-weight: 600;
+  --text-label-sm: 11px; /* chips, status badges */
+  --text-label-sm--line-height: 1;
+  --text-label-sm--letter-spacing: 0.05em;
+  --text-label-sm--font-weight: 600;
+  --text-label-micro: 10px; /* micro labels — never in outline colour */
+  --text-label-micro--line-height: 1;
+  --text-label-micro--letter-spacing: 0.05em;
+  --text-label-micro--font-weight: 600;
+
+  /* ---- Spacing & layout (DESIGN-TOKENS §3–§4) ----
+     Base unit stays Tailwind's 4px (--spacing: 0.25rem, not overridden).
+     These are prepared for the shell batches; Batch 1 applies none of them
+     to a layout. */
+  --spacing-gutter: 24px; /* common grid gap */
+  --spacing-margin-mobile: 16px; /* page gutter < 768px */
+  --spacing-margin-desktop: 64px; /* storefront page gutter >= 1024px */
+  --spacing-section: 96px; /* storefront section rhythm */
+  --spacing-section-mobile: 64px;
+  --spacing-sidebar: 256px; /* app sidebar width (w-sidebar) */
+  --spacing-topbar: 64px; /* app top bar height (h-topbar) */
+  --container-content: 1440px; /* main content cap (max-w-content) */
+  --container-form: 1200px; /* admin long-form cap (max-w-form) */
+
+  /* ---- Shape (DESIGN-TOKENS §6, DESIGN-SYSTEM §12.10) ----
+     Semantic radii — prefer these in components. Tailwind defaults keep
+     rounded (4) / rounded-xl (12) / rounded-2xl (16) / rounded-3xl (24). */
+  --radius-badge: 4px;
+  --radius-control: 8px; /* buttons, inputs, selects */
+  --radius-card: 12px; /* standard card, dialog, toast, alert */
+  --radius-panel: 16px; /* large / summary panel */
+  --radius-banner: 24px; /* promo / CTA banner */
+  --radius-lg: 8px; /* Stitch rounded-lg = 8px (was 12px; its 3 uses moved to rounded-xl first) */
+
+  /* ---- Elevation (DESIGN-TOKENS §7) ---- */
+  --shadow-ambient: 0 4px 20px -2px rgb(20 27 43 / 0.04); /* e2 */
+  --shadow-focus-ring: 0 0 0 2px var(--color-white), 0 0 0 4px var(--color-primary);
+
+  /* ---- Motion (DESIGN-TOKENS §8) ---- */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --default-transition-duration: 200ms; /* Stitch standard colour transition */
+  --default-transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ---- Breakpoints — unchanged; equal Stitch md (768) / lg (1024).
+     Translate Stitch md: -> tablet:, lg: -> desktop:. ---- */
+  --breakpoint-tablet: 768px;
+  --breakpoint-desktop: 1024px;
+
+  /* ================================================================
+   * 2. LEGACY ALIASES (remove in Batch 11 once unused)
+   * ================================================================ */
+
+  /* Brand */
+  --color-brand-dark-green: var(--color-primary);
+  --color-brand-green: var(--color-secondary);
+  --color-brand-lime: var(--color-secondary-container);
+  --color-ink: var(--color-on-surface);
+
+  /* Status — -bg variants point at real MD3 containers instead of the old
+     8% tints. success-bg is lime at 40% (COMPONENT-MIGRATION Alert spec) so
+     the legacy left-rail banners stay a tint, not a solid lime block. */
+  --color-success: var(--color-primary);
+  --color-success-bg: color-mix(in srgb, var(--color-secondary-container) 40%, transparent);
+  --color-warning-bg: var(--color-warning-container);
+  --color-warning-text: var(--color-on-warning-container);
+  --color-danger: var(--color-error);
+  --color-danger-bg: var(--color-error-container);
+  --color-info-bg: var(--color-info-container);
+
+  /* Neutral scale -> Stitch roles (TOKEN-MIGRATION §1 "Neutral scale") */
+  --color-neutral-50: var(--color-surface-container-low);
+  --color-neutral-100: var(--color-surface-container);
+  --color-neutral-200: var(--color-surface-container-high);
+  --color-neutral-300: var(--color-outline-variant);
+  --color-neutral-400: var(--color-outline);
+  --color-neutral-500: var(--color-outline);
+  --color-neutral-600: var(--color-on-surface-variant);
+  --color-neutral-700: var(--color-on-surface-variant);
+  --color-neutral-800: var(--color-on-surface);
+  --color-neutral-900: var(--color-on-surface);
+
+  /* Text */
+  --color-text-primary: var(--color-on-surface);
+  --color-text-secondary: var(--color-on-surface-variant);
+  --color-text-disabled: var(--color-outline);
+  --color-text-on-brand: var(--color-on-primary);
+  --color-text-link: var(--color-primary);
+
+  /* Surfaces & borders */
+  --color-surface-base: var(--color-surface-container-lowest);
+  --color-surface-subtle: var(--color-surface-container-low);
+  --color-surface-sunken: var(--color-surface-container);
+  --color-border-default: var(--color-outline-variant);
+  --color-border-strong: var(--color-outline);
+  --color-border-focus: var(--color-primary);
+
+  /* Type scale. text-body (14px) is deliberately KEPT: it is Stitch's
+     "secondary body" (text-sm). Primary paragraphs move to text-body-md
+     per batch rather than reflowing 109 files at once. text-h2 stays 24px
+     until each call site picks headline-lg or headline-md. */
+  --text-h1: var(--text-headline-lg);
+  --text-h1--line-height: var(--text-headline-lg--line-height);
+  --text-h1--letter-spacing: var(--text-headline-lg--letter-spacing);
   --text-h2: 24px;
   --text-h2--line-height: 32px;
-  --text-h3: 20px;
-  --text-h3--line-height: 28px;
-  --text-h4: 16px;
-  --text-h4--line-height: 24px;
-  --text-body-lg: 16px;
-  --text-body-lg--line-height: 24px;
+  --text-h3: var(--text-headline-md);
+  --text-h3--line-height: var(--text-headline-md--line-height);
+  --text-h4: var(--text-title-sm);
+  --text-h4--line-height: var(--text-title-sm--line-height);
   --text-body: 14px;
   --text-body--line-height: 20px;
   --text-caption: 12px;
   --text-caption--line-height: 16px;
   --text-label: 12px;
-  --text-label--line-height: 16px;
-  --tracking-label: 0.04em; /* tokens.md §6 label tracking */
+  --text-label--line-height: 16px; /* kept 16px (not 1.0) so wrapped labels do not collide */
+  --tracking-label: 0.05em; /* Stitch label-caps tracking (was 0.04em) */
 
-  /*
-   * ---- Spacing — tokens.md §7 ----
-   * tokens.md's space-1..space-16 scale (4, 8, 12, 16, 20, 24, 32, 40, 48,
-   * 64px) is an exact match for Tailwind v4's own default spacing scale,
-   * which is every integer multiple of the base --spacing token (0.25rem
-   * equals 4px, already the v4 default, not overridden here). No custom
-   * --spacing- keys are added; components use Tailwind's built-in padding,
-   * margin and gap utilities directly, and each one already is the
-   * matching space token:
-   *   space-1 = 4px  -> p-1, m-1, gap-1     space-6 = 24px -> p-6, m-6, gap-6
-   *   space-2 = 8px  -> p-2, m-2, gap-2     space-8 = 32px -> p-8, m-8, gap-8
-   *   space-3 = 12px -> p-3, m-3, gap-3     space-10 = 40px -> p-10, m-10, gap-10
-   *   space-4 = 16px -> p-4, m-4, gap-4     space-12 = 48px -> p-12, m-12, gap-12
-   *   space-5 = 20px -> p-5, m-5, gap-5     space-16 = 64px -> p-16, m-16, gap-16
-   */
-
-  /* ---- Radius — tokens.md §8 ---- */
+  /* Radius */
   --radius-sm: 4px;
   --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-pill: 999px;
+  --radius-pill: 9999px;
 
-  /* ---- Elevation — tokens.md §9. elevation-0 ("none") is Tailwind's
-     built-in shadow-none, so it is not redefined here. Shadow color is
-     derived from --color-ink via color-mix() rather than a duplicated raw
-     hex/rgb value, at the exact opacities tokens.md specifies (8/10/16%). */
-  --shadow-elevation-1: 0 1px 3px color-mix(in srgb, var(--color-ink) 8%, transparent);
-  --shadow-elevation-2: 0 4px 12px color-mix(in srgb, var(--color-ink) 10%, transparent);
-  --shadow-elevation-3: 0 12px 32px color-mix(in srgb, var(--color-ink) 16%, transparent);
-  /* FVS001-T15 closure pass: outer ring changed from --color-brand-lime to
-     --color-brand-dark-green. brand-lime's outer edge measured only 2.15:1
-     against white (below the 3:1 non-text-contrast target); brand-dark-green
-     measures 7.16-8.15:1 against every surrounding surface this app uses
-     (white, neutral-50, and all four 8%-tint alert backgrounds). The white
-     2px inner ring is unchanged and still separates the outer ring from the
-     focused element's own fill — the outer ring is never directly adjacent
-     to e.g. a brand-dark-green button's own background, only to the
-     surrounding page/container surface, which is the comparison that
-     actually applies to this geometry. */
-  --shadow-focus-ring: 0 0 0 2px var(--color-white), 0 0 0 4px var(--color-brand-dark-green);
-
-  /* ---- Breakpoints — tokens.md §10 ----
-     tokens.md defines this named mobile/tablet/desktop system explicitly as
-     "the single breakpoint system for the whole app, not a second competing
-     scale" — added here (deferred by T03, see that task's own note naming
-     T05a/T05b as the owner) because this is the first component that
-     actually needs responsive behavior. Named tablet:/desktop: variants are
-     used instead of Tailwind's differently-named default sm:/md:/lg: scale
-     so components read directly in tokens.md's own vocabulary rather than
-     relying on an incidental pixel-value coincidence with an unrelated
-     default scale. Mobile has no explicit token — it is simply the
-     unprefixed base state, matching tokens.md's "≤767px". */
-  --breakpoint-tablet: 768px;
-  --breakpoint-desktop: 1024px;
+  /* Elevation — re-pointed onto the Stitch e1 / e4 / e5 levels */
+  --shadow-elevation-1: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-elevation-2: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-elevation-3: 0 25px 50px -12px rgb(0 0 0 / 0.25);
 }
 
-/* ---- Minimal global/base styles ---- */
-body {
-  background-color: var(--color-surface-base);
-  color: var(--color-text-primary);
+/* ---- Non-utility design variables ---- */
+:root {
+  /* Gradients (DESIGN-TOKENS §1.6). Use ONLY where the Stitch design
+     specifies a gradient; solid primary is the default CTA (§12.9). */
+  --gradient-primary: linear-gradient(135deg, #2e7d32 0%, #1b6d24 100%);
+  --gradient-signature: linear-gradient(135deg, #0d631b 0%, #3e6a00 100%);
+  --gradient-text-primary: linear-gradient(to right, #0d631b, #3e6a00);
+
+  /* Motion durations (DESIGN-TOKENS §8) */
+  --duration-colors: 200ms;
+  --duration-card: 300ms;
+  --duration-image: 500ms;
+  --press-scale: 0.95;
+}
+
+@layer base {
+  /* Mobile type step-down (RESPONSIVE-SPECS §1): display 48 -> 36,
+     headline-lg 32 -> 24 (text-h1 follows headline-lg). */
+  @media (width < 768px) {
+    :root {
+      --text-display: 36px;
+      --text-headline-lg: 24px;
+    }
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-on-surface);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Hanken Grotesk for every heading; size/weight/colour stay with the
+     call site's utilities. */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-headline);
+  }
+
+  ::selection {
+    background-color: var(--color-primary-fixed);
+    color: var(--color-on-primary-fixed);
+  }
+
+  /* Native checkboxes/radios take the brand colour (COMPONENT-SPECS §28);
+     size and layout stay with each call site. */
+  input[type="checkbox"],
+  input[type="radio"] {
+    accent-color: var(--color-primary);
+  }
+
+  /* Stitch does not handle reduced motion; the app does (DESIGN-SYSTEM §11). */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* ---- Documented Stitch effects (use only where the design specifies) ---- */
+
+/* Glass (DESIGN-SYSTEM §12.19): white 80% + 20px blur, opaque fallback. */
+@utility glass-panel {
+  background-color: rgb(255 255 255 / 0.8);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  @supports not (backdrop-filter: blur(1px)) {
+    background-color: var(--color-surface-container-lowest);
+  }
+}
+
+/* Blueprint grid (DESIGN-SYSTEM §12.20): auth / account / admin shells only. */
+@utility bg-blueprint {
+  background-color: var(--color-background);
+  background-image:
+    linear-gradient(to right, rgb(13 99 27 / 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(13 99 27 / 0.05) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Home H1 accent only (DESIGN-TOKENS §1.6). */
+@utility text-gradient-primary {
+  background-image: var(--gradient-text-primary);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 /*
- * ---- Global focus-visible treatment — tokens.md §9 `focus-ring` ----
- * A visible double ring — 2px white inner separation, 4px brand-dark-green
- * outer (changed from brand-lime during the FVS001-T15 closure pass; see
- * --shadow-focus-ring above) — so it reads clearly against both a focused
- * element's own fill (via the white inner ring) and the surrounding page
- * surface (the outer ring measures 7.16-8.15:1 against every surface this
- * app uses, vs. brand-lime's 2.15:1 against white).
- * Applied to every focusable element by default; never removed without this
- * exact replacement, per bekaa3d-brand-ui's "Responsive & States" section
- * and WCAG 2.4.7. `outline: none` here is intentional and always paired
- * with the box-shadow ring on the same rule — it is not a bare removal.
+ * ---- Global focus-visible treatment ----
+ * A double box-shadow ring — 2px white inner separation, 4px primary
+ * (#0d631b) outer. #0d631b measures 7.45:1 on white and 7.11:1 on the
+ * #f9f9ff canvas, so the ring stays well above the 3:1 non-text target.
+ * Kept as box-shadow (not outline): e2e/account-profile.spec.ts and
+ * e2e/login-session.spec.ts assert a non-"none" box-shadow on focus.
+ * Stitch's own inputs use a faint ring-primary/20; that is too weak to be
+ * the only indicator, so this stronger ring wins (it is unlayered, so it
+ * overrides utility shadows while an element is focused). `outline: none`
+ * is always paired with the ring — never a bare removal (WCAG 2.4.7).
  */
 :focus-visible {
   outline: none;

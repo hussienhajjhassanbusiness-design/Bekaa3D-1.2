@@ -181,8 +181,10 @@ describe("DialogShell", () => {
   it("uses the exact existing default panel classes when panelClassName is omitted", () => {
     renderShell();
     const dialog = screen.getByRole("dialog");
+    // Stitch modal card (Batch 1). The width and 90vh scroll cap are the
+    // behavioural part and are unchanged from the pre-Stitch panel.
     expect(dialog.className).toBe(
-      "w-full max-w-md max-h-[90vh] overflow-y-auto rounded-lg bg-white p-6 shadow-elevation-3"
+      "w-full max-w-md max-h-[90vh] overflow-y-auto rounded-card border border-outline-variant/30 bg-surface-container-lowest p-6 shadow-2xl tablet:p-8"
     );
   });
 

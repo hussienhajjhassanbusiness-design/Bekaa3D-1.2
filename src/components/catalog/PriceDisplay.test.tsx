@@ -48,4 +48,15 @@ describe("PriceDisplay", () => {
     render(<PriceDisplay amountCents={100} currency="USD" locale="en-US" />);
     expect(screen.getByText("$1.00")).toBeInTheDocument();
   });
+
+  it("adds no presentation classes unless a size is requested (existing call sites unchanged)", () => {
+    render(<PriceDisplay amountCents={100} currency="USD" locale="en-US" />);
+    expect(screen.getByText("$1.00")).not.toHaveAttribute("class");
+  });
+
+  it("applies the Stitch price role for an opted-in size without changing the formatted value", () => {
+    render(<PriceDisplay amountCents={4999} currency="USD" locale="en-US" size="card" />);
+    const price = screen.getByText("$49.99");
+    expect(price).toHaveClass("text-headline-md", "text-primary");
+  });
 });

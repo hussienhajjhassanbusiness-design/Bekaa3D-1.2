@@ -1,4 +1,5 @@
 import { Button } from "@/components/forms/Button";
+import { Icon } from "@/components/ui/Icon";
 
 export interface EmptyStateProps {
   message: string;
@@ -6,19 +7,18 @@ export interface EmptyStateProps {
   onAction?: () => void;
 }
 
-// bekaa3d-brand-ui convention: centered neutral (not brand-colored) icon
-// + one-line explanation + at most one primary action — never a
-// decorative brand-green illustration filling the space.
+// Stitch empty state (COMPONENT-SPECS §49): a 96px lavender circle with a
+// neutral (not brand-green) icon, a one-line explanation, and at most one
+// primary action. Props are unchanged.
 export function EmptyState({ message, actionLabel, onAction }: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center gap-3 py-12 text-center">
-      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="h-10 w-10 text-neutral-400">
-        <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.5" />
-        <path d="M20 20l-3.2-3.2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      </svg>
-      <p className="text-body text-text-secondary">{message}</p>
+    <div className="flex flex-col items-center gap-4 px-4 py-16 text-center">
+      <div className="flex h-24 w-24 items-center justify-center rounded-full bg-surface-container">
+        <Icon name="search" className="h-12 w-12 text-outline" strokeWidth={1.5} />
+      </div>
+      <p className="max-w-sm text-body-md text-on-surface-variant">{message}</p>
       {actionLabel && onAction && (
-        <Button type="button" onClick={onAction}>
+        <Button type="button" onClick={onAction} className="mt-2">
           {actionLabel}
         </Button>
       )}

@@ -11,12 +11,32 @@ import { StatusBadge, describeAdminAccountStatus } from "./StatusBadge";
 // bounded union — never an arbitrary color string.
 
 describe("StatusBadge", () => {
-  // Phase 6E (axe color-contrast): warning text uses the AA `warning-text`
-  // token, never the brand amber (#B8860B is ~3:1 on its own tint).
-  it("renders warning text in the AA warning-text colour", () => {
+  // Phase 6E (axe color-contrast): warning text uses the AA dark-amber
+  // `on-warning-container` (#92400e, 6.4:1 on #fef3c7), never the amber
+  // `warning` token (#d97706), which is for icons/borders only.
+  it("renders warning text in the AA on-warning-container colour", () => {
     render(<StatusBadge label="Pending" tone="warning" />);
-    expect(screen.getByText("Pending")).toHaveClass("text-warning-text");
+    expect(screen.getByText("Pending")).toHaveClass("text-on-warning-container");
     expect(screen.getByText("Pending")).not.toHaveClass("text-warning");
+  });
+
+  // DESIGN-SYSTEM §9 status mapping on Stitch MD3 containers.
+  it.each([
+    ["neutral", "bg-surface-container-highest", "text-on-surface-variant"],
+    ["positive", "bg-secondary-container", "text-on-secondary-container"],
+    ["negative", "bg-error-container", "text-on-error-container"],
+    ["warning", "bg-warning-container", "text-on-warning-container"],
+    ["info", "bg-info-container", "text-on-info-container"],
+  ] as const)("maps the '%s' tone to its container and on-container text", (tone, bg, text) => {
+    render(<StatusBadge label="Status" tone={tone} />);
+    expect(screen.getByText("Status")).toHaveClass(bg, text);
+  });
+
+  it("uppercases through CSS only, so the text node keeps its source casing", () => {
+    render(<StatusBadge label="In production" tone="positive" />);
+    const badge = screen.getByText("In production");
+    expect(badge.textContent).toBe("In production");
+    expect(badge).toHaveClass("uppercase");
   });
 
   it("renders the supplied label as visible text", () => {

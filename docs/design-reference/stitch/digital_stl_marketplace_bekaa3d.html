@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>STL Marketplace | Bekaa3D Industrial Manufacturing</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Hanken+Grotesk:wght@600;700;800&amp;family=JetBrains+Mono:wght@600&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@100..900&amp;family=Inter:wght@100..900&amp;family=JetBrains+Mono:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "secondary-container": "#b9f474",
+                    "on-secondary-fixed-variant": "#2e4f00",
+                    "on-secondary-container": "#437000",
+                    "on-error": "#ffffff",
+                    "inverse-primary": "#88d982",
+                    "surface-tint": "#1b6d24",
+                    "on-tertiary-fixed": "#3f001c",
+                    "inverse-surface": "#293040",
+                    "on-surface": "#141b2b",
+                    "on-secondary-fixed": "#0f2000",
+                    "surface-container-high": "#e1e8fd",
+                    "on-secondary": "#ffffff",
+                    "surface-container": "#e9edff",
+                    "outline": "#707a6c",
+                    "on-error-container": "#93000a",
+                    "inverse-on-surface": "#edf0ff",
+                    "error-container": "#ffdad6",
+                    "secondary-fixed": "#b9f474",
+                    "on-background": "#141b2b",
+                    "tertiary": "#923357",
+                    "surface-container-low": "#f1f3ff",
+                    "on-tertiary-fixed-variant": "#7f2448",
+                    "on-tertiary-container": "#ffedf0",
+                    "primary-container": "#2e7d32",
+                    "primary": "#0d631b",
+                    "outline-variant": "#bfcaba",
+                    "surface-container-highest": "#dce2f7",
+                    "secondary": "#3e6a00",
+                    "on-surface-variant": "#40493d",
+                    "tertiary-fixed-dim": "#ffb1c7",
+                    "surface-bright": "#f9f9ff",
+                    "primary-fixed-dim": "#88d982",
+                    "background": "#f9f9ff",
+                    "on-primary-fixed-variant": "#005312",
+                    "tertiary-container": "#b14b6f",
+                    "secondary-fixed-dim": "#9ed75b",
+                    "on-primary-fixed": "#002204",
+                    "error": "#ba1a1a",
+                    "surface-dim": "#d3daef",
+                    "primary-fixed": "#a3f69c",
+                    "on-tertiary": "#ffffff",
+                    "on-primary": "#ffffff",
+                    "on-primary-container": "#cbffc2",
+                    "surface-variant": "#dce2f7",
+                    "tertiary-fixed": "#ffd9e2",
+                    "surface-container-lowest": "#ffffff",
+                    "surface": "#f9f9ff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "max-width": "1440px",
+                    "margin-desktop": "64px",
+                    "unit": "4px",
+                    "margin-mobile": "16px",
+                    "gutter": "24px"
+            },
+            "fontFamily": {
+                    "body-md": ["Inter"],
+                    "headline-md": ["Hanken Grotesk"],
+                    "headline-lg-mobile": ["Hanken Grotesk"],
+                    "label-caps": ["JetBrains Mono"],
+                    "body-lg": ["Inter"],
+                    "headline-lg": ["Hanken Grotesk"],
+                    "display": ["Hanken Grotesk"]
+            },
+            "fontSize": {
+                    "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                    "headline-md": ["20px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                    "label-caps": ["12px", {"lineHeight": "1.0", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                    "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                    "headline-lg": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                    "display": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "800"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        .signature-gradient {
+            background: linear-gradient(135deg, #0d631b 0%, #3e6a00 100%);
+        }
+        .signature-gradient:hover {
+            filter: brightness(1.1);
+        }
+        .blueprint-border {
+            border: 1px solid rgba(191, 202, 186, 0.3);
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f9f9ff;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #bfcaba;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body-md overflow-x-hidden">
+<!-- TopNavBar -->
+<nav class="fixed top-0 w-full z-50 flex justify-between items-center px-margin-desktop max-w-max-width mx-auto bg-surface/80 dark:bg-surface/80 backdrop-blur-md border-b border-outline-variant/30 h-20">
+<div class="flex items-center gap-12">
+<span class="font-display text-headline-lg font-extrabold text-primary dark:text-primary-fixed tracking-tight">Bekaa3D</span>
+<div class="hidden md:flex items-center gap-8">
+<a class="text-primary dark:text-primary-fixed font-bold border-b-2 border-primary py-7 transition-colors duration-200" href="#">Marketplace</a>
+<a class="text-on-surface-variant dark:text-on-surface-variant/80 font-medium hover:text-primary dark:hover:text-primary-fixed transition-colors duration-200 py-7" href="#">Services</a>
+<a class="text-on-surface-variant dark:text-on-surface-variant/80 font-medium hover:text-primary dark:hover:text-primary-fixed transition-colors duration-200 py-7" href="#">Materials</a>
+<a class="text-on-surface-variant dark:text-on-surface-variant/80 font-medium hover:text-primary dark:hover:text-primary-fixed transition-colors duration-200 py-7" href="#">Community</a>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<div class="relative hidden lg:block group">
+<span class="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-outline">search</span>
+<input class="pl-10 pr-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 w-64 transition-all" placeholder="Search industrial models..." type="text"/>
+</div>
+<div class="flex items-center gap-4">
+<button class="flex items-center gap-2 text-on-surface-variant hover:text-primary transition-all">
+<span class="material-symbols-outlined" data-icon="shopping_cart">shopping_cart</span>
+<span class="hidden sm:inline font-medium">Cart</span>
+</button>
+<button class="px-6 py-2 bg-primary text-on-primary rounded-lg font-bold transition-all active:scale-95 flex items-center gap-2">
+<span class="material-symbols-outlined text-[20px]" data-icon="account_circle">account_circle</span>
+                    Login
+                </button>
+</div>
+</div>
+</nav>
+<main class="pt-20">
+<!-- Hero/Header Section -->
+<section class="relative w-full h-[400px] flex items-center justify-center overflow-hidden">
+
+<div class="relative z-10 text-center px-margin-mobile">
+<span class="font-label-caps text-primary bg-primary-container/20 px-4 py-1 rounded-full mb-6 inline-block">ENGINEERING ARCHIVE</span>
+<h1 class="font-display text-display text-on-surface mb-4">Digital STL Marketplace</h1>
+<p class="font-body-lg text-on-surface-variant max-w-2xl mx-auto mb-10">Access over 124,500+ precision-engineered 3D models, functional components, and industrial designs verified for performance.</p>
+<div class="max-w-3xl mx-auto bg-surface p-2 rounded-xl shadow-xl flex flex-col md:flex-row gap-2 border border-outline-variant/30">
+<div class="flex-grow flex items-center px-4 gap-3">
+<span class="material-symbols-outlined text-primary">search</span>
+<input class="w-full bg-transparent border-none focus:ring-0 font-body-md py-3" placeholder="Search by model name, manufacturer, or printer compatibility..." type="text"/>
+</div>
+<button class="signature-gradient text-on-primary px-10 py-3 rounded-lg font-bold text-label-caps tracking-widest uppercase transition-all">Search Database</button>
+</div>
+<div class="mt-6 flex justify-center gap-8 text-on-surface-variant font-label-caps text-[10px]">
+<span class="flex items-center gap-2"><span class="material-symbols-outlined text-[14px]">check_circle</span> 100% PRINTABLE VERIFIED</span>
+<span class="flex items-center gap-2"><span class="material-symbols-outlined text-[14px]">verified_user</span> COMMERCIAL LICENSES</span>
+<span class="flex items-center gap-2"><span class="material-symbols-outlined text-[14px]">precision_manufacturing</span> CAD NATIVE EXPORTS</span>
+</div>
+</div>
+</section>
+<!-- Marketplace Layout -->
+<section class="max-w-max-width mx-auto px-margin-desktop py-16 flex flex-col lg:flex-row gap-gutter">
+<!-- Sidebar Filters -->
+<aside class="w-full lg:w-72 flex-shrink-0 space-y-10">
+<div>
+<h3 class="font-headline-md text-on-surface mb-6 flex items-center justify-between">
+                        Filters
+                        <button class="text-primary font-label-caps text-[10px] hover:underline">Reset All</button>
+</h3>
+<!-- Category Filter -->
+<div class="space-y-4 mb-8">
+<p class="font-label-caps text-on-surface-variant border-b border-outline-variant pb-2">Categories</p>
+<div class="space-y-2">
+<label class="flex items-center gap-3 cursor-pointer group">
+<input checked="" class="rounded border-outline-variant text-primary focus:ring-primary" type="checkbox"/>
+<span class="font-body-md text-on-surface group-hover:text-primary transition-colors">Engineering &amp; CAD</span>
+</label>
+<label class="flex items-center gap-3 cursor-pointer group">
+<input class="rounded border-outline-variant text-primary focus:ring-primary" type="checkbox"/>
+<span class="font-body-md text-on-surface group-hover:text-primary transition-colors">Art &amp; Decorative</span>
+</label>
+<label class="flex items-center gap-3 cursor-pointer group">
+<input class="rounded border-outline-variant text-primary focus:ring-primary" type="checkbox"/>
+<span class="font-body-md text-on-surface group-hover:text-primary transition-colors">Industrial Tools</span>
+</label>
+<label class="flex items-center gap-3 cursor-pointer group">
+<input class="rounded border-outline-variant text-primary focus:ring-primary" type="checkbox"/>
+<span class="font-body-md text-on-surface group-hover:text-primary transition-colors">Consumer Electronics</span>
+</label>
+</div>
+</div>
+<!-- License Type -->
+<div class="space-y-4 mb-8">
+<p class="font-label-caps text-on-surface-variant border-b border-outline-variant pb-2">License Type</p>
+<div class="grid grid-cols-1 gap-2">
+<button class="px-4 py-2 rounded-lg border border-outline-variant text-left font-body-md hover:border-primary hover:bg-primary-container/10 transition-all text-sm">Commercial Use</button>
+<button class="px-4 py-2 rounded-lg border border-primary bg-primary-container/10 text-left font-body-md transition-all text-sm font-bold">Personal Only</button>
+<button class="px-4 py-2 rounded-lg border border-outline-variant text-left font-body-md hover:border-primary hover:bg-primary-container/10 transition-all text-sm">Public Domain</button>
+</div>
+</div>
+<!-- Printer Compatibility -->
+<div class="space-y-4 mb-8">
+<p class="font-label-caps text-on-surface-variant border-b border-outline-variant pb-2">Compatibility</p>
+<select class="w-full bg-surface-container border-none rounded-lg font-body-md focus:ring-2 focus:ring-primary">
+<option>All Printers</option>
+<option>Bambu Lab X1-Carbon</option>
+<option>Prusa i3 MK4</option>
+<option>Creality Ender Series</option>
+<option>Voron 2.4 / Trident</option>
+</select>
+</div>
+<!-- File Format -->
+<div class="space-y-4 mb-8">
+<p class="font-label-caps text-on-surface-variant border-b border-outline-variant pb-2">Format</p>
+<div class="flex flex-wrap gap-2">
+<span class="px-3 py-1 bg-surface-container-highest rounded text-[12px] font-bold">STL</span>
+<span class="px-3 py-1 bg-surface-container-highest rounded text-[12px] font-bold text-on-surface/40">STEP</span>
+<span class="px-3 py-1 bg-surface-container-highest rounded text-[12px] font-bold text-on-surface/40">3MF</span>
+<span class="px-3 py-1 bg-surface-container-highest rounded text-[12px] font-bold text-on-surface/40">OBJ</span>
+</div>
+</div>
+<!-- Price Range -->
+<div class="space-y-4">
+<p class="font-label-caps text-on-surface-variant border-b border-outline-variant pb-2">Price Range</p>
+<input class="w-full h-2 bg-surface-container-highest rounded-lg appearance-none cursor-pointer accent-primary" type="range"/>
+<div class="flex justify-between font-label-caps text-[10px]">
+<span>$0</span>
+<span>$500+</span>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Grid -->
+<div class="flex-grow">
+<div class="flex justify-between items-center mb-8">
+<p class="font-body-md text-on-surface-variant">Showing <span class="font-bold text-on-surface">1,240</span> results for "All Categories"</p>
+<div class="flex items-center gap-4">
+<span class="font-label-caps text-[12px] text-on-surface-variant">Sort by:</span>
+<select class="bg-transparent border-none font-bold focus:ring-0 cursor-pointer">
+<option>Latest Uploads</option>
+<option>Most Popular</option>
+<option>Price: Low to High</option>
+<option>Price: High to Low</option>
+</select>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+<!-- STL Card 1 -->
+<div class="group bg-surface rounded-xl border border-outline-variant/30 overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col">
+<div class="relative h-64 overflow-hidden bg-surface-container-low">
+<img class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" data-alt="A hyper-realistic 3D render of a precision-machined mechanical gear assembly with carbon fiber textures. The lighting is high-end studio style with subtle green accents reflecting off metallic surfaces. The background is a clean, minimalist engineering blueprint style in light gray and white tones, matching a professional industrial design aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDAl7RXlaiBalMvhvy57Phbln8Y262V-n0PGf1n0HO8fp7vT-UCsj5GJ8K-gGsgWwzkZo8kTiuBAp-OuNw7Hpf4C1pBXnMBMasvXXp_7dktc12B4rJe4HoMN0LptkgHJLJ653qee0L1b9fjXKTStXrwRnL3KG_FlAOrmqdacdFitsBwgbdmAultPPEBjoESxWAnNPYDmZSIpTosa5UTOhh4pP6-IfgRcLhUimqqdHxWrprqO6yfMaBEdw"/>
+<div class="absolute top-4 left-4 flex gap-2">
+<span class="px-3 py-1 bg-primary text-on-primary font-label-caps text-[10px] rounded shadow-lg">COMMERCIAL</span>
+</div>
+<button class="absolute top-4 right-4 w-10 h-10 rounded-full glass-panel flex items-center justify-center text-on-surface hover:text-error transition-colors">
+<span class="material-symbols-outlined" data-icon="favorite">favorite</span>
+</button>
+</div>
+<div class="p-6 flex-grow flex flex-col">
+<div class="flex justify-between items-start mb-2">
+<h4 class="font-headline-md text-on-surface group-hover:text-primary transition-colors">Precision V2 Gear Housing</h4>
+<span class="font-bold text-headline-md text-primary">$45.00</span>
+</div>
+<p class="text-sm text-on-surface-variant mb-4 line-clamp-2">Optimized housing for high-torque stepper motors. Heat dissipation vents included.</p>
+<div class="flex items-center gap-4 mb-6">
+<div class="flex items-center text-amber-500">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-bold ml-1 text-sm text-on-surface">4.9</span>
+</div>
+<span class="text-xs text-on-surface-variant">(128 reviews)</span>
+<span class="text-xs px-2 py-0.5 bg-surface-container-highest rounded text-on-surface-variant">STL, STEP</span>
+</div>
+<div class="flex gap-2 mt-auto">
+<button class="flex-grow signature-gradient text-on-primary py-3 rounded-lg font-bold text-label-caps uppercase transition-all">Buy Now</button>
+<button class="px-4 py-3 border border-outline-variant rounded-lg hover:bg-surface-container transition-all">
+<span class="material-symbols-outlined" data-icon="bid_landscape">bid_landscape</span>
+</button>
+</div>
+</div>
+</div>
+<!-- STL Card 2 -->
+<div class="group bg-surface rounded-xl border border-outline-variant/30 overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col">
+<div class="relative h-64 overflow-hidden bg-surface-container-low">
+<img class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" data-alt="A clean, minimalist 3D render of a geometric architectural desk lamp model for 3D printing. The model is shown in a crisp white resin material with elegant shadows. The lighting is soft and atmospheric, highlighting the intricate Voronoi patterns on the lamp shade. The overall aesthetic is functional luxury and modern high-tech design." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAZL0_pVJqZmu-JD0dT05cKmbVJ4S2gtMyb3r3bpulW0FoCPYjzQ4FGDgyJprM_nRhVnJrRqmjT64YV9c2W3LUNPZo7CZHIioaE1OUU8nAN3L1jYH94qjkf5AiAxypN_xobN2iWj4A5RkqHwmSDeFhqX8t0K_gLkk8DdalTWQPnadSWG3SMI82kcLfmEkF1C3DFHNsmG1n1HpGauiR96Y2Z-65JnCljDNVK96or2CA-hgXMeqaiSiEMmg"/>
+<div class="absolute top-4 left-4 flex gap-2">
+<span class="px-3 py-1 bg-secondary text-on-secondary font-label-caps text-[10px] rounded shadow-lg">PERSONAL</span>
+</div>
+<button class="absolute top-4 right-4 w-10 h-10 rounded-full glass-panel flex items-center justify-center text-on-surface hover:text-error transition-colors">
+<span class="material-symbols-outlined" data-icon="favorite">favorite</span>
+</button>
+</div>
+<div class="p-6 flex-grow flex flex-col">
+<div class="flex justify-between items-start mb-2">
+<h4 class="font-headline-md text-on-surface group-hover:text-primary transition-colors">Voronoi Apex Lamp</h4>
+<span class="font-bold text-headline-md text-secondary">FREE</span>
+</div>
+<p class="text-sm text-on-surface-variant mb-4 line-clamp-2">A beautiful parametric lamp design. Requires minimal support for most FDM printers.</p>
+<div class="flex items-center gap-4 mb-6">
+<div class="flex items-center text-amber-500">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-bold ml-1 text-sm text-on-surface">5.0</span>
+</div>
+<span class="text-xs text-on-surface-variant">(3.4k downloads)</span>
+<span class="text-xs px-2 py-0.5 bg-surface-container-highest rounded text-on-surface-variant">3MF</span>
+</div>
+<div class="flex gap-2 mt-auto">
+<button class="flex-grow bg-on-surface text-surface py-3 rounded-lg font-bold text-label-caps uppercase hover:opacity-90 transition-all">Download Free</button>
+</div>
+</div>
+</div>
+<!-- STL Card 3 -->
+<div class="group bg-surface rounded-xl border border-outline-variant/30 overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col">
+<div class="relative h-64 overflow-hidden bg-surface-container-low">
+<img class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" data-alt="An industrial 3D render of a rugged drone chassis kit designed for carbon fiber reinforced filaments. The scene features the disassembled parts laid out in a precise grid on a dark technical workbench. Low-key lighting with sharp rim lights emphasizes the functional edges and durability of the design. The mood is high-performance engineering." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBgb4GvJEaRO2Xkak9gwsBV0rlv-fGy7yNyX5g3Zps4-NYZ-KOYWdDuJNQi9x_26X-5M5YTDgNRwNeVy9wWjMUKN2xIaevCukcBgvGXGBT2c4kCNGj0w_PkdiEunY3tahp4_azo1Q7pQebdVUg8JOgAEnkQWCSSgmq77xnr3jGRm4VcakIHEa-PpuYvTqJofE0Qir1CGf6oDev8BkIYmVY5rpt6Frz5XVbVJjR0-mmeobwy59Nc39YDWg"/>
+<div class="absolute top-4 left-4 flex gap-2">
+<span class="px-3 py-1 bg-primary text-on-primary font-label-caps text-[10px] rounded shadow-lg">COMMERCIAL</span>
+</div>
+<button class="absolute top-4 right-4 w-10 h-10 rounded-full glass-panel flex items-center justify-center text-on-surface hover:text-error transition-colors">
+<span class="material-symbols-outlined" data-icon="favorite">favorite</span>
+</button>
+</div>
+<div class="p-6 flex-grow flex flex-col">
+<div class="flex justify-between items-start mb-2">
+<h4 class="font-headline-md text-on-surface group-hover:text-primary transition-colors">X-Pro Drone Chassis</h4>
+<span class="font-bold text-headline-md text-primary">$89.00</span>
+</div>
+<p class="text-sm text-on-surface-variant mb-4 line-clamp-2">Professional grade drone frame optimized for weight-to-strength ratio and vibrations.</p>
+<div class="flex items-center gap-4 mb-6">
+<div class="flex items-center text-amber-500">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-bold ml-1 text-sm text-on-surface">4.8</span>
+</div>
+<span class="text-xs text-on-surface-variant">(42 reviews)</span>
+<span class="text-xs px-2 py-0.5 bg-surface-container-highest rounded text-on-surface-variant">STL, CAD</span>
+</div>
+<div class="flex gap-2 mt-auto">
+<button class="flex-grow signature-gradient text-on-primary py-3 rounded-lg font-bold text-label-caps uppercase transition-all">Buy Now</button>
+<button class="px-4 py-3 border border-outline-variant rounded-lg hover:bg-surface-container transition-all">
+<span class="material-symbols-outlined" data-icon="bid_landscape">bid_landscape</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Row 2 Card 1 -->
+<div class="group bg-surface rounded-xl border border-outline-variant/30 overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col">
+<div class="relative h-64 overflow-hidden bg-surface-container-low">
+<img class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" data-alt="A detailed 3D visualization of an industrial robotic gripper attachment. The render showcases the inner mechanical linkages in a translucent view, with high-vis orange and matte black components. Studio lighting highlighting the precision tolerances. Set against a clean laboratory background with digital data overlays." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDOtNsbH397KQhn5ctQwTGKysChCkk7N2nao6TYmLUyhWFVHeZUM4LXP3DJbEMLTccv5CTQNBNnyrAsB4FEpGOUI_wNFEIObkrVuZ0yjntGOqZvRkV7UmlI7la75lOq0I8eVerE63Mr72Df-xnmnpJ8J1FItylkTfJDogBoMj4WGKzFFTBropJHYXvTsNdzjL8fcaBcrCeeJRXaB7nVjpPAzXW8KBpppbzPVv3bvHdD3Q6SWaLLa_R10w"/>
+<div class="absolute top-4 left-4 flex gap-2">
+<span class="px-3 py-1 bg-primary text-on-primary font-label-caps text-[10px] rounded shadow-lg">COMMERCIAL</span>
+</div>
+<button class="absolute top-4 right-4 w-10 h-10 rounded-full glass-panel flex items-center justify-center text-on-surface hover:text-error transition-colors">
+<span class="material-symbols-outlined" data-icon="favorite">favorite</span>
+</button>
+</div>
+<div class="p-6 flex-grow flex flex-col">
+<div class="flex justify-between items-start mb-2">
+<h4 class="font-headline-md text-on-surface group-hover:text-primary transition-colors">Industrial Parallel Gripper</h4>
+<span class="font-bold text-headline-md text-primary">$120.00</span>
+</div>
+<p class="text-sm text-on-surface-variant mb-4 line-clamp-2">Compliant gripper design for sensitive objects. Includes bill of materials for assembly.</p>
+<div class="flex items-center gap-4 mb-6">
+<div class="flex items-center text-amber-500">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-bold ml-1 text-sm text-on-surface">4.7</span>
+</div>
+<span class="text-xs text-on-surface-variant">(15 reviews)</span>
+<span class="text-xs px-2 py-0.5 bg-surface-container-highest rounded text-on-surface-variant">STL, STEP</span>
+</div>
+<div class="flex gap-2 mt-auto">
+<button class="flex-grow signature-gradient text-on-primary py-3 rounded-lg font-bold text-label-caps uppercase transition-all">Buy Now</button>
+<button class="px-4 py-3 border border-outline-variant rounded-lg hover:bg-surface-container transition-all">
+<span class="material-symbols-outlined" data-icon="bid_landscape">bid_landscape</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Row 2 Card 2 -->
+<div class="group bg-surface rounded-xl border border-outline-variant/30 overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col">
+<div class="relative h-64 overflow-hidden bg-surface-container-low">
+<img class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" data-alt="A macro 3D render of a highly detailed miniature terrain piece for table-top gaming, representing a futuristic lunar research outpost. The textures show fine moon dust and metallic paneling. Cool blue and gray color palette with high-contrast sharp lighting. Professional architectural visualization style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDsoO6Pr3hP85Z6vtnmPVuCThCGMFAtuqrjnVgxIay4moC9Fn7YvGldXsV7yzvGWQ1VD21q6DbtDj93_fmkoSepLMN8BaEtx3tlhfN-ueFOCJTqAQB7c0Eh2pN76BP7NDYkoLOxsbclAVJWMWQWfK5CUOL1pKWRpMziWLy3yaL8oiR8xgNoQ9UhET6ScJY0vo4aHJlw6ZGM7bK3uUVwJ6HimaDShMjomyljrs5JNH2VswaEraDGl1dc5Q"/>
+<div class="absolute top-4 left-4 flex gap-2">
+<span class="px-3 py-1 bg-secondary text-on-secondary font-label-caps text-[10px] rounded shadow-lg">PERSONAL</span>
+</div>
+<button class="absolute top-4 right-4 w-10 h-10 rounded-full glass-panel flex items-center justify-center text-on-surface hover:text-error transition-colors">
+<span class="material-symbols-outlined" data-icon="favorite">favorite</span>
+</button>
+</div>
+<div class="p-6 flex-grow flex flex-col">
+<div class="flex justify-between items-start mb-2">
+<h4 class="font-headline-md text-on-surface group-hover:text-primary transition-colors">Lunar Base: Sector 7</h4>
+<span class="font-bold text-headline-md text-primary">$12.50</span>
+</div>
+<p class="text-sm text-on-surface-variant mb-4 line-clamp-2">Modular sci-fi terrain. Scaled for 28mm and 32mm wargaming models.</p>
+<div class="flex items-center gap-4 mb-6">
+<div class="flex items-center text-amber-500">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-bold ml-1 text-sm text-on-surface">4.9</span>
+</div>
+<span class="text-xs text-on-surface-variant">(840 sales)</span>
+<span class="text-xs px-2 py-0.5 bg-surface-container-highest rounded text-on-surface-variant">STL</span>
+</div>
+<div class="flex gap-2 mt-auto">
+<button class="flex-grow signature-gradient text-on-primary py-3 rounded-lg font-bold text-label-caps uppercase transition-all">Buy Now</button>
+</div>
+</div>
+</div>
+<!-- Row 2 Card 3 -->
+<div class="group bg-surface rounded-xl border border-outline-variant/30 overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col">
+<div class="relative h-64 overflow-hidden bg-surface-container-low">
+<img class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" data-alt="A professional product render of an ergonomic custom keyboard case design with an integrated wrist rest. The surface is shown in a premium dark wood filament texture and anodized aluminum. The lighting is warm and elegant, showcasing the smooth curves and CNC-machined precision. High-end lifestyle tech aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBNs1wwxiDo08bVs4T-t0s7gn84F2XUTGnw-IizacsklEB82YKvNDsFuKLdmJtKIFR2BGo1k9x-ogDNeQSwPOsUNQIUAb88iWfvHluyO0mFRFs5fWpt0gjYNTQ_4o6kaMjcRW_p1V2f1eufKlTwFadIyfg81W0m_rYrd8TME2mnJ5GqOp-ladLZ-DTnH0GqhWoysDu6nAglUXEG49xmGpYFra9BKD82_1siakHHuLMYILkKl5KV4zeULA"/>
+<div class="absolute top-4 left-4 flex gap-2">
+<span class="px-3 py-1 bg-primary text-on-primary font-label-caps text-[10px] rounded shadow-lg">COMMERCIAL</span>
+</div>
+<button class="absolute top-4 right-4 w-10 h-10 rounded-full glass-panel flex items-center justify-center text-on-surface hover:text-error transition-colors">
+<span class="material-symbols-outlined" data-icon="favorite">favorite</span>
+</button>
+</div>
+<div class="p-6 flex-grow flex flex-col">
+<div class="flex justify-between items-start mb-2">
+<h4 class="font-headline-md text-on-surface group-hover:text-primary transition-colors">ErgoKey 65 Shell</h4>
+<span class="font-bold text-headline-md text-primary">$35.00</span>
+</div>
+<p class="text-sm text-on-surface-variant mb-4 line-clamp-2">Customizable 65% keyboard case. Multiple bottom plate options included.</p>
+<div class="flex items-center gap-4 mb-6">
+<div class="flex items-center text-amber-500">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-bold ml-1 text-sm text-on-surface">4.6</span>
+</div>
+<span class="text-xs text-on-surface-variant">(62 reviews)</span>
+<span class="text-xs px-2 py-0.5 bg-surface-container-highest rounded text-on-surface-variant">STL, OBJ</span>
+</div>
+<div class="flex gap-2 mt-auto">
+<button class="flex-grow signature-gradient text-on-primary py-3 rounded-lg font-bold text-label-caps uppercase transition-all">Buy Now</button>
+<button class="px-4 py-3 border border-outline-variant rounded-lg hover:bg-surface-container transition-all">
+<span class="material-symbols-outlined" data-icon="bid_landscape">bid_landscape</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Pagination -->
+<div class="mt-16 flex justify-center">
+<nav class="flex items-center gap-2">
+<button class="w-10 h-10 flex items-center justify-center rounded-lg border border-outline-variant hover:bg-surface-container transition-all">
+<span class="material-symbols-outlined">chevron_left</span>
+</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-lg bg-primary text-on-primary font-bold">1</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-lg border border-outline-variant hover:bg-surface-container transition-all">2</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-lg border border-outline-variant hover:bg-surface-container transition-all">3</button>
+<span class="px-2 text-outline-variant">...</span>
+<button class="w-10 h-10 flex items-center justify-center rounded-lg border border-outline-variant hover:bg-surface-container transition-all">24</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-lg border border-outline-variant hover:bg-surface-container transition-all">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</nav>
+</div>
+</div>
+</section>
+<!-- Technical Verification Banner -->
+<section class="bg-surface-container-low py-20 border-y border-outline-variant/30">
+<div class="max-w-max-width mx-auto px-margin-desktop text-center">
+<h2 class="font-headline-lg text-on-surface mb-4">Precision-First Philosophy</h2>
+<p class="font-body-lg text-on-surface-variant max-w-3xl mx-auto mb-12">Every model in our marketplace undergoes a rigorous technical verification process to ensure zero manifold errors, correct scale orientation, and optimal wall thickness for industrial manufacturing.</p>
+<div class="grid grid-cols-1 md:grid-cols-4 gap-gutter text-left">
+<div class="glass-panel p-6 rounded-xl blueprint-border">
+<span class="material-symbols-outlined text-primary mb-4 text-3xl">architecture</span>
+<h4 class="font-headline-md mb-2">CAD Verified</h4>
+<p class="text-sm text-on-surface-variant">Ensuring dimensional accuracy for assembly-ready parts.</p>
+</div>
+<div class="glass-panel p-6 rounded-xl blueprint-border">
+<span class="material-symbols-outlined text-primary mb-4 text-3xl">verified_user</span>
+<h4 class="font-headline-md mb-2">Manifold Check</h4>
+<p class="text-sm text-on-surface-variant">Watertight mesh guarantee for failure-free slicing.</p>
+</div>
+<div class="glass-panel p-6 rounded-xl blueprint-border">
+<span class="material-symbols-outlined text-primary mb-4 text-3xl">settings_input_component</span>
+<h4 class="font-headline-md mb-2">Print Optimization</h4>
+<p class="text-sm text-on-surface-variant">Optimized for standard FDM, SLA, and SLS technologies.</p>
+</div>
+<div class="glass-panel p-6 rounded-xl blueprint-border">
+<span class="material-symbols-outlined text-primary mb-4 text-3xl">copyright</span>
+<h4 class="font-headline-md mb-2">Clear Rights</h4>
+<p class="text-sm text-on-surface-variant">Straightforward licensing for your business or hobby.</p>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="bg-surface-container-low dark:bg-surface-dim border-t border-outline-variant w-full py-16 px-margin-desktop max-w-max-width mx-auto grid grid-cols-12 gap-gutter">
+<div class="col-span-12 lg:col-span-4 space-y-6">
+<span class="font-display text-headline-md font-bold text-on-surface dark:text-on-surface">Bekaa3D</span>
+<p class="font-body-md text-on-surface-variant/70 max-w-xs">Pioneering precision in digital manufacturing and high-fidelity 3D assets for the next generation of engineers.</p>
+<div class="flex gap-4">
+<a class="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center text-on-surface-variant hover:text-primary transition-all duration-300" href="#"><span class="material-symbols-outlined">public</span></a>
+<a class="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center text-on-surface-variant hover:text-primary transition-all duration-300" href="#"><span class="material-symbols-outlined">group</span></a>
+<a class="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center text-on-surface-variant hover:text-primary transition-all duration-300" href="#"><span class="material-symbols-outlined">share</span></a>
+</div>
+</div>
+<div class="col-span-6 lg:col-span-2 space-y-4">
+<h5 class="font-label-caps text-on-surface font-bold">Marketplace</h5>
+<div class="flex flex-col gap-2">
+<a class="text-on-surface-variant/70 hover:text-secondary dark:hover:text-secondary-fixed transition-all hover:translate-x-1 duration-300 text-body-md font-body-md" href="#">All Models</a>
+<a class="text-on-surface-variant/70 hover:text-secondary dark:hover:text-secondary-fixed transition-all hover:translate-x-1 duration-300 text-body-md font-body-md" href="#">Featured Creators</a>
+<a class="text-on-surface-variant/70 hover:text-secondary dark:hover:text-secondary-fixed transition-all hover:translate-x-1 duration-300 text-body-md font-body-md" href="#">Industrial Assets</a>
+<a class="text-on-surface-variant/70 hover:text-secondary dark:hover:text-secondary-fixed transition-all hover:translate-x-1 duration-300 text-body-md font-body-md" href="#">Free Archives</a>
+</div>
+</div>
+<div class="col-span-6 lg:col-span-2 space-y-4">
+<h5 class="font-label-caps text-on-surface font-bold">Resources</h5>
+<div class="flex flex-col gap-2">
+<a class="text-on-surface-variant/70 hover:text-secondary dark:hover:text-secondary-fixed transition-all hover:translate-x-1 duration-300 text-body-md font-body-md" href="#">API Documentation</a>
+<a class="text-on-surface-variant/70 hover:text-secondary dark:hover:text-secondary-fixed transition-all hover:translate-x-1 duration-300 text-body-md font-body-md" href="#">Sustainability</a>
+<a class="text-on-surface-variant/70 hover:text-secondary dark:hover:text-secondary-fixed transition-all hover:translate-x-1 duration-300 text-body-md font-body-md" href="#">Support Center</a>
+<a class="text-on-surface-variant/70 hover:text-secondary dark:hover:text-secondary-fixed transition-all hover:translate-x-1 duration-300 text-body-md font-body-md" href="#">File Converter</a>
+</div>
+</div>
+<div class="col-span-12 lg:col-span-4 space-y-6">
+<h5 class="font-label-caps text-on-surface font-bold">Legal &amp; Corporate</h5>
+<div class="flex flex-wrap gap-x-6 gap-y-2">
+<a class="text-on-surface-variant/70 hover:text-secondary transition-all text-body-md" href="#">Privacy Policy</a>
+<a class="text-on-surface-variant/70 hover:text-secondary transition-all text-body-md" href="#">Terms of Service</a>
+<a class="text-on-surface-variant/70 hover:text-secondary transition-all text-body-md" href="#">Shipping &amp; Returns</a>
+</div>
+<div class="pt-6 border-t border-outline-variant/30">
+<p class="text-on-surface-variant/50 text-[12px] font-body-md">© 2024 Bekaa3D Industrial Manufacturing. All rights reserved. Precision guaranteed.</p>
+</div>
+</div>
+</footer>
+<script>
+        // Micro-interactions for buttons and filters
+        document.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('mousedown', () => {
+                btn.classList.add('scale-95', 'opacity-80');
+            });
+            btn.addEventListener('mouseup', () => {
+                btn.classList.remove('scale-95', 'opacity-80');
+            });
+            btn.addEventListener('mouseleave', () => {
+                btn.classList.remove('scale-95', 'opacity-80');
+            });
+        });
+
+        // Search bar focus effect
+        const searchInput = document.querySelector('input[type="text"]');
+        if (searchInput) {
+            searchInput.addEventListener('focus', () => {
+                searchInput.parentElement.classList.add('border-primary');
+                searchInput.parentElement.classList.add('ring-2');
+                searchInput.parentElement.classList.add('ring-primary/20');
+            });
+            searchInput.addEventListener('blur', () => {
+                searchInput.parentElement.classList.remove('border-primary');
+                searchInput.parentElement.classList.remove('ring-2');
+                searchInput.parentElement.classList.remove('ring-primary/20');
+            });
+        }
+    </script>
+</body></html>

@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Bekaa3D Admin | Operations Console</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@600&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@100..900&family=Inter:wght@100..900&family=JetBrains+Mono:wght@100..900&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-primary-fixed": "#002204",
+                    "tertiary-container": "#b14b6f",
+                    "on-primary": "#ffffff",
+                    "inverse-primary": "#88d982",
+                    "background": "#f9f9ff",
+                    "surface-container-lowest": "#ffffff",
+                    "on-surface-variant": "#40493d",
+                    "on-secondary-container": "#437000",
+                    "inverse-surface": "#293040",
+                    "tertiary": "#923357",
+                    "error": "#ba1a1a",
+                    "error-container": "#ffdad6",
+                    "surface-container-highest": "#dce2f7",
+                    "on-error": "#ffffff",
+                    "secondary-fixed": "#b9f474",
+                    "tertiary-fixed-dim": "#ffb1c7",
+                    "secondary": "#3e6a00",
+                    "primary-fixed-dim": "#88d982",
+                    "surface": "#f9f9ff",
+                    "primary-fixed": "#a3f69c",
+                    "outline-variant": "#bfcaba",
+                    "primary": "#0d631b",
+                    "on-background": "#141b2b",
+                    "primary-container": "#2e7d32",
+                    "inverse-on-surface": "#edf0ff",
+                    "on-surface": "#141b2b",
+                    "secondary-fixed-dim": "#9ed75b",
+                    "tertiary-fixed": "#ffd9e2",
+                    "outline": "#707a6c",
+                    "on-tertiary": "#ffffff",
+                    "on-secondary": "#ffffff",
+                    "surface-container-high": "#e1e8fd",
+                    "on-primary-container": "#cbffc2",
+                    "surface-bright": "#f9f9ff",
+                    "on-secondary-fixed": "#0f2000",
+                    "on-primary-fixed-variant": "#005312",
+                    "on-error-container": "#93000a",
+                    "surface-variant": "#dce2f7",
+                    "on-secondary-fixed-variant": "#2e4f00",
+                    "surface-tint": "#1b6d24",
+                    "on-tertiary-fixed": "#3f001c",
+                    "secondary-container": "#b9f474",
+                    "on-tertiary-fixed-variant": "#7f2448",
+                    "on-tertiary-container": "#ffedf0",
+                    "surface-dim": "#d3daef",
+                    "surface-container-low": "#f1f3ff",
+                    "surface-container": "#e9edff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "max-width": "1440px",
+                    "gutter": "24px",
+                    "margin-desktop": "64px",
+                    "unit": "4px",
+                    "margin-mobile": "16px"
+            },
+            "fontFamily": {
+                    "headline-md": ["Hanken Grotesk"],
+                    "headline-lg-mobile": ["Hanken Grotesk"],
+                    "label-caps": ["JetBrains Mono"],
+                    "display": ["Hanken Grotesk"],
+                    "body-md": ["Inter"],
+                    "headline-lg": ["Hanken Grotesk"],
+                    "body-lg": ["Inter"]
+            },
+            "fontSize": {
+                    "headline-md": ["20px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                    "label-caps": ["12px", {"lineHeight": "1.0", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                    "display": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                    "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                    "headline-lg": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                    "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        
+        .blueprint-grid {
+            background-size: 40px 40px;
+            background-image: 
+                linear-gradient(to right, rgba(13, 99, 27, 0.05) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(13, 99, 27, 0.05) 1px, transparent 1px);
+        }
+
+        .glass-panel {
+            backdrop-filter: blur(20px);
+            background-color: rgba(255, 255, 255, 0.8);
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #bfcaba;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="bg-background font-body-md text-on-background antialiased custom-scrollbar">
+<!-- SideNavBar Shell -->
+<aside class="h-screen w-64 fixed left-0 top-0 bg-surface-container-lowest dark:bg-surface-dim border-r border-outline-variant dark:border-outline flex flex-col py-unit-margin-desktop z-50">
+<div class="px-6 mb-8">
+<div class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed">Bekaa3D</div>
+<div class="font-label-caps text-label-caps text-on-surface-variant mt-1">Admin Console</div>
+</div>
+<nav class="flex-1 px-4 space-y-1 overflow-y-auto custom-scrollbar">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant dark:text-on-surface-variant font-medium hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors group" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-body-md text-body-md">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant dark:text-on-surface-variant font-medium hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors group" href="#">
+<span class="material-symbols-outlined" data-icon="inventory_2">inventory_2</span>
+<span class="font-body-md text-body-md">Physical Products</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant dark:text-on-surface-variant font-medium hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors group" href="#">
+<span class="material-symbols-outlined" data-icon="deployed_code">deployed_code</span>
+<span class="font-body-md text-body-md">STL Files</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant dark:text-on-surface-variant font-medium hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors group" href="#">
+<span class="material-symbols-outlined" data-icon="category">category</span>
+<span class="font-body-md text-body-md">Categories</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant dark:text-on-surface-variant font-medium hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors group" href="#">
+<span class="material-symbols-outlined" data-icon="receipt_long">receipt_long</span>
+<span class="font-body-md text-body-md">Orders</span>
+</a>
+</nav>
+<div class="px-4 mt-auto space-y-1">
+<button class="w-full flex items-center justify-center gap-2 bg-primary-container text-on-primary-container font-label-caps text-label-caps py-3 px-4 rounded-lg hover:brightness-110 transition-all active:scale-95 mb-6">
+<span class="material-symbols-outlined" data-icon="add" style="font-variation-settings: 'FILL' 1;">add</span>
+                New Print Job
+            </button>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-primary dark:text-primary-fixed font-bold border-r-4 border-primary dark:border-primary-fixed bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="settings" style="font-variation-settings: 'FILL' 1;">settings</span>
+<span class="font-body-md text-body-md">Settings</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant font-medium hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="account_circle">account_circle</span>
+<span class="font-body-md text-body-md">Admin Profile</span>
+</a>
+</div>
+</aside>
+<!-- TopNavBar Shell -->
+<header class="fixed top-0 right-0 left-64 h-16 bg-surface/80 dark:bg-surface-dim/80 backdrop-blur-xl border-b border-outline-variant dark:border-outline flex items-center justify-between px-gutter z-40">
+<div class="flex items-center gap-4 flex-1">
+<div class="relative w-full max-w-md group">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" data-icon="search">search</span>
+<input class="w-full pl-10 pr-4 py-2 bg-surface-container-low border border-outline-variant rounded-full text-body-md focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none" placeholder="Search settings, commands, or jobs..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="p-2 hover:bg-surface-variant/50 dark:hover:bg-inverse-surface/50 rounded-full transition-colors relative">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="notifications">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-error rounded-full"></span>
+</button>
+<button class="p-2 hover:bg-surface-variant/50 dark:hover:bg-inverse-surface/50 rounded-full transition-colors">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="help">help</span>
+</button>
+<div class="h-8 w-[1px] bg-outline-variant mx-2"></div>
+<div class="flex items-center gap-3 pl-2 cursor-pointer hover:bg-surface-variant/50 p-1 rounded-lg transition-colors">
+<img class="w-8 h-8 rounded-full border-2 border-primary-fixed object-cover" data-alt="A professional headshot of a senior industrial administrator in a high-tech office environment. The person is wearing a clean, dark polo shirt with a subtle 3D-printing company logo. The background is softly blurred showing a futuristic lab with glowing additive manufacturing printers. The lighting is crisp, cool-toned, and sophisticated." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDovMnhpoKY13j5NaZsym4iWw9f22yV0NmyCq9_vOk2Q2Qc3GTElTN21EbdH3Ok73aHVomfgKbpPrbH7mH4vaTYfSXol65jHZQNZdapE3XZackHvqKXvMI0jLwcwqH-ptRl_HN-XdJGthafIaUMn6NFT1lwSKkBUXIAcYV12ohNstEqrQon6gEUW1aDnMV11Lv8Hz35CB7ZmEtfOTa74Mr0IyKLX-HD3Q4lEccvsJQo_U6K-VqXKxHrHA"/>
+<div class="hidden lg:block text-left">
+<p class="font-body-md text-sm font-bold text-on-surface">Alex Rivera</p>
+<p class="font-label-caps text-[10px] text-on-surface-variant">SUPER ADMIN</p>
+</div>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="ml-64 pt-16 min-h-screen blueprint-grid">
+<div class="max-width mx-auto p-gutter">
+<!-- Page Header -->
+<div class="flex items-end justify-between mb-8">
+<div>
+<nav class="flex items-center gap-2 text-on-surface-variant font-label-caps text-xs mb-2">
+<span>ADMIN</span>
+<span class="material-symbols-outlined text-xs" data-icon="chevron_right">chevron_right</span>
+<span class="text-primary">SETTINGS</span>
+</nav>
+<h1 class="font-headline-lg text-headline-lg text-on-surface">Console Operations</h1>
+<p class="text-on-surface-variant mt-1">Configure global parameters and precision control protocols for Bekaa3D.</p>
+</div>
+<div class="flex gap-3">
+<button class="px-6 py-2.5 border border-outline text-on-surface font-label-caps text-label-caps rounded-lg hover:bg-surface-container-high transition-all">
+                        DISCARD CHANGES
+                    </button>
+<button class="px-8 py-2.5 bg-primary text-on-primary font-label-caps text-label-caps rounded-lg shadow-lg shadow-primary/20 hover:scale-105 transition-all">
+                        SAVE CONFIGURATION
+                    </button>
+</div>
+</div>
+<!-- Settings Layout: Sidebar + Canvas -->
+<div class="grid grid-cols-12 gap-8 items-start">
+<!-- Settings Sidebar -->
+<nav class="col-span-3 space-y-1 sticky top-24">
+<a class="flex items-center justify-between w-full p-4 rounded-xl bg-white border border-primary text-primary font-bold shadow-sm transition-all group" href="#general">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined" data-icon="settings_applications">settings_applications</span>
+<span class="font-body-md">General Settings</span>
+</div>
+<span class="material-symbols-outlined text-sm opacity-0 group-hover:opacity-100 transition-opacity" data-icon="arrow_forward_ios">arrow_forward_ios</span>
+</a>
+<a class="flex items-center justify-between w-full p-4 rounded-xl border border-transparent text-on-surface-variant hover:bg-surface-container-high font-medium transition-all group" href="#company">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined" data-icon="business">business</span>
+<span class="font-body-md">Company Information</span>
+</div>
+</a>
+<a class="flex items-center justify-between w-full p-4 rounded-xl border border-transparent text-on-surface-variant hover:bg-surface-container-high font-medium transition-all group" href="#payment">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+<span class="font-body-md">Payment Methods</span>
+</div>
+</a>
+<a class="flex items-center justify-between w-full p-4 rounded-xl border border-transparent text-on-surface-variant hover:bg-surface-container-high font-medium transition-all group" href="#shipping">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined" data-icon="local_shipping">local_shipping</span>
+<span class="font-body-md">Shipping Options</span>
+</div>
+</a>
+<a class="flex items-center justify-between w-full p-4 rounded-xl border border-transparent text-on-surface-variant hover:bg-surface-container-high font-medium transition-all group" href="#roles">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined" data-icon="admin_panel_settings">admin_panel_settings</span>
+<span class="font-body-md">User Roles</span>
+</div>
+</a>
+<a class="flex items-center justify-between w-full p-4 rounded-xl border border-transparent text-on-surface-variant hover:bg-surface-container-high font-medium transition-all group" href="#security">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined" data-icon="security">security</span>
+<span class="font-body-md">Backup & Security</span>
+</div>
+</a>
+<div class="pt-4 pb-2 px-4 font-label-caps text-[10px] text-outline">COMMUNICATIONS</div>
+<a class="flex items-center justify-between w-full p-4 rounded-xl border border-transparent text-on-surface-variant hover:bg-surface-container-high font-medium transition-all group" href="#emails">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined" data-icon="mail">mail</span>
+<span class="font-body-md">Email Templates</span>
+</div>
+</a>
+<a class="flex items-center justify-between w-full p-4 rounded-xl border border-transparent text-on-surface-variant hover:bg-surface-container-high font-medium transition-all group" href="#whatsapp">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined" data-icon="chat">chat</span>
+<span class="font-body-md">WhatsApp Settings</span>
+</div>
+</a>
+</nav>
+<!-- Content Area (Bento Layout) -->
+<div class="col-span-9 space-y-8">
+<!-- General Settings Section -->
+<section class="grid grid-cols-1 md:grid-cols-2 gap-6" id="general">
+<div class="bg-white p-8 rounded-2xl border border-outline-variant shadow-sm col-span-2">
+<div class="flex items-start justify-between mb-6">
+<div>
+<h3 class="font-headline-md text-headline-md text-on-surface">General Configuration</h3>
+<p class="text-on-surface-variant text-sm">Identity and global brand identifiers.</p>
+</div>
+<span class="material-symbols-outlined text-primary-container bg-primary-fixed p-2 rounded-lg" data-icon="info">info</span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+<div class="space-y-6">
+<div class="space-y-1.5">
+<label class="font-label-caps text-label-caps text-on-surface-variant block">SITE TITLE</label>
+<input class="w-full px-4 py-3 bg-surface-container-low border border-outline-variant rounded-lg font-body-md focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all" type="text" value="Bekaa3D Operations Console"/>
+</div>
+<div class="space-y-1.5">
+<label class="font-label-caps text-label-caps text-on-surface-variant block">TAGLINE</label>
+<input class="w-full px-4 py-3 bg-surface-container-low border border-outline-variant rounded-lg font-body-md focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all" type="text" value="Precision additive manufacturing at scale."/>
+</div>
+</div>
+<div class="space-y-3">
+<label class="font-label-caps text-label-caps text-on-surface-variant block">ADMIN CONSOLE LOGO</label>
+<div class="border-2 border-dashed border-outline-variant rounded-xl p-6 flex flex-col items-center justify-center bg-surface-container-low hover:border-primary transition-colors cursor-pointer group">
+<span class="material-symbols-outlined text-4xl text-outline-variant group-hover:text-primary transition-colors" data-icon="upload_file">upload_file</span>
+<p class="text-sm font-medium mt-2">Click to upload or drag & drop</p>
+<p class="text-xs text-on-surface-variant">SVG, PNG, or JPG (max. 2MB)</p>
+</div>
+</div>
+</div>
+</div>
+<!-- System Preferences Card -->
+<div class="bg-white p-8 rounded-2xl border border-outline-variant shadow-sm">
+<h4 class="font-label-caps text-label-caps text-primary mb-4">SYSTEM PREFERENCES</h4>
+<div class="space-y-4">
+<div class="flex items-center justify-between py-2 border-b border-outline-variant">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="language">language</span>
+<span class="font-body-md">Default Language</span>
+</div>
+<select class="bg-transparent border-none font-bold text-on-surface focus:ring-0 cursor-pointer">
+<option>English (US)</option>
+<option>Arabic</option>
+<option>French</option>
+</select>
+</div>
+<div class="flex items-center justify-between py-2 border-b border-outline-variant">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="schedule">schedule</span>
+<span class="font-body-md">Timezone</span>
+</div>
+<select class="bg-transparent border-none font-bold text-on-surface focus:ring-0 cursor-pointer">
+<option>(GMT+03:00) Beirut</option>
+<option>(GMT+00:00) London</option>
+</select>
+</div>
+<div class="flex items-center justify-between py-2">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="dark_mode">dark_mode</span>
+<span class="font-body-md">Console Theme</span>
+</div>
+<div class="flex bg-surface-container p-1 rounded-full">
+<button class="px-3 py-1 bg-white text-primary rounded-full shadow-sm text-xs font-bold">LIGHT</button>
+<button class="px-3 py-1 text-on-surface-variant text-xs font-bold">DARK</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Contact Quick Actions -->
+<div class="bg-white p-8 rounded-2xl border border-outline-variant shadow-sm">
+<h4 class="font-label-caps text-label-caps text-primary mb-4">CONTACT CHANNELS</h4>
+<div class="space-y-4">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="alternate_email">alternate_email</span>
+</div>
+<div class="flex-1">
+<p class="text-xs font-label-caps text-on-surface-variant">SUPPORT EMAIL</p>
+<p class="font-body-md font-medium">ops@bekaa3d.com</p>
+</div>
+<button class="text-primary material-symbols-outlined" data-icon="edit_square">edit_square</button>
+</div>
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="call">call</span>
+</div>
+<div class="flex-1">
+<p class="text-xs font-label-caps text-on-surface-variant">PHONE</p>
+<p class="font-body-md font-medium">+961 71 000 000</p>
+</div>
+<button class="text-primary material-symbols-outlined" data-icon="edit_square">edit_square</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Homepage Banner & CTA -->
+<section class="bg-white p-8 rounded-2xl border border-outline-variant shadow-sm" id="banner">
+<div class="flex items-center justify-between mb-8">
+<div>
+<h3 class="font-headline-md text-headline-md text-on-surface">Homepage Hero Configuration</h3>
+<p class="text-on-surface-variant text-sm">Update front-facing visual messaging.</p>
+</div>
+<button class="flex items-center gap-2 text-primary font-bold text-sm">
+<span class="material-symbols-outlined" data-icon="preview">preview</span>
+                                LIVE PREVIEW
+                            </button>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+<div class="lg:col-span-1">
+<div class="w-full aspect-video rounded-xl bg-cover bg-center border border-outline-variant mb-3" data-alt="A high-contrast cinematic shot of a modern 3D printing nozzle depositing layers of translucent green resin onto a metallic plate. The lighting is dramatic, highlighting the microscopic precision and technical complexity. The atmosphere is professional, clean, and futuristic, following a light-mode architectural aesthetic with subtle green accents." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDdiNyWPUvQ5FNsvAug378u-kNPbkViJLHWZzhKXKIAlgcfnaOhznN272Iy8QWZa606yc3qbb-RkhvH_XWTRYl9Y8DyfTNqDs7-hzgYa5aOjDvtXbmUTuS1tXkrvXFq9p1al3xSIFjjaxuQvJZsQnZUtY4-DcJhP8SymMdRu4I_ZIyy4NC4L6tIuciAsUDOim3gDHzfYv7MqhIb22cteR-DLzCc2xQsxQApX1fSnptlt0_NY3S7FOPU-Q')"></div>
+<button class="w-full py-2 bg-surface-container border border-outline-variant rounded-lg text-xs font-bold hover:bg-surface-container-high transition-colors">REPLACE HERO IMAGE</button>
+</div>
+<div class="lg:col-span-2 space-y-4">
+<div class="space-y-1.5">
+<label class="font-label-caps text-label-caps text-on-surface-variant block">MAIN CTA TEXT</label>
+<input class="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-lg font-body-md outline-none" type="text" value="Start Your Production Run"/>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div class="space-y-1.5">
+<label class="font-label-caps text-label-caps text-on-surface-variant block">LINK TYPE</label>
+<select class="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-lg font-body-md outline-none">
+<option>Direct Link (Internal)</option>
+<option>External URL</option>
+</select>
+</div>
+<div class="space-y-1.5">
+<label class="font-label-caps text-label-caps text-on-surface-variant block">DESTINATION</label>
+<input class="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-lg font-body-md outline-none" type="text" value="/order/new"/>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Payment & Checkout -->
+<section class="bg-white p-8 rounded-2xl border border-outline-variant shadow-sm" id="payment">
+<h3 class="font-headline-md text-headline-md text-on-surface mb-6">Payment Gateway Integration</h3>
+<div class="space-y-4">
+<!-- Payment Row 1 -->
+<div class="flex items-center justify-between p-4 bg-surface-container-low rounded-xl border border-outline-variant/30">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 bg-white rounded-lg flex items-center justify-center border border-outline-variant">
+<span class="material-symbols-outlined text-primary" data-icon="credit_card">credit_card</span>
+</div>
+<div>
+<p class="font-bold text-on-surface">Stripe Payments</p>
+<p class="text-xs text-on-surface-variant">Global credit card & local wallet processing.</p>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<span class="text-xs font-label-caps text-primary bg-primary-fixed px-2 py-1 rounded">LIVE</span>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-outline-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+</div>
+<!-- Payment Row 2 -->
+<div class="flex items-center justify-between p-4 bg-surface-container-low rounded-xl border border-outline-variant/30 opacity-70">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 bg-white rounded-lg flex items-center justify-center border border-outline-variant">
+<span class="material-symbols-outlined text-[#003087]" data-icon="account_balance_wallet">account_balance_wallet</span>
+</div>
+<div>
+<p class="font-bold text-on-surface">PayPal Express</p>
+<p class="text-xs text-on-surface-variant">Quick checkout with customer PayPal accounts.</p>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<span class="text-xs font-label-caps text-on-surface-variant bg-surface-container px-2 py-1 rounded">INACTIVE</span>
+<label class="relative inline-flex items-center cursor-pointer">
+<input class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-outline-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+</div>
+</div>
+</section>
+<!-- Security & Backups -->
+<section class="grid grid-cols-1 md:grid-cols-3 gap-6" id="security">
+<div class="bg-white p-8 rounded-2xl border border-outline-variant shadow-sm md:col-span-2">
+<h3 class="font-headline-md text-headline-md text-on-surface mb-6">Security Protocols</h3>
+<div class="grid grid-cols-2 gap-8">
+<div class="space-y-6">
+<div>
+<label class="font-label-caps text-label-caps text-on-surface-variant mb-2 block">2FA ENFORCEMENT</label>
+<div class="flex gap-2">
+<button class="flex-1 py-2 rounded-lg bg-primary-container text-on-primary-container text-xs font-bold">ALL USERS</button>
+<button class="flex-1 py-2 rounded-lg bg-surface-container text-on-surface-variant text-xs font-bold">ADMINS ONLY</button>
+</div>
+</div>
+<div>
+<label class="font-label-caps text-label-caps text-on-surface-variant mb-2 block">AUTO-BACKUP FREQUENCY</label>
+<select class="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-lg text-sm">
+<option>Every 6 Hours</option>
+<option>Daily at 03:00</option>
+<option>Weekly</option>
+</select>
+</div>
+</div>
+<div class="bg-surface-container-low p-4 rounded-xl flex flex-col items-center justify-center text-center">
+<div class="w-12 h-12 bg-white rounded-full flex items-center justify-center mb-3 shadow-sm border border-outline-variant">
+<span class="material-symbols-outlined text-primary animate-pulse" data-icon="cloud_done" style="font-variation-settings: 'FILL' 1;">cloud_done</span>
+</div>
+<p class="font-bold text-sm">Last Backup: Successful</p>
+<p class="text-[10px] text-on-surface-variant mt-1 uppercase font-label-caps">22 OCT 2023 - 03:00 AM</p>
+<button class="mt-4 px-4 py-2 border border-primary text-primary font-label-caps text-[10px] rounded-full hover:bg-primary-fixed transition-colors">FORCE NEW BACKUP</button>
+</div>
+</div>
+</div>
+<div class="bg-surface-container-high p-8 rounded-2xl border border-outline-variant shadow-sm flex flex-col">
+<h4 class="font-label-caps text-label-caps text-primary mb-6">ACTIVE SESSIONS</h4>
+<div class="space-y-4 flex-1">
+<div class="flex items-start gap-3">
+<span class="material-symbols-outlined text-primary text-xl" data-icon="desktop_windows">desktop_windows</span>
+<div>
+<p class="text-xs font-bold">Windows 11 • Chrome</p>
+<p class="text-[10px] text-on-surface-variant">Beirut, LB • Current</p>
+</div>
+</div>
+<div class="flex items-start gap-3 opacity-60">
+<span class="material-symbols-outlined text-on-surface-variant text-xl" data-icon="smartphone">smartphone</span>
+<div>
+<p class="text-xs font-bold">iPhone 14 Pro • Safari</p>
+<p class="text-[10px] text-on-surface-variant">Tripoli, LB • 2h ago</p>
+</div>
+</div>
+</div>
+<button class="w-full mt-6 py-2 bg-error-container text-on-error-container font-label-caps text-[10px] rounded-lg">TERMINATE ALL SESSIONS</button>
+</div>
+</section>
+</div>
+</div>
+</div>
+</main>
+<!-- Floating Toast Feedback (Hidden by default) -->
+<div class="fixed bottom-8 right-8 bg-inverse-surface text-inverse-on-surface px-6 py-4 rounded-xl shadow-2xl flex items-center gap-4 translate-y-24 transition-transform duration-300 z-50" id="toast">
+<span class="material-symbols-outlined text-primary-fixed" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<div>
+<p class="font-bold text-sm">Changes synchronized</p>
+<p class="text-xs opacity-80">Configuration has been applied to production server.</p>
+</div>
+<button class="ml-4 material-symbols-outlined text-sm" data-icon="close" onclick="hideToast()">close</button>
+</div>
+<script>
+        function showToast() {
+            const toast = document.getElementById('toast');
+            toast.classList.remove('translate-y-24');
+        }
+
+        function hideToast() {
+            const toast = document.getElementById('toast');
+            toast.classList.add('translate-y-24');
+        }
+
+        // Auto-show toast on save button click for demonstration
+        document.querySelector('button.bg-primary').addEventListener('click', () => {
+            showToast();
+            setTimeout(hideToast, 4000);
+        });
+
+        // Simple Smooth Scroll
+        document.querySelectorAll('nav a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    window.scrollTo({
+                        top: target.offsetTop - 100,
+                        behavior: 'smooth'
+                    });
+                    
+                    // Update active state
+                    document.querySelectorAll('nav a').forEach(a => {
+                        a.classList.remove('bg-white', 'border-primary', 'text-primary', 'font-bold', 'shadow-sm');
+                        a.classList.add('border-transparent', 'text-on-surface-variant', 'font-medium');
+                    });
+                    this.classList.add('bg-white', 'border-primary', 'text-primary', 'font-bold', 'shadow-sm');
+                    this.classList.remove('border-transparent', 'text-on-surface-variant', 'font-medium');
+                }
+            });
+        });
+    </script>
+</body></html>

@@ -18,16 +18,25 @@ describe("Toast", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
+  // Stitch toast (COMPONENT-SPECS §47): one dark inverse surface for every
+  // variant; the variant is carried by a decorative icon of a different
+  // shape (never colour alone) plus the message text.
   it.each([
-    ["success", "bg-success-bg"],
-    ["error", "bg-danger-bg"],
-    ["info", "bg-info-bg"],
+    ["success", "check-circle", "text-primary-fixed"],
+    ["error", "error", "text-error-container"],
+    ["info", "info", "text-info-container"],
   ] as const)(
-    "applies the mapped semantic token background class for the '%s' variant",
-    (variant, expectedClassFragment) => {
+    "renders the '%s' variant on the inverse surface with its own decorative icon",
+    (variant, iconName, iconColour) => {
       render(<Toast message="Variant check" variant={variant} />);
 
-      expect(screen.getByRole("status").className).toContain(expectedClassFragment);
+      const toast = screen.getByRole("status");
+      expect(toast).toHaveAttribute("data-variant", variant);
+      expect(toast.className).toContain("bg-inverse-surface");
+      const icon = toast.querySelector(`svg[data-icon="${iconName}"]`);
+      expect(icon).not.toBeNull();
+      expect(icon).toHaveAttribute("aria-hidden", "true");
+      expect(icon).toHaveClass(iconColour);
     }
   );
 

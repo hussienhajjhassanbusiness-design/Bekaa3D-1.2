@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Checkout | Bekaa3D Precision Engineering</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700;800&family=Inter:wght@400;500&family=JetBrains+Mono:wght@600&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@100..900&family=Inter:wght@100..900&family=JetBrains+Mono:wght@100..900&display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-primary-fixed": "#002204",
+                        "on-background": "#141b2b",
+                        "inverse-on-surface": "#edf0ff",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-dim": "#d3daef",
+                        "primary-fixed-dim": "#88d982",
+                        "on-secondary": "#ffffff",
+                        "surface-container-high": "#e1e8fd",
+                        "surface-container": "#e9edff",
+                        "surface-container-highest": "#dce2f7",
+                        "error-container": "#ffdad6",
+                        "surface-tint": "#1b6d24",
+                        "surface-bright": "#f9f9ff",
+                        "on-tertiary-fixed-variant": "#7f2448",
+                        "error": "#ba1a1a",
+                        "surface": "#f9f9ff",
+                        "outline-variant": "#bfcaba",
+                        "inverse-primary": "#88d982",
+                        "on-tertiary-fixed": "#3f001c",
+                        "on-primary-container": "#cbffc2",
+                        "tertiary-container": "#b14b6f",
+                        "primary-container": "#2e7d32",
+                        "primary": "#0d631b",
+                        "on-secondary-fixed": "#0f2000",
+                        "tertiary": "#923357",
+                        "background": "#f9f9ff",
+                        "on-tertiary-container": "#ffedf0",
+                        "on-surface-variant": "#40493d",
+                        "tertiary-fixed-dim": "#ffb1c7",
+                        "secondary-fixed": "#b9f474",
+                        "on-primary": "#ffffff",
+                        "secondary": "#3e6a00",
+                        "on-secondary-fixed-variant": "#2e4f00",
+                        "secondary-container": "#b9f474",
+                        "outline": "#707a6c",
+                        "tertiary-fixed": "#ffd9e2",
+                        "on-secondary-container": "#437000",
+                        "inverse-surface": "#293040",
+                        "surface-container-low": "#f1f3ff",
+                        "surface-variant": "#dce2f7",
+                        "secondary-fixed-dim": "#9ed75b",
+                        "primary-fixed": "#a3f69c",
+                        "on-tertiary": "#ffffff",
+                        "on-error": "#ffffff",
+                        "on-surface": "#141b2b",
+                        "on-error-container": "#93000a",
+                        "on-primary-fixed-variant": "#005312"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "gutter": "24px",
+                        "margin-desktop": "64px",
+                        "max-width": "1440px",
+                        "margin-mobile": "16px",
+                        "unit": "4px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Hanken Grotesk"],
+                        "body-lg": ["Inter"],
+                        "body-md": ["Inter"],
+                        "headline-md": ["Hanken Grotesk"],
+                        "label-caps": ["JetBrains Mono"],
+                        "display": ["Hanken Grotesk"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                        "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                        "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                        "headline-md": ["20px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                        "label-caps": ["12px", {"lineHeight": "1.0", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "display": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "800"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-panel {
+            backdrop-filter: blur(20px);
+            background: rgba(255, 255, 255, 0.8);
+        }
+        input:focus {
+            outline: none;
+            border-color: #0d631b !important;
+            box-shadow: 0 0 0 2px rgba(13, 99, 27, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body-md selection:bg-primary-fixed selection:text-on-primary-fixed">
+<!-- TopNavBar (Simplified for Checkout focus) -->
+<header class="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-xl border-b border-outline-variant/30">
+<div class="max-w-[1440px] mx-auto px-margin-desktop flex justify-between items-center h-16">
+<div class="font-display text-headline-md font-extrabold text-primary">Bekaa3D</div>
+<div class="flex items-center gap-4 text-on-surface-variant font-label-caps uppercase tracking-wider">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">lock</span>
+                Secure Checkout
+            </div>
+</div>
+</header>
+<main class="pt-24 pb-16 max-w-[1440px] mx-auto px-margin-desktop">
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-12">
+<!-- Left Side: Form Progress -->
+<div class="lg:col-span-7 space-y-12">
+<!-- Section 1: Shipping -->
+<section>
+<div class="flex items-center gap-4 mb-8">
+<span class="w-8 h-8 rounded-full bg-primary text-on-primary flex items-center justify-center font-label-caps">1</span>
+<h2 class="font-headline-lg text-headline-lg">Shipping Information</h2>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<div class="md:col-span-2">
+<label class="font-label-caps text-on-surface-variant mb-2 block uppercase">Full Name</label>
+<input class="w-full bg-white border border-outline-variant rounded-lg p-4 font-body-md focus:border-primary transition-all" placeholder="Dr. Elena Vance" type="text"/>
+</div>
+<div class="md:col-span-2">
+<label class="font-label-caps text-on-surface-variant mb-2 block uppercase">Shipping Address</label>
+<input class="w-full bg-white border border-outline-variant rounded-lg p-4 font-body-md" placeholder="123 Precision Way, Industrial Park" type="text"/>
+</div>
+<div>
+<label class="font-label-caps text-on-surface-variant mb-2 block uppercase">City</label>
+<input class="w-full bg-white border border-outline-variant rounded-lg p-4 font-body-md" placeholder="Zurich" type="text"/>
+</div>
+<div>
+<label class="font-label-caps text-on-surface-variant mb-2 block uppercase">Country</label>
+<select class="w-full bg-white border border-outline-variant rounded-lg p-4 font-body-md appearance-none">
+<option>Switzerland</option>
+<option>Germany</option>
+<option>United States</option>
+<option>Japan</option>
+</select>
+</div>
+<div>
+<label class="font-label-caps text-on-surface-variant mb-2 block uppercase">Postal Code</label>
+<input class="w-full bg-white border border-outline-variant rounded-lg p-4 font-body-md" placeholder="8001" type="text"/>
+</div>
+</div>
+</section>
+<!-- Section 2: Billing -->
+<section>
+<div class="flex items-center gap-4 mb-8">
+<span class="w-8 h-8 rounded-full border-2 border-primary text-primary flex items-center justify-center font-label-caps">2</span>
+<h2 class="font-headline-lg text-headline-lg">Billing Details</h2>
+</div>
+<label class="flex items-center gap-3 cursor-pointer group">
+<input checked="" class="w-5 h-5 rounded border-outline-variant text-primary focus:ring-primary" type="checkbox"/>
+<span class="font-body-md text-on-surface-variant group-hover:text-on-surface transition-colors">Billing address is the same as shipping</span>
+</label>
+</section>
+<!-- Section 3: Payment -->
+<section>
+<div class="flex items-center gap-4 mb-8">
+<span class="w-8 h-8 rounded-full border-2 border-primary text-primary flex items-center justify-center font-label-caps">3</span>
+<h2 class="font-headline-lg text-headline-lg">Payment Method</h2>
+</div>
+<div class="space-y-4">
+<!-- Credit Card Option -->
+<div class="border-2 border-primary bg-primary-fixed/5 rounded-xl p-6 relative">
+<div class="flex justify-between items-center mb-6">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">credit_card</span>
+<span class="font-headline-md text-headline-md">Credit Card</span>
+</div>
+<div class="flex gap-2">
+<span class="material-symbols-outlined text-on-surface-variant opacity-50">branding_watermark</span>
+<span class="material-symbols-outlined text-on-surface-variant opacity-50">payments</span>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div class="col-span-2">
+<label class="font-label-caps text-on-surface-variant mb-2 block uppercase">Card Number</label>
+<div class="relative">
+<input class="w-full bg-white border border-outline-variant rounded-lg p-4 font-body-md" placeholder="0000 0000 0000 0000" type="text"/>
+<span class="absolute right-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-outline">lock</span>
+</div>
+</div>
+<div>
+<label class="font-label-caps text-on-surface-variant mb-2 block uppercase">Expiry Date</label>
+<input class="w-full bg-white border border-outline-variant rounded-lg p-4 font-body-md" placeholder="MM / YY" type="text"/>
+</div>
+<div>
+<label class="font-label-caps text-on-surface-variant mb-2 block uppercase">CVC</label>
+<input class="w-full bg-white border border-outline-variant rounded-lg p-4 font-body-md" placeholder="***" type="password"/>
+</div>
+</div>
+</div>
+<!-- PayPal Option -->
+<div class="border border-outline-variant rounded-xl p-6 flex justify-between items-center hover:border-primary cursor-pointer transition-all">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-on-surface-variant">account_balance_wallet</span>
+<span class="font-headline-md text-headline-md text-on-surface-variant">PayPal</span>
+</div>
+<span class="material-symbols-outlined text-outline">open_in_new</span>
+</div>
+</div>
+</section>
+</div>
+<!-- Right Side: Sidebar Order Summary -->
+<div class="lg:col-span-5">
+<div class="sticky top-24 space-y-6">
+<div class="bg-white border border-outline-variant rounded-2xl p-8 shadow-sm">
+<h3 class="font-headline-lg text-headline-lg mb-8">Order Summary</h3>
+<!-- Item List -->
+<div class="space-y-6 mb-8">
+<div class="flex gap-4">
+<div class="w-20 h-20 bg-surface-container rounded-lg overflow-hidden flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="A high-resolution, close-up photograph of a professional 3D printing filament spool featuring NX7 Ultra-Poly Carbon material. The filament has a deep matte black, industrial texture. It is set against a clean, minimalist white background with soft laboratory lighting. The packaging shows precision engineering branding in a sophisticated green and white palette, evoking a sense of high-performance manufacturing quality." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBYZLTJsYRJummIEo3h-w87dxTc9GqCZ4OP3xaTZv4c7uTiAd1hRslUyESPOW1jru4fhfZRKbIglSngziUAKJIeFpKBgjKwLaYSc6tuGTD7Yq1ct9idr9VeWMIY3srFtvhRGVTJYbnuQc-wrw4q-Wv7WiQ9-8V3DdAebyWfJHBjUaYx4_ePrOFz14kCwvxCOLAaWYTO2xHWlgYh_ewSSNqR0iLyGe09Lqi7nl-CZLSJ7trduwAWufi_Lg"/>
+</div>
+<div class="flex-grow">
+<div class="flex justify-between items-start">
+<h4 class="font-headline-md text-headline-md text-on-background">NX7 Ultra-Poly Carbon Filament</h4>
+<span class="font-label-caps text-primary">$89.00</span>
+</div>
+<p class="text-on-surface-variant text-sm mt-1">1.75mm • 1kg Spool</p>
+</div>
+</div>
+<div class="flex gap-4">
+<div class="w-20 h-20 bg-surface-container rounded-lg overflow-hidden flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="A detailed 3D technical rendering of a complex Planetary Gear System, displayed as a digital CAD blueprint. The gears are semi-transparent with glowing green edges to signify precision and engineering accuracy. The background is a soft, light-mode gray gradient, highlighting the intricate mechanical layers and fine details of the STL file's geometry. The overall aesthetic is clean, professional, and tech-forward." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDcMRVhEQLBtczFIdR66iGnojgfCLKo-sGB_5PYOCa6Z-z_pI4clTmLoVPU4eq2ezd4BFv6YjwhvEBumx_69COkk7SjdfdFNOWcwzdi2DURJAxuUnrRYqBtgvqwvhNnY-4LJti2prZe0d0C91j4opb_OKb5hHLWKx1QyeMHaJNa00Ayv3EyC5HTAOJzLj6iWOxNJ0uqiJV0JHO3yKl0m0Q1izxg2Scx8v4ri0lmVR68sbpKf04cTGgesg"/>
+</div>
+<div class="flex-grow">
+<div class="flex justify-between items-start">
+<h4 class="font-headline-md text-headline-md text-on-background">Planetary Gear System STL</h4>
+<span class="font-label-caps text-primary">$24.00</span>
+</div>
+<p class="text-on-surface-variant text-sm mt-1">High-Precision Digital Model</p>
+</div>
+</div>
+</div>
+<!-- Price Calculations -->
+<div class="border-t border-outline-variant pt-6 space-y-3">
+<div class="flex justify-between text-on-surface-variant">
+<span>Subtotal</span>
+<span class="font-label-caps">$113.00</span>
+</div>
+<div class="flex justify-between text-on-surface-variant">
+<span>Shipping (Express)</span>
+<span class="font-label-caps text-secondary-container bg-on-secondary-container/10 px-2 rounded">FREE</span>
+</div>
+<div class="flex justify-between text-on-surface-variant">
+<span>Estimated Tax</span>
+<span class="font-label-caps">$9.04</span>
+</div>
+<div class="flex justify-between items-end pt-4">
+<span class="font-headline-lg text-headline-lg">Total Due</span>
+<span class="font-display text-headline-lg text-primary">$122.04</span>
+</div>
+</div>
+<!-- CTA -->
+<button class="w-full mt-8 bg-primary hover:bg-primary-container text-on-primary font-label-caps py-5 rounded-xl transition-all shadow-lg hover:shadow-primary/20 uppercase tracking-widest flex items-center justify-center gap-3">
+                            Complete Purchase
+                            <span class="material-symbols-outlined">arrow_forward</span>
+</button>
+<p class="text-center text-xs text-on-surface-variant mt-6 px-4">
+                            By clicking 'Complete Purchase', you agree to Bekaa3D's <a class="underline" href="#">Terms of Service</a> and <a class="underline" href="#">Privacy Policy</a>.
+                        </p>
+</div>
+<!-- Trust Badges -->
+<div class="grid grid-cols-3 gap-4">
+<div class="bg-white/50 border border-outline-variant rounded-xl p-4 flex flex-col items-center text-center gap-2">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">verified_user</span>
+<span class="text-[10px] font-label-caps text-on-surface-variant uppercase">SSL Secure</span>
+</div>
+<div class="bg-white/50 border border-outline-variant rounded-xl p-4 flex flex-col items-center text-center gap-2">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">encrypted</span>
+<span class="text-[10px] font-label-caps text-on-surface-variant uppercase">256-Bit</span>
+</div>
+<div class="bg-white/50 border border-outline-variant rounded-xl p-4 flex flex-col items-center text-center gap-2">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">workspace_premium</span>
+<span class="text-[10px] font-label-caps text-on-surface-variant uppercase">Quality</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Footer -->
+<footer class="bg-surface-container-lowest border-t border-outline-variant w-full py-16">
+<div class="max-w-[1440px] mx-auto px-margin-desktop grid grid-cols-1 md:grid-cols-4 gap-gutter">
+<div class="md:col-span-1">
+<div class="font-display text-headline-md font-bold text-on-surface mb-4">Bekaa3D</div>
+<p class="text-on-surface-variant text-sm">Precision in every layer. Advanced additive manufacturing solutions for the next industrial era.</p>
+</div>
+<div class="flex flex-col gap-3">
+<h5 class="font-label-caps text-primary uppercase mb-2">Company</h5>
+<a class="text-on-surface-variant hover:text-primary transition-all" href="#">About Us</a>
+<a class="text-on-surface-variant hover:text-primary transition-all" href="#">Contact</a>
+</div>
+<div class="flex flex-col gap-3">
+<h5 class="font-label-caps text-primary uppercase mb-2">Support</h5>
+<a class="text-on-surface-variant hover:text-primary transition-all" href="#">Shipping Info</a>
+<a class="text-on-surface-variant hover:text-primary transition-all" href="#">Returns</a>
+</div>
+<div class="flex flex-col gap-3">
+<h5 class="font-label-caps text-primary uppercase mb-2">Legal</h5>
+<a class="text-on-surface-variant hover:text-primary transition-all" href="#">Privacy Policy</a>
+<a class="text-on-surface-variant hover:text-primary transition-all" href="#">Terms of Service</a>
+</div>
+</div>
+<div class="max-w-[1440px] mx-auto px-margin-desktop mt-16 pt-8 border-t border-outline-variant/30 flex justify-between items-center text-xs text-on-surface-variant uppercase font-label-caps">
+<span>© 2024 Bekaa3D. Precision in every layer.</span>
+<div class="flex gap-4">
+<span class="material-symbols-outlined text-sm">language</span>
+<span>English (CH)</span>
+</div>
+</div>
+</footer>
+<script>
+        // Micro-interactions for form focus
+        document.querySelectorAll('input, select').forEach(el => {
+            el.addEventListener('focus', () => {
+                el.parentElement.classList.add('scale-[1.01]');
+                el.parentElement.style.transition = 'transform 0.2s ease-out';
+            });
+            el.addEventListener('blur', () => {
+                el.parentElement.classList.remove('scale-[1.01]');
+            });
+        });
+    </script>
+</body></html>

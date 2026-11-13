@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Upload Physical Product | Bekaa3D Admin</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Hanken+Grotesk:wght@600;700;800&family=JetBrains+Mono:wght@600&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@100..900&family=Inter:wght@100..900&family=JetBrains+Mono:wght@100..900&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "inverse-surface": "#293040",
+                    "tertiary-container": "#b14b6f",
+                    "background": "#f9f9ff",
+                    "surface-bright": "#f9f9ff",
+                    "secondary-container": "#b9f474",
+                    "on-primary": "#ffffff",
+                    "secondary-fixed": "#b9f474",
+                    "surface-dim": "#d3daef",
+                    "on-surface-variant": "#40493d",
+                    "tertiary-fixed-dim": "#ffb1c7",
+                    "on-secondary-fixed": "#0f2000",
+                    "on-background": "#141b2b",
+                    "surface-tint": "#1b6d24",
+                    "on-tertiary-fixed": "#3f001c",
+                    "primary-fixed-dim": "#88d982",
+                    "on-error-container": "#93000a",
+                    "surface-container-highest": "#dce2f7",
+                    "primary-container": "#2e7d32",
+                    "on-primary-container": "#cbffc2",
+                    "surface-container-high": "#e1e8fd",
+                    "on-tertiary-fixed-variant": "#7f2448",
+                    "on-primary-fixed": "#002204",
+                    "secondary": "#3e6a00",
+                    "surface-variant": "#dce2f7",
+                    "error-container": "#ffdad6",
+                    "surface": "#f9f9ff",
+                    "on-tertiary": "#ffffff",
+                    "surface-container-low": "#f1f3ff",
+                    "secondary-fixed-dim": "#9ed75b",
+                    "primary-fixed": "#a3f69c",
+                    "tertiary-fixed": "#ffd9e2",
+                    "surface-container-lowest": "#ffffff",
+                    "outline-variant": "#bfcaba",
+                    "outline": "#707a6c",
+                    "primary": "#0d631b",
+                    "on-secondary": "#ffffff",
+                    "on-secondary-container": "#437000",
+                    "on-primary-fixed-variant": "#005312",
+                    "on-error": "#ffffff",
+                    "tertiary": "#923357",
+                    "inverse-primary": "#88d982",
+                    "inverse-on-surface": "#edf0ff",
+                    "error": "#ba1a1a",
+                    "surface-container": "#e9edff",
+                    "on-secondary-fixed-variant": "#2e4f00",
+                    "on-tertiary-container": "#ffedf0",
+                    "on-surface": "#141b2b"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "unit": "4px",
+                    "margin-desktop": "64px",
+                    "max-width": "1440px",
+                    "margin-mobile": "16px",
+                    "gutter": "24px"
+            },
+            "fontFamily": {
+                    "body-md": ["Inter"],
+                    "headline-md": ["Hanken Grotesk"],
+                    "headline-lg": ["Hanken Grotesk"],
+                    "display": ["Hanken Grotesk"],
+                    "headline-lg-mobile": ["Hanken Grotesk"],
+                    "body-lg": ["Inter"],
+                    "label-caps": ["JetBrains Mono"]
+            },
+            "fontSize": {
+                    "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                    "headline-md": ["20px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                    "headline-lg": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                    "display": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                    "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                    "label-caps": ["12px", {"lineHeight": "1.0", "letterSpacing": "0.05em", "fontWeight": "600"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .blueprint-grid {
+            background-image: 
+                linear-gradient(to right, rgba(13, 99, 27, 0.05) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(13, 99, 27, 0.05) 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(13, 99, 27, 0.1);
+        }
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: #2e7d32 !important;
+            box-shadow: 0 0 0 2px rgba(46, 125, 50, 0.2);
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #dce2f7;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body-md blueprint-grid min-h-screen">
+<!-- Sidebar Navigation -->
+<aside class="h-screen w-64 fixed left-0 top-0 flex flex-col py-8 px-6 border-r border-outline-variant bg-surface-container-lowest z-50">
+<div class="mb-10">
+<h1 class="font-display text-headline-md text-primary font-extrabold tracking-tight">Bekaa3D</h1>
+<p class="font-label-caps text-[10px] text-outline mt-1 uppercase">Engineering Precision</p>
+</div>
+<nav class="flex-1 space-y-2 custom-scrollbar overflow-y-auto">
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors rounded-lg group" href="#">
+<span class="material-symbols-outlined text-outline group-hover:text-primary">dashboard</span>
+<span class="font-medium">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-primary font-bold border-r-4 border-primary bg-surface-container-low rounded-lg" href="#">
+<span class="material-symbols-outlined">shopping_bag</span>
+<span>Products</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors rounded-lg group" href="#">
+<span class="material-symbols-outlined text-outline group-hover:text-primary">deployed_code</span>
+<span class="font-medium">STL Models</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors rounded-lg group" href="#">
+<span class="material-symbols-outlined text-outline group-hover:text-primary">account_circle</span>
+<span class="font-medium">Customers</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors rounded-lg group" href="#">
+<span class="material-symbols-outlined text-outline group-hover:text-primary">rate_review</span>
+<span class="font-medium">Reviews</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors rounded-lg group" href="#">
+<span class="material-symbols-outlined text-outline group-hover:text-primary">settings</span>
+<span class="font-medium">Settings</span>
+</a>
+</nav>
+<div class="mt-auto pt-6 border-t border-outline-variant">
+<div class="flex items-center gap-3 p-2">
+<img class="w-10 h-10 rounded-full border-2 border-primary-container object-cover" data-alt="A professional headshot of a high-end engineering software administrator, clean lighting, soft bokeh, wearing corporate smart casual, background featuring subtle industrial design elements." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB6QoVeb23gHs2FX3tqseIMFfu0LNAw-aK465cwXA5LxdYQiDEHq01qtWDqrIgRooWdhije_OXa7I1GSR8Ja47yqRuzhx-3EZDvS2UVcUAexbTgua_PlFeSuWqHlsnfZwRFemDGTwyyDi0okmqI1ZZIQGCKzzf0CUrhpX5bePx58bPRJH4-ZIsrHx8YzMRW846QuDxGREQ7DFeReKEYDXoJv1CILplyojziXs3CcAtedMKlIcMJ8a2a4w"/>
+<div>
+<p class="text-sm font-bold">Admin Panel</p>
+<p class="text-[10px] text-outline uppercase font-label-caps">Super User</p>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="ml-64 p-margin-desktop max-w-max-width">
+<!-- Header -->
+<header class="flex justify-between items-end mb-8">
+<div>
+<h2 class="font-headline-lg text-headline-lg text-on-background mb-1">Upload Physical Product</h2>
+<nav class="flex items-center gap-2 text-sm text-outline">
+<span>Products</span>
+<span class="material-symbols-outlined text-xs">chevron_right</span>
+<span class="text-primary font-medium">New Product</span>
+</nav>
+</div>
+<div class="flex gap-4">
+<button class="px-6 py-3 font-label-caps text-primary border border-primary rounded-lg hover:bg-primary/5 transition-all">
+                    SAVE AS DRAFT
+                </button>
+<button class="px-8 py-3 font-label-caps bg-primary text-white rounded-lg shadow-lg hover:brightness-110 active:scale-95 transition-all">
+                    PUBLISH PRODUCT
+                </button>
+</div>
+</header>
+<div class="grid grid-cols-12 gap-gutter">
+<!-- Left Column: Primary Data -->
+<div class="col-span-8 space-y-gutter">
+<!-- General Information Card -->
+<section class="glass-panel p-8 rounded-xl shadow-sm">
+<h3 class="font-headline-md text-headline-md mb-6 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">info</span>
+                        General Information
+                    </h3>
+<div class="space-y-6">
+<div>
+<label class="font-label-caps text-outline block mb-2">PRODUCT TITLE</label>
+<input class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg p-3 text-body-md" placeholder="e.g. Industrial Mechanical Gear Set" type="text"/>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div>
+<label class="font-label-caps text-outline block mb-2">CATEGORY</label>
+<select class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg p-3 text-body-md appearance-none">
+<option>Mechanical Components</option>
+<option>Artistic Sculptures</option>
+<option>Functional Tools</option>
+<option>Educational Models</option>
+</select>
+</div>
+<div>
+<label class="font-label-caps text-outline block mb-2">AVAILABILITY</label>
+<select class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg p-3 text-body-md appearance-none">
+<option>In Stock</option>
+<option>Pre-Order</option>
+<option>Out of Stock</option>
+</select>
+</div>
+</div>
+<div>
+<label class="font-label-caps text-outline block mb-2">PRODUCT DESCRIPTION</label>
+<div class="border border-outline-variant rounded-lg overflow-hidden">
+<div class="bg-surface-container-low p-2 border-b border-outline-variant flex gap-2">
+<button class="p-1 hover:bg-white rounded transition-colors"><span class="material-symbols-outlined text-sm">format_bold</span></button>
+<button class="p-1 hover:bg-white rounded transition-colors"><span class="material-symbols-outlined text-sm">format_italic</span></button>
+<button class="p-1 hover:bg-white rounded transition-colors"><span class="material-symbols-outlined text-sm">list</span></button>
+<button class="p-1 hover:bg-white rounded transition-colors"><span class="material-symbols-outlined text-sm">link</span></button>
+</div>
+<textarea class="w-full bg-surface-container-lowest p-4 text-body-md border-none focus:ring-0" placeholder="Describe the high-fidelity details of your engineering marvel..." rows="6"></textarea>
+</div>
+</div>
+</div>
+</section>
+<!-- Inventory & Pricing Card -->
+<section class="glass-panel p-8 rounded-xl shadow-sm">
+<h3 class="font-headline-md text-headline-md mb-6 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">payments</span>
+                        Inventory & Pricing
+                    </h3>
+<div class="grid grid-cols-3 gap-6">
+<div>
+<label class="font-label-caps text-outline block mb-2">PRICE ($)</label>
+<input class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg p-3 text-body-md" placeholder="0.00" type="number"/>
+</div>
+<div>
+<label class="font-label-caps text-outline block mb-2">DISCOUNT (%)</label>
+<input class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg p-3 text-body-md" placeholder="0" type="number"/>
+</div>
+<div>
+<label class="font-label-caps text-outline block mb-2">SKU ID</label>
+<input class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg p-3 text-body-md font-mono" placeholder="BK-3D-001" type="text"/>
+</div>
+</div>
+</section>
+<!-- Technical Specifications Card -->
+<section class="glass-panel p-8 rounded-xl shadow-sm">
+<h3 class="font-headline-md text-headline-md mb-6 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">architecture</span>
+                        Technical Specifications
+                    </h3>
+<div class="grid grid-cols-2 gap-6 mb-8">
+<div>
+<label class="font-label-caps text-outline block mb-2">RECOMMENDED MATERIAL</label>
+<input class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg p-3 text-body-md" placeholder="e.g. PLA+, Carbon Fiber PETG" type="text"/>
+</div>
+<div>
+<label class="font-label-caps text-outline block mb-2">EST. PRINTING TIME</label>
+<input class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg p-3 text-body-md" placeholder="e.g. 14h 30m" type="text"/>
+</div>
+</div>
+<div class="space-y-4">
+<p class="font-label-caps text-outline">DETAILED SPECS LIST</p>
+<div class="grid grid-cols-2 gap-4">
+<div class="flex gap-2">
+<input class="w-1/3 bg-surface-container-low border border-outline-variant rounded-lg p-2 text-sm text-outline font-medium" readonly="" type="text" value="Weight"/>
+<input class="w-2/3 bg-surface-container-lowest border border-outline-variant rounded-lg p-2 text-sm" placeholder="250g" type="text"/>
+</div>
+<div class="flex gap-2">
+<input class="w-1/3 bg-surface-container-low border border-outline-variant rounded-lg p-2 text-sm text-outline font-medium" readonly="" type="text" value="Dimensions"/>
+<input class="w-2/3 bg-surface-container-lowest border border-outline-variant rounded-lg p-2 text-sm" placeholder="120 x 120 x 40 mm" type="text"/>
+</div>
+<div class="flex gap-2">
+<input class="w-1/3 bg-surface-container-low border border-outline-variant rounded-lg p-2 text-sm text-outline font-medium" readonly="" type="text" value="Layer Height"/>
+<input class="w-2/3 bg-surface-container-lowest border border-outline-variant rounded-lg p-2 text-sm" placeholder="0.2mm" type="text"/>
+</div>
+<div class="flex gap-2">
+<button class="w-full border-2 border-dashed border-outline-variant rounded-lg p-2 text-sm text-outline hover:text-primary hover:border-primary transition-all flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-sm">add</span> ADD NEW FIELD
+                                </button>
+</div>
+</div>
+</div>
+</section>
+<!-- Media Upload Card -->
+<section class="glass-panel p-8 rounded-xl shadow-sm">
+<h3 class="font-headline-md text-headline-md mb-6 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">cloud_upload</span>
+                        Product Media
+                    </h3>
+<div class="border-2 border-dashed border-outline-variant rounded-xl p-10 flex flex-col items-center justify-center bg-surface-container-lowest/50 hover:bg-surface-container-low/50 hover:border-primary transition-all cursor-pointer group">
+<div class="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-primary text-3xl">upload_file</span>
+</div>
+<p class="text-body-lg font-bold text-on-surface mb-1">Drag and drop high-res images here</p>
+<p class="text-outline text-sm">Supported formats: PNG, JPG, WEBP (Max 10MB each)</p>
+</div>
+<div class="mt-8 grid grid-cols-4 gap-4">
+<div class="relative group aspect-square rounded-lg overflow-hidden border border-outline-variant">
+<img class="w-full h-full object-cover" data-alt="A high-fidelity 3D printed mechanical part with complex internal gears, photographed in a professional studio setting with clean white backdrops and precise industrial lighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB2uPcRQOVAH5Tcm90BHegnH1eYopTnyI_MMyy_4VLxawyK3cbzcAHWke9YvX54k9KdMrWQa4jR9StdO7PyjoRNgIZiyZ3ZI8G3iVuVCJSp0IPr7aabimGQqgr37eMB6aHaUixXDU5DU3_g_0Linni5QOr-I001lLSgFz5uqEjIGPVgFxE-td3XOTfz_dSOAtq_KqCaSyWlvlGrqObAh1lssG91CeYoupU69-8P2aDeLNCMEfI8daCsaQ"/>
+<div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+<button class="p-2 bg-white rounded-full text-error shadow-lg hover:scale-110 transition-transform"><span class="material-symbols-outlined">delete</span></button>
+<button class="p-2 bg-white rounded-full text-primary shadow-lg hover:scale-110 transition-transform"><span class="material-symbols-outlined">visibility</span></button>
+</div>
+</div>
+<div class="relative group aspect-square rounded-lg overflow-hidden border border-outline-variant">
+<img class="w-full h-full object-cover" data-alt="Close up view of the surface texture and layer lines of a professional 3D printed model, highlighting the precision of the manufacturing process, clean industrial aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAi488XvBYotLTyc7L8Med77t1LgFfasSl_C3QSs2zLjTiVgx4BxhFssSQ3Purj_LOE9cLf5xuWWN-DaKEenVvrvXFcq325BvLpl34hN0hhTdzjQsiYgWBNVGSVJT3yg6shtqHvxotFMgKtEOAS1cU5sXJHk-__V3jAy_1IniKQeff8c2BZQC0rrBBgJ4PNYbQGDpajcsTYbIy2xUjjzqB4CHpy31M9vVCg9ceugkdMgys4ptBSwJ2TnQ"/>
+<div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+<button class="p-2 bg-white rounded-full text-error shadow-lg"><span class="material-symbols-outlined">delete</span></button>
+</div>
+</div>
+<div class="aspect-square rounded-lg bg-surface-container-low border border-outline-variant border-dashed flex items-center justify-center text-outline-variant hover:text-outline transition-colors cursor-pointer">
+<span class="material-symbols-outlined text-3xl">add_a_photo</span>
+</div>
+</div>
+</section>
+</div>
+<!-- Right Column: Metadata & Controls -->
+<div class="col-span-4 space-y-gutter">
+<!-- Visibility & Status Card -->
+<section class="glass-panel p-6 rounded-xl shadow-sm">
+<h3 class="font-headline-md text-headline-md mb-6">Visibility & Status</h3>
+<div class="space-y-6">
+<div class="flex items-center justify-between">
+<div>
+<p class="font-bold text-sm">Featured Product</p>
+<p class="text-xs text-outline">Showcase on homepage hero</p>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+<div class="flex items-center justify-between">
+<div>
+<p class="font-bold text-sm">New Arrival</p>
+<p class="text-xs text-outline">Display badge for 30 days</p>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+<hr class="border-outline-variant"/>
+<div>
+<p class="font-label-caps text-outline text-[10px] mb-2">LAST UPDATED</p>
+<p class="text-sm font-medium">Oct 24, 2023 - 14:22 PM</p>
+</div>
+</div>
+</section>
+<!-- SEO Configuration Card -->
+<section class="glass-panel p-6 rounded-xl shadow-sm">
+<h3 class="font-headline-md text-headline-md mb-6">SEO Configuration</h3>
+<div class="space-y-6">
+<div>
+<div class="flex justify-between items-center mb-2">
+<label class="font-label-caps text-outline">META TITLE</label>
+<span class="text-[10px] text-outline">45/60</span>
+</div>
+<input class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg p-3 text-sm" type="text" value="Industrial Mechanical Gear Set | Bekaa3D"/>
+</div>
+<div>
+<div class="flex justify-between items-center mb-2">
+<label class="font-label-caps text-outline">META DESCRIPTION</label>
+<span class="text-[10px] text-outline">122/160</span>
+</div>
+<textarea class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg p-3 text-sm" rows="4">Discover high-precision 3D printed mechanical components for industrial and educational use. Engineered for durability and performance.</textarea>
+</div>
+</div>
+</section>
+<!-- Organization Card -->
+<section class="glass-panel p-6 rounded-xl shadow-sm">
+<h3 class="font-headline-md text-headline-md mb-6">Organization</h3>
+<div class="space-y-6">
+<div>
+<label class="font-label-caps text-outline block mb-2">BRAND</label>
+<select class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg p-3 text-sm appearance-none">
+<option>Bekaa3D Signature</option>
+<option>Partner: PrecisionLabs</option>
+<option>User Contribution</option>
+</select>
+</div>
+<div>
+<label class="font-label-caps text-outline block mb-2">TAGS</label>
+<div class="flex flex-wrap gap-2 mb-3">
+<span class="px-2 py-1 bg-primary/10 text-primary rounded text-xs flex items-center gap-1">Mechanical <button class="material-symbols-outlined text-[12px]">close</button></span>
+<span class="px-2 py-1 bg-primary/10 text-primary rounded text-xs flex items-center gap-1">Engineering <button class="material-symbols-outlined text-[12px]">close</button></span>
+<span class="px-2 py-1 bg-primary/10 text-primary rounded text-xs flex items-center gap-1">Functional <button class="material-symbols-outlined text-[12px]">close</button></span>
+</div>
+<div class="relative">
+<input class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg p-2 pr-10 text-sm" placeholder="Add tags..." type="text"/>
+<button class="absolute right-2 top-2 text-outline hover:text-primary"><span class="material-symbols-outlined">add</span></button>
+</div>
+</div>
+</div>
+</section>
+<!-- Helpful Tips -->
+<div class="bg-primary/5 p-6 rounded-xl border border-primary/20">
+<div class="flex gap-3 text-primary mb-2">
+<span class="material-symbols-outlined">lightbulb</span>
+<p class="font-bold">Pro Tip</p>
+</div>
+<p class="text-sm text-on-surface-variant leading-relaxed">
+                        High-quality images showing the product in use increase conversion rates by up to 40%. Ensure at least one image shows the technical scale.
+                    </p>
+</div>
+</div>
+</div>
+</main>
+<!-- Micro-interaction Script -->
+<script>
+        document.querySelectorAll('button, a').forEach(elem => {
+            elem.addEventListener('mousedown', () => {
+                elem.style.transform = 'scale(0.98)';
+            });
+            elem.addEventListener('mouseup', () => {
+                elem.style.transform = '';
+            });
+            elem.addEventListener('mouseleave', () => {
+                elem.style.transform = '';
+            });
+        });
+
+        // Simple Toggle interaction visualization
+        const toggles = document.querySelectorAll('input[type="checkbox"]');
+        toggles.forEach(toggle => {
+            toggle.addEventListener('change', (e) => {
+                const parent = e.target.closest('section');
+                if(e.target.checked) {
+                    console.log('Status Enabled');
+                }
+            });
+        });
+    </script>
+</body></html>

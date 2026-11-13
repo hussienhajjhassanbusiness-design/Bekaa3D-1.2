@@ -1,3 +1,4 @@
+import { FIELD_ERROR_CLASSES, FIELD_HINT_CLASSES, FIELD_LABEL_CLASSES, FieldErrorIcon, fieldControlClasses } from "./fieldStyles";
 import { useId, type Ref, type TextareaHTMLAttributes } from "react";
 
 export interface TextAreaFieldProps extends Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "id"> {
@@ -20,7 +21,7 @@ export function TextAreaField({ label, hint, error, className, rows = 3, ...rest
 
   return (
     <div>
-      <label htmlFor={inputId} className="block text-label font-semibold uppercase tracking-label text-text-primary">
+      <label htmlFor={inputId} className={FIELD_LABEL_CLASSES}>
         {label}
       </label>
       <textarea
@@ -28,18 +29,17 @@ export function TextAreaField({ label, hint, error, className, rows = 3, ...rest
         rows={rows}
         aria-describedby={describedBy}
         aria-invalid={error ? true : undefined}
-        className={`mt-1 w-full rounded-sm border px-3 py-2 text-body text-text-primary ${
-          error ? "border-danger" : "border-border-default"
-        } ${className ?? ""}`}
+        className={`mt-2 ${fieldControlClasses(Boolean(error))} resize-y ${className ?? ""}`}
         {...rest}
       />
       {hint && (
-        <p id={hintId} className="mt-1 text-caption text-text-secondary">
+        <p id={hintId} className={FIELD_HINT_CLASSES}>
           {hint}
         </p>
       )}
       {error && (
-        <p id={errorId} className="mt-1 text-caption text-danger">
+        <p id={errorId} className={FIELD_ERROR_CLASSES}>
+          <FieldErrorIcon />
           {error}
         </p>
       )}

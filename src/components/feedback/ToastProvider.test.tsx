@@ -43,7 +43,7 @@ describe("ToastProvider / useToast", () => {
 
     const toast = screen.getByRole("status");
     expect(toast).toHaveTextContent("Saved successfully");
-    expect(toast.className).toContain("bg-success-bg");
+    expect(toast).toHaveAttribute("data-variant", "success");
   });
 
   it("dismisses a shown toast when its dismiss control is activated", async () => {

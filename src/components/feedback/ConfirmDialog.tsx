@@ -53,14 +53,18 @@ export function ConfirmDialog({
 
   return (
     <DialogShell open={open} onClose={onCancel} isBusy={isConfirming} labelledBy={titleId} describedBy={descriptionId}>
-      <h2 id={titleId} className="text-h3 font-bold text-text-primary">
+      {/* Stitch modal content (COMPONENT-SPECS §48 + §8): headline-md title,
+          body-md description, actions right-aligned with the single
+          primary/destructive action rightmost and Cancel as the neutral
+          outline. DOM and Tab order are unchanged (Cancel, then Confirm). */}
+      <h2 id={titleId} className="font-headline text-headline-md text-on-surface">
         {title}
       </h2>
-      <p id={descriptionId} className="mt-2 text-body text-text-secondary">
+      <p id={descriptionId} className="mt-2 text-body-md text-on-surface-variant">
         {description}
       </p>
-      <div className="mt-4 flex justify-end gap-2">
-        <Button type="button" onClick={onCancel} disabled={isConfirming}>
+      <div className="mt-6 flex flex-wrap justify-end gap-3">
+        <Button type="button" variant="outline" onClick={onCancel} disabled={isConfirming}>
           {cancelLabel}
         </Button>
         <Button type="button" variant={isDestructive ? "destructive" : "primary"} onClick={onConfirm} isLoading={isConfirming}>

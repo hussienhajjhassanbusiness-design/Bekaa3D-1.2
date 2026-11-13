@@ -127,13 +127,22 @@ describe("ConfirmDialog", () => {
 
   it("defaults to the primary Confirm button treatment", () => {
     renderDialog();
-    expect(screen.getByRole("button", { name: /confirm/i })).toHaveClass("bg-brand-dark-green");
+    expect(screen.getByRole("button", { name: /confirm/i })).toHaveClass("bg-primary");
   });
 
   it("isDestructive renders the danger Confirm button treatment, for a genuinely irreversible action", () => {
     renderDialog({ isDestructive: true, confirmLabel: "Delete" });
     const confirmButton = screen.getByRole("button", { name: "Delete" });
-    expect(confirmButton).toHaveClass("bg-danger");
-    expect(confirmButton).not.toHaveClass("bg-brand-dark-green");
+    expect(confirmButton).toHaveClass("bg-error");
+    expect(confirmButton).not.toHaveClass("bg-primary");
+  });
+
+  // Stitch CTA hierarchy (DESIGN-SYSTEM §10): one rank-1 action per view, so
+  // Cancel is the neutral outline, never a second solid primary.
+  it("renders Cancel as the neutral outline action, never a second solid primary", () => {
+    renderDialog();
+    const cancelButton = screen.getByRole("button", { name: /cancel/i });
+    expect(cancelButton).toHaveClass("border-outline-variant");
+    expect(cancelButton).not.toHaveClass("bg-primary");
   });
 });

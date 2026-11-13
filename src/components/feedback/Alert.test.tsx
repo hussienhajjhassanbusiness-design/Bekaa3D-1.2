@@ -9,16 +9,21 @@ describe("Alert", () => {
     expect(screen.getByText("Check your email to continue.")).toBeInTheDocument();
   });
 
+  // DESIGN-SYSTEM §9 status colours on Stitch MD3 containers, plus a
+  // decorative per-variant icon (different shape, not colour alone).
   it.each([
-    ["success", "bg-success-bg"],
-    ["info", "bg-info-bg"],
-    ["warning", "bg-warning-bg"],
-    ["error", "bg-danger-bg"],
-  ] as const)("applies the mapped semantic token background class for the '%s' variant", (variant, expectedClassFragment) => {
+    ["success", "bg-secondary-container/40", "check-circle"],
+    ["info", "bg-info-container", "info"],
+    ["warning", "bg-warning-container", "warning"],
+    ["error", "bg-error-container", "error"],
+  ] as const)("applies the mapped status container and icon for the '%s' variant", (variant, expectedClassFragment, iconName) => {
     render(<Alert message="Variant check" variant={variant} />);
 
     const region = variant === "error" ? screen.getByRole("alert") : screen.getByRole("status");
     expect(region.className).toContain(expectedClassFragment);
+    const icon = region.querySelector(`svg[data-icon="${iconName}"]`);
+    expect(icon).not.toBeNull();
+    expect(icon).toHaveAttribute("aria-hidden", "true");
   });
 
   it.each(["success", "info", "warning"] as const)(

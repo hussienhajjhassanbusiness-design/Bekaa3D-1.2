@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { fontVariablesClassName } from "./fonts";
 import { QueryProvider } from "@/lib/query/QueryProvider";
 import { ToastProvider } from "@/components/feedback/ToastProvider";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -29,7 +30,9 @@ export const metadata: Metadata = {
 // component.
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en">
+    // Stitch fonts: next/font CSS variables on <html>; globals.css maps them
+    // to the body / heading / label families. Composition below is unchanged.
+    <html lang="en" className={fontVariablesClassName}>
       <body>
         <QueryProvider>
           <AuthProvider>

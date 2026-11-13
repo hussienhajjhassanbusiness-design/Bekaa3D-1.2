@@ -29,7 +29,7 @@ import type { FieldValidationError } from "@/lib/api/validationErrors";
 type EditorState = { mode: "create" } | { mode: "edit"; address: AddressModel } | null;
 
 const DIALOG_PANEL_CLASSNAME =
-  "w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-lg bg-white p-4 shadow-elevation-3 tablet:p-6";
+  "w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-card border border-outline-variant/30 bg-surface-container-lowest p-4 shadow-2xl tablet:p-6";
 
 // #FVS023-ADDRESS-BOOK — /account/addresses, against the real backend
 // (VS-026). Every write ends in a refetch of the list (useAddresses.ts),

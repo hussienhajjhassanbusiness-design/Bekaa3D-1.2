@@ -1,3 +1,5 @@
+import { FIELD_ERROR_CLASSES, FIELD_HINT_CLASSES, FIELD_LABEL_CLASSES, FieldErrorIcon, fieldControlClasses } from "./fieldStyles";
+import { Icon } from "@/components/ui/Icon";
 import { useId, useState, type InputHTMLAttributes, type Ref } from "react";
 
 export interface PasswordFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "id" | "type"> {
@@ -30,36 +32,39 @@ export function PasswordField({ label, hint, error, className, ...rest }: Passwo
 
   return (
     <div>
-      <label htmlFor={inputId} className="block text-label font-semibold uppercase tracking-label text-text-primary">
+      <label htmlFor={inputId} className={FIELD_LABEL_CLASSES}>
         {label}
       </label>
-      <div className="mt-1 flex items-stretch gap-2">
+      {/* The show/hide toggle sits inside the field box (COMPONENT-SPECS §27
+          "trailing action"). Its accessible name is still the visible-to-AT
+          text "Show password" / "Hide password", plus aria-pressed. */}
+      <div className="relative mt-2">
         <input
           id={inputId}
           type={isVisible ? "text" : "password"}
           aria-describedby={describedBy}
           aria-invalid={error ? true : undefined}
-          className={`w-full rounded-sm border px-3 py-2 text-body text-text-primary ${
-            error ? "border-danger" : "border-border-default"
-          } ${className ?? ""}`}
+          className={`${fieldControlClasses(Boolean(error))} pr-14 ${className ?? ""}`}
           {...rest}
         />
         <button
           type="button"
           aria-pressed={isVisible}
           onClick={() => setIsVisible((visible) => !visible)}
-          className="shrink-0 rounded-sm border border-border-default px-3 text-body text-text-secondary"
+          className="absolute right-1 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-control text-on-surface-variant transition-colors duration-200 hover:bg-surface-container-high hover:text-on-surface"
         >
-          {isVisible ? "Hide password" : "Show password"}
+          <Icon name={isVisible ? "visibility-off" : "visibility"} className="h-5 w-5" />
+          <span className="sr-only">{isVisible ? "Hide password" : "Show password"}</span>
         </button>
       </div>
       {hint && (
-        <p id={hintId} className="mt-1 text-caption text-text-secondary">
+        <p id={hintId} className={FIELD_HINT_CLASSES}>
           {hint}
         </p>
       )}
       {error && (
-        <p id={errorId} className="mt-1 text-caption text-danger">
+        <p id={errorId} className={FIELD_ERROR_CLASSES}>
+          <FieldErrorIcon />
           {error}
         </p>
       )}

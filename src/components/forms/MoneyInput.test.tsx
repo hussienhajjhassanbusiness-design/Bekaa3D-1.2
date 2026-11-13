@@ -194,7 +194,7 @@ describe("MoneyInput", () => {
   it("marks the field invalid (red border) when an externally-supplied error is present", () => {
     render(<MoneyInput label="Price" currencyLabel="USD" valueCents={0} onChangeCents={vi.fn()} error="Rate must be at least 0." />);
 
-    expect(screen.getByLabelText("Price (USD)").className).toMatch(/border-danger/);
+    expect(screen.getByLabelText("Price (USD)").className).toMatch(/(^| )border-error( |$)/);
   });
 
   it("a local parse error takes precedence over a stale externally-supplied error", async () => {

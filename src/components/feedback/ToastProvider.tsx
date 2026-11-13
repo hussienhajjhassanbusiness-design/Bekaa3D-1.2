@@ -46,7 +46,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
-      <div className="fixed inset-x-0 bottom-0 z-50 flex flex-col items-center gap-2 p-4">
+      {/* Stitch position (COMPONENT-SPECS §47): centred full-width minus 32px
+          on mobile, bottom-right with a 32px inset from tablet up. The
+          container ignores the pointer so its empty area never blocks the
+          page; each toast re-enables pointer events for itself. */}
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex flex-col items-center gap-3 p-4 tablet:left-auto tablet:items-end tablet:p-8">
         {toasts.map((toast) => (
           <Toast
             key={toast.id}

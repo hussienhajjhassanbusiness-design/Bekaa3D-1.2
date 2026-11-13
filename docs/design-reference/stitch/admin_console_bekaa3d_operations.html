@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Bekaa3D | Professional Management Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700;800&amp;family=Inter:wght@400;500&amp;family=JetBrains+Mono:wght@600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind Config Hook -->
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-tertiary-fixed": "#3f001c",
+                    "on-surface": "#141b2b",
+                    "on-error-container": "#93000a",
+                    "primary": "#0d631b",
+                    "on-tertiary-container": "#ffedf0",
+                    "on-tertiary-fixed-variant": "#7f2448",
+                    "surface-variant": "#dce2f7",
+                    "background": "#f9f9ff",
+                    "outline": "#707a6c",
+                    "tertiary-container": "#b14b6f",
+                    "on-background": "#141b2b",
+                    "outline-variant": "#bfcaba",
+                    "on-secondary-fixed": "#0f2000",
+                    "tertiary-fixed-dim": "#ffb1c7",
+                    "surface-dim": "#d3daef",
+                    "surface-container-high": "#e1e8fd",
+                    "surface-container-highest": "#dce2f7",
+                    "surface-tint": "#1b6d24",
+                    "inverse-on-surface": "#edf0ff",
+                    "secondary-fixed-dim": "#9ed75b",
+                    "on-secondary-container": "#437000",
+                    "on-primary-container": "#cbffc2",
+                    "secondary-container": "#b9f474",
+                    "on-primary": "#ffffff",
+                    "primary-fixed": "#a3f69c",
+                    "surface-container-low": "#f1f3ff",
+                    "error": "#ba1a1a",
+                    "on-tertiary": "#ffffff",
+                    "on-error": "#ffffff",
+                    "primary-container": "#2e7d32",
+                    "surface-container-lowest": "#ffffff",
+                    "secondary": "#3e6a00",
+                    "on-surface-variant": "#40493d",
+                    "error-container": "#ffdad6",
+                    "secondary-fixed": "#b9f474",
+                    "on-secondary": "#ffffff",
+                    "on-secondary-fixed-variant": "#2e4f00",
+                    "tertiary-fixed": "#ffd9e2",
+                    "surface-container": "#e9edff",
+                    "inverse-surface": "#293040",
+                    "inverse-primary": "#88d982",
+                    "tertiary": "#923357",
+                    "surface-bright": "#f9f9ff",
+                    "primary-fixed-dim": "#88d982",
+                    "on-primary-fixed": "#002204",
+                    "on-primary-fixed-variant": "#005312",
+                    "surface": "#f9f9ff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "unit": "4px",
+                    "max-width": "1440px",
+                    "margin-mobile": "16px",
+                    "margin-desktop": "64px",
+                    "gutter": "24px"
+            },
+            "fontFamily": {
+                    "headline-lg": ["Hanken Grotesk"],
+                    "body-md": ["Inter"],
+                    "headline-lg-mobile": ["Hanken Grotesk"],
+                    "body-lg": ["Inter"],
+                    "headline-md": ["Hanken Grotesk"],
+                    "label-caps": ["JetBrains Mono"],
+                    "display": ["Hanken Grotesk"]
+            },
+            "fontSize": {
+                    "headline-lg": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                    "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                    "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                    "headline-md": ["20px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                    "label-caps": ["12px", {"lineHeight": "1.0", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                    "display": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "800"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #bfcaba;
+            border-radius: 10px;
+        }
+        .glass-panel {
+            backdrop-filter: blur(20px);
+            background-color: rgba(255, 255, 255, 0.8);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body-md overflow-hidden h-screen flex">
+<!-- Persistent Sidebar -->
+<aside class="w-64 h-full bg-surface-container-low border-r border-outline-variant/30 flex flex-col shrink-0">
+<div class="p-6">
+<h1 class="font-display text-headline-md font-extrabold text-primary tracking-tight">Bekaa3D</h1>
+<p class="font-label-caps text-on-surface-variant/60 text-[10px] mt-1 uppercase tracking-widest">Precision Console</p>
+</div>
+<nav class="flex-1 px-4 overflow-y-auto custom-scrollbar space-y-1">
+<!-- Active: Dashboard -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-primary-container text-on-primary-container font-semibold transition-all group" href="#">
+<span class="material-symbols-outlined text-[22px]" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+<span class="font-body-md">Dashboard</span>
+</a>
+<div class="pt-4 pb-2 px-3">
+<span class="font-label-caps text-on-surface-variant/50 text-[11px] uppercase tracking-wider">Inventory</span>
+</div>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-variant/40 hover:text-primary transition-all group" href="#">
+<span class="material-symbols-outlined text-[22px]">precision_manufacturing</span>
+<span class="font-body-md">Physical Products</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-variant/40 hover:text-primary transition-all group" href="#">
+<span class="material-symbols-outlined text-[22px]">model_training</span>
+<span class="font-body-md">STL Files</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-variant/40 hover:text-primary transition-all group" href="#">
+<span class="material-symbols-outlined text-[22px]">category</span>
+<span class="font-body-md">Categories</span>
+</a>
+<div class="pt-4 pb-2 px-3">
+<span class="font-label-caps text-on-surface-variant/50 text-[11px] uppercase tracking-wider">Sales &amp; CRM</span>
+</div>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-variant/40 hover:text-primary transition-all group" href="#">
+<span class="material-symbols-outlined text-[22px]">shopping_bag</span>
+<span class="font-body-md">Orders</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-variant/40 hover:text-primary transition-all group" href="#">
+<span class="material-symbols-outlined text-[22px]">request_quote</span>
+<span class="font-body-md">Offers</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-variant/40 hover:text-primary transition-all group" href="#">
+<span class="material-symbols-outlined text-[22px]">percent</span>
+<span class="font-body-md">Discounts</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-variant/40 hover:text-primary transition-all group" href="#">
+<span class="material-symbols-outlined text-[22px]">reviews</span>
+<span class="font-body-md">Reviews</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-variant/40 hover:text-primary transition-all group" href="#">
+<span class="material-symbols-outlined text-[22px]">group</span>
+<span class="font-body-md">Customers</span>
+</a>
+</nav>
+<div class="p-4 border-t border-outline-variant/30">
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-variant/40 hover:text-primary transition-all" href="#">
+<span class="material-symbols-outlined text-[22px]">settings</span>
+<span class="font-body-md">Settings</span>
+</a>
+<div class="mt-4 flex items-center gap-3 px-3 py-2">
+<div class="w-8 h-8 rounded-full bg-primary-fixed text-on-primary-fixed flex items-center justify-center font-bold text-xs">JD</div>
+<div class="flex-1 min-w-0">
+<p class="text-sm font-semibold truncate">Jane Doe</p>
+<p class="text-[11px] text-on-surface-variant/60 truncate">Admin Lead</p>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="flex-1 flex flex-col h-full overflow-hidden relative">
+<!-- Top App Bar -->
+<header class="h-16 flex items-center justify-between px-8 bg-surface/80 backdrop-blur-md z-40 border-b border-outline-variant/20">
+<div class="flex items-center gap-4">
+<h2 class="font-headline-md text-on-surface">Dashboard Overview</h2>
+<div class="h-4 w-[1px] bg-outline-variant/50 mx-2"></div>
+<p class="font-body-md text-on-surface-variant/70">Thursday, Oct 24, 2024</p>
+</div>
+<div class="flex items-center gap-6">
+<!-- Search -->
+<div class="relative hidden lg:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/60 text-lg">search</span>
+<input class="pl-10 pr-4 py-2 bg-surface-container-low border-none rounded-full text-sm w-64 focus:ring-2 focus:ring-primary/20 placeholder:text-on-surface-variant/40" placeholder="Search orders, files, users..." type="text"/>
+</div>
+<!-- Notifications Toggle -->
+<button class="relative p-2 text-on-surface-variant hover:bg-surface-variant/30 rounded-full transition-colors" id="notif-btn">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-error rounded-full"></span>
+</button>
+<button class="p-2 text-on-surface-variant hover:bg-surface-variant/30 rounded-full transition-colors">
+<span class="material-symbols-outlined">help</span>
+</button>
+</div>
+</header>
+<!-- Dashboard Content -->
+<div class="flex-1 overflow-y-auto p-8 custom-scrollbar">
+<!-- Quick Actions Bar -->
+<div class="mb-8 flex flex-wrap gap-4">
+<button class="flex items-center gap-2 bg-primary text-on-primary px-6 py-2.5 rounded-lg font-label-caps text-label-caps hover:bg-primary-container hover:text-on-primary-container transition-all active:scale-95 shadow-lg shadow-primary/10">
+<span class="material-symbols-outlined text-[18px]">add</span> ADD PRODUCT
+                </button>
+<button class="flex items-center gap-2 bg-secondary-container text-on-secondary-container px-6 py-2.5 rounded-lg font-label-caps text-label-caps hover:bg-secondary hover:text-on-secondary transition-all active:scale-95">
+<span class="material-symbols-outlined text-[18px]">upload_file</span> UPLOAD STL
+                </button>
+<button class="flex items-center gap-2 bg-surface-container-highest text-on-surface-variant px-6 py-2.5 rounded-lg font-label-caps text-label-caps hover:bg-outline-variant transition-all active:scale-95">
+<span class="material-symbols-outlined text-[18px]">loyalty</span> CREATE DISCOUNT
+                </button>
+<button class="flex items-center gap-2 bg-surface-container-highest text-on-surface-variant px-6 py-2.5 rounded-lg font-label-caps text-label-caps hover:bg-outline-variant transition-all active:scale-95">
+<span class="material-symbols-outlined text-[18px]">assessment</span> GENERATE REPORT
+                </button>
+</div>
+<!-- Bento Grid: Key Metrics -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+<!-- Revenue Card -->
+<div class="bg-surface-container-lowest p-6 rounded-xl border border-outline-variant/30 shadow-sm hover:shadow-md transition-shadow group">
+<div class="flex justify-between items-start mb-4">
+<div class="p-2 bg-primary/10 rounded-lg text-primary group-hover:bg-primary group-hover:text-on-primary transition-colors">
+<span class="material-symbols-outlined">payments</span>
+</div>
+<span class="font-label-caps text-[10px] text-primary bg-primary/10 px-2 py-0.5 rounded-full">+12.4%</span>
+</div>
+<p class="text-on-surface-variant/60 font-body-md text-sm mb-1">Revenue (MTD)</p>
+<h3 class="font-headline-lg text-[24px] text-on-surface tracking-tight">$42,850.00</h3>
+</div>
+<!-- Total Orders -->
+<div class="bg-surface-container-lowest p-6 rounded-xl border border-outline-variant/30 shadow-sm hover:shadow-md transition-shadow group">
+<div class="flex justify-between items-start mb-4">
+<div class="p-2 bg-secondary-container/30 rounded-lg text-secondary group-hover:bg-secondary group-hover:text-on-secondary transition-colors">
+<span class="material-symbols-outlined">shopping_cart</span>
+</div>
+<span class="font-label-caps text-[10px] text-secondary bg-secondary-container px-2 py-0.5 rounded-full">+5.2%</span>
+</div>
+<p class="text-on-surface-variant/60 font-body-md text-sm mb-1">Total Orders</p>
+<h3 class="font-headline-lg text-[24px] text-on-surface tracking-tight">1,204</h3>
+</div>
+<!-- Sales Growth -->
+<div class="bg-surface-container-lowest p-6 rounded-xl border border-outline-variant/30 shadow-sm hover:shadow-md transition-shadow group">
+<div class="flex justify-between items-start mb-4">
+<div class="p-2 bg-tertiary-fixed/30 rounded-lg text-tertiary group-hover:bg-tertiary group-hover:text-on-tertiary transition-colors">
+<span class="material-symbols-outlined">trending_up</span>
+</div>
+<span class="font-label-caps text-[10px] text-on-surface-variant bg-surface-variant px-2 py-0.5 rounded-full">Steady</span>
+</div>
+<p class="text-on-surface-variant/60 font-body-md text-sm mb-1">Sales Growth</p>
+<h3 class="font-headline-lg text-[24px] text-on-surface tracking-tight">18.5%</h3>
+</div>
+<!-- Digital Downloads -->
+<div class="bg-surface-container-lowest p-6 rounded-xl border border-outline-variant/30 shadow-sm hover:shadow-md transition-shadow group">
+<div class="flex justify-between items-start mb-4">
+<div class="p-2 bg-primary-fixed/30 rounded-lg text-primary group-hover:bg-primary group-hover:text-on-primary transition-colors">
+<span class="material-symbols-outlined">download</span>
+</div>
+<span class="font-label-caps text-[10px] text-primary bg-primary/10 px-2 py-0.5 rounded-full">High</span>
+</div>
+<p class="text-on-surface-variant/60 font-body-md text-sm mb-1">STL Downloads</p>
+<h3 class="font-headline-lg text-[24px] text-on-surface tracking-tight">8,492</h3>
+</div>
+<!-- Active Offers -->
+<div class="bg-surface-container-lowest p-6 rounded-xl border border-outline-variant/30 shadow-sm hover:shadow-md transition-shadow group">
+<div class="flex justify-between items-start mb-4">
+<div class="p-2 bg-error-container/30 rounded-lg text-error group-hover:bg-error group-hover:text-on-error transition-colors">
+<span class="material-symbols-outlined">campaign</span>
+</div>
+<span class="font-label-caps text-[10px] text-error bg-error-container px-2 py-0.5 rounded-full">New</span>
+</div>
+<p class="text-on-surface-variant/60 font-body-md text-sm mb-1">Active Offers</p>
+<h3 class="font-headline-lg text-[24px] text-on-surface tracking-tight">14</h3>
+</div>
+</div>
+<!-- Charts Section -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+<!-- Revenue Trend Chart -->
+<div class="lg:col-span-2 bg-surface-container-lowest p-8 rounded-xl border border-outline-variant/30 shadow-sm">
+<div class="flex justify-between items-center mb-8">
+<div>
+<h4 class="font-headline-md text-on-surface">Revenue Performance</h4>
+<p class="font-body-md text-sm text-on-surface-variant/60">6-month analytical projection</p>
+</div>
+<div class="flex gap-2">
+<button class="px-3 py-1 text-xs font-semibold rounded-md bg-surface-container text-on-surface-variant">Weekly</button>
+<button class="px-3 py-1 text-xs font-semibold rounded-md bg-primary text-on-primary">Monthly</button>
+</div>
+</div>
+<!-- Chart Placeholder Visual -->
+<div class="h-64 flex items-end justify-between gap-2 px-2 relative group">
+<div class="w-full bg-surface-variant/30 h-full absolute inset-0 rounded-lg"></div>
+<div class="relative w-full h-[40%] bg-primary/20 hover:bg-primary/40 transition-all rounded-t-sm" title="May: $12k"></div>
+<div class="relative w-full h-[55%] bg-primary/20 hover:bg-primary/40 transition-all rounded-t-sm" title="Jun: $18k"></div>
+<div class="relative w-full h-[45%] bg-primary/20 hover:bg-primary/40 transition-all rounded-t-sm" title="Jul: $15k"></div>
+<div class="relative w-full h-[70%] bg-primary/20 hover:bg-primary/40 transition-all rounded-t-sm" title="Aug: $24k"></div>
+<div class="relative w-full h-[85%] bg-primary/20 hover:bg-primary/40 transition-all rounded-t-sm" title="Sep: $29k"></div>
+<div class="relative w-full h-[100%] bg-primary hover:bg-primary/90 transition-all rounded-t-sm" title="Oct: $42k"></div>
+<!-- Axis Labels -->
+<div class="absolute -bottom-6 w-full flex justify-between font-label-caps text-[9px] text-on-surface-variant/40 uppercase tracking-widest">
+<span>May</span><span>Jun</span><span>Jul</span><span>Aug</span><span>Sep</span><span>Oct</span>
+</div>
+</div>
+</div>
+<!-- Product Distribution (Digital vs Physical) -->
+<div class="bg-surface-container-lowest p-8 rounded-xl border border-outline-variant/30 shadow-sm flex flex-col justify-between">
+<div>
+<h4 class="font-headline-md text-on-surface mb-2">Sales Mix</h4>
+<p class="font-body-md text-sm text-on-surface-variant/60 mb-6">Volume by product type</p>
+<div class="space-y-6">
+<div class="space-y-2">
+<div class="flex justify-between font-body-md text-sm">
+<span>STL Digital Models</span>
+<span class="font-semibold">68%</span>
+</div>
+<div class="w-full h-2 bg-surface-container-high rounded-full overflow-hidden">
+<div class="h-full bg-primary rounded-full" style="width: 68%;"></div>
+</div>
+</div>
+<div class="space-y-2">
+<div class="flex justify-between font-body-md text-sm">
+<span>Physical Components</span>
+<span class="font-semibold">22%</span>
+</div>
+<div class="w-full h-2 bg-surface-container-high rounded-full overflow-hidden">
+<div class="h-full bg-secondary rounded-full" style="width: 22%;"></div>
+</div>
+</div>
+<div class="space-y-2">
+<div class="flex justify-between font-body-md text-sm">
+<span>Custom Licensing</span>
+<span class="font-semibold">10%</span>
+</div>
+<div class="w-full h-2 bg-surface-container-high rounded-full overflow-hidden">
+<div class="h-full bg-tertiary-container rounded-full" style="width: 10%;"></div>
+</div>
+</div>
+</div>
+</div>
+<div class="mt-8 p-4 bg-surface-container-low rounded-lg border border-outline-variant/20">
+<p class="text-xs text-on-surface-variant/70 leading-relaxed">
+<span class="font-bold text-primary">Insight:</span> Digital assets are yielding 40% higher margins this quarter compared to hardware exports.
+                        </p>
+</div>
+</div>
+</div>
+<!-- Recent Activity Table -->
+<div class="bg-surface-container-lowest rounded-xl border border-outline-variant/30 shadow-sm overflow-hidden">
+<div class="p-6 border-b border-outline-variant/20 flex justify-between items-center">
+<h4 class="font-headline-md text-on-surface">Recent Activity</h4>
+<button class="text-primary font-semibold text-sm hover:underline">View All Records</button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low font-label-caps text-[11px] text-on-surface-variant uppercase tracking-widest">
+<th class="px-6 py-4 font-semibold">Asset / Product</th>
+<th class="px-6 py-4 font-semibold">Type</th>
+<th class="px-6 py-4 font-semibold">Customer</th>
+<th class="px-6 py-4 font-semibold">Status</th>
+<th class="px-6 py-4 font-semibold">Value</th>
+<th class="px-6 py-4 font-semibold">Action</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/10">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-container/30 transition-colors">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded bg-surface-container border border-outline-variant/20 overflow-hidden shrink-0">
+<img class="w-full h-full object-cover" data-alt="A professional high-fidelity 3D rendering of a futuristic industrial mechanical part, displayed in a clean studio setting with precision green lighting accents, emphasizing engineering accuracy and high-tech manufacturing aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAhAvkTqY5-778Pc-59AQgchVevEdRluQE8vSdppUl5oY6bEmP7gQtMHUSFeMmZnBhYnlE1m03JQdp9gKbYD0k9AamJd2CG_tN9LwG5E7UbBnYd_oBO_V0B1yES3WXhsDhTaDMBjqbCmUZe0gu4Vh1oSgOytoWZBO0SYXn7vGSi2TtTuC-RJ4mGYmGdiMhbQ1Nt-I5Tjv_bPWE1pKduGvF0Rs4deD3RMrG3lFIK9afVfCqFSOFAlQCXhg"/>
+</div>
+<div>
+<p class="font-semibold text-sm">Titanium Extruder V3</p>
+<p class="text-[11px] text-on-surface-variant/50">ID: BK-29402</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="px-2 py-0.5 rounded text-[10px] font-label-caps bg-secondary-container/20 text-secondary border border-secondary/20">PHYSICAL</span>
+</td>
+<td class="px-6 py-4 text-sm">Industrial Labs Inc.</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+<span class="text-xs font-medium">Shipped</span>
+</div>
+</td>
+<td class="px-6 py-4 font-label-caps text-xs">$1,240.00</td>
+<td class="px-6 py-4">
+<button class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors">more_vert</button>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-surface-container/30 transition-colors">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded bg-surface-container border border-outline-variant/20 overflow-hidden shrink-0 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary-fixed-dim">deployed_code</span>
+</div>
+<div>
+<p class="font-semibold text-sm">Lunar Rover Shell (STL)</p>
+<p class="text-[11px] text-on-surface-variant/50">ID: BK-STL-008</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="px-2 py-0.5 rounded text-[10px] font-label-caps bg-primary-container/20 text-primary border border-primary/20">DIGITAL</span>
+</td>
+<td class="px-6 py-4 text-sm">Marcus V.</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+<span class="text-xs font-medium">Completed</span>
+</div>
+</td>
+<td class="px-6 py-4 font-label-caps text-xs">$89.00</td>
+<td class="px-6 py-4">
+<button class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors">more_vert</button>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-container/30 transition-colors">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded bg-surface-container border border-outline-variant/20 overflow-hidden shrink-0">
+<img class="w-full h-full object-cover" data-alt="Detailed macro photograph of a 3D printed precision gear made from carbon fiber material, showcased against a neutral architectural backdrop with soft industrial shadows, highlighting the luxury engineering finish." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAEnmkzmAS1R6jj8RLFfjSQ3BBxdbkjnBsYeJTxfOwlROItPzYPCv6x-a6b7rd3qXfUh1u5qQDv4z7zrAxJAuSSLeILcxDsm10lExNUTX3dHch0LWHWlLSOY2JCHXZkZcC9q9yPru1O8d_cDpzqoCnzOxnYfT7rxykLst8lTIryx_p4jHNSdBpVQ0fhdM30skV8LU352xfCf-J0PyBneDR7jwMeRK6NCWSS27Z1fHZ7A-opIdopReaKpA"/>
+</div>
+<div>
+<p class="font-semibold text-sm">Carbon-X Gear Assembly</p>
+<p class="text-[11px] text-on-surface-variant/50">ID: BK-91823</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="px-2 py-0.5 rounded text-[10px] font-label-caps bg-secondary-container/20 text-secondary border border-secondary/20">PHYSICAL</span>
+</td>
+<td class="px-6 py-4 text-sm">Design Dynamics Ltd</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>
+<span class="text-xs font-medium">Processing</span>
+</div>
+</td>
+<td class="px-6 py-4 font-label-caps text-xs">$455.00</td>
+<td class="px-6 py-4">
+<button class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors">more_vert</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<!-- Notifications Panel (Hidden by default, triggered by JS) -->
+<div class="absolute top-16 right-8 w-80 bg-surface-container-lowest border border-outline-variant/30 rounded-xl shadow-2xl z-50 transition-all duration-300 opacity-0 translate-y-4 pointer-events-none" id="notif-panel">
+<div class="p-4 border-b border-outline-variant/20 flex justify-between items-center">
+<h5 class="font-bold text-sm">System Alerts</h5>
+<span class="px-1.5 py-0.5 bg-error text-on-error text-[10px] rounded-full">3 New</span>
+</div>
+<div class="max-h-96 overflow-y-auto custom-scrollbar">
+<div class="p-4 hover:bg-surface-container-low transition-colors border-b border-outline-variant/10 cursor-pointer">
+<p class="text-xs font-bold text-primary mb-1">Licensing Offer Received</p>
+<p class="text-[11px] text-on-surface-variant/80">Automotive Corp requested a bulk license for the "Structural Support V2" STL. Review proposal.</p>
+<p class="text-[9px] text-on-surface-variant/40 mt-2">2 minutes ago</p>
+</div>
+<div class="p-4 hover:bg-surface-container-low transition-colors border-b border-outline-variant/10 cursor-pointer">
+<p class="text-xs font-bold text-error mb-1">Inventory Alert</p>
+<p class="text-[11px] text-on-surface-variant/80">Stock level for 'Polyamide Resin 500g' is below critical threshold (2 units left).</p>
+<p class="text-[9px] text-on-surface-variant/40 mt-2">1 hour ago</p>
+</div>
+<div class="p-4 hover:bg-surface-container-low transition-colors cursor-pointer">
+<p class="text-xs font-bold text-on-surface mb-1">New Order #8294</p>
+<p class="text-[11px] text-on-surface-variant/80">Pending payment confirmation for physical shipment to Munich, DE.</p>
+<p class="text-[9px] text-on-surface-variant/40 mt-2">3 hours ago</p>
+</div>
+</div>
+<div class="p-3 bg-surface-container-low rounded-b-xl text-center">
+<button class="text-primary text-[11px] font-bold uppercase tracking-wider hover:underline">Mark all as read</button>
+</div>
+</div>
+</main>
+<!-- Interactive Layer -->
+<script>
+        const notifBtn = document.getElementById('notif-btn');
+        const notifPanel = document.getElementById('notif-panel');
+
+        notifBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            notifPanel.classList.toggle('opacity-0');
+            notifPanel.classList.toggle('translate-y-4');
+            notifPanel.classList.toggle('pointer-events-none');
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!notifPanel.contains(e.target) && !notifBtn.contains(e.target)) {
+                notifPanel.classList.add('opacity-0');
+                notifPanel.classList.add('translate-y-4');
+                notifPanel.classList.add('pointer-events-none');
+            }
+        });
+
+        // Simple table hover state and row highlighting
+        const rows = document.querySelectorAll('tbody tr');
+        rows.forEach(row => {
+            row.addEventListener('mouseenter', () => {
+                row.classList.add('shadow-inner');
+            });
+            row.addEventListener('mouseleave', () => {
+                row.classList.remove('shadow-inner');
+            });
+        });
+    </script>
+</body></html>

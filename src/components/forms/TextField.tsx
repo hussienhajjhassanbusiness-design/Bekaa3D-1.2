@@ -1,3 +1,4 @@
+import { FIELD_ERROR_CLASSES, FIELD_HINT_CLASSES, FIELD_LABEL_CLASSES, FieldErrorIcon, fieldControlClasses } from "./fieldStyles";
 import { useId, type InputHTMLAttributes, type Ref } from "react";
 
 export interface TextFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "id"> {
@@ -27,25 +28,24 @@ export function TextField({ label, hint, error, className, ...rest }: TextFieldP
 
   return (
     <div>
-      <label htmlFor={inputId} className="block text-label font-semibold uppercase tracking-label text-text-primary">
+      <label htmlFor={inputId} className={FIELD_LABEL_CLASSES}>
         {label}
       </label>
       <input
         id={inputId}
         aria-describedby={describedBy}
         aria-invalid={error ? true : undefined}
-        className={`mt-1 w-full rounded-sm border px-3 py-2 text-body text-text-primary ${
-          error ? "border-danger" : "border-border-default"
-        } ${className ?? ""}`}
+        className={`mt-2 ${fieldControlClasses(Boolean(error))} ${className ?? ""}`}
         {...rest}
       />
       {hint && (
-        <p id={hintId} className="mt-1 text-caption text-text-secondary">
+        <p id={hintId} className={FIELD_HINT_CLASSES}>
           {hint}
         </p>
       )}
       {error && (
-        <p id={errorId} className="mt-1 text-caption text-danger">
+        <p id={errorId} className={FIELD_ERROR_CLASSES}>
+          <FieldErrorIcon />
           {error}
         </p>
       )}
