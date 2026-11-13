@@ -126,10 +126,19 @@ test.describe("Account profile (FVS-006 T05/T06)", () => {
       const navBox = await nav.boundingBox();
       expect(navBox).not.toBeNull();
 
-      if (width >= 768) {
-        // tablet+: the sidebar sits beside the content, not above it —
-        // same viewport row, narrower than the full width.
+      // Redesign Batch 5 (deliberate update): the old ">= 768 → narrower
+      // than the viewport" check described the previous sidebar. The intent
+      // is unchanged — the nav is always discoverable and never squeezes the
+      // content — so it is asserted directly: from 1024px a side panel
+      // (<= 256px) beside the content; below that a tab strip above it.
+      const contentBox = await page.getByRole("region", { name: "Account content" }).boundingBox();
+      expect(contentBox).not.toBeNull();
+      if (width >= 1024) {
+        expect(navBox!.width).toBeLessThanOrEqual(256);
+        expect(navBox!.x + navBox!.width).toBeLessThanOrEqual(contentBox!.x);
+      } else {
         expect(navBox!.width).toBeLessThan(width);
+        expect(navBox!.y + navBox!.height).toBeLessThanOrEqual(contentBox!.y);
       }
     });
   }

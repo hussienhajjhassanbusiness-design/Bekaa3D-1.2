@@ -180,4 +180,36 @@ describe("AccountLayout", () => {
     expect(screen.getByRole("navigation", { name: "Account" })).toBeInTheDocument();
     expect(screen.getByTestId("page-content")).toBeInTheDocument();
   });
+
+  it("keeps link accessible names to the plain labels (icons are decorative) — Batch 5", () => {
+    mockedUseAuth.mockReturnValue(authState({ isAuthenticated: true, user: STUB_USER }));
+    render(
+      <AccountLayout>
+        <div>content</div>
+      </AccountLayout>
+    );
+
+    const nav = screen.getByRole("navigation", { name: "Account" });
+    for (const label of ["Profile", "Orders", "Offers", "Wishlist", "Addresses", "Notifications"]) {
+      expect(screen.getByRole("link", { name: label })).toBeInTheDocument();
+    }
+    for (const icon of nav.querySelectorAll("svg")) {
+      expect(icon).toHaveAttribute("aria-hidden", "true");
+    }
+    expect(nav.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
+  });
+
+  it("keeps Log out inside the Account navigation, after the destinations", () => {
+    mockedUseAuth.mockReturnValue(authState({ isAuthenticated: true, user: STUB_USER }));
+    render(
+      <AccountLayout>
+        <div>content</div>
+      </AccountLayout>
+    );
+
+    const nav = screen.getByRole("navigation", { name: "Account" });
+    const controls = Array.from(nav.querySelectorAll("a, button"));
+    expect(controls.at(-1)).toHaveTextContent("Log out");
+    expect(controls).toHaveLength(7);
+  });
 });

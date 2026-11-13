@@ -45,5 +45,6 @@ export function adaptNotification(dto: NotificationReadDTO): NotificationItemMod
     title: label,
     body: event ? `${label} update: ${event}` : `You have a new ${label.toLowerCase()} notification.`,
     isRead: dto.read,
+    createdAt: dto.created_at,
   };
 }

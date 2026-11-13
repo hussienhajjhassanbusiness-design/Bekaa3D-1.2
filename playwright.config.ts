@@ -61,6 +61,7 @@ export default defineConfig({
         "register-and-verify.spec.ts",
         "login-session.spec.ts",
         "account-profile.spec.ts",
+        "account-pages-responsive.spec.ts",
         "shop.spec.ts",
         "product-detail.spec.ts",
         "auth-account-phase2.spec.ts",

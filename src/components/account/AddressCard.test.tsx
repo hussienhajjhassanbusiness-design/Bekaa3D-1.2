@@ -84,4 +84,25 @@ describe("AddressCard", () => {
     renderCard({ address: DEFAULT_ADDRESS });
     expect(screen.queryByText(/zone|shipping|fee/i)).not.toBeInTheDocument();
   });
+
+  it("labels recipient, phone, location and landmark notes as term/definition pairs (Batch 5)", () => {
+    renderCard();
+    const card = screen.getByRole("article", { name: "Home" });
+    for (const term of ["Recipient", "Phone", "Location", "Landmark notes"]) {
+      expect(within(card).getByText(term).tagName).toBe("DT");
+    }
+    expect(within(card).getByText("+9613123456").closest("dd")).not.toBeNull();
+  });
+
+  it("communicates the default state as text, and the card is not itself a control", () => {
+    renderCard({ address: DEFAULT_ADDRESS });
+    const card = screen.getByRole("article", { name: "Home" });
+    expect(within(card).getByText("Default")).toBeVisible();
+    expect(card).not.toHaveAttribute("role", "button");
+    expect(card.closest("a, button")).toBeNull();
+    expect(within(card).getAllByRole("button").map((button) => button.getAttribute("aria-label"))).toEqual([
+      "Edit Home",
+      "Delete Home",
+    ]);
+  });
 });

@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { NotificationList } from "@/components/notifications/NotificationList";
 import { Alert } from "@/components/feedback/Alert";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { useNotifications } from "@/lib/notifications/useNotifications";
 import { useSetNotificationRead } from "@/lib/notifications/useSetNotificationRead";
 import { adaptNotification } from "@/lib/notifications/notificationAdapter";
@@ -63,9 +64,17 @@ export default function AccountNotificationsPage() {
 
   return (
     <>
-      <h1 className="text-h1 font-bold text-text-primary">Notifications</h1>
-      {writeFailure && <Alert variant="error" message={writeFailure} />}
-      <div className="mt-4">
+      <PageHeader
+        eyebrow="Account"
+        title="Notifications"
+        description="Updates about your account and your activity on Bekaa3D."
+      />
+      {writeFailure && (
+        <div className="mb-6">
+          <Alert variant="error" message={writeFailure} />
+        </div>
+      )}
+      <div>
         <NotificationList
           notifications={notifications}
           onToggleRead={handleToggleRead}

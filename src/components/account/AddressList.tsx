@@ -43,13 +43,13 @@ export function AddressList({
 }: AddressListProps) {
   if (isLoading) {
     return (
-      <div role="status" className="grid grid-cols-1 gap-4 tablet:grid-cols-2">
+      <div role="status" className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
         <span className="sr-only">Loading your addresses…</span>
         {[0, 1].map((index) => (
           <div
             key={index}
             aria-hidden="true"
-            className="h-44 animate-pulse rounded-md bg-neutral-200 motion-reduce:animate-none"
+            className="h-72 animate-pulse rounded-card border border-outline-variant/30 bg-surface-container-low motion-reduce:animate-none"
           />
         ))}
       </div>
@@ -58,10 +58,10 @@ export function AddressList({
 
   if (isError) {
     return (
-      <div>
+      <div className="rounded-card border border-outline-variant/30 bg-surface-container-lowest p-6 shadow-sm">
         <Alert variant="error" message={ERROR_MESSAGE} />
         {onRetry && (
-          <Button onClick={onRetry} className="mt-2">
+          <Button onClick={onRetry} className="mt-4">
             Retry
           </Button>
         )}
@@ -70,11 +70,24 @@ export function AddressList({
   }
 
   if (addresses.length === 0) {
-    return <EmptyState message={EMPTY_MESSAGE} actionLabel={onAdd ? "Add an address" : undefined} onAction={onAdd} />;
+    return (
+      <div className="rounded-card border border-dashed border-outline-variant bg-surface-container-lowest">
+        <EmptyState
+          icon="location-on"
+          message={EMPTY_MESSAGE}
+          actionLabel={onAdd ? "Add an address" : undefined}
+          onAction={onAdd}
+        />
+      </div>
+    );
   }
 
   return (
-    <ul className="grid grid-cols-1 gap-4 tablet:grid-cols-2">
+    // 2-up while the nav is a tab strip (768–1023), 1-up beside the 256px
+    // sidebar at 1024 (too narrow for two readable cards), 2-up from 1280.
+    // Default breakpoints on purpose: the custom tablet:/desktop: variants
+    // are emitted before the defaults (see the Batch 3 cascade note).
+    <ul className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
       {addresses.map((address) => (
         <li key={address.id}>
           <AddressCard

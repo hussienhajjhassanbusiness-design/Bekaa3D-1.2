@@ -108,4 +108,48 @@ describe("NotificationItem", () => {
   it("ships with zero concrete event-type renderers", () => {
     expect(Object.keys(NOTIFICATION_RENDERERS)).toHaveLength(0);
   });
+
+  describe("Batch 5 presentation", () => {
+    it("names the row by its title heading, so the list reads as one article per notification", () => {
+      render(<NotificationItem notification={UNREAD_NOTIFICATION} onToggleRead={vi.fn()} />);
+      expect(screen.getByRole("article", { name: "Welcome to Bekaa3D" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { level: 2, name: "Welcome to Bekaa3D" })).toBeInTheDocument();
+    });
+
+    it("renders the real created_at as a machine-readable <time>", () => {
+      render(
+        <NotificationItem
+          notification={{ ...UNREAD_NOTIFICATION, createdAt: "2026-11-09T08:15:00Z" }}
+          onToggleRead={vi.fn()}
+        />
+      );
+      const time = document.querySelector("time");
+      expect(time).toHaveAttribute("datetime", "2026-11-09T08:15:00Z");
+      expect(time?.textContent).toMatch(/2026/);
+    });
+
+    it("renders no time at all when createdAt is missing or unparsable", () => {
+      const { rerender } = render(<NotificationItem notification={UNREAD_NOTIFICATION} onToggleRead={vi.fn()} />);
+      expect(document.querySelector("time")).toBeNull();
+      rerender(
+        <NotificationItem notification={{ ...UNREAD_NOTIFICATION, createdAt: "not-a-date" }} onToggleRead={vi.fn()} />
+      );
+      expect(document.querySelector("time")).toBeNull();
+      expect(screen.queryByText(/invalid date/i)).not.toBeInTheDocument();
+    });
+
+    it("renders a custom_request notification with its real title and the same mark-read action", async () => {
+      const onToggleRead = vi.fn();
+      const user = userEvent.setup();
+      render(
+        <NotificationItem
+          notification={{ ...UNREAD_NOTIFICATION, type: "custom_request", title: "Custom request", body: "Custom request update: quoted" }}
+          onToggleRead={onToggleRead}
+        />
+      );
+      expect(screen.getByRole("article", { name: "Custom request" })).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: /mark read/i }));
+      expect(onToggleRead).toHaveBeenCalledWith("n-1", true);
+    });
+  });
 });

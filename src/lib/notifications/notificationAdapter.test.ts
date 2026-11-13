@@ -87,4 +87,8 @@ describe("adaptNotification", () => {
     expect(result.title).toBe("Custom request");
     expect(result.body.length).toBeGreaterThan(0);
   });
+
+  it("passes the real created_at through as createdAt (Batch 5 row timestamp)", () => {
+    expect(adaptNotification(dto({ created_at: "2026-11-09T08:15:00Z" })).createdAt).toBe("2026-11-09T08:15:00Z");
+  });
 });

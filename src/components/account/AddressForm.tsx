@@ -192,18 +192,25 @@ export function AddressForm({
         </div>
 
         {defaultIsAutomatic ? (
-          <p className="text-caption text-text-secondary">Your first address becomes your default automatically.</p>
+          <p className="rounded-lg bg-surface-container-low p-3 text-body-md text-on-surface-variant">
+            Your first address becomes your default automatically.
+          </p>
         ) : (
-          <div className="flex items-start gap-2">
-            <input id={checkboxId} type="checkbox" className="mt-1 h-4 w-4" {...register("is_default")} />
-            <label htmlFor={checkboxId} className="text-body text-text-primary">
+          <div className="flex min-h-11 items-center gap-3 rounded-lg bg-surface-container-low px-3 py-2">
+            <input
+              id={checkboxId}
+              type="checkbox"
+              className="h-5 w-5 shrink-0 cursor-pointer rounded-badge accent-primary"
+              {...register("is_default")}
+            />
+            <label htmlFor={checkboxId} className="cursor-pointer text-body-md text-on-surface">
               Use as my default address
             </label>
           </div>
         )}
 
-        <div className="flex flex-col-reverse gap-2 tablet:flex-row tablet:justify-end">
-          <Button type="button" variant="secondary" onClick={onCancel}>
+        <div className="flex flex-col-reverse gap-3 border-t border-outline-variant/30 pt-6 tablet:flex-row tablet:justify-end">
+          <Button type="button" variant="outline" onClick={onCancel}>
             Cancel
           </Button>
           <Button type="submit" isLoading={isSubmitting}>

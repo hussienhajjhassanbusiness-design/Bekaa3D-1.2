@@ -40,4 +40,12 @@ describe("EmptyState", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
   });
+
+  it("draws the optional icon (decorative) and defaults to the original glyph", () => {
+    const { container, rerender } = render(<EmptyState message="Nothing here." />);
+    expect(container.querySelector("svg")).toHaveAttribute("data-icon", "search");
+    rerender(<EmptyState message="Nothing here." icon="notifications" />);
+    expect(container.querySelector("svg")).toHaveAttribute("data-icon", "notifications");
+    expect(container.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+  });
 });

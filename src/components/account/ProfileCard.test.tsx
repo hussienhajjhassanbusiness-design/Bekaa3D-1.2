@@ -162,4 +162,43 @@ describe("ProfileCard", () => {
     expect(screen.queryByRole("button", { name: /^edit$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /cancel/i })).not.toBeInTheDocument();
   });
+
+  describe("Batch 5 layout", () => {
+    it("keeps exactly one h1 'Profile' in the loading, error and loaded states", () => {
+      for (const state of [
+        { isLoading: true },
+        { isError: true },
+        { isAuthenticated: true, user: VERIFIED_USER },
+      ] as const) {
+        mockedUseAuth.mockReturnValue(authState(state));
+        const { unmount } = render(<ProfileCard />);
+        expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+        expect(screen.getByRole("heading", { level: 1, name: "Profile" })).toBeInTheDocument();
+        unmount();
+      }
+    });
+
+    it("shows 'Member since' from the real createdAt, and hides it for an unparsable value", () => {
+      mockedUseAuth.mockReturnValue(authState({ isAuthenticated: true, user: VERIFIED_USER }));
+      const { unmount } = render(<ProfileCard />);
+      expect(screen.getByText("Member since December 2025")).toBeInTheDocument();
+      unmount();
+
+      mockedUseAuth.mockReturnValue(
+        authState({ isAuthenticated: true, user: { ...VERIFIED_USER, createdAt: "not-a-date" } })
+      );
+      render(<ProfileCard />);
+      expect(screen.queryByText(/member since/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/invalid date/i)).not.toBeInTheDocument();
+    });
+
+    it("renders the email once and the status rows as term/definition pairs under an 'Account details' h2", () => {
+      mockedUseAuth.mockReturnValue(authState({ isAuthenticated: true, user: VERIFIED_USER }));
+      render(<ProfileCard />);
+      expect(screen.getAllByText("ada@example.com")).toHaveLength(1);
+      expect(screen.getByRole("heading", { level: 2, name: "Account details" })).toBeInTheDocument();
+      expect(screen.getByText("Verification status").tagName).toBe("DT");
+      expect(screen.getByText("Account status").tagName).toBe("DT");
+    });
+  });
 });

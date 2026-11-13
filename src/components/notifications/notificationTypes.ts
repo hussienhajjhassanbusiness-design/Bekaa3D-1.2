@@ -13,14 +13,17 @@
 // belong in that adapter, not in every component that renders a
 // notification.
 //
-// No timestamp/link field exists here — nothing in this batch's UI
-// requirements needs one yet; add only when a real consumer does.
+// No link field exists here — nothing in the UI needs one yet; add only
+// when a real consumer does. `createdAt` (Batch 5) is the real
+// NotificationRead.created_at, shown as the row timestamp; optional so a
+// model built without it simply renders no time.
 export interface NotificationItemModel {
   id: string;
   type: string;
   title: string;
   body: string;
   isRead: boolean;
+  createdAt?: string;
 }
 
 // #SHARED-NOTIFICATION-RENDERERS

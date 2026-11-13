@@ -158,6 +158,64 @@ const PATHS = {
       <rect x="13.5" y="13" width="7" height="7" rx="1" />
     </>
   ),
+  // Batch 5 — account navigation, address cards, notification rows.
+  "shopping-bag": (
+    <>
+      <path d="M5.5 7.5h13l-1 12.5h-11z" />
+      <path d="M9 7.5V6.5a3 3 0 0 1 6 0v1" />
+    </>
+  ),
+  sell: (
+    <>
+      <path d="M3.5 12.2V4.5a1 1 0 0 1 1-1h7.7l8.3 8.3a1 1 0 0 1 0 1.4l-7.3 7.3a1 1 0 0 1-1.4 0z" />
+      <circle cx="8" cy="8" r="1.25" />
+    </>
+  ),
+  favorite: (
+    <path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z" />
+  ),
+  "location-on": (
+    <>
+      <path d="M12 21s-6.5-5.8-6.5-11.2a6.5 6.5 0 0 1 13 0C18.5 15.2 12 21 12 21z" />
+      <circle cx="12" cy="9.8" r="2.3" />
+    </>
+  ),
+  notifications: (
+    <>
+      <path d="M6 16.5v-5.5a6 6 0 0 1 12 0v5.5l1.5 2h-15z" />
+      <path d="M10 20.5a2 2 0 0 0 4 0" />
+    </>
+  ),
+  logout: (
+    <>
+      <path d="M10 4H5.5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1H10" />
+      <path d="M15 8l4 4-4 4" />
+      <path d="M19 12H9.5" />
+    </>
+  ),
+  edit: (
+    <>
+      <path d="M4 20h4L19.3 8.7a1.4 1.4 0 0 0 0-2L17.3 4.7a1.4 1.4 0 0 0-2 0L4 16z" />
+      <path d="M13.5 6.5l4 4" />
+    </>
+  ),
+  delete: (
+    <>
+      <path d="M4.5 7h15" />
+      <path d="M9.5 7V4.5h5V7" />
+      <path d="M6.5 7l1 13h9l1-13" />
+      <path d="M10.5 11v5M13.5 11v5" />
+    </>
+  ),
+  call: (
+    <path d="M5.5 3.5h3.2l1.8 4.6-2.3 1.4a11 11 0 0 0 6.3 6.3l1.4-2.3 4.6 1.8v3.2a1 1 0 0 1-1 1A16.5 16.5 0 0 1 4.5 4.5a1 1 0 0 1 1-1z" />
+  ),
+  schedule: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3.25 2" />
+    </>
+  ),
 } as const;
 
 export type IconName = keyof typeof PATHS;

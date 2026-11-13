@@ -6,6 +6,8 @@ import { Button } from "@/components/forms/Button";
 import { Alert } from "@/components/feedback/Alert";
 import { ConfirmDialog } from "@/components/feedback/ConfirmDialog";
 import { DialogShell } from "@/components/feedback/DialogShell";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Icon } from "@/components/ui/Icon";
 import { AddressList } from "./AddressList";
 import { AddressForm } from "./AddressForm";
 import { useAuth } from "@/lib/auth/AuthProvider";
@@ -29,7 +31,7 @@ import type { FieldValidationError } from "@/lib/api/validationErrors";
 type EditorState = { mode: "create" } | { mode: "edit"; address: AddressModel } | null;
 
 const DIALOG_PANEL_CLASSNAME =
-  "w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-card border border-outline-variant/30 bg-surface-container-lowest p-4 shadow-2xl tablet:p-6";
+  "w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-card border border-outline-variant/30 bg-surface-container-lowest p-5 shadow-2xl tablet:p-8";
 
 // #FVS023-ADDRESS-BOOK — /account/addresses, against the real backend
 // (VS-026). Every write ends in a refetch of the list (useAddresses.ts),
@@ -156,26 +158,33 @@ export function AddressBook() {
 
   return (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-h1 font-bold text-text-primary">Addresses</h1>
-        {hasAddresses && (
-          <Button type="button" onClick={() => openEditor({ mode: "create" })}>
-            Add address
-          </Button>
-        )}
-      </div>
-      <p className="mt-1 text-body text-text-secondary">Saved delivery addresses you can choose at checkout.</p>
+      <PageHeader
+        eyebrow="Account"
+        title="Addresses"
+        description="Saved delivery addresses you can choose at checkout."
+        actions={
+          hasAddresses ? (
+            <Button type="button" onClick={() => openEditor({ mode: "create" })}>
+              <Icon name="add" className="h-4 w-4" />
+              Add address
+            </Button>
+          ) : undefined
+        }
+      />
 
       {user && !user.emailVerified && (
-        <div className="mt-4 flex flex-col gap-2">
+        <div className="mb-6 flex flex-col items-start gap-2">
           <Alert variant="warning" message={ADDRESS_MESSAGES.verifyEmail} />
-          <Link href="/verify-email/resend" className="text-body text-brand-dark-green underline">
+          <Link
+            href="/verify-email/resend"
+            className="inline-flex min-h-11 items-center font-semibold text-primary underline underline-offset-4 hover:text-primary-container"
+          >
             Resend the verification email
           </Link>
         </div>
       )}
 
-      <div className="mt-4 flex flex-col gap-2" aria-live="polite">
+      <div className="flex flex-col gap-2" aria-live="polite">
         {notice && <Alert variant="success" message={notice} />}
       </div>
       {pageError && (
@@ -184,7 +193,7 @@ export function AddressBook() {
         </div>
       )}
 
-      <div className="mt-4">
+      <div className={notice || pageError ? "mt-6" : undefined}>
         <AddressList
           addresses={addresses}
           isLoading={query.isLoading}
@@ -214,9 +223,14 @@ export function AddressBook() {
         labelledBy={editorTitleId}
         panelClassName={DIALOG_PANEL_CLASSNAME}
       >
-        <h2 id={editorTitleId} className="mb-4 text-h3 font-bold text-text-primary">
-          {isEditing ? "Edit address" : "Add address"}
-        </h2>
+        <div className="mb-6 border-b border-outline-variant/30 pb-4">
+          <p aria-hidden="true" className="mb-1 font-label text-label-sm uppercase tracking-widest text-primary">
+            Address book
+          </p>
+          <h2 id={editorTitleId} className="font-headline text-headline-md text-on-surface">
+            {isEditing ? "Edit address" : "Add address"}
+          </h2>
+        </div>
         {editor && (
           <AddressForm
             key={isEditing ? editor.address.id : "create"}

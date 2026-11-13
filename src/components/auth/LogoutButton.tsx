@@ -14,8 +14,26 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth/AuthProvider";
+import { Icon } from "@/components/ui/Icon";
 
-export function LogoutButton({ className = "" }: { className?: string }) {
+// Presentation only (Batch 5): "nav" draws the control as the account
+// navigation's last item (Stitch §40 bottom section: logout in error ink
+// with a leading glyph). Behaviour is identical for both appearances.
+const APPEARANCE_CLASSES = {
+  default:
+    "whitespace-nowrap rounded-sm px-3 py-2 text-left text-body text-text-primary hover:text-brand-dark-green disabled:opacity-60",
+  nav:
+    "inline-flex min-h-11 w-full items-center gap-3 whitespace-nowrap rounded-lg px-3 text-left text-body-md text-error " +
+    "transition-colors duration-200 ease-standard hover:bg-error-container/50 disabled:opacity-60 desktop:px-4 desktop:py-3 motion-reduce:transition-none",
+} as const;
+
+export function LogoutButton({
+  className = "",
+  appearance = "default",
+}: {
+  className?: string;
+  appearance?: keyof typeof APPEARANCE_CLASSES;
+}) {
   const { logout } = useAuth();
   const router = useRouter();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -36,8 +54,9 @@ export function LogoutButton({ className = "" }: { className?: string }) {
       onClick={handleClick}
       disabled={isLoggingOut}
       aria-busy={isLoggingOut || undefined}
-      className={`whitespace-nowrap rounded-sm px-3 py-2 text-left text-body text-text-primary hover:text-brand-dark-green disabled:opacity-60 ${className}`}
+      className={`${APPEARANCE_CLASSES[appearance]} ${className}`}
     >
+      {appearance === "nav" && <Icon name="logout" className="h-5 w-5" />}
       {isLoggingOut ? "Logging out…" : "Log out"}
     </button>
   );
