@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Request } from "@playwright/test";
 import { stubEmptyCart } from "./support/stubCart";
+import { E2E_ORIGIN } from "./support/origin";
 
 // Phase 5F — FVS-027 payment result + payment retry on /account/orders/[id]
 // against a deterministic, in-memory stand-in for backend 2dfb27b:
@@ -42,7 +43,7 @@ type Json = Record<string, unknown>;
 const usd = (amount_cents: number) => ({ amount_cents, currency: "USD" });
 const ORDER_ID = "00000000-0000-4000-8000-000000000101";
 const NUMBER = "B3D-2026-000101";
-const RETURN_URL = `http://localhost:3000/checkout/return?order=${NUMBER}`;
+const RETURN_URL = `${E2E_ORIGIN}/checkout/return?order=${NUMBER}`;
 
 function minutesFromNow(minutes: number): string {
   return new Date(Date.now() + minutes * 60_000).toISOString();
@@ -130,7 +131,7 @@ async function installFake(page: Page, order: Json): Promise<Fake> {
   const fake: Fake = { detailCalls: 0, retryCalls: [], order, retryAnswers: [] };
   const stored = new Map<string, Json>();
 
-  await page.context().addCookies([{ name: "csrf_token", value: CSRF, url: "http://localhost:3000" }]);
+  await page.context().addCookies([{ name: "csrf_token", value: CSRF, url: E2E_ORIGIN }]);
   await stubEmptyCart(page);
   await page.route(/\/api\/v1\/me$/, (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify(ME) }));
   await page.route(/\/api\/v1\/settings\/public$/, (route) =>

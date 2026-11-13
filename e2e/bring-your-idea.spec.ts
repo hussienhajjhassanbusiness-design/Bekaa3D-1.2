@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { E2E_CAPTCHA_TOKEN, routeFakeTurnstile, waitForCaptchaToken } from "./support/fakeTurnstile";
 import { stubEmptyCart } from "./support/stubCart";
+import { E2E_ORIGIN } from "./support/origin";
 
 // Phase 6B-2 — Bring Your Idea against a deterministic stand-in for backend
 // 2dfb27b (engagement/api/custom_requests.py, custom_request_admin.py,
@@ -24,7 +25,7 @@ async function asGuest(page: Page) {
 }
 
 async function asUser(page: Page, me: Json) {
-  await page.context().addCookies([{ name: "csrf_token", value: "e2e-csrf-value", url: "http://localhost:3000" }]);
+  await page.context().addCookies([{ name: "csrf_token", value: "e2e-csrf-value", url: E2E_ORIGIN }]);
   await stubEmptyCart(page);
   await page.route(/\/api\/v1\/me$/, (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(me) }));
 }

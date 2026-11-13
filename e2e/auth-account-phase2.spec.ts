@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { E2E_CAPTCHA_TOKEN, routeFakeTurnstile, waitForCaptchaToken } from "./support/fakeTurnstile";
 import { stubEmptyCart } from "./support/stubCart";
+import { E2E_ORIGIN } from "./support/origin";
 
 // Phase 5C: keep the header cart read inside the browser (no :8000).
 test.beforeEach(async ({ page }) => {
@@ -92,7 +93,7 @@ test.describe("Reset password (Phase 2 / FVS-004 confirm half)", () => {
 });
 
 async function signInAs(page: Page) {
-  await page.context().addCookies([{ name: "csrf_token", value: "test-csrf-value", url: "http://localhost:3000" }]);
+  await page.context().addCookies([{ name: "csrf_token", value: "test-csrf-value", url: E2E_ORIGIN }]);
   await page.route("**/api/v1/me", async (route) => {
     await route.fulfill({
       status: 200,

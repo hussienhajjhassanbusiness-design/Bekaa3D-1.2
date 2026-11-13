@@ -237,6 +237,10 @@ These are product-owner calls. The plan proceeds with the **default** shown unle
 
 **Deferred to Batch 4+:** `PageHeader` (with the account/admin pages that share §64), related products on the PDP (no related-products endpoint; a category query would be new data behaviour), header search, the wishlist page cards (`WishlistList`, Batch 7), cart line items/stepper (Batch 6), admin chrome removal (Batch 9). The dev-server E2E load flake on cold admin routes is worth a separate look (e.g. a production-build E2E server or fewer workers), outside the redesign.
 
+### Between Batch 3 and Batch 4 — E2E harness stabilized (test infrastructure only)
+
+The dev-server cold-compile flake above (Batch 2 `/login`, Batch 3 admin routes) is fixed at the source: `npm run test:e2e` now runs against its own **production build** (`next build` + `next start` on `:3100`, output in `.next-e2e/`) instead of `next dev` on `:3000`, so no route compiles on demand during a run. Application timeouts, workers and retries are unchanged. No application code changed. Result: the previously flaky admin/auth group 58/58, then 135/135 over three repeats; full suite 199/199. Details: `docs/setup/frontend-setup.md` → "Default E2E Smoke Tests".
+
 ---
 
 ## 1. High-risk areas and how to restyle them safely
@@ -456,6 +460,8 @@ npm run test:e2e
 ```
 
 Do not re-run the full E2E suite repeatedly without a reason. If the gate fails, fix the cause, re-run only the affected targeted tests, then run the gate once more.
+
+`npm run test:e2e` builds and serves its own production build (`.next-e2e/`, port 3100), separate from the `npm run build` step above, which checks the real build. Targeted re-runs after the gate can skip that rebuild with `E2E_REUSE_BUILD=1` when no source changed (see `docs/setup/frontend-setup.md`).
 
 Batch report template:
 

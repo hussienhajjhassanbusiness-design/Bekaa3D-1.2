@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Route } from "@playwright/test";
 import { stubEmptyCart } from "./support/stubCart";
+import { E2E_ORIGIN } from "./support/origin";
 
 // Phase 6D — Wishlist against a deterministic stand-in for backend 2dfb27b
 // (engagement/api/wishlist.py): GET /api/v1/me/wishlist (cursor pages),
@@ -48,7 +49,7 @@ function wishItem(id: string, available = true): Json {
 async function install(page: Page, user: Json | null): Promise<Fake> {
   const fake: Fake = { saved: new Map(), user, writes: [], failNext: null, pageSize: 100 };
   const json = (route: Route, body: unknown, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
-  await page.context().addCookies([{ name: "csrf_token", value: "e2e-csrf-value", url: "http://localhost:3000" }]);
+  await page.context().addCookies([{ name: "csrf_token", value: "e2e-csrf-value", url: E2E_ORIGIN }]);
   await stubEmptyCart(page);
   await page.route(/\/api\/v1\/me$/, (r) => (fake.user ? json(r, fake.user) : r.fulfill(problem(401, "AUTH_REQUIRED"))));
   await page.route(/\/api\/v1\/auth\/refresh$/, (r) => r.fulfill(problem(401, "AUTH_REQUIRED")));

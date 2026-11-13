@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Route } from "@playwright/test";
 import { stubEmptyWishlist } from "./support/stubCart";
+import { E2E_ORIGIN } from "./support/origin";
 
 // Phase 5C — /cart and product-page Add to cart (FVS-025) against a
 // deterministic, in-memory stand-in for the real contract (openapi.json
@@ -138,7 +139,7 @@ function cartRead(backend: FakeBackend) {
 async function installFakeBackend(page: Page, initial: StoredLine[] = []): Promise<FakeBackend> {
   const backend: FakeBackend = { lines: initial.map((line) => ({ ...line })), writes: [] };
 
-  await page.context().addCookies([{ name: "csrf_token", value: CSRF, url: "http://localhost:3000" }]);
+  await page.context().addCookies([{ name: "csrf_token", value: CSRF, url: E2E_ORIGIN }]);
   await page.route("**/api/v1/me", (route) => route.fulfill({ status: 200, body: JSON.stringify(ME) }));
   await stubEmptyWishlist(page);
   await page.route("**/api/v1/settings/public", (route) =>
@@ -388,7 +389,7 @@ test.describe("Cart (Phase 5C / FVS-025)", () => {
 
   test("a CSRF rejection shows safe copy and leaves the cart unchanged", async ({ page }) => {
     const backend = await installFakeBackend(page, [{ productId: "p-dragon", quantity: 1, snapshotCents: 1800 }]);
-    await page.context().addCookies([{ name: "csrf_token", value: "stale-value", url: "http://localhost:3000" }]);
+    await page.context().addCookies([{ name: "csrf_token", value: "stale-value", url: E2E_ORIGIN }]);
     await page.goto("/cart");
 
     const dragon = page.getByRole("article", { name: "Articulated Dragon" });

@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { stubEmptyCart } from "./support/stubCart";
+import { E2E_ORIGIN } from "./support/origin";
 
 // Phase 5C: keep the header cart read inside the browser (no :8000).
 test.beforeEach(async ({ page }) => {
@@ -41,7 +42,7 @@ const ME_BODY_VERIFIED: RawMeBody = {
 const ME_BODY_UNVERIFIED: RawMeBody = { ...ME_BODY_VERIFIED, email_verified: false, email_verified_at: null };
 
 async function signInAs(page: Page, meBody: RawMeBody) {
-  await page.context().addCookies([{ name: "csrf_token", value: "test-value", url: "http://localhost:3000" }]);
+  await page.context().addCookies([{ name: "csrf_token", value: "test-value", url: E2E_ORIGIN }]);
   await page.route("**/api/v1/me", async (route) => {
     await route.fulfill({ status: 200, body: JSON.stringify(meBody) });
   });
@@ -148,7 +149,7 @@ test.describe("Account profile (FVS-006 T05/T06)", () => {
     page,
   }) => {
     let meCallCount = 0;
-    await page.context().addCookies([{ name: "csrf_token", value: "test-value", url: "http://localhost:3000" }]);
+    await page.context().addCookies([{ name: "csrf_token", value: "test-value", url: E2E_ORIGIN }]);
     await page.route("**/api/v1/me", async (route) => {
       meCallCount += 1;
       if (meCallCount === 1) {

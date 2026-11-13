@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Route } from "@playwright/test";
 import { stubEmptyCart } from "./support/stubCart";
+import { E2E_ORIGIN } from "./support/origin";
 
 // Phase 5C: keep the header cart read inside the browser (no :8000).
 test.beforeEach(async ({ page }) => {
@@ -65,7 +66,7 @@ async function installFakeBackend(page: Page, initial: StoredAddress[] = []): Pr
   const backend: FakeBackend = { addresses: [...initial], writes: [], failNextCreateWithPhone422: false };
   let nextId = 1;
 
-  await page.context().addCookies([{ name: "csrf_token", value: CSRF, url: "http://localhost:3000" }]);
+  await page.context().addCookies([{ name: "csrf_token", value: CSRF, url: E2E_ORIGIN }]);
   await page.route("**/api/v1/me", (route) => route.fulfill({ status: 200, body: JSON.stringify(ME) }));
 
   await page.route(/\/api\/v1\/me\/addresses(\/.*)?$/, async (route) => {

@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { stubEmptyCart } from "./support/stubCart";
+import { E2E_ORIGIN } from "./support/origin";
 
 // Phase 5C: keep the header cart read inside the browser (no :8000).
 test.beforeEach(async ({ page }) => {
@@ -138,7 +139,7 @@ test.describe("returnTo security (FVS-003 BATCH 4 Section E)", () => {
     await fillValidForm(page);
     await submitAndWaitForMe(page);
 
-    await expect(page).toHaveURL(/^http:\/\/localhost:3000\/$/, { timeout: 15_000 });
+    await expect(page).toHaveURL(`${E2E_ORIGIN}/`, { timeout: 15_000 });
   });
 
   test("a protocol-relative returnTo (//evil.example) never results in external navigation — falls back to /", async ({
@@ -150,7 +151,7 @@ test.describe("returnTo security (FVS-003 BATCH 4 Section E)", () => {
     await fillValidForm(page);
     await submitAndWaitForMe(page);
 
-    await expect(page).toHaveURL(/^http:\/\/localhost:3000\/$/, { timeout: 15_000 });
+    await expect(page).toHaveURL(`${E2E_ORIGIN}/`, { timeout: 15_000 });
   });
 });
 

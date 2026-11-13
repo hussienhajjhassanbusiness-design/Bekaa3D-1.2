@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { stubEmptyCart } from "./support/stubCart";
+import { E2E_ORIGIN } from "./support/origin";
 
 // Phase 5E — /account/orders and /account/orders/[id] (FVS-029) against a
 // deterministic, in-memory stand-in for backend 2dfb27b's customer order
@@ -204,7 +205,7 @@ async function installFakeBackend(page: Page, options: { orders?: Json[]; pageSi
 
   // A signed-in browser has the csrf_token cookie; without it the auth
   // bootstrap treats the visitor as anonymous without calling /me.
-  await page.context().addCookies([{ name: "csrf_token", value: "e2e-csrf-value", url: "http://localhost:3000" }]);
+  await page.context().addCookies([{ name: "csrf_token", value: "e2e-csrf-value", url: E2E_ORIGIN }]);
   // The header's cart count reads /api/v1/cart on every page.
   await stubEmptyCart(page);
   await page.route(/\/api\/v1\/me$/, (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify(ME) }));
@@ -243,7 +244,7 @@ test.describe("Account orders (Phase 5E / FVS-029)", () => {
   test("an anonymous visit redirects to /login with a safe returnTo", async ({ page }) => {
     await stubEmptyCart(page);
     // An expired session: the cookie is present, /me and the refresh are refused.
-    await page.context().addCookies([{ name: "csrf_token", value: "e2e-csrf-value", url: "http://localhost:3000" }]);
+    await page.context().addCookies([{ name: "csrf_token", value: "e2e-csrf-value", url: E2E_ORIGIN }]);
     await page.route(/\/api\/v1\/me$/, (route) => route.fulfill(problem(401, "AUTH_REQUIRED")));
     await page.route(/\/api\/v1\/auth\/refresh$/, (route) => route.fulfill(problem(401, "AUTH_REQUIRED")));
     let orderCalls = 0;

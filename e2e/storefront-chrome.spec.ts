@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { stubGuest } from "./support/stubGuest";
 import { stubEmptyCart } from "./support/stubCart";
+import { E2E_ORIGIN } from "./support/origin";
 
 // Redesign Batch 2 — the shared storefront chrome (Header with the Login /
 // Account entry and the mobile menu, Footer) at every supported width.
@@ -17,7 +18,7 @@ const ME_BODY = {
 
 async function signIn(page: Page) {
   await stubEmptyCart(page);
-  await page.context().addCookies([{ name: "csrf_token", value: "test-value", url: "http://localhost:3000" }]);
+  await page.context().addCookies([{ name: "csrf_token", value: "test-value", url: E2E_ORIGIN }]);
   await page.route(/\/api\/v1\/me$/, (route) => route.fulfill({ status: 200, body: JSON.stringify(ME_BODY) }));
 }
 

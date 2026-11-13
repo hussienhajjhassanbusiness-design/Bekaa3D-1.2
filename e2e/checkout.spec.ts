@@ -1,4 +1,5 @@
 import { test, expect, type Page, type Route } from "@playwright/test";
+import { E2E_ORIGIN } from "./support/origin";
 
 // Phase 5D — /checkout (FVS-026) against a deterministic, in-memory
 // stand-in for backend 2dfb27b's contract (openapi.json /api/v1/checkout;
@@ -245,7 +246,7 @@ function placeOrder(backend: FakeBackend, body: Record<string, unknown>): { stat
         amount_due: cash ? money(total) : null,
         lines,
       },
-      payment: cash ? null : { id: `pay-${backend.orderSeq}`, status: "pending", provider: "mock", redirect_url: `http://localhost:3000/checkout/return?order=${number}` },
+      payment: cash ? null : { id: `pay-${backend.orderSeq}`, status: "pending", provider: "mock", redirect_url: `${E2E_ORIGIN}/checkout/return?order=${number}` },
       dropped_lines: dropped.map((product_id) => ({ product_id, reason: "already_owned" })),
     },
   };
@@ -265,7 +266,7 @@ async function installFakeBackend(page: Page, initial: StoredLine[], options: { 
   };
   const settings = { ...SETTINGS, ...options.settings };
 
-  await page.context().addCookies([{ name: "csrf_token", value: CSRF, url: "http://localhost:3000" }]);
+  await page.context().addCookies([{ name: "csrf_token", value: CSRF, url: E2E_ORIGIN }]);
   await page.route(/\/api\/v1\/me$/, (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(ME) }));
   await page.route(/\/api\/v1\/settings\/public$/, (route) =>
     route.fulfill({ contentType: "application/json", body: JSON.stringify(settings) })
@@ -578,7 +579,7 @@ test.describe("Checkout (Phase 5D / FVS-026)", () => {
 
   test("CSRF rejection: safe copy, cart kept", async ({ page }) => {
     const backend = await installFakeBackend(page, [{ productId: "p-dragon", quantity: 1, snapshotCents: 1800 }]);
-    await page.context().addCookies([{ name: "csrf_token", value: "stale-value", url: "http://localhost:3000" }]);
+    await page.context().addCookies([{ name: "csrf_token", value: "stale-value", url: E2E_ORIGIN }]);
     await page.goto("/checkout");
     await chooseDelivery(page);
     await page.getByRole("radio", { name: /Pay online/ }).check();

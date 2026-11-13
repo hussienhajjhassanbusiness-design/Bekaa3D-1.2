@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Route } from "@playwright/test";
 import { stubEmptyCart } from "./support/stubCart";
+import { E2E_ORIGIN } from "./support/origin";
 
 // Phase 6C — Offers against a deterministic stand-in for backend 2dfb27b
 // (negotiation/api/offers.py, admin_offers.py, ordering/api/offer_checkout.py).
@@ -114,7 +115,7 @@ async function install(page: Page, me: Json | null, initial: Json | null = null)
   };
 
   if (me) {
-    await page.context().addCookies([{ name: "csrf_token", value: "e2e-csrf-value", url: "http://localhost:3000" }]);
+    await page.context().addCookies([{ name: "csrf_token", value: "e2e-csrf-value", url: E2E_ORIGIN }]);
     await stubEmptyCart(page);
     await page.route(/\/api\/v1\/me$/, (r) => json(r, me));
   } else {
@@ -168,7 +169,7 @@ async function install(page: Page, me: Json | null, initial: Json | null = null)
           delivery_address: null, payment_due: false, amount_due: null,
           lines: [{ id: uuid(702), product_id: PRODUCT_ID, product_type: "stl", name: "Dragon STL", unit_price: usd(1800), quantity: 1, line_total: usd(1800), fulfillment_status: "pending" }],
         },
-        payment: { id: uuid(703), status: "pending", provider: "mock", redirect_url: "http://localhost:3000/__e2e-mock-pay" },
+        payment: { id: uuid(703), status: "pending", provider: "mock", redirect_url: `${E2E_ORIGIN}/__e2e-mock-pay` },
         dropped_lines: [],
       },
       201

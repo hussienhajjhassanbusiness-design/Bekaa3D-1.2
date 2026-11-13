@@ -9,6 +9,8 @@ const eslintConfig = defineConfig([
   globalIgnores([
     // Default ignores of eslint-config-next:
     ".next/**",
+    // Playwright E2E harness build output (next.config.ts BEKAA3D_E2E_BUILD).
+    ".next-e2e/**",
     "out/**",
     "build/**",
     "next-env.d.ts",

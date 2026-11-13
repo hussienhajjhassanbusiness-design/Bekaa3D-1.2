@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Route } from "@playwright/test";
 import { stubEmptyCart } from "./support/stubCart";
+import { E2E_ORIGIN } from "./support/origin";
 
 // Phase 6A — admin operations completion against a deterministic stand-in
 // for backend 2dfb27b: cash blocks (ordering/api/admin_cash_blocks.py),
@@ -50,7 +51,7 @@ async function install(page: Page): Promise<Fake> {
     writes: [],
     phoneInUrl: false,
   };
-  await page.context().addCookies([{ name: "csrf_token", value: "e2e-csrf-value", url: "http://localhost:3000" }]);
+  await page.context().addCookies([{ name: "csrf_token", value: "e2e-csrf-value", url: E2E_ORIGIN }]);
   await stubEmptyCart(page);
   const json = (route: Route, body: unknown, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
   const log = (route: Route) => {

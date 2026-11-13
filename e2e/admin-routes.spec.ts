@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { stubEmptyCart } from "./support/stubCart";
+import { E2E_ORIGIN } from "./support/origin";
 
 // Phase 5C: keep the header cart read inside the browser (no :8000).
 test.beforeEach(async ({ page }) => {
@@ -37,7 +38,7 @@ const ADMIN_ME: RawMeBody = {
 const CUSTOMER_ME: RawMeBody = { ...ADMIN_ME, id: "customer-1", email: "customer@example.com", role: "customer" };
 
 async function signInAs(page: Page, meBody: RawMeBody) {
-  await page.context().addCookies([{ name: "csrf_token", value: "test-value", url: "http://localhost:3000" }]);
+  await page.context().addCookies([{ name: "csrf_token", value: "test-value", url: E2E_ORIGIN }]);
   await page.route("**/api/v1/me", async (route) => {
     await route.fulfill({ status: 200, body: JSON.stringify(meBody) });
   });

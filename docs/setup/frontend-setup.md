@@ -786,13 +786,37 @@ Current coverage: `/` boots (shell landmarks, SkipLink, foundation content); `/d
 
 No accessibility automation runs here — see below.
 
+#### Server mode: production build on :3100 (not `next dev`)
+
+Playwright's `webServer` (in `playwright.config.ts`) runs `next build` and then `next start --port 3100` itself. It does **not** use `next dev`. Under `next dev`, each route compiled on its first request, and with many parallel workers that delay pushed mocked `/me` session reads past the app's request timeout ("We couldn't verify your session"). A production build compiles everything up front, so a timing failure in E2E now points at the app, not the bundler. Timeouts, workers and retries were not changed to get there.
+
+- **The build is the harness's own.** `BEKAA3D_E2E_BUILD=1` (set by the Playwright config, never by hand) makes `next.config.ts` write it to `.next-e2e/` with `tsconfig.e2e.json`. It never replaces the real `npm run build` output in `.next/`, and it never touches the tracked `tsconfig.json`. The flag only changes where the build goes. It does not change app behaviour.
+- **A build is required, and the harness does it for you.** Every `npm run test:e2e` builds first, which adds roughly 30 s. You do not need to run `npm run build` beforehand. The gate's own `npm run build` cannot be reused, because the E2E build inlines test-only public values (below).
+- **Port 3100, never reused.** `:3000` stays free for your own `npm run dev`. `reuseExistingServer` is `false` on purpose: if something already listens on 3100, the run stops with "http://localhost:3100 is already used" instead of testing an unknown server. Playwright stops the server it started when the run ends. Specs that need an absolute URL import `E2E_ORIGIN` from `e2e/support/origin.ts`.
+- **Environment the E2E build gets** (Playwright `webServer.env`, applied to both build and start; process env wins over `.env.local`):
+  - `NEXT_PUBLIC_TURNSTILE_SITE_KEY=1x00000000000000000000AA`: Cloudflare's public always-pass test key. A production build otherwise shows "Verification is unavailable". The real widget never loads, because `e2e/support/fakeTurnstile.ts` serves an offline fake for `challenges.cloudflare.com`.
+  - `NEXT_PUBLIC_ALLOW_MOCK_PAYMENTS=true`: the documented staging opt-in, so the mocked checkout, offer and payment specs can follow a `mock` provider redirect. Every response is route-intercepted, and no payment service exists.
+  - `MEDIA_PROXY_TARGET=""`: no `/media` proxy to `:8001`. A production build never registers that rule anyway.
+  - `API_PROXY_TARGET` comes from `.env.local`, exactly as it did under `next dev`. The smoke specs intercept every `/api` call in the browser, and only `test:e2e:backend` relies on the real rewrite.
+- **The production CSP is active in E2E.** It allows the Turnstile origin (where the fake is fulfilled), and the suite passes under it.
+
+#### Running E2E
+
+| Purpose | Command (bash) | PowerShell |
+|---|---|---|
+| Full suite (major-phase gate) | `npm run test:e2e` | same |
+| Targeted specs | `npx playwright test --project=smoke e2e/login-session.spec.ts` | same |
+| Targeted re-run, no source change since the last E2E build | `E2E_REUSE_BUILD=1 npx playwright test --project=smoke e2e/admin-orders.spec.ts` | `$env:E2E_REUSE_BUILD="1"; npx playwright test --project=smoke e2e/admin-orders.spec.ts; Remove-Item Env:E2E_REUSE_BUILD` |
+
+`E2E_REUSE_BUILD=1` serves the existing `.next-e2e/` without rebuilding. It tests stale code if anything under `src/` changed since that build, so use it only for repeat runs. The major-phase gate stays `lint → typecheck → test → build → test:e2e`, and `test:e2e` always rebuilds.
+
 ### Real Backend Connectivity E2E Test
 
 ```bash
 npm run test:e2e:backend
 ```
 
-Runs **only** `e2e/backend-connectivity.spec.ts`. Requires: the frontend dev server (started automatically by Playwright's `webServer` config), `API_PROXY_TARGET` configured, and an actual VS-001 backend running locally.
+Runs **only** `e2e/backend-connectivity.spec.ts`. Requires: the frontend server (the same production build on :3100, started automatically by Playwright's `webServer` config), `API_PROXY_TARGET` configured, and an actual VS-001 backend running locally.
 
 Makes one real request to `/api/health/ready` through the frontend origin (exercising the genuine proxy, not a mock) and asserts a genuine 2xx response — no response-body field is inspected. This command is intentionally separate and opt-in: it is never run by `npm test`, `npm run test:e2e`, or `npm run build`.
 
@@ -800,7 +824,7 @@ Makes one real request to `/api/health/ready` through the frontend origin (exerc
 
 Both projects in `playwright.config.ts` use `channel: "msedge"` — the system-installed Microsoft Edge — instead of Playwright's own bundled Chromium. During FVS001-T16's implementation, the environment had no outbound network access to `cdn.playwright.dev`, so Playwright's browser binary could not be downloaded; a channel-based browser launches an already-installed executable directly, with no download required. If your machine doesn't have Edge installed, either install it or change the config to `devices["Desktop Chrome"]` and run `npx playwright install chromium` (requires normal internet access).
 
-Generated run artifacts — `test-results/`, `playwright-report/`, `blob-report/`, `playwright/.cache/` — are git-ignored; do not commit them.
+Generated run artifacts — `test-results/`, `playwright-report/`, `blob-report/`, `playwright/.cache/`, and the E2E build in `.next-e2e/` — are git-ignored; do not commit them.
 
 ### Current backend E2E status
 

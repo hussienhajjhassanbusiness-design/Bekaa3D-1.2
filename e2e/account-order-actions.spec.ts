@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Route } from "@playwright/test";
 import { stubEmptyCart } from "./support/stubCart";
+import { E2E_ORIGIN } from "./support/origin";
 
 // Phase 5G — FVS-031 customer order actions on /account/orders/[id] against
 // a deterministic, stateful in-memory stand-in for backend 2dfb27b
@@ -177,7 +178,7 @@ async function installFakeBackend(page: Page, options: { overrides?: Record<stri
     Object.assign(fake.orders.find((o) => o.id === id)!, patch);
   }
 
-  await page.context().addCookies([{ name: "csrf_token", value: "e2e-csrf-value", url: "http://localhost:3000" }]);
+  await page.context().addCookies([{ name: "csrf_token", value: "e2e-csrf-value", url: E2E_ORIGIN }]);
   await stubEmptyCart(page);
   await page.route(/\/api\/v1\/me$/, (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify(ME) }));
   await page.route(/\/api\/v1\/settings\/public$/, (route) =>
@@ -281,7 +282,7 @@ test.describe("Customer order actions (Phase 5G / FVS-031)", () => {
     await installFakeBackend(page);
     await page.goto(`/account/orders/${CASH_ID}`);
     // Rotate the cookie so the header no longer matches what the fake expects.
-    await page.context().addCookies([{ name: "csrf_token", value: "stale", url: "http://localhost:3000" }]);
+    await page.context().addCookies([{ name: "csrf_token", value: "stale", url: E2E_ORIGIN }]);
     await actions(page).getByRole("button", { name: "Cancel order" }).click();
     const dialog = page.getByRole("dialog");
     await dialog.getByRole("button", { name: "Cancel order" }).click();

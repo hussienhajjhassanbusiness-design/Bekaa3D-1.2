@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Route } from "@playwright/test";
 import { stubEmptyCart } from "./support/stubCart";
+import { E2E_ORIGIN } from "./support/origin";
 
 // Phase 5I — FVS-028 admin payments + refunds against a deterministic,
 // stateful stand-in for backend 2dfb27b (payments/api/admin_payments.py,
@@ -71,7 +72,7 @@ function refund(id: string, amount: number, overrides: Json = {}): Json {
 
 async function install(page: Page, me: Json = ADMIN_ME): Promise<Fake> {
   const fake: Fake = { balance: 3600, refunds: [], keys: new Map(), writes: [] };
-  await page.context().addCookies([{ name: "csrf_token", value: "e2e-csrf-value", url: "http://localhost:3000" }]);
+  await page.context().addCookies([{ name: "csrf_token", value: "e2e-csrf-value", url: E2E_ORIGIN }]);
   await stubEmptyCart(page);
   await page.route(/\/api\/v1\/me$/, (r) => r.fulfill({ contentType: "application/json", body: JSON.stringify(me) }));
   const json = (route: Route, body: unknown, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
@@ -253,12 +254,12 @@ test.describe("Admin payments + refunds (Phase 5I / FVS-028)", () => {
     await dialog.getByRole("button", { name: "Record refund" }).click();
     await expect(page).toHaveURL(/\/admin\/refunds\//);
 
-    await page.context().addCookies([{ name: "csrf_token", value: "stale", url: "http://localhost:3000" }]);
+    await page.context().addCookies([{ name: "csrf_token", value: "stale", url: E2E_ORIGIN }]);
     await page.getByRole("button", { name: "Mark failed" }).click();
     await page.getByRole("dialog").getByLabel("Reason").fill("Card closed");
     await page.getByRole("dialog").getByRole("button", { name: "Mark failed" }).click();
     await expect(page.getByRole("dialog").getByRole("alert")).toContainText("Unable to verify your session");
-    await page.context().addCookies([{ name: "csrf_token", value: "e2e-csrf-value", url: "http://localhost:3000" }]);
+    await page.context().addCookies([{ name: "csrf_token", value: "e2e-csrf-value", url: E2E_ORIGIN }]);
     await page.getByRole("dialog").getByRole("button", { name: "Mark failed" }).click();
     await expect(page.getByRole("heading", { level: 1 }).locator("..")).toContainText("Still owed");
 

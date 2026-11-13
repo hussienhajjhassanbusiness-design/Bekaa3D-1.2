@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Route } from "@playwright/test";
 import { stubEmptyCart } from "./support/stubCart";
+import { E2E_ORIGIN } from "./support/origin";
 
 // Phase 5H — FVS-030 admin orders + fulfillment against a deterministic,
 // stateful stand-in for backend 2dfb27b (fulfillment/api/admin_orders.py,
@@ -109,7 +110,7 @@ function recompute(o: Json) {
 
 async function install(page: Page, me: Json = ADMIN_ME): Promise<Fake> {
   const fake: Fake = { orders: seed(), writes: [] };
-  await page.context().addCookies([{ name: "csrf_token", value: "e2e-csrf-value", url: "http://localhost:3000" }]);
+  await page.context().addCookies([{ name: "csrf_token", value: "e2e-csrf-value", url: E2E_ORIGIN }]);
   await stubEmptyCart(page);
   await page.route(/\/api\/v1\/me$/, (r) => r.fulfill({ contentType: "application/json", body: JSON.stringify(me) }));
   const adminOnly = (route: Route, handler: () => Promise<void>) => (me.role !== "admin" ? route.fulfill(problem(404, "NOT_FOUND")) : handler());
@@ -310,10 +311,10 @@ test.describe("Admin orders + fulfillment (Phase 5H / FVS-030)", () => {
     await expect(dialog).toContainText("Enter a reason for cancelling.");
     expect(fake.writes).toHaveLength(0);
     await dialog.getByLabel(/Why is this order being cancelled/).fill("Out of filament");
-    await page.context().addCookies([{ name: "csrf_token", value: "stale", url: "http://localhost:3000" }]);
+    await page.context().addCookies([{ name: "csrf_token", value: "stale", url: E2E_ORIGIN }]);
     await dialog.getByRole("button", { name: "Cancel order" }).click();
     await expect(dialog.getByRole("alert")).toContainText("Unable to verify your session");
-    await page.context().addCookies([{ name: "csrf_token", value: "e2e-csrf-value", url: "http://localhost:3000" }]);
+    await page.context().addCookies([{ name: "csrf_token", value: "e2e-csrf-value", url: E2E_ORIGIN }]);
     await dialog.getByRole("button", { name: "Cancel order" }).click();
     await expect(dialog).toBeHidden();
     await expect(page.getByRole("heading", { level: 1 }).locator("..")).toContainText("Cancelled");
