@@ -82,4 +82,28 @@ describe("FloatingWhatsAppButton", () => {
     rerender(<FloatingWhatsAppButton whatsappNumber="96170123456" />);
     expect(screen.getByRole("link")).toBeInTheDocument();
   });
+
+  it("Batch 3: a 56px circle on WhatsApp's Teal Green (white glyph 4.1:1), never the failing #25d366 fill", () => {
+    render(<FloatingWhatsAppButton whatsappNumber="96170123456" />);
+    const link = screen.getByRole("link", { name: "Chat with us on WhatsApp" });
+    expect(link).toHaveClass("h-14", "w-14", "bg-whatsapp-strong", "text-white");
+    expect(link).not.toHaveClass("bg-whatsapp");
+  });
+
+  it("Batch 3: stays under the sticky header (z-40) and every dialog or sheet (z-50)", () => {
+    render(<FloatingWhatsAppButton whatsappNumber="96170123456" />);
+    expect(screen.getByRole("link")).toHaveClass("z-30");
+  });
+
+  it("Batch 3: keeps clear of the device safe area and the sticky-action seam", () => {
+    render(<FloatingWhatsAppButton whatsappNumber="96170123456" />);
+    const style = screen.getByRole("link").getAttribute("style") ?? "";
+    expect(style).toContain("safe-area-inset-bottom");
+    expect(style).toContain("--mobile-sticky-action-offset");
+  });
+
+  it("Batch 3: its hover scale is switched off under reduced motion", () => {
+    render(<FloatingWhatsAppButton whatsappNumber="96170123456" />);
+    expect(screen.getByRole("link")).toHaveClass("motion-reduce:hover:scale-100");
+  });
 });

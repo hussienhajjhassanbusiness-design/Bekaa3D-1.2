@@ -93,6 +93,50 @@ const PATHS = {
     </>
   ),
   star: <path d="M12 3.5l2.6 5.3 5.9.85-4.25 4.15 1 5.85L12 16.9l-5.25 2.75 1-5.85L3.5 9.65l5.9-.85z" />,
+  // Batch 3 — home, shop, product detail.
+  "filter-list": <path d="M4 7h16M7 12h10M10 17h4" />,
+  "chevron-right": <path d="M9 6l6 6-6 6" />,
+  add: <path d="M12 5v14M5 12h14" />,
+  remove: <path d="M5 12h14" />,
+  "deployed-code": (
+    <>
+      <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z" />
+      <path d="M4 7.5l8 4.5 8-4.5" />
+      <path d="M12 12v9" />
+    </>
+  ),
+  download: (
+    <>
+      <path d="M12 4v11" />
+      <path d="M7 10.5l5 5 5-5" />
+      <path d="M5 19.5h14" />
+    </>
+  ),
+  verified: (
+    <>
+      <path d="M12 3l2.2 1.6 2.7-.1.9 2.6 2.2 1.6-.8 2.6.8 2.6-2.2 1.6-.9 2.6-2.7-.1L12 21l-2.2-1.6-2.7.1-.9-2.6L4 15.3l.8-2.6L4 10.1l2.2-1.6.9-2.6 2.7.1z" />
+      <path d="M8.75 12.25l2.25 2.25 4.25-4.5" />
+    </>
+  ),
+  lightbulb: (
+    <>
+      <path d="M9 17.5h6M10 20.5h4" />
+      <path d="M12 3.5a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1.1 2V17.5h5v-1.2c.1-.8.5-1.5 1.1-2A6 6 0 0 0 12 3.5z" />
+    </>
+  ),
+  mail: (
+    <>
+      <rect x="3.5" y="5.5" width="17" height="13" rx="2" />
+      <path d="M4 7l8 6 8-6" />
+    </>
+  ),
+  category: (
+    <>
+      <path d="M12 3.5l4.5 7.5h-9z" />
+      <circle cx="7.5" cy="16.5" r="3.5" />
+      <rect x="13.5" y="13" width="7" height="7" rx="1" />
+    </>
+  ),
 } as const;
 
 export type IconName = keyof typeof PATHS;

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/apiClient";
 import { useAuth, type AuthContextValue } from "@/lib/auth/AuthProvider";
@@ -124,10 +124,13 @@ describe("ProductDetailView", () => {
     renderDetail("dragon-stl");
 
     expect(await screen.findByRole("heading", { name: "Articulated Dragon" })).toBeInTheDocument();
-    expect(screen.queryByText(/material:/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/colour:/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/dimensions:/i)).not.toBeInTheDocument();
+    // Batch 3: the labels are spec-tile terms (no trailing colon); none of
+    // them, nor the Specifications section itself, may render for an STL.
+    expect(screen.queryByText("Material", { exact: true })).not.toBeInTheDocument();
+    expect(screen.queryByText("Colour", { exact: true })).not.toBeInTheDocument();
+    expect(screen.queryByText("Dimensions", { exact: true })).not.toBeInTheDocument();
     expect(screen.queryByText(/production lead time/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Specifications" })).not.toBeInTheDocument();
   });
 
   it("shows UnavailableNotice when the product is unavailable", async () => {
@@ -225,6 +228,105 @@ describe("ProductDetailView", () => {
       renderDetail();
       expect(await screen.findByText(/currently unavailable/i)).toBeInTheDocument();
       expect(screen.queryByRole("button", { name: /add to cart/i })).not.toBeInTheDocument();
+    });
+  });
+
+  describe("Batch 3 layout", () => {
+    function mockDetail(detail: Record<string, unknown>, whatsappNumber: string | null = "+96170000000") {
+      vi.spyOn(apiClient, "get").mockImplementation(async (path: unknown) => {
+        const p = path as string;
+        if (p.startsWith("/api/v1/settings/public")) {
+          return { accepting_orders: true, cash_payment_enabled: true, cash_max_order_total: { amount_cents: 10000, currency: "USD" }, pickup_address: null, pickup_hours: null, whatsapp_number: whatsappNumber };
+        }
+        return detail;
+      });
+    }
+
+    it("renders a breadcrumb: Shop, the real category filter link, then the current product", async () => {
+      mockDetail(physicalDetail);
+      mockedUseAuth.mockReturnValue(authState());
+      renderDetail("dragon");
+
+      const crumb = await screen.findByRole("navigation", { name: "Breadcrumb" });
+      expect(within(crumb).getByRole("link", { name: "Shop" })).toHaveAttribute("href", "/shop");
+      expect(within(crumb).getByRole("link", { name: "Toys and Figures" })).toHaveAttribute("href", "/shop?category=c1");
+      expect(within(crumb).getByText("Articulated Dragon")).toHaveAttribute("aria-current", "page");
+    });
+
+    it("keeps a clean heading outline: one h1, then h2 sections", async () => {
+      mockDetail(physicalDetail);
+      mockedUseAuth.mockReturnValue(authState());
+      renderDetail("dragon");
+
+      await screen.findByRole("heading", { level: 1, name: "Articulated Dragon" });
+      expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+      expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual(["Specifications", "Description"]);
+    });
+
+    it("presents real physical specs as term/definition pairs", async () => {
+      mockDetail(physicalDetail);
+      mockedUseAuth.mockReturnValue(authState());
+      renderDetail("dragon");
+
+      await screen.findByRole("heading", { level: 1 });
+      expect(screen.getAllByRole("term").map((t) => t.textContent)).toEqual(["Material", "Colour", "Dimensions", "Production lead time"]);
+      expect(screen.getAllByRole("definition").map((d) => d.textContent)).toEqual(["PLA", "Red", "120 × 80 × 60 mm", "2 days"]);
+    });
+
+    it("shows the real rating only when the product has reviews", async () => {
+      mockDetail({ ...physicalDetail, average_rating: 4.5, review_count: 12 });
+      mockedUseAuth.mockReturnValue(authState());
+      renderDetail("dragon");
+
+      expect(await screen.findByText("Rated 4.5 out of 5 from 12 reviews")).toBeInTheDocument();
+    });
+
+    it("never shows a rating, stock, SKU or datasheet that the contract does not supply", async () => {
+      mockDetail(physicalDetail);
+      mockedUseAuth.mockReturnValue(authState());
+      renderDetail("dragon");
+
+      await screen.findByRole("heading", { level: 1 });
+      expect(screen.queryByText(/rated|review/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/in stock|sku|datasheet/i)).not.toBeInTheDocument();
+    });
+
+    it("shows the no-image placeholder (never a broken image) when the product has no images", async () => {
+      mockDetail({ ...physicalDetail, images: [], cover_image: null });
+      mockedUseAuth.mockReturnValue(authState());
+      renderDetail("dragon");
+
+      expect(await screen.findByText(/no image available/i)).toBeInTheDocument();
+      expect(screen.queryByTestId("product-gallery-main-image")).not.toBeInTheDocument();
+    });
+
+    it("anonymous, offer-capable STL: Add to cart, Make an offer and wishlist are sign-in links with the product returnTo", async () => {
+      mockDetail(stlDetail, null);
+      mockedUseAuth.mockReturnValue(authState());
+      renderDetail("dragon-stl");
+
+      const returnTo = "/login?returnTo=%2Fshop%2Fdragon-stl";
+      expect(await screen.findByRole("link", { name: "Add to cart" })).toHaveAttribute("href", returnTo);
+      expect(screen.getByRole("link", { name: "Make an offer" })).toHaveAttribute("href", returnTo);
+      expect(screen.getByRole("link", { name: "Save to wishlist" })).toHaveAttribute("href", returnTo);
+    });
+
+    it("no Make an offer without the server's can_offer capability", async () => {
+      mockDetail({ ...stlDetail, capabilities: { can_add_to_cart: true, can_offer: false, whatsapp_available: false } }, null);
+      mockedUseAuth.mockReturnValue(authState());
+      renderDetail("dragon-stl");
+
+      await screen.findByRole("link", { name: "Add to cart" });
+      expect(screen.queryByRole("link", { name: "Make an offer" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Make an offer" })).not.toBeInTheDocument();
+    });
+
+    it("keeps the description's own line breaks", async () => {
+      mockDetail({ ...physicalDetail, description: "Line one.\n\nLine two." });
+      mockedUseAuth.mockReturnValue(authState());
+      renderDetail("dragon");
+
+      expect(await screen.findByText(/Line one\./)).toHaveClass("whitespace-pre-line");
     });
   });
 });

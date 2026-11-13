@@ -134,4 +134,47 @@ describe("Home (root route /)", () => {
     const decorativeChildren = wrapper.querySelectorAll("div");
     expect(decorativeChildren.length).toBeGreaterThan(0);
   });
+
+  it("Batch 3: real sections in Stitch order with one h1 and h2 section headings", async () => {
+    mockApi();
+    renderHome();
+
+    expect(await screen.findByRole("heading", { level: 2, name: "Shop by Category" })).toBeInTheDocument();
+    await screen.findByRole("heading", { level: 2, name: "Featured Products" });
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual([
+      "Shop by Category",
+      "Featured Products",
+      "Why Choose Bekaa3D",
+      "Have something in mind that isn’t in the shop?".replace("’", "'"),
+    ]);
+  });
+
+  it("Batch 3: every new home link goes to a real route", async () => {
+    mockApi();
+    renderHome();
+
+    expect(await screen.findByRole("link", { name: /Shop all products/ })).toHaveAttribute("href", "/shop");
+    expect(await screen.findByRole("link", { name: /View all products/ })).toHaveAttribute("href", "/shop");
+    expect(screen.getByRole("link", { name: "Bring your idea" })).toHaveAttribute("href", "/bring-your-idea");
+    expect(screen.getByRole("link", { name: "Contact us" })).toHaveAttribute("href", "/contact");
+  });
+
+  it("Batch 3: category tiles link to the shop filtered by the real category id", async () => {
+    mockApi();
+    renderHome();
+
+    const section = (await screen.findByRole("heading", { name: "Shop by Category" })).closest("section")!;
+    const categoryLinks = Array.from(section.querySelectorAll("a")).filter((a) => a.getAttribute("href")!.includes("category="));
+    expect(categoryLinks.length).toBeGreaterThan(0);
+    for (const link of categoryLinks) expect(link.getAttribute("href")).toMatch(/^\/shop\?category=/);
+  });
+
+  it("Batch 3: no invented statistics, testimonials, promotions or discounts", async () => {
+    mockApi();
+    renderHome();
+
+    await screen.findByRole("heading", { name: "Featured Products" });
+    expect(screen.queryByText(/models shipped|tolerance|testimonial|trusted by|% off|discount|redeem/i)).not.toBeInTheDocument();
+  });
 });

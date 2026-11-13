@@ -56,4 +56,11 @@ describe("WhatsAppChatButton", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
   });
+
+  it("Batch 3: dark label text with a decorative glyph — the name is only the label", () => {
+    render(<WhatsAppChatButton normalizedNumber="96170123456" productName="Widget" />);
+    const link = screen.getByRole("link", { name: "Chat on WhatsApp" });
+    expect(link).toHaveClass("text-on-surface");
+    expect(link.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+  });
 });

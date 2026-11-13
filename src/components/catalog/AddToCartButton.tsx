@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Alert } from "@/components/feedback/Alert";
-import { Button } from "@/components/forms/Button";
+import { Button, buttonLinkClassName } from "@/components/forms/Button";
+import { Icon } from "@/components/ui/Icon";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { buildLoginRedirectPath } from "@/lib/auth/returnTo";
 import { describeCartWriteError } from "@/lib/cart/cartErrors";
@@ -53,10 +54,8 @@ export function AddToCartButton({
 
   if (!user) {
     return (
-      <a
-        href={buildLoginRedirectPath(returnToPath)}
-        className="inline-block rounded-md bg-brand-dark-green px-4 py-2 text-text-on-brand"
-      >
+      <a href={buildLoginRedirectPath(returnToPath)} className={`${buttonLinkClassName("primary", "lg")} w-full`}>
+        <Icon name="shopping-cart" className="h-5 w-5" />
         Add to cart
       </a>
     );
@@ -64,8 +63,8 @@ export function AddToCartButton({
 
   if (!user.emailVerified) {
     return (
-      <p className="text-body text-text-secondary">
-        <Link href="/verify-email/resend" className="text-brand-dark-green underline">
+      <p className="font-body text-body-md text-on-surface-variant">
+        <Link href="/verify-email/resend" className="font-semibold text-primary underline underline-offset-4">
           Verify your email
         </Link>{" "}
         to add products to your cart.
@@ -82,6 +81,9 @@ export function AddToCartButton({
     />
   );
 }
+
+const STEPPER_BUTTON_CLASS =
+  "inline-flex h-12 w-12 items-center justify-center text-on-surface-variant transition-colors duration-200 enabled:hover:bg-surface-container enabled:hover:text-primary disabled:cursor-not-allowed disabled:opacity-40";
 
 function VerifiedAddToCart({
   productId,
@@ -106,47 +108,53 @@ function VerifiedAddToCart({
   }
 
   return (
+    // Batch 3 — Stitch PDP action row (PAGE-SPECS S4): a square-cornered
+    // stepper (COMPONENT-SPECS §26) beside a full-width primary lg "Add to
+    // cart". Same buttons, labels, limits and disabled rules as before.
     <div className="flex w-full flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
         {isPhysical && (
           <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2" role="group" aria-label={`Quantity of ${productName}`}>
-              <Button
+            <div
+              className="inline-flex min-h-13 items-center rounded-control border-2 border-outline-variant bg-surface-container-lowest"
+              role="group"
+              aria-label={`Quantity of ${productName}`}
+            >
+              <button
                 type="button"
-                variant="secondary"
-                className="h-10 w-10 px-0 py-0"
+                className={STEPPER_BUTTON_CLASS}
                 onClick={() => setQuantity((q) => Math.max(1, q - 1))}
                 disabled={addToCart.isPending || quantity <= 1}
                 aria-label="Decrease quantity"
               >
-                −
-              </Button>
-              <span aria-live="polite" className="min-w-8 text-center text-body font-semibold text-text-primary">
+                <Icon name="remove" className="h-5 w-5" />
+              </button>
+              <span aria-live="polite" className="min-w-10 flex-1 text-center font-body text-body-md font-semibold text-on-surface tabular-nums">
                 {quantity}
               </span>
-              <Button
+              <button
                 type="button"
-                variant="secondary"
-                className="h-10 w-10 px-0 py-0"
+                className={STEPPER_BUTTON_CLASS}
                 onClick={() => setQuantity((q) => (cap === null ? q + 1 : Math.min(cap, q + 1)))}
                 disabled={addToCart.isPending || (cap !== null && quantity >= cap)}
                 aria-label="Increase quantity"
               >
-                +
-              </Button>
+                <Icon name="add" className="h-5 w-5" />
+              </button>
             </div>
-            {cap !== null && <p className="text-caption text-text-secondary">Maximum {cap} per order</p>}
+            {cap !== null && <p className="font-body text-sm text-on-surface-variant">Maximum {cap} per order</p>}
           </div>
         )}
-        <Button type="button" onClick={() => void handleAdd()} isLoading={addToCart.isPending}>
+        <Button type="button" size="lg" className="w-full sm:flex-1" onClick={() => void handleAdd()} isLoading={addToCart.isPending}>
+          {addToCart.isPending ? null : <Icon name="shopping-cart" className="h-5 w-5" />}
           {addToCart.isPending ? "Adding…" : "Add to cart"}
         </Button>
       </div>
 
       {result?.ok && (
-        <p role="status" className="text-body text-text-primary">
+        <p role="status" className="font-body text-body-md text-on-surface">
           Added to your cart.{" "}
-          <Link href="/cart" className="font-semibold text-brand-dark-green underline">
+          <Link href="/cart" className="font-semibold text-primary underline underline-offset-4">
             View cart
           </Link>
         </p>

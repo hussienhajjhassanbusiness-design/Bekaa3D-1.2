@@ -94,6 +94,11 @@
   --color-info-outline: #bfdbfe; /* blue-200 */
   --color-on-info-container: #1e40af; /* blue-800 */
   --color-whatsapp: #25d366; /* brand-external; white text on it fails contrast */
+  /* Batch 3: WhatsApp's own darker palette greens (Teal Green / Dark Teal), used
+     where a white glyph sits on the fill — white on #128c7e is 4.1:1 (passes the
+     3:1 non-text minimum), on #075e54 7.6:1. */
+  --color-whatsapp-strong: #128c7e;
+  --color-whatsapp-deep: #075e54;
 
   /* ---- Typography: families (DESIGN-TOKENS §2.1) ----
      The --font-*-face variables are set on <html> by next/font/local

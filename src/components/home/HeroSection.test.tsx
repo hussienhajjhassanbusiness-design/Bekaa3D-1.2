@@ -67,4 +67,18 @@ describe("HeroSection", () => {
     );
     expect(screen.getAllByRole("link")).toHaveLength(2);
   });
+
+  it("Batch 3: the accent half of the heading carries the gradient, without changing the heading's name", () => {
+    render(<HeroSection />);
+    const heading = screen.getByRole("heading", { level: 1, name: TAGLINE });
+    expect(heading.querySelector(".text-gradient-primary")).toHaveTextContent("Engineered Grade 3D Solutions");
+  });
+
+  it("Batch 3: the brand panel is decorative — hidden from assistive tech, with an empty-alt logo", () => {
+    const { container } = render(<HeroSection />);
+    const logo = container.querySelector('img[src="/brand/bekaa3d-mark.png"]');
+    expect(logo).toHaveAttribute("alt", "");
+    expect(logo!.closest('[aria-hidden="true"]')).not.toBeNull();
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+  });
 });

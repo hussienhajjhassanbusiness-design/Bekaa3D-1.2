@@ -1,8 +1,12 @@
 "use client";
 
+import Link from "next/link";
+import type { ReactNode } from "react";
 import { Alert } from "@/components/feedback/Alert";
 import { LoadingSpinner } from "@/components/feedback/LoadingSpinner";
 import { NotFoundContent } from "@/components/feedback/NotFoundContent";
+import { Container } from "@/components/ui/Container";
+import { Icon } from "@/components/ui/Icon";
 import { useProduct } from "@/lib/catalog/useProduct";
 import { toProductDetailModel } from "@/lib/catalog/productAdapters";
 import { usePublicSettings } from "@/lib/settings/usePublicSettings";
@@ -12,11 +16,22 @@ import { AddToCartButton } from "./AddToCartButton";
 import { PriceDisplay } from "./PriceDisplay";
 import { ProductImageGallery } from "./ProductImageGallery";
 import { ProductTypeBadge } from "./ProductTypeBadge";
+import { RatingSummary } from "./RatingSummary";
 import { UnavailableNotice } from "./UnavailableNotice";
 import { WhatsAppChatButton } from "./WhatsAppChatButton";
 
 export interface ProductDetailViewProps {
   slug: string;
+}
+
+// Stitch spec tile (COMPONENT-SPECS §25): mono label over a bold value.
+function SpecTile({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="rounded-card border border-outline-variant/30 bg-surface-container-lowest p-4">
+      <dt className="mb-1 font-label text-label-caps uppercase text-on-surface-variant">{label}</dt>
+      <dd className="break-words font-body text-body-md font-bold text-on-surface">{children}</dd>
+    </div>
+  );
 }
 
 // #FVS014-PRODUCT-DETAIL-VIEW
@@ -31,13 +46,20 @@ export interface ProductDetailViewProps {
 // it renders NotFoundContent directly rather than calling next/navigation's
 // `notFound()`, which Next's own docs confirm only for Server Components/
 // Server Functions/Route Handlers, not Client Components.
+//
+// Batch 3 — Stitch Product Details (PAGE-SPECS S4): breadcrumb, 7/5 split
+// from 1024px (gallery first when stacked), display H1, the detail price
+// role, an action card, spec tiles and the description. Every action keeps
+// its own capability gate (can_add_to_cart, can_offer, whatsapp_available)
+// and auth branches. Stitch's stock pill, SKU, datasheet, material story,
+// reviews and pairings have no data and are not rendered.
 export function ProductDetailView({ slug }: ProductDetailViewProps) {
   const productQuery = useProduct(slug);
   const settingsQuery = usePublicSettings();
 
   if (productQuery.isLoading) {
     return (
-      <div className="flex justify-center py-16">
+      <div className="flex justify-center py-section-mobile tablet:py-section">
         <LoadingSpinner />
       </div>
     );
@@ -48,9 +70,11 @@ export function ProductDetailView({ slug }: ProductDetailViewProps) {
       return <NotFoundContent />;
     }
     return (
-      <div className="mx-auto max-w-3xl px-4 py-8">
-        <Alert variant="error" message="We couldn't load this product. Please try again." />
-      </div>
+      <Container className="py-12">
+        <div className="mx-auto max-w-3xl">
+          <Alert variant="error" message="We couldn't load this product. Please try again." />
+        </div>
+      </Container>
     );
   }
 
@@ -63,57 +87,56 @@ export function ProductDetailView({ slug }: ProductDetailViewProps) {
 
   const product = toProductDetailModel(productQuery.data);
   const returnToPath = `/shop/${product.slug}`;
+  const hasSpecs =
+    product.material !== null || product.colour !== null || product.dimensions !== null || product.productionLeadTimeDays !== null;
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 tablet:px-6 desktop:px-8">
-      <div className="grid grid-cols-1 gap-8 tablet:grid-cols-2">
-        <ProductImageGallery images={product.images} />
+    <Container className="pb-section-mobile pt-8 tablet:pb-section tablet:pt-12">
+      <nav aria-label="Breadcrumb" className="mb-8">
+        <ol className="flex flex-wrap items-center gap-2 font-label text-label-caps uppercase text-on-surface-variant">
+          <li>
+            <Link href="/shop" className="rounded-badge hover:text-primary">
+              Shop
+            </Link>
+          </li>
+          <li aria-hidden="true">
+            <Icon name="chevron-right" className="h-4 w-4" />
+          </li>
+          <li>
+            <Link href={`/shop?category=${product.category.id}`} className="rounded-badge hover:text-primary">
+              {product.category.name}
+            </Link>
+          </li>
+          <li aria-hidden="true">
+            <Icon name="chevron-right" className="h-4 w-4" />
+          </li>
+          <li aria-current="page" className="min-w-0 max-w-full truncate text-on-surface">
+            {product.name}
+          </li>
+        </ol>
+      </nav>
 
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <ProductTypeBadge type={product.type} />
-            <span className="text-caption uppercase tracking-label text-text-secondary">{product.category.name}</span>
+      <div className="grid grid-cols-1 gap-10 desktop:grid-cols-12 desktop:gap-12">
+        <div className="desktop:col-span-7">
+          <ProductImageGallery images={product.images} />
+        </div>
+
+        <div className="flex min-w-0 flex-col gap-6 desktop:col-span-5">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <ProductTypeBadge type={product.type} />
+              <RatingSummary averageRating={product.averageRating} reviewCount={product.reviewCount} size="md" />
+            </div>
+            <h1 className="break-words font-display text-display text-on-surface">{product.name}</h1>
+            <PriceDisplay amountCents={product.price.amountCents} currency={product.price.currency} size="detail" />
           </div>
-
-          <h1 className="text-h1 font-bold text-text-primary">{product.name}</h1>
-
-          <div className="text-h2 font-semibold text-text-primary">
-            <PriceDisplay amountCents={product.price.amountCents} currency={product.price.currency} />
-          </div>
-
-          {(product.material || product.colour) && (
-            <dl className="flex flex-wrap gap-6 text-body text-text-secondary">
-              {product.material && (
-                <div>
-                  <dt className="inline font-semibold text-text-primary">Material: </dt>
-                  <dd className="inline">{product.material.name}</dd>
-                </div>
-              )}
-              {product.colour && (
-                <div>
-                  <dt className="inline font-semibold text-text-primary">Colour: </dt>
-                  <dd className="inline">{product.colour.name}</dd>
-                </div>
-              )}
-            </dl>
-          )}
-
-          {product.dimensions && (
-            <p className="text-body text-text-secondary">
-              Dimensions: {product.dimensions.lengthMm} × {product.dimensions.widthMm} × {product.dimensions.heightMm} mm
-            </p>
-          )}
-          {product.productionLeadTimeDays !== null && (
-            <p className="text-body text-text-secondary">
-              Production lead time: {product.productionLeadTimeDays} day{product.productionLeadTimeDays === 1 ? "" : "s"}
-            </p>
-          )}
 
           {!product.isAvailable && <UnavailableNotice message="This product is currently unavailable." />}
 
-          {product.description && <p className="text-body text-text-primary">{product.description}</p>}
-
-          <div className="mt-2 flex flex-wrap gap-3">
+          {/* One card for every real action: Add to cart (primary), then the
+              secondary row — WhatsApp, wishlist — and Make an offer. Each
+              renders only what its own capability and auth state allow. */}
+          <div className="flex flex-col gap-4 rounded-card border border-outline-variant/30 bg-surface-container-lowest p-6 shadow-sm">
             <AddToCartButton
               productId={product.id}
               productType={product.type}
@@ -128,16 +151,47 @@ export function ProductDetailView({ slug }: ProductDetailViewProps) {
                 productName={product.name}
               />
             )}
+            <WishlistButton productId={product.id} productName={product.name} returnToPath={returnToPath} variant="full" />
+            <MakeOfferPanel
+              productId={product.id}
+              productName={product.name}
+              canOffer={product.capabilities.canOffer}
+              returnToPath={returnToPath}
+            />
           </div>
-          <WishlistButton productId={product.id} productName={product.name} returnToPath={returnToPath} variant="full" />
-          <MakeOfferPanel
-            productId={product.id}
-            productName={product.name}
-            canOffer={product.capabilities.canOffer}
-            returnToPath={returnToPath}
-          />
+
+          {hasSpecs && (
+            <section aria-labelledby="product-specs-heading">
+              <h2 id="product-specs-heading" className="mb-4 font-headline text-headline-md text-on-surface">
+                Specifications
+              </h2>
+              <dl className="grid grid-cols-2 gap-3 tablet:gap-4">
+                {product.material && <SpecTile label="Material">{product.material.name}</SpecTile>}
+                {product.colour && <SpecTile label="Colour">{product.colour.name}</SpecTile>}
+                {product.dimensions && (
+                  <SpecTile label="Dimensions">
+                    {product.dimensions.lengthMm} × {product.dimensions.widthMm} × {product.dimensions.heightMm} mm
+                  </SpecTile>
+                )}
+                {product.productionLeadTimeDays !== null && (
+                  <SpecTile label="Production lead time">
+                    {product.productionLeadTimeDays} day{product.productionLeadTimeDays === 1 ? "" : "s"}
+                  </SpecTile>
+                )}
+              </dl>
+            </section>
+          )}
+
+          {product.description && (
+            <section aria-labelledby="product-description-heading">
+              <h2 id="product-description-heading" className="mb-3 font-headline text-headline-md text-on-surface">
+                Description
+              </h2>
+              <p className="whitespace-pre-line break-words font-body text-body-lg text-on-surface-variant">{product.description}</p>
+            </section>
+          )}
         </div>
       </div>
-    </div>
+    </Container>
   );
 }

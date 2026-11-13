@@ -34,8 +34,9 @@ function Heart({ filled }: { filled: boolean }) {
 // favourite colour. Kept at 44px (Stitch: 40px) for the touch-target size.
 const ICON_CLASS =
   "inline-flex h-11 w-11 items-center justify-center rounded-full bg-surface-container-lowest/90 text-on-surface-variant shadow-sm backdrop-blur-sm transition-colors duration-200 hover:text-error aria-pressed:text-error";
+// Full: the product page's neutral outline action (Stitch secondary row).
 const FULL_CLASS =
-  "inline-flex items-center gap-2 rounded-md border border-brand-dark-green px-4 py-2 text-brand-dark-green hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-60";
+  "inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-control border-2 border-outline-variant bg-surface-container-lowest px-6 py-3 font-label text-label-caps uppercase text-on-surface transition-colors duration-200 hover:border-outline hover:bg-surface-container-high aria-pressed:text-error [&>svg]:text-error disabled:cursor-not-allowed disabled:opacity-60";
 
 // #FVS-WISHLIST-BUTTON (phase 6D)
 //
@@ -64,8 +65,8 @@ export function WishlistButton({ productId, productName, returnToPath, variant }
   if (!user.emailVerified) {
     if (variant === "icon") return null;
     return (
-      <p className="text-body text-text-secondary">
-        <Link href="/verify-email/resend" className="text-brand-dark-green underline">
+      <p className="font-body text-body-md text-on-surface-variant">
+        <Link href="/verify-email/resend" className="font-semibold text-primary underline underline-offset-4">
           Verify your email
         </Link>{" "}
         to save products to your wishlist.
@@ -106,7 +107,7 @@ function VerifiedWishlistButton({ productId, productName, variant }: Omit<Wishli
   // aria-pressed; the visible text names the action, and a status line says
   // what is saved now.
   return (
-    <span className={variant === "full" ? "flex flex-col items-start gap-2" : "relative inline-flex"}>
+    <span className={variant === "full" ? "flex w-full flex-col items-start gap-2" : "relative inline-flex"}>
       <button
         type="button"
         aria-pressed={variant === "icon" ? saved : undefined}
@@ -120,11 +121,11 @@ function VerifiedWishlistButton({ productId, productName, variant }: Omit<Wishli
         {variant === "full" && <span>{saved ? "Remove from wishlist" : "Save to wishlist"}</span>}
       </button>
       {variant === "full" && (
-        <span role="status" className="text-caption text-text-secondary">
+        <span role="status" className="font-body text-sm text-on-surface-variant">
           {saved ? (
             <>
               Saved to your{" "}
-              <Link href="/account/wishlist" className="text-brand-dark-green underline">
+              <Link href="/account/wishlist" className="font-semibold text-primary underline underline-offset-4">
                 wishlist
               </Link>
               .

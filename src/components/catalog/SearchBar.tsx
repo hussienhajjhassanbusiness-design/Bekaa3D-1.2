@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, type FormEvent } from "react";
-import { Button } from "@/components/forms/Button";
+import { Icon } from "@/components/ui/Icon";
 
 export interface SearchSuggestion {
   label: string;
@@ -18,6 +18,9 @@ export interface SearchBarProps {
   isLoadingSuggestions?: boolean;
   onSelectSuggestion?: (suggestion: SearchSuggestion) => void;
   label?: string;
+  // Keeps the label for assistive tech but hides it visually, for a field
+  // whose purpose is already obvious from its surroundings (the shop hero).
+  hideLabel?: boolean;
 }
 
 // #FVS013-SEARCH-BAR
@@ -42,6 +45,7 @@ export function SearchBar({
   isLoadingSuggestions = false,
   onSelectSuggestion,
   label = "Search products",
+  hideLabel = false,
 }: SearchBarProps) {
   const inputId = useId();
 
@@ -50,47 +54,74 @@ export function SearchBar({
     onSubmit?.(value);
   }
 
+  // Batch 3 — Stitch hero glass search pill (COMPONENT-SPECS §5): a rounded
+  // white pill with a leading search glyph, a borderless field, an optional
+  // Clear control and a primary Search button (submits the same form — Enter
+  // still works). Suggestions sit in a card directly under the pill.
   return (
     <div>
       <form onSubmit={handleSubmit} role="search">
-        <label htmlFor={inputId} className="block text-label font-semibold uppercase tracking-label text-text-primary">
+        <label
+          htmlFor={inputId}
+          className={hideLabel ? "sr-only" : "mb-2 block font-label text-label-caps uppercase text-on-surface"}
+        >
           {label}
         </label>
-        <div className="mt-1 flex items-center gap-2">
+        <div className="flex items-center gap-2 rounded-full border border-outline-variant/40 bg-surface-container-lowest p-1.5 pl-5 shadow-2xl">
+          <Icon name="search" className="h-5 w-5 text-on-surface-variant" />
           <input
             id={inputId}
             type="search"
             value={value}
             onChange={(event) => onChange(event.target.value)}
-            className="w-full rounded-sm border border-border-default px-3 py-2 text-body text-text-primary"
+            placeholder="Search by product name"
+            className="min-h-11 min-w-0 flex-1 rounded-control bg-transparent px-2 font-body text-body-md text-on-surface placeholder:text-on-surface-variant/70 focus:outline-none"
           />
           {value.length > 0 && (
-            <Button type="button" onClick={() => onChange("")}>
+            <button
+              type="button"
+              onClick={() => onChange("")}
+              className="inline-flex min-h-11 items-center rounded-full px-3 font-label text-label-caps uppercase text-on-surface-variant transition-colors duration-200 hover:bg-surface-container hover:text-on-surface"
+            >
               Clear
-            </Button>
+            </button>
           )}
+          <button
+            type="submit"
+            className="inline-flex min-h-11 items-center gap-2 rounded-full bg-primary px-4 font-label text-label-caps uppercase text-on-primary transition-colors duration-200 hover:bg-primary-container tablet:px-6"
+          >
+            <Icon name="search" className="h-4 w-4" />
+            <span className="sr-only tablet:not-sr-only">Search</span>
+          </button>
         </div>
       </form>
 
       {isLoadingSuggestions && (
-        <p role="status" aria-live="polite" className="mt-2 text-caption text-text-secondary">
+        <p
+          role="status"
+          aria-live="polite"
+          className="mt-2 rounded-card bg-surface-container-lowest px-4 py-3 font-body text-sm text-on-surface-variant shadow-lg"
+        >
           Loading suggestions…
         </p>
       )}
 
       {!isLoadingSuggestions && suggestions && suggestions.length === 0 && (
-        <p className="mt-2 text-caption text-text-secondary">No suggestions found.</p>
+        <p className="mt-2 rounded-card bg-surface-container-lowest px-4 py-3 font-body text-sm text-on-surface-variant shadow-lg">
+          No suggestions found.
+        </p>
       )}
 
       {!isLoadingSuggestions && suggestions && suggestions.length > 0 && (
-        <ul className="mt-2">
+        <ul className="mt-2 rounded-card border border-outline-variant/30 bg-surface-container-lowest p-2 text-left shadow-xl">
           {suggestions.map((suggestion, index) => (
             <li key={index}>
               <button
                 type="button"
                 onClick={() => onSelectSuggestion?.(suggestion)}
-                className="w-full text-left text-body text-text-primary"
+                className="flex min-h-11 w-full items-center gap-3 rounded-control px-3 text-left font-body text-body-md text-on-surface transition-colors duration-200 hover:bg-surface-container-low"
               >
+                <Icon name="search" className="h-4 w-4 text-on-surface-variant" />
                 {suggestion.label}
               </button>
             </li>

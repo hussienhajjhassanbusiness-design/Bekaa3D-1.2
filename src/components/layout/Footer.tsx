@@ -49,7 +49,7 @@ export function Footer() {
 
   return (
     <div className="border-t border-outline-variant bg-surface-container-low">
-      <div className="mx-auto max-w-content px-margin-mobile pb-8 pt-16 tablet:px-8 tablet:pb-12 tablet:pt-24 desktop:px-margin-desktop">
+      <div className="mx-auto max-w-content px-margin-mobile pb-24 pt-16 tablet:px-8 tablet:pb-28 tablet:pt-24 desktop:px-margin-desktop">
         <div className="grid grid-cols-1 gap-12 desktop:grid-cols-4 desktop:gap-gutter">
           <div className="flex flex-col gap-6">
             <BrandMark tone="on-surface" />

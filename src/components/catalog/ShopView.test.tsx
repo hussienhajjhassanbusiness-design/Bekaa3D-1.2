@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/apiClient";
@@ -163,5 +163,127 @@ describe("ShopView", () => {
     renderShopView();
 
     expect(await screen.findByText(/no products match your filters/i)).toBeInTheDocument();
+  });
+
+  describe("Batch 3 layout: heading, toolbar and the filter drawer", () => {
+    type ChangeListener = (event: { matches: boolean }) => void;
+    let mediaListeners: ChangeListener[] = [];
+
+    beforeEach(() => {
+      mediaListeners = [];
+      window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+        matches: false,
+        media: query,
+        addEventListener: (_type: string, listener: ChangeListener) => mediaListeners.push(listener),
+        removeEventListener: (_type: string, listener: ChangeListener) => {
+          mediaListeners = mediaListeners.filter((l) => l !== listener);
+        },
+      })) as unknown as typeof window.matchMedia;
+    });
+
+    it("renders one h1 and a labelled search field inside the page header", async () => {
+      mockApi();
+      renderShopView();
+
+      expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+      expect(screen.getByRole("heading", { level: 1, name: "Shop" })).toBeInTheDocument();
+      expect(screen.getByRole("searchbox", { name: "Search products" })).toBeInTheDocument();
+      await screen.findByRole("link", { name: /Articulated Dragon/ });
+    });
+
+    it("reports how many products are shown in a status region once loaded (cursor paging has no total)", async () => {
+      mockApi();
+      renderShopView();
+
+      await screen.findByRole("link", { name: /Articulated Dragon/ });
+      expect(screen.getByText(/products? shown/).closest("[role=status]")).toHaveTextContent("1 product shown, more available");
+    });
+
+    it("the Filters button opens a labelled modal drawer holding the same live filters, and moves focus into it", async () => {
+      mockApi();
+      renderShopView();
+      const trigger = screen.getByRole("button", { name: /^Filters/ });
+      expect(trigger).toHaveAttribute("aria-expanded", "false");
+      expect(trigger).toHaveAttribute("aria-haspopup", "dialog");
+
+      await userEvent.click(trigger);
+
+      const drawer = screen.getByRole("dialog", { name: "Filters" });
+      expect(drawer).toHaveAttribute("aria-modal", "true");
+      expect(trigger).toHaveAttribute("aria-expanded", "true");
+      expect(within(drawer).getByRole("button", { name: "Close filters" })).toHaveFocus();
+      expect(await within(drawer).findByRole("checkbox", { name: "Toys" })).toBeInTheDocument();
+      expect(document.documentElement.style.overflow).toBe("hidden");
+    });
+
+    it("ticking a filter in the drawer uses the same handler (pushes the URL) and keeps the drawer open", async () => {
+      mockApi();
+      renderShopView();
+      await userEvent.click(screen.getByRole("button", { name: /^Filters/ }));
+      const drawer = screen.getByRole("dialog", { name: "Filters" });
+
+      await userEvent.click(await within(drawer).findByRole("checkbox", { name: "Toys" }));
+
+      expect(mockPush).toHaveBeenCalledWith("/shop?category=cat-1");
+      expect(screen.getByRole("dialog", { name: "Filters" })).toBeInTheDocument();
+    });
+
+    it("closing and reopening the drawer never resets the filters: they come from the URL", async () => {
+      mockSearchParams = new URLSearchParams("category=cat-1");
+      mockApi();
+      renderShopView();
+      // The count is derived from the live options, so it appears once the
+      // category list has loaded.
+      const trigger = await screen.findByRole("button", { name: "Filters, 1 active" });
+
+      await userEvent.click(trigger);
+      expect(await within(screen.getByRole("dialog")).findByRole("checkbox", { name: "Toys" })).toBeChecked();
+      await userEvent.click(screen.getByRole("button", { name: "Close filters" }));
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(trigger).toHaveFocus();
+
+      await userEvent.click(trigger);
+      expect(within(screen.getByRole("dialog")).getByRole("checkbox", { name: "Toys" })).toBeChecked();
+      expect(mockPush).not.toHaveBeenCalled();
+    });
+
+    it("Escape and Show results both close the drawer and return focus to the trigger", async () => {
+      mockApi();
+      renderShopView();
+      const trigger = screen.getByRole("button", { name: /^Filters/ });
+
+      await userEvent.click(trigger);
+      await userEvent.keyboard("{Escape}");
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(trigger).toHaveFocus();
+      expect(document.documentElement.style.overflow).toBe("");
+
+      await userEvent.click(trigger);
+      await userEvent.click(screen.getByRole("button", { name: "Show results" }));
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(trigger).toHaveFocus();
+    });
+
+    it("Clear filters inside the drawer clears every facet through the same handler", async () => {
+      mockSearchParams = new URLSearchParams("category=cat-1&material=mat-1");
+      mockApi();
+      renderShopView();
+      await userEvent.click(screen.getByRole("button", { name: /^Filters/ }));
+      const drawer = screen.getByRole("dialog");
+
+      await userEvent.click(await within(drawer).findByRole("button", { name: "Clear filters" }));
+
+      expect(mockPush).toHaveBeenCalledWith("/shop?");
+    });
+
+    it("the drawer closes itself when the viewport grows to the desktop aside breakpoint", async () => {
+      mockApi();
+      renderShopView();
+      await userEvent.click(screen.getByRole("button", { name: /^Filters/ }));
+
+      act(() => mediaListeners.forEach((listener) => listener({ matches: true })));
+
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
   });
 });

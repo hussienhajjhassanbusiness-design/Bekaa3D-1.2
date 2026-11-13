@@ -89,4 +89,30 @@ describe("ProductImageGallery", () => {
     render(<ProductImageGallery images={IMAGES} />);
     expect(spy).not.toHaveBeenCalled();
   });
+
+  it("Batch 3: shows a placeholder panel, not an empty slot, when there are no images", () => {
+    render(<ProductImageGallery images={[]} />);
+    expect(screen.getByText(/no image available/i)).toBeInTheDocument();
+  });
+
+  it("Batch 3: one image shows no thumbnail strip — there is nothing to choose", () => {
+    render(<ProductImageGallery images={[IMAGES[0]!]} />);
+    expect(screen.getByTestId("product-gallery-main-image")).toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("Batch 3: the main image is a real cropped <img> (never a tiled CSS background)", () => {
+    render(<ProductImageGallery images={IMAGES} />);
+    const main = screen.getByTestId("product-gallery-main-image");
+    expect(main.tagName).toBe("IMG");
+    expect(main).toHaveClass("object-cover", "aspect-square");
+  });
+
+  it("Batch 3: thumbnails are operable from the keyboard", async () => {
+    const user = userEvent.setup();
+    render(<ProductImageGallery images={IMAGES} />);
+    screen.getByRole("button", { name: /side view/i }).focus();
+    await user.keyboard("{Enter}");
+    expect(screen.getByTestId("product-gallery-main-image")).toHaveAttribute("alt", "Side view");
+  });
 });

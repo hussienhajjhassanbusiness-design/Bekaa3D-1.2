@@ -1,3 +1,5 @@
+import { Icon } from "@/components/ui/Icon";
+
 export interface UnavailableNoticeProps {
   message: string;
 }
@@ -7,10 +9,12 @@ export interface UnavailableNoticeProps {
 // status literal itself. No purchase action lives here; a WhatsApp CTA
 // (if applicable for this product) is a sibling the parent renders
 // separately.
+// Batch 3: Stitch callout (COMPONENT-SPECS §56) in the warning tone.
 export function UnavailableNotice({ message }: UnavailableNoticeProps) {
   return (
-    <div role="status" className="rounded-md border-l-4 border-l-warning bg-warning-bg p-4 text-text-primary">
-      <p className="text-body">{message}</p>
+    <div role="status" className="flex items-start gap-3 rounded-card border border-warning-outline bg-warning-container p-4 text-on-warning-container">
+      <Icon name="warning" className="h-5 w-5 shrink-0" />
+      <p className="font-body text-body-md">{message}</p>
     </div>
   );
 }

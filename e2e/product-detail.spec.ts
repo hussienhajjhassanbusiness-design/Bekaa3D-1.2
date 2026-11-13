@@ -92,8 +92,11 @@ test.describe("Product detail (/shop/[slug])", () => {
     // The type badge itself (exact text): the Batch 2 footer copy also
     // mentions "STL files".
     await expect(page.getByRole("main").getByText("STL", { exact: true })).toBeVisible();
-    await expect(page.getByText(/material:/i)).toHaveCount(0);
-    await expect(page.getByText(/colour:/i)).toHaveCount(0);
+    // Batch 3: the labels became spec-tile terms without a colon; assert the
+    // exact terms (and the section) are absent so this check stays meaningful.
+    await expect(page.getByText("Material", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Colour", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Specifications" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: /chat on whatsapp/i })).toHaveCount(0);
   });
 

@@ -55,4 +55,10 @@ describe("SkipLink", () => {
     expect(link).toHaveClass("sr-only");
     expect(link).toHaveClass("focus:not-sr-only");
   });
+
+  it("Batch 3: when focused it becomes a high-contrast chip above the sticky header", () => {
+    render(<SkipLink />);
+    const link = screen.getByRole("link", { name: "Skip to main content" });
+    expect(link).toHaveClass("focus:fixed", "focus:z-[60]", "focus:bg-primary", "focus:text-on-primary", "focus:min-h-11");
+  });
 });

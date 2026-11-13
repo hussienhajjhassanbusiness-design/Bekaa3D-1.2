@@ -60,6 +60,17 @@ const SIZE_CLASSES: Record<ButtonSize, string> = {
   lg: "min-h-13 px-8 py-3.5",
 };
 
+// Batch 3: the same visual hierarchy for a navigation link (<a>/<Link>) that
+// must look like a button (hero and CTA-panel links, sign-in links). Links
+// have no :enabled/:disabled state, so those variant prefixes are dropped;
+// everything else (radius, label, sizes, press scale, reduced motion) is
+// identical to <Button>.
+export function buttonLinkClassName(variant: ButtonVariant = "primary", size: ButtonSize = "md"): string {
+  return `${BASE_CLASSES} ${SIZE_CLASSES[size]} ${VARIANT_CLASSES[variant]}`
+    .replace(/\benabled:/g, "")
+    .replace(/\s*disabled:\S+/g, "");
+}
+
 function ButtonSpinner() {
   return (
     <svg

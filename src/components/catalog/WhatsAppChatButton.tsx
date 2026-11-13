@@ -1,3 +1,4 @@
+import { WhatsAppGlyph } from "@/components/ui/WhatsAppGlyph";
 import { buildWhatsAppHref, buildWhatsAppProductMessage } from "@/lib/catalog/whatsapp";
 
 export interface WhatsAppChatButtonProps {
@@ -31,8 +32,13 @@ export function WhatsAppChatButton({ normalizedNumber, productName, label = "Cha
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-block rounded-md bg-brand-green px-4 py-2 text-text-on-brand"
+      // Stitch STL-detail "WHATSAPP" secondary action, made accessible: a
+      // neutral outline button with dark text and the glyph in WhatsApp's
+      // Teal Green (4.1:1 on white). Green text or a white-on-#25d366 fill
+      // would fail contrast (COMPONENT-MIGRATION "WhatsAppChatButton").
+      className="inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-control border-2 border-whatsapp-strong/40 bg-surface-container-lowest px-6 py-3 font-label text-label-caps uppercase text-on-surface transition-colors duration-200 hover:border-whatsapp-strong hover:bg-whatsapp/10"
     >
+      <WhatsAppGlyph className="h-5 w-5 text-whatsapp-strong" />
       {label}
     </a>
   );

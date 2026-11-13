@@ -51,4 +51,21 @@ describe("ProductGrid", () => {
     expect(screen.getAllByRole("listitem")).toHaveLength(1);
     expect(screen.getByRole("link", { name: /Articulated Dragon/ })).toBeInTheDocument();
   });
+
+  it("Batch 3: loading shows card-shaped placeholders inside one announced status, hidden from the reading order", () => {
+    const { container } = render(<ProductGrid products={[]} isLoading isError={false} />);
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent("Loading…");
+    expect(status).toHaveAttribute("aria-busy", "true");
+    expect(container.querySelector("ul")).toHaveAttribute("aria-hidden", "true");
+    expect(screen.queryByRole("listitem")).not.toBeInTheDocument();
+  });
+
+  it("Batch 3: the showcase layout goes 4-up at xl, the catalog layout stops at 3-up", () => {
+    const { container, rerender } = render(<ProductGrid products={[product]} isLoading={false} isError={false} layout="showcase" />);
+    expect(container.querySelector("ul")).toHaveClass("xl:grid-cols-4");
+    rerender(<ProductGrid products={[product]} isLoading={false} isError={false} />);
+    expect(container.querySelector("ul")).toHaveClass("xl:grid-cols-3");
+    expect(container.querySelector("ul")).not.toHaveClass("xl:grid-cols-4");
+  });
 });

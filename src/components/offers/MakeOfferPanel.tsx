@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useId, useRef, useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Alert } from "@/components/feedback/Alert";
-import { Button } from "@/components/forms/Button";
+import { Button, buttonLinkClassName } from "@/components/forms/Button";
 import { MoneyInput } from "@/components/forms/MoneyInput";
 import { TextAreaField } from "@/components/forms/TextAreaField";
 import { useAuth } from "@/lib/auth/AuthProvider";
@@ -39,15 +39,15 @@ export function MakeOfferPanel({ productId, productName, canOffer, returnToPath 
 
   if (!user) {
     return (
-      <a href={buildLoginRedirectPath(returnToPath)} className="inline-block rounded-md border border-brand-dark-green px-4 py-2 text-brand-dark-green">
+      <a href={buildLoginRedirectPath(returnToPath)} className={`${buttonLinkClassName("secondary", "lg")} w-full`}>
         Make an offer
       </a>
     );
   }
   if (!user.emailVerified) {
     return (
-      <p className="text-body text-text-secondary">
-        <Link href="/verify-email/resend" className="text-brand-dark-green underline">
+      <p className="font-body text-body-md text-on-surface-variant">
+        <Link href="/verify-email/resend" className="font-semibold text-primary underline underline-offset-4">
           Verify your email
         </Link>{" "}
         to make an offer.
@@ -104,9 +104,9 @@ function VerifiedMakeOffer({ productId, productName, returnToPath }: Omit<MakeOf
   return (
     <div className="flex w-full flex-col gap-3">
       {sentId && (
-        <p role="status" className="text-body text-text-primary">
+        <p role="status" className="font-body text-body-md text-on-surface">
           Your offer was sent. We&apos;ll reply before the deadline.{" "}
-          <Link href={`/account/offers/${encodeURIComponent(sentId)}`} className="font-semibold text-brand-dark-green underline">
+          <Link href={`/account/offers/${encodeURIComponent(sentId)}`} className="font-semibold text-primary underline underline-offset-4">
             View your offer
           </Link>
         </p>
@@ -114,9 +114,9 @@ function VerifiedMakeOffer({ productId, productName, returnToPath }: Omit<MakeOf
 
       {live ? (
         !sentId && (
-          <p className="text-body text-text-primary">
+          <p className="font-body text-body-md text-on-surface">
             You have an offer in progress on this STL ({describeOfferStatus(live.status, "customer").label.toLowerCase()}).{" "}
-            <Link href={`/account/offers/${encodeURIComponent(live.id)}`} className="font-semibold text-brand-dark-green underline">
+            <Link href={`/account/offers/${encodeURIComponent(live.id)}`} className="font-semibold text-primary underline underline-offset-4">
               View your offer
             </Link>
           </p>
@@ -128,6 +128,8 @@ function VerifiedMakeOffer({ productId, productName, returnToPath }: Omit<MakeOf
               id={toggleId}
               type="button"
               variant="secondary"
+              size="lg"
+              className="w-full"
               aria-expanded={open}
               aria-controls={open ? formId : undefined}
               onClick={() => {
@@ -145,9 +147,9 @@ function VerifiedMakeOffer({ productId, productName, returnToPath }: Omit<MakeOf
               noValidate
               onSubmit={(event) => void handleSubmit(event)}
               aria-label={`Make an offer on ${productName}`}
-              className="flex flex-col gap-3 rounded-md border border-border-default bg-white p-4"
+              className="flex flex-col gap-4 rounded-card border border-outline-variant/30 bg-surface-container-low p-6"
             >
-              <p className="text-body text-text-secondary">
+              <p className="font-body text-body-md text-on-surface-variant">
                 Propose a price for this STL. We&apos;ll accept, decline or reply with a counter-offer before the deadline.
               </p>
               <MoneyInput
@@ -172,12 +174,12 @@ function VerifiedMakeOffer({ productId, productName, returnToPath }: Omit<MakeOf
                 <div className="flex flex-col items-start gap-2">
                   <Alert variant="error" message={failure.message} />
                   {(failure.kind === "already-active" || failure.message === OFFER_MESSAGES.uncertainCreate) && (
-                    <Link href="/account/offers" className="font-semibold text-brand-dark-green underline">
+                    <Link href="/account/offers" className="font-semibold text-primary underline underline-offset-4">
                       View your offers
                     </Link>
                   )}
                   {failure.kind === "session-expired" && (
-                    <Link href={buildLoginRedirectPath(returnToPath)} className="font-semibold text-brand-dark-green underline">
+                    <Link href={buildLoginRedirectPath(returnToPath)} className="font-semibold text-primary underline underline-offset-4">
                       Sign in again
                     </Link>
                   )}

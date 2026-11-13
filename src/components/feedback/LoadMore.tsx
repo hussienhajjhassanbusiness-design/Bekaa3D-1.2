@@ -19,8 +19,11 @@ export function LoadMore({ hasMore, onLoadMore, isLoading = false }: LoadMorePro
   }
 
   return (
-    <div className="flex justify-center py-4">
-      <Button type="button" onClick={onLoadMore} disabled={isLoading} isLoading={isLoading}>
+    // Batch 3: Stitch places paging `mt-12`/`mt-16`, centred; cursor
+    // paging has no page numbers (COMPONENT-MIGRATION "LoadMore"), so it is
+    // one outline button.
+    <div className="mt-12 flex justify-center">
+      <Button type="button" variant="outline" onClick={onLoadMore} disabled={isLoading} isLoading={isLoading}>
         Load more
       </Button>
     </div>

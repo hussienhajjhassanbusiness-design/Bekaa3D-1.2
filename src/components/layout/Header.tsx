@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { DialogShell } from "@/components/feedback/DialogShell";
 import { Icon } from "@/components/ui/Icon";
+import { useSheetBehavior } from "@/components/ui/useSheetBehavior";
 import { BrandMark } from "./BrandMark";
 import { HeaderAccountLink } from "./HeaderAccountLink";
 import { HeaderCartLink } from "./HeaderCartLink";
@@ -70,33 +71,17 @@ export function Header() {
     setIsMenuOpen(false);
   }
 
+  const closeMenu = useCallback(() => setIsMenuOpen(false), []);
+
+  // Scroll lock while open, and close when growing past the breakpoint
+  // (no menu button left to return to) — shared with the shop filter drawer.
+  useSheetBehavior({ open: isMenuOpen, onClose: closeMenu, closeAtQuery: DESKTOP_QUERY });
+
+  // Focus moves into the sheet; DialogShell returns it to the menu button
+  // on close.
   useEffect(() => {
-    if (!isMenuOpen) return;
-
-    // Focus moves into the sheet; DialogShell returns it to the menu button
-    // on close.
-    closeButtonRef.current?.focus();
-
-    // The page behind a modal sheet should not scroll.
-    const root = document.documentElement;
-    const previousOverflow = root.style.overflow;
-    root.style.overflow = "hidden";
-
-    // Growing past the breakpoint (rotation, resize) leaves no menu button
-    // to return to, so the sheet closes itself.
-    const media = window.matchMedia(DESKTOP_QUERY);
-    const handleChange = (event: MediaQueryListEvent) => {
-      if (event.matches) setIsMenuOpen(false);
-    };
-    media.addEventListener("change", handleChange);
-
-    return () => {
-      root.style.overflow = previousOverflow;
-      media.removeEventListener("change", handleChange);
-    };
+    if (isMenuOpen) closeButtonRef.current?.focus();
   }, [isMenuOpen]);
-
-  const closeMenu = () => setIsMenuOpen(false);
 
   return (
     <div className="relative">

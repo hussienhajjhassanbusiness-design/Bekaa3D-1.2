@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PriceDisplay } from "./PriceDisplay";
 import { ProductTypeBadge } from "./ProductTypeBadge";
+import { RatingSummary } from "./RatingSummary";
 import type { ProductCardModel } from "@/lib/catalog/productAdapters";
 import { Icon } from "@/components/ui/Icon";
 import { WishlistButton } from "@/components/wishlist/WishlistButton";
@@ -8,8 +9,6 @@ import { WishlistButton } from "@/components/wishlist/WishlistButton";
 export interface ProductCardProps {
   product: ProductCardModel;
 }
-
-const RATING_FORMAT = new Intl.NumberFormat("en", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 // #FVS013-PRODUCT-CARD
 //
@@ -38,8 +37,6 @@ const RATING_FORMAT = new Intl.NumberFormat("en", { minimumFractionDigits: 1, ma
 // stronger shadow — on the wrapper, so the heart moves with it — and every
 // transform is off under prefers-reduced-motion.
 export function ProductCard({ product }: ProductCardProps) {
-  const hasRating = product.reviewCount > 0;
-
   return (
     <div className="group relative h-full transition-transform duration-300 ease-standard hover:-translate-y-1 motion-reduce:transition-none motion-reduce:hover:translate-y-0">
       <Link
@@ -81,24 +78,7 @@ export function ProductCard({ product }: ProductCardProps) {
         <div className="flex flex-1 flex-col p-6">
           <div className="mb-3 flex min-h-6 flex-wrap items-center justify-between gap-2">
             <ProductTypeBadge type={product.type} />
-            {hasRating && (
-              <span className="font-body text-sm text-on-surface-variant">
-                {/* Spoken as one sentence; the compact visual is hidden from
-                    assistive tech so it is not read twice. */}
-                <span className="sr-only">
-                  {`Rated ${RATING_FORMAT.format(product.averageRating)} out of 5 from ${product.reviewCount} ${
-                    product.reviewCount === 1 ? "review" : "reviews"
-                  }`}
-                </span>
-                <span aria-hidden="true" className="inline-flex items-center gap-1">
-                  {/* Amber-600 (the warning token): Stitch's amber-400 is
-                      2.1:1 on white, below the 3:1 graphics minimum. */}
-                  <Icon name="star" fill="currentColor" strokeWidth={1} className="h-4 w-4 text-warning" />
-                  <span className="font-semibold text-on-surface">{RATING_FORMAT.format(product.averageRating)}</span>
-                  <span>({product.reviewCount})</span>
-                </span>
-              </span>
-            )}
+            <RatingSummary averageRating={product.averageRating} reviewCount={product.reviewCount} />
           </div>
           <h3 className="line-clamp-2 font-headline text-headline-md text-on-surface transition-colors duration-200 group-hover:text-primary">
             {product.name}

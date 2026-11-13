@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@/components/forms/Button";
+import { Icon } from "@/components/ui/Icon";
 
 export interface FacetOption {
   value: string;
@@ -40,11 +40,17 @@ export interface FilterPanelProps {
 // component has no swatch concept of its own; a caller that wants a
 // swatch supplies one via `label`/a richer option shape later, but
 // text remains the only thing this component ever relies on.
+//
+// Batch 3 — Stitch shop filter sidebar (COMPONENT-SPECS §19): mono caps
+// group legends, 20px primary checkboxes with Inter labels, applied
+// filters as removable tags (§18) and "Clear filters" as a text action.
+// The same instance is rendered in the desktop aside and in the tablet /
+// mobile drawer, with the same handlers.
 export function FilterPanel({ groups, onChange, appliedFilters = [], onRemoveFilter, onClearAll }: FilterPanelProps) {
   return (
-    <div>
+    <div className="flex flex-col gap-8">
       {appliedFilters.length > 0 && (
-        <div className="mb-4">
+        <div className="flex flex-col items-start gap-3">
           <ul className="flex flex-wrap gap-2">
             {appliedFilters.map((filter) => (
               <li key={`${filter.groupId}:${filter.value}`}>
@@ -52,37 +58,44 @@ export function FilterPanel({ groups, onChange, appliedFilters = [], onRemoveFil
                   type="button"
                   aria-label={`Remove ${filter.label} filter`}
                   onClick={() => onRemoveFilter?.(filter.groupId, filter.value)}
-                  className="rounded-pill border border-border-default px-3 py-1 text-caption text-text-primary"
+                  className="inline-flex min-h-8 items-center gap-1.5 rounded-badge bg-primary/10 py-1 pl-2.5 pr-1.5 font-body text-sm font-medium text-primary transition-colors duration-200 hover:bg-primary/20"
                 >
-                  {filter.label} ✕
+                  {filter.label}
+                  <Icon name="close" className="h-4 w-4" />
                 </button>
               </li>
             ))}
           </ul>
           {onClearAll && (
-            <Button type="button" onClick={onClearAll} className="mt-2">
+            <button
+              type="button"
+              onClick={onClearAll}
+              className="inline-flex min-h-8 items-center rounded-badge font-label text-label-caps uppercase text-primary underline-offset-4 hover:underline"
+            >
               Clear filters
-            </Button>
+            </button>
           )}
         </div>
       )}
 
       {groups.map((group) => (
-        <fieldset key={group.id} className="mb-4">
-          <legend className="text-label font-semibold uppercase tracking-label text-text-primary">
-            {group.legend}
-          </legend>
+        <fieldset key={group.id}>
+          <legend className="mb-4 font-label text-label-caps uppercase text-on-surface-variant">{group.legend}</legend>
           {group.options.length === 0 ? (
-            <p className="mt-2 text-caption text-text-secondary">No options available.</p>
+            <p className="font-body text-sm text-on-surface-variant">No options available.</p>
           ) : (
-            <div className="mt-2 flex flex-col gap-2">
+            <div className="flex flex-col gap-1">
               {group.options.map((option) => (
-                <label key={option.value} className="flex items-center gap-2 text-body text-text-primary">
+                <label
+                  key={option.value}
+                  className="group flex min-h-9 cursor-pointer items-center gap-3 font-body text-body-md text-on-surface-variant hover:text-on-surface has-[:checked]:font-semibold has-[:checked]:text-on-surface has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50"
+                >
                   <input
                     type="checkbox"
                     checked={option.checked}
                     disabled={option.disabled}
                     onChange={(event) => onChange(group.id, option.value, event.target.checked)}
+                    className="h-5 w-5 shrink-0 cursor-pointer rounded-badge accent-primary"
                   />
                   {option.label}
                 </label>

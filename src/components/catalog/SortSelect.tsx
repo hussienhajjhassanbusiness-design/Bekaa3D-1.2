@@ -1,6 +1,7 @@
 "use client";
 
 import { useId } from "react";
+import { Icon } from "@/components/ui/Icon";
 
 export interface SortOption {
   value: string;
@@ -25,24 +26,33 @@ export interface SortSelectProps {
 export function SortSelect({ options, value, onChange, label = "Sort by" }: SortSelectProps) {
   const selectId = useId();
 
+  // Batch 3 — Stitch results-toolbar sort (COMPONENT-SPECS §20): mono
+  // "SORT BY" label beside a tinted, borderless native select with a
+  // decorative chevron. Still a native <select> with its own label.
   return (
-    <div>
-      <label htmlFor={selectId} className="block text-label font-semibold uppercase tracking-label text-text-primary">
+    <div className="flex items-center gap-3">
+      <label htmlFor={selectId} className="shrink-0 font-label text-label-caps uppercase text-on-surface-variant">
         {label}
       </label>
-      <select
-        id={selectId}
-        value={value ?? ""}
-        disabled={options.length === 0}
-        onChange={(event) => onChange(event.target.value)}
-        className="mt-1 rounded-sm border border-border-default px-3 py-2 text-body text-text-primary"
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+      <div className="relative">
+        <select
+          id={selectId}
+          value={value ?? ""}
+          disabled={options.length === 0}
+          onChange={(event) => onChange(event.target.value)}
+          className="min-h-11 w-full appearance-none rounded-control bg-surface-container py-2 pl-4 pr-10 font-body text-body-md text-on-surface disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <Icon
+          name="chevron-down"
+          className="pointer-events-none absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-on-surface-variant"
+        />
+      </div>
     </div>
   );
 }
