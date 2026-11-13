@@ -82,6 +82,7 @@ export default defineConfig({
         "storefront-chrome.spec.ts",
         "storefront-pages.spec.ts",
         "auth-pages-responsive.spec.ts",
+        "cart-checkout-responsive.spec.ts",
       ],
       // Uses the system-installed Microsoft Edge (Chromium-based) via
       // Playwright's "channel" option instead of Playwright's own bundled

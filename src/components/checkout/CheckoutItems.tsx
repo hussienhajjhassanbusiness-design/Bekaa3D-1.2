@@ -1,5 +1,13 @@
+import type { ReactNode } from "react";
 import { PriceDisplay } from "@/components/catalog/PriceDisplay";
+import { Icon } from "@/components/ui/Icon";
 import { UNNAMED_PRODUCT, type CartModel } from "@/lib/cart/cartModel";
+
+export interface CheckoutItemsProps {
+  cart: CartModel;
+  // Rendered at the bottom of the summary card (the Place order action).
+  children?: ReactNode;
+}
 
 // #FVS026-CHECKOUT-ITEMS
 //
@@ -8,35 +16,68 @@ import { UNNAMED_PRODUCT, type CartModel } from "@/lib/cart/cartModel";
 // prices, so no figure is summed here. The current price is shown when the
 // server has one; a server-flagged price change is labelled, never
 // reconciled on the client.
-export function CheckoutItems({ cart }: { cart: CartModel }) {
+//
+// Redesign Batch 6: the Stitch checkout Order Summary card (COMPONENT-SPECS
+// §35): white 16px panel, thumbnail rows, mono prices. The Stitch
+// subtotal / shipping / tax / total rows are deliberately absent — the
+// cart has none of those values and ADR-024 forbids a shipping charge —
+// and are replaced by the honest "calculated when you place your order"
+// note. The real server totals appear on the confirmation (OrderSummary).
+export function CheckoutItems({ cart, children }: CheckoutItemsProps) {
   return (
-    <section aria-labelledby="checkout-items-heading" className="flex flex-col gap-3">
-      <h2 id="checkout-items-heading" className="text-h4 font-semibold text-text-primary">
-        Your items
+    <section
+      aria-labelledby="checkout-items-heading"
+      className="flex flex-col gap-6 rounded-panel border border-outline-variant/40 bg-surface-container-lowest p-5 shadow-sm tablet:p-8"
+    >
+      <h2 id="checkout-items-heading" className="font-headline text-headline-md text-on-surface">
+        Order summary
       </h2>
-      <ul className="flex flex-col divide-y divide-border-default rounded-md border border-border-default bg-white">
+      <ul className="flex flex-col gap-5">
         {cart.lines.map((line) => {
           const price = line.currentPrice ?? line.snapshotPrice;
+          const isStl = line.productType === "stl";
           return (
-            <li key={line.productId} className="flex flex-wrap items-start justify-between gap-2 p-3">
-              <div>
-                <p className="text-body font-semibold text-text-primary">{line.name ?? UNNAMED_PRODUCT}</p>
-                <p className="text-caption text-text-secondary">
-                  {line.productType === "stl" ? "STL file (sent by email)" : "Physical item"} · Qty {line.quantity}
-                </p>
-                {line.priceChanged && <p className="text-caption font-semibold text-warning-text">Price updated</p>}
+            <li key={line.productId} className="flex min-w-0 items-start gap-4">
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-control bg-surface-container tablet:h-20 tablet:w-20">
+                {line.coverImage ? (
+                  // Decorative here: the product name is right beside it.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={line.coverImage.src} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <Icon name={isStl ? "deployed-code" : "image"} className="h-7 w-7 text-outline" strokeWidth={1.5} />
+                )}
               </div>
-              <p className="text-body text-text-primary">
-                <PriceDisplay amountCents={price.amountCents} currency={price.currency} />
-                <span className="text-caption text-text-secondary"> each</span>
-              </p>
+              <div className="flex min-w-0 flex-1 flex-col gap-1">
+                <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+                  <p className="min-w-0 break-words font-headline text-title-sm text-on-surface">
+                    {line.name ?? UNNAMED_PRODUCT}
+                  </p>
+                  <p className="font-label text-label-caps font-bold tabular-nums text-primary">
+                    <PriceDisplay amountCents={price.amountCents} currency={price.currency} />
+                    <span className="font-body text-caption font-normal text-on-surface-variant"> each</span>
+                  </p>
+                </div>
+                <p className="text-caption text-on-surface-variant">
+                  {isStl ? "STL file (sent by email)" : "Physical item"} · Qty {line.quantity}
+                </p>
+                {line.priceChanged && (
+                  <p className="flex items-center gap-1.5 text-caption font-semibold text-on-warning-container">
+                    <Icon name="warning" className="h-4 w-4" />
+                    Price updated
+                  </p>
+                )}
+              </div>
             </li>
           );
         })}
       </ul>
-      <p className="text-caption text-text-secondary">
-        Your order total is calculated from current prices when you place your order, and shown on the next screen.
+      <p className="flex items-start gap-2 border-t border-outline-variant/40 pt-5 text-caption text-on-surface-variant">
+        <Icon name="receipt-long" className="mt-px h-4 w-4 text-outline" />
+        <span>
+          Your order total is calculated from current prices when you place your order, and shown on the next screen.
+        </span>
       </p>
+      {children}
     </section>
   );
 }

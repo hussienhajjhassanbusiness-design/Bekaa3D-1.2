@@ -1,7 +1,10 @@
 "use client";
 
 import { useId } from "react";
+import { Icon } from "@/components/ui/Icon";
 import { CONSENT_COPY } from "@/lib/checkout/checkoutCopy";
+import { CheckoutStepHeading } from "./CheckoutStepHeading";
+import { FIELD_ERROR_CLASSES } from "./choiceCardStyles";
 
 export type ConsentKey = "acceptTerms" | "acceptDigitalFinalSale" | "acceptCashTerms";
 
@@ -14,6 +17,9 @@ export interface ConsentCheckboxGroupProps {
   onChange: (key: ConsentKey, checked: boolean) => void;
   errors: Partial<Record<ConsentKey, string>>;
   disabled?: boolean;
+  // Presentation only (Batch 6): numbered step header.
+  step?: number;
+  complete?: boolean;
 }
 
 // #FVS026-CONSENTS
@@ -21,6 +27,11 @@ export interface ConsentCheckboxGroupProps {
 // One checkbox per backend consent boolean, and only those the order
 // needs; never one blanket "I agree to everything", never pre-ticked.
 // Wording: PENDING LEGAL REVIEW (see checkoutCopy.ts).
+//
+// Redesign Batch 6: numbered step header as the legend; each consent is a
+// bordered row whose whole surface is the <label> (a 20px native
+// checkbox, text wraps freely). Same booleans, same wording, never
+// pre-ticked; an error turns the row's border red AND adds text.
 export function ConsentCheckboxGroup({
   showDigital,
   showCash,
@@ -28,6 +39,8 @@ export function ConsentCheckboxGroup({
   onChange,
   errors,
   disabled,
+  step = 3,
+  complete = false,
 }: ConsentCheckboxGroupProps) {
   const items: { key: ConsentKey; label: string }[] = [
     { key: "acceptTerms", label: CONSENT_COPY.terms },
@@ -43,8 +56,8 @@ export function ConsentCheckboxGroup({
   ];
 
   return (
-    <fieldset className="flex flex-col gap-3" disabled={disabled}>
-      <legend className="mb-2 text-h4 font-semibold text-text-primary">Confirm</legend>
+    <fieldset className="flex min-w-0 flex-col gap-3" disabled={disabled}>
+      <CheckoutStepHeading as="legend" step={step} title="Confirm" complete={complete} />
       {items.map((item) => (
         <ConsentCheckbox
           key={item.key}
@@ -72,20 +85,25 @@ function ConsentCheckbox({
   const errorId = useId();
   return (
     <div>
-      <label className="flex items-start gap-2 text-body text-text-primary">
+      <label
+        className={`flex cursor-pointer items-start gap-3 rounded-control border bg-surface-container-lowest p-4 text-body-md text-on-surface transition-colors duration-200 ease-standard hover:bg-surface-container-low has-[:checked]:border-primary has-[:disabled]:cursor-not-allowed motion-reduce:transition-none ${
+          error ? "border-error ring-2 ring-error/20" : "border-outline-variant"
+        }`}
+      >
         <input
           type="checkbox"
-          className="mt-1"
+          className="mt-0.5 h-5 w-5 shrink-0 cursor-[inherit] accent-primary"
           checked={checked}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? errorId : undefined}
           onChange={(event) => onChange(event.target.checked)}
         />
-        <span>{label}</span>
+        <span className="min-w-0 break-words">{label}</span>
       </label>
       {error && (
-        <p id={errorId} className="ml-6 mt-1 text-caption text-danger">
-          {error}
+        <p id={errorId} className={FIELD_ERROR_CLASSES}>
+          <Icon name="error" className="mt-px h-4 w-4" />
+          <span>{error}</span>
         </p>
       )}
     </div>

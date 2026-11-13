@@ -50,4 +50,11 @@ describe("PriceChangeConflictBanner", () => {
       "You've accepted the new prices. Place your order to continue."
     );
   });
+
+  // Redesign Batch 6.
+  it("labels the old and new prices with visible text (Was / Now)", () => {
+    render(<PriceChangeConflictBanner changes={CHANGES} names={NAMES} accepted={false} onAccept={vi.fn()} />);
+    expect(screen.getAllByText("Was")).toHaveLength(2);
+    expect(screen.getAllByText("Now")).toHaveLength(2);
+  });
 });

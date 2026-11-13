@@ -606,3 +606,101 @@ describe("CheckoutView submission", () => {
     );
   });
 });
+
+// Redesign Batch 6 — presentation over unchanged behaviour. Role/name/state
+// assertions only (no layout selectors).
+describe("CheckoutView layout (redesign Batch 6)", () => {
+  it("one h1; numbered steps are h2 headings that also name their groups, in decision order", async () => {
+    renderView();
+    await screen.findByRole("button", { name: "Place order" });
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual([
+      "Delivery or pickup",
+      "Payment",
+      "Confirm",
+      "Order summary",
+    ]);
+    expect(screen.getByRole("group", { name: "Delivery or pickup" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Payment" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Confirm" })).toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "Order summary" })).toBeInTheDocument();
+  });
+
+  it("the summary shows server unit prices only: no total, shipping, tax or discount row", async () => {
+    renderView();
+    const summary = await screen.findByRole("complementary", { name: "Order summary" });
+    expect(within(summary).getByText("$18.00")).toBeInTheDocument();
+    expect(summary).not.toHaveTextContent(/shipping|tax|discount|subtotal/i);
+    expect(within(summary).queryByText(/^Total/)).not.toBeInTheDocument();
+    expect(summary).toHaveTextContent(/calculated from current prices when you place your order/);
+  });
+
+  it("Place order comes after every decision in DOM (= keyboard) order", async () => {
+    renderView();
+    const place = await screen.findByRole("button", { name: "Place order" });
+    const terms = screen.getByRole("checkbox", { name: CONSENT_COPY.terms });
+    const delivery = screen.getByRole("radio", { name: /^Delivery/ });
+    expect(delivery.compareDocumentPosition(terms) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(terms.compareDocumentPosition(place) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("STL only: a Delivery step explains email delivery, with no fulfillment group", async () => {
+    cart = cartOf([STL]);
+    renderView();
+    expect(await screen.findByRole("heading", { level: 2, name: "Delivery" })).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Delivery or pickup" })).not.toBeInTheDocument();
+    expect(screen.getByText(/Your order only has STL files/)).toBeInTheDocument();
+  });
+
+  it("while submitting: Place order is busy and disabled, the choices are locked, and the state is announced", async () => {
+    let resolve!: (value: CheckoutReadDTO) => void;
+    placeSpy.mockImplementation(() => new Promise((r) => (resolve = r)));
+    const u = user();
+    renderView();
+    await chooseDeliveryOnline(u);
+    await u.click(screen.getByRole("button", { name: "Place order" }));
+    const place = screen.getByRole("button", { name: "Place order" });
+    expect(place).toBeDisabled();
+    expect(place).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByRole("status")).toHaveTextContent("Placing your order…");
+    expect(screen.getByRole("radio", { name: /Pay online/ })).toBeDisabled();
+    expect(screen.getByRole("checkbox", { name: CONSENT_COPY.terms })).toBeDisabled();
+    expect(placeSpy).toHaveBeenCalledTimes(1);
+    resolve(onlineRead());
+    await waitFor(() => expect(mockedRedirect).toHaveBeenCalledTimes(1));
+  });
+
+  it("a price change keeps the old and new prices with visible Was / Now labels until accepted", async () => {
+    placeSpy.mockRejectedValueOnce(
+      problem(409, "CART_PRICE_CHANGED", {
+        price_changes: [{ product_id: "p-dragon", old_amount_cents: 1800, new_amount_cents: 2100, currency: "USD" }],
+      })
+    );
+    const u = user();
+    renderView();
+    await chooseDeliveryOnline(u);
+    await u.click(screen.getByRole("button", { name: "Place order" }));
+    const banner = await screen.findByRole("alert");
+    expect(within(banner).getByText("Was")).toBeInTheDocument();
+    expect(within(banner).getByText("Now")).toBeInTheDocument();
+    expect(within(banner).getByText("$18.00")).toBeInTheDocument();
+    expect(within(banner).getByText("$21.00")).toBeInTheDocument();
+    expect(screen.getByText("Accept the new prices above before placing your order.")).toBeInTheDocument();
+  });
+
+  it("the cash confirmation shows the server's total and amount due, and never a paid state", async () => {
+    placeSpy.mockResolvedValue(cashRead());
+    const u = user();
+    renderView();
+    await u.click(await screen.findByRole("radio", { name: /^Delivery/ }));
+    await u.click(screen.getByRole("radio", { name: /Pay in cash/ }));
+    await u.click(screen.getByRole("checkbox", { name: CONSENT_COPY.terms }));
+    await u.click(screen.getByRole("checkbox", { name: CONSENT_COPY.cashTerms }));
+    await u.click(screen.getByRole("button", { name: "Place order" }));
+    expect(await screen.findByRole("heading", { level: 2, name: "Order placed" })).toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(screen.getByText(/hasn't been paid yet/)).toBeInTheDocument();
+    expect(screen.queryByText(/\bpaid\b(?! yet)/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Continue shopping" })).toHaveAttribute("href", "/shop");
+  });
+});

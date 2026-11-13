@@ -5,8 +5,10 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 import { useQueryClient } from "@tanstack/react-query";
 import { Alert } from "@/components/feedback/Alert";
 import { EmptyState } from "@/components/feedback/EmptyState";
-import { Button } from "@/components/forms/Button";
+import { Button, buttonLinkClassName } from "@/components/forms/Button";
 import { TextAreaField } from "@/components/forms/TextAreaField";
+import { Container } from "@/components/ui/Container";
+import { Icon } from "@/components/ui/Icon";
 import { addressKeys } from "@/lib/addresses/addressKeys";
 import { useAddresses } from "@/lib/addresses/useAddresses";
 import { AUTH_SESSION_QUERY_KEY } from "@/lib/auth/authSession";
@@ -39,6 +41,8 @@ import { CheckoutConfirmation } from "./CheckoutConfirmation";
 import { CheckoutDisabledBanner } from "./CheckoutDisabledBanner";
 import { CheckoutItems } from "./CheckoutItems";
 import { CheckoutLineIssues } from "./CheckoutLineIssues";
+import { CheckoutStepHeading } from "./CheckoutStepHeading";
+import { STEP_CARD_CLASSES } from "./choiceCardStyles";
 import { ConsentCheckboxGroup, type ConsentKey } from "./ConsentCheckboxGroup";
 import { FulfillmentSection } from "./FulfillmentSection";
 import { PaymentMethodSection } from "./PaymentMethodSection";
@@ -60,7 +64,12 @@ type Phase =
     };
 
 const VALIDATION_SUMMARY = "Please check the highlighted details before placing your order.";
-const PAGE_CLASS = "mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 tablet:px-6 desktop:px-8";
+// Inline text links on checkout states (primary ink, underlined, 44px row).
+const TEXT_LINK_CLASS =
+  "inline-flex min-h-11 items-center gap-2 rounded-sm font-semibold text-primary underline decoration-1 underline-offset-4 hover:decoration-2";
+// A state panel that replaces the form (result, unknown outcome, guards).
+const STATE_CARD_CLASS =
+  "flex max-w-3xl flex-col items-start gap-4 rounded-card border border-outline-variant/30 bg-surface-container-lowest p-5 shadow-sm tablet:p-8";
 
 function cartNames(cart: CartModel): Record<string, string> {
   return Object.fromEntries(cart.lines.map((line) => [line.productId, line.name ?? UNNAMED_PRODUCT]));
@@ -216,11 +225,18 @@ export function CheckoutView() {
     });
   }
 
+  // Redesign Batch 6: shared 1440px Container; the page's single h1
+  // (display role, as the cart) and a one-line description in every state.
   const page = (content: ReactNode) => (
-    <div className={PAGE_CLASS}>
-      <h1 className="text-h1 font-bold text-text-primary">Checkout</h1>
+    <Container className="flex flex-col gap-8 py-10 tablet:py-12 desktop:py-16">
+      <div className="flex max-w-2xl flex-col gap-3">
+        <h1 className="font-display text-display text-on-surface">Checkout</h1>
+        <p className="text-body-md text-on-surface-variant">
+          Choose how you&apos;ll receive your order and how you&apos;ll pay, then confirm and place it.
+        </p>
+      </div>
       {content}
-    </div>
+    </Container>
   );
 
   // --- results that no longer depend on the cart -------------------------
@@ -241,12 +257,15 @@ export function CheckoutView() {
   if (phase.kind === "redirecting") {
     const url = phase.result.payment?.redirectUrl ?? "";
     return page(
-      <div role="status" className="flex flex-col items-start gap-3">
-        <p className="text-body text-text-primary">
-          Order <span className="font-semibold">{phase.result.orderNumber}</span> is awaiting payment. Taking you to the
-          payment page…
+      <div role="status" className={STATE_CARD_CLASS}>
+        <p className="flex items-start gap-3 text-body-md text-on-surface">
+          <Icon name="open-in-new" className="mt-0.5 h-5 w-5 text-primary" />
+          <span>
+            Order <span className="font-semibold">{phase.result.orderNumber}</span> is awaiting payment. Taking you to
+            the payment page…
+          </span>
         </p>
-        <a href={url} className="font-semibold text-brand-dark-green underline">
+        <a href={url} className={TEXT_LINK_CLASS}>
           Continue to payment
         </a>
       </div>
@@ -254,28 +273,34 @@ export function CheckoutView() {
   }
   if (phase.kind === "payment-not-started") {
     return page(
-      <section aria-labelledby="checkout-unpaid-heading" className="flex flex-col items-start gap-3">
-        <h2 id="checkout-unpaid-heading" ref={focusRef} tabIndex={-1} className="text-h2 font-bold text-text-primary">
+      <section aria-labelledby="checkout-unpaid-heading" className={STATE_CARD_CLASS}>
+        <h2
+          id="checkout-unpaid-heading"
+          ref={focusRef}
+          tabIndex={-1}
+          className="font-headline text-headline-lg text-on-surface outline-none"
+        >
           Payment not started
         </h2>
-        <p className="text-body text-text-primary">{phase.message}</p>
+        <p className="flex items-start gap-3 rounded-card border border-warning-outline bg-warning-container p-4 text-body text-on-warning-container">
+          <Icon name="warning" className="h-5 w-5" />
+          <span>{phase.message}</span>
+        </p>
         {phase.orderNumber && (
-          <p className="text-body text-text-primary">
-            Order number <span className="font-semibold">{phase.orderNumber}</span>
+          <p className="text-body-md text-on-surface">
+            Order number <span className="font-label text-label-caps font-bold">{phase.orderNumber}</span>
           </p>
         )}
-        <p className="text-body text-text-secondary">
-          You can retry the payment from the order page.
-        </p>
+        <p className="text-body-md text-on-surface-variant">You can retry the payment from the order page.</p>
         {phase.orderId ? (
           <Link
             href={`/account/orders/${encodeURIComponent(phase.orderId)}`}
-            className="font-semibold text-brand-dark-green underline"
+            className={buttonLinkClassName("primary")}
           >
             View order
           </Link>
         ) : (
-          <Link href="/account/orders" className="font-semibold text-brand-dark-green underline">
+          <Link href="/account/orders" className={buttonLinkClassName("primary")}>
             View your orders
           </Link>
         )}
@@ -287,7 +312,7 @@ export function CheckoutView() {
   const authFailed = auth.isError && !auth.user;
   if (authFailed) {
     return page(
-      <div className="flex flex-col items-start gap-3">
+      <div className="flex max-w-2xl flex-col items-start gap-4">
         <Alert variant="error" message="We couldn't load your account. Please try again." />
         <Button
           type="button"
@@ -308,17 +333,21 @@ export function CheckoutView() {
   }
   if (phase.kind === "uncertain") {
     return page(
-      <section aria-labelledby="checkout-uncertain-heading" className="flex flex-col items-start gap-3">
+      <section aria-labelledby="checkout-uncertain-heading" className={STATE_CARD_CLASS}>
         <h2
           id="checkout-uncertain-heading"
           ref={focusRef}
           tabIndex={-1}
-          className="text-h3 font-semibold text-text-primary"
+          className="font-headline text-headline-md text-on-surface outline-none"
         >
           Checking your order
         </h2>
-        <p role="alert" className="text-body text-text-primary">
-          {phase.message}
+        <p
+          role="alert"
+          className="flex items-start gap-3 rounded-card border border-warning-outline bg-warning-container p-4 text-body text-on-warning-container"
+        >
+          <Icon name="warning" className="h-5 w-5" />
+          <span>{phase.message}</span>
         </p>
         <Button type="button" onClick={() => void submit(phase.body)}>
           Try again
@@ -328,9 +357,9 @@ export function CheckoutView() {
   }
   if (!auth.user.emailVerified) {
     return page(
-      <div className="flex flex-col items-start gap-3">
+      <div className="flex max-w-2xl flex-col items-start gap-3">
         <Alert variant="info" message="Verify your email address before placing an order. Your cart is saved." />
-        <Link href="/verify-email/resend" className="font-semibold text-brand-dark-green underline">
+        <Link href="/verify-email/resend" className={TEXT_LINK_CLASS}>
           Resend the verification email
         </Link>
       </div>
@@ -338,15 +367,26 @@ export function CheckoutView() {
   }
   if (cartQuery.isPending) {
     return page(
-      <div role="status" className="flex flex-col gap-4">
+      <div role="status" className="grid grid-cols-1 items-start gap-8 desktop:grid-cols-12 desktop:gap-12">
         <span className="sr-only">Loading checkout…</span>
-        <div aria-hidden="true" className="h-40 animate-pulse rounded-md bg-neutral-200 motion-reduce:animate-none" />
+        <div aria-hidden="true" className="flex flex-col gap-6 desktop:col-span-7">
+          {[0, 1].map((index) => (
+            <div
+              key={index}
+              className="h-48 animate-pulse rounded-card bg-surface-container-low motion-reduce:animate-none"
+            />
+          ))}
+        </div>
+        <div
+          aria-hidden="true"
+          className="h-72 animate-pulse rounded-panel bg-surface-container-low motion-reduce:animate-none desktop:col-span-5"
+        />
       </div>
     );
   }
   if (cartQuery.isError || !cart) {
     return page(
-      <div className="flex flex-col items-start gap-3">
+      <div className="flex max-w-2xl flex-col items-start gap-4">
         <Alert variant="error" message="We couldn't load your cart. Please try again." />
         <Button type="button" onClick={() => void cartQuery.refetch()}>
           Retry
@@ -368,31 +408,35 @@ export function CheckoutView() {
             }))}
           />
         )}
-        <EmptyState message="Your cart is empty, so there's nothing to check out." />
-        <Link href="/shop" className="rounded-md bg-brand-dark-green px-4 py-2 text-text-on-brand hover:bg-brand-green">
-          Browse the shop
-        </Link>
+        <div className="flex w-full flex-col items-center rounded-card border border-dashed border-outline-variant bg-surface-container-lowest px-4 pb-12">
+          <EmptyState message="Your cart is empty, so there's nothing to check out." icon="shopping-cart" />
+          <Link href="/shop" className={buttonLinkClassName("primary", "lg")}>
+            Browse the shop
+          </Link>
+        </div>
       </div>
     );
   }
   if (gate.kind === "needs-attention") {
     return page(
-      <CheckoutLineIssues
-        message="Some items in your cart can't be ordered right now. Update your cart to continue:"
-        items={gate.lines.map((line) => ({
-          productId: line.productId,
-          name: line.name ?? UNNAMED_PRODUCT,
-          detail: refusalReasonText(line.overCap ? "over_cap" : (line.unpurchasableReason ?? ""), line.maxQuantity),
-        }))}
-        showCartLink
-      />
+      <div className="max-w-3xl">
+        <CheckoutLineIssues
+          message="Some items in your cart can't be ordered right now. Update your cart to continue:"
+          items={gate.lines.map((line) => ({
+            productId: line.productId,
+            name: line.name ?? UNNAMED_PRODUCT,
+            detail: refusalReasonText(line.overCap ? "over_cap" : (line.unpurchasableReason ?? ""), line.maxQuantity),
+          }))}
+          showCartLink
+        />
+      </div>
     );
   }
   if (gate.kind === "paused") {
     return page(
-      <div className="flex flex-col items-start gap-3">
+      <div className="flex max-w-2xl flex-col items-start gap-3">
         <CheckoutDisabledBanner reason="The shop isn't accepting orders right now. Your cart is saved, so you can check out later." />
-        <Link href="/cart" className="font-semibold text-brand-dark-green underline">
+        <Link href="/cart" className={TEXT_LINK_CLASS}>
           Back to your cart
         </Link>
       </div>
@@ -403,15 +447,30 @@ export function CheckoutView() {
   const submitting = phase.kind === "submitting";
   const cash = cashOption(cart, settings);
   const priceBlocked = problem?.kind === "price-changed" && !priceAccepted;
+  // Step-header decoration only (filled circle + check). Never gates the
+  // submit: validateCheckoutForm and the server decide.
+  const fulfillmentChosen =
+    form.fulfillment === "delivery"
+      ? form.addressId !== null
+      : form.fulfillment === "pickup" && form.contactPhone.trim() !== "";
+  const consentsGiven =
+    form.acceptTerms &&
+    (!cart.containsDigital || form.acceptDigitalFinalSale) &&
+    (form.paymentMethod !== "cash" || form.acceptCashTerms);
 
+  // Redesign Batch 6 (PAGE-SPECS S7): 7/5 split from 1024px — numbered step
+  // cards on the left, the order summary on the right, sticky below the
+  // 64px sticky header (top-24 = 96px). Below 1024px one column, with the
+  // decisions first and the summary + Place order after them (DOM order =
+  // visual order = keyboard order at every width).
   return page(
     <form
       noValidate
       onSubmit={(event) => handleSubmit(event, cart)}
-      className="grid grid-cols-1 gap-8 desktop:grid-cols-[1fr_22rem]"
+      className="grid grid-cols-1 items-start gap-8 desktop:grid-cols-12 desktop:gap-12"
     >
-      <div className="flex min-w-0 flex-col gap-8">
-        <div ref={problemRef} tabIndex={-1} className="flex flex-col gap-3 outline-none">
+      <div className="flex min-w-0 flex-col gap-6 desktop:col-span-7">
+        <div ref={problemRef} tabIndex={-1} className="flex flex-col gap-3 outline-none empty:hidden">
           {validationFailed && <Alert variant="error" message={VALIDATION_SUMMARY} />}
           {problem && (
             <ProblemNotice
@@ -424,7 +483,7 @@ export function CheckoutView() {
         </div>
 
         {cart.containsPhysical ? (
-          <section aria-label="Delivery or pickup">
+          <div className={STEP_CARD_CLASSES}>
             <FulfillmentSection
               value={form.fulfillment}
               onChange={chooseFulfillment}
@@ -439,54 +498,96 @@ export function CheckoutView() {
               pickup={pickup}
               errors={fieldErrors}
               disabled={submitting}
+              step={1}
+              complete={fulfillmentChosen}
             />
             {cart.containsDigital && (
-              <p className="mt-3 text-caption text-text-secondary">{FULFILLMENT_COPY.mixedDigital}</p>
+              <p className="mt-6 flex items-start gap-2 rounded-control bg-surface-container-low px-3 py-2 text-caption text-on-surface-variant">
+                <Icon name="mail" className="mt-px h-4 w-4 text-primary" />
+                <span>{FULFILLMENT_COPY.mixedDigital}</span>
+              </p>
             )}
-          </section>
+          </div>
         ) : (
-          <p className="rounded-md bg-neutral-50 px-3 py-2 text-body text-text-secondary">
-            {FULFILLMENT_COPY.digitalOnly}
-          </p>
+          <section aria-labelledby="checkout-digital-heading" className={STEP_CARD_CLASSES}>
+            <CheckoutStepHeading id="checkout-digital-heading" step={1} title="Delivery" complete />
+            <p className="flex items-start gap-3 rounded-control bg-surface-container-low p-4 text-body text-on-surface">
+              <Icon name="mail" className="mt-px h-5 w-5 text-primary" />
+              <span>{FULFILLMENT_COPY.digitalOnly}</span>
+            </p>
+          </section>
         )}
 
-        <PaymentMethodSection
-          value={form.paymentMethod}
-          onChange={(paymentMethod: PaymentMethod) => update({ paymentMethod })}
-          cash={cash}
-          error={fieldErrors.paymentMethod}
-          disabled={submitting}
-        />
+        <div className={STEP_CARD_CLASSES}>
+          <PaymentMethodSection
+            value={form.paymentMethod}
+            onChange={(paymentMethod: PaymentMethod) => update({ paymentMethod })}
+            cash={cash}
+            error={fieldErrors.paymentMethod}
+            disabled={submitting}
+            step={2}
+            complete={form.paymentMethod !== null}
+          />
+        </div>
 
-        <TextAreaField
-          label="Order note (optional)"
-          hint="Anything we should know about your order."
-          maxLength={MAX_CUSTOMER_NOTE}
-          value={form.customerNote}
-          onChange={(event) => update({ customerNote: event.target.value })}
-          error={fieldErrors.customerNote}
-          disabled={submitting}
-        />
+        {/* Optional, so not a numbered step; kept in its original place
+            between payment and the consents. */}
+        <div className={STEP_CARD_CLASSES}>
+          <TextAreaField
+            label="Order note (optional)"
+            hint="Anything we should know about your order."
+            maxLength={MAX_CUSTOMER_NOTE}
+            value={form.customerNote}
+            onChange={(event) => update({ customerNote: event.target.value })}
+            error={fieldErrors.customerNote}
+            disabled={submitting}
+          />
+        </div>
 
-        <ConsentCheckboxGroup
-          showDigital={cart.containsDigital}
-          showCash={form.paymentMethod === "cash"}
-          values={form}
-          onChange={(key: ConsentKey, checked) => update({ [key]: checked })}
-          errors={fieldErrors}
-          disabled={submitting}
-        />
+        <div className={STEP_CARD_CLASSES}>
+          <ConsentCheckboxGroup
+            showDigital={cart.containsDigital}
+            showCash={form.paymentMethod === "cash"}
+            values={form}
+            onChange={(key: ConsentKey, checked) => update({ [key]: checked })}
+            errors={fieldErrors}
+            disabled={submitting}
+            step={3}
+            complete={consentsGiven}
+          />
+        </div>
       </div>
 
-      <aside className="flex h-fit flex-col gap-4 desktop:sticky desktop:top-20">
-        <CheckoutItems cart={cart} />
-        <Button type="submit" isLoading={submitting} disabled={submitting || priceBlocked}>
-          Place order
-        </Button>
-        {priceBlocked && (
-          <p className="text-caption text-text-secondary">Accept the new prices above before placing your order.</p>
-        )}
-        <Link href="/cart" className="text-center text-caption font-semibold text-brand-dark-green underline">
+      <aside
+        aria-labelledby="checkout-items-heading"
+        className="flex min-w-0 flex-col gap-4 desktop:sticky desktop:top-24 desktop:col-span-5"
+      >
+        <CheckoutItems cart={cart}>
+          <div className="flex flex-col gap-3">
+            <Button
+              type="submit"
+              size="lg"
+              className="w-full"
+              isLoading={submitting}
+              disabled={submitting || priceBlocked}
+            >
+              Place order
+            </Button>
+            {submitting && (
+              <p role="status" className="text-center text-caption text-on-surface-variant">
+                Placing your order…
+              </p>
+            )}
+            {priceBlocked && (
+              <p className="flex items-start gap-2 text-caption text-on-warning-container">
+                <Icon name="warning" className="mt-px h-4 w-4" />
+                <span>Accept the new prices above before placing your order.</span>
+              </p>
+            )}
+          </div>
+        </CheckoutItems>
+        <Link href="/cart" className={`${TEXT_LINK_CLASS} self-center text-caption`}>
+          <Icon name="arrow-back" className="h-4 w-4" />
           Back to your cart
         </Link>
       </aside>
@@ -542,7 +643,7 @@ function ProblemNotice({
       return (
         <div className="flex flex-col items-start gap-2">
           <Alert variant="error" message={problem.message} />
-          <Link href={buildLoginRedirectPath("/checkout")} className="font-semibold text-brand-dark-green underline">
+          <Link href={buildLoginRedirectPath("/checkout")} className={TEXT_LINK_CLASS}>
             Log in again
           </Link>
         </div>

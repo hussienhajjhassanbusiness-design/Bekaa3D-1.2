@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { Alert } from "@/components/feedback/Alert";
-import { Button } from "@/components/forms/Button";
+import { Button, buttonLinkClassName } from "@/components/forms/Button";
 import { EmptyState } from "@/components/feedback/EmptyState";
+import { Icon } from "@/components/ui/Icon";
 import { cartBlockingLines } from "@/lib/cart/cartInvariants";
 import { cartItemCount, type CartModel } from "@/lib/cart/cartModel";
 import { CartLineItem } from "./CartLineItem";
@@ -25,6 +26,9 @@ export interface CartPageProps {
 
 const NO_PENDING: ReadonlySet<string> = new Set();
 
+// 8/4 split from 1024px (PAGE-SPECS S6); one column below.
+const GRID_CLASSES = "grid grid-cols-1 items-start gap-gutter desktop:grid-cols-12";
+
 // #FVS025-CART-PAGE
 //
 // Presentational: loading / error / empty / populated. The summary has a
@@ -33,6 +37,12 @@ const NO_PENDING: ReadonlySet<string> = new Set();
 // to /checkout (FVS-026) only when the cart can proceed; otherwise it is a
 // disabled button. A price change alone does not block: checkout asks the
 // customer to accept the new price explicitly.
+//
+// Redesign Batch 6: Stitch cart composition (line cards left, lavender
+// summary panel right, sticky below the 64px header from 1024px only).
+// The Stitch subtotal / shipping / tax / total rows, discount code and
+// payment logos are NOT reproduced: CartRead has no such values, ADR-024
+// forbids a shipping charge, and there is no coupon contract.
 export function CartPage({
   cart,
   isLoading = false,
@@ -47,22 +57,27 @@ export function CartPage({
 }: CartPageProps) {
   if (isLoading) {
     return (
-      <div role="status" className="flex flex-col gap-4">
+      <div role="status" className={GRID_CLASSES}>
         <span className="sr-only">Loading your cart…</span>
-        {[0, 1].map((index) => (
-          <div
-            key={index}
-            aria-hidden="true"
-            className="h-32 animate-pulse rounded-md bg-neutral-200 motion-reduce:animate-none"
-          />
-        ))}
+        <div aria-hidden="true" className="flex flex-col gap-4 desktop:col-span-8">
+          {[0, 1].map((index) => (
+            <div
+              key={index}
+              className="h-44 animate-pulse rounded-card bg-surface-container-low motion-reduce:animate-none"
+            />
+          ))}
+        </div>
+        <div
+          aria-hidden="true"
+          className="h-64 animate-pulse rounded-panel bg-surface-container-low motion-reduce:animate-none desktop:col-span-4"
+        />
       </div>
     );
   }
 
   if (isError) {
     return (
-      <div className="flex flex-col items-start gap-3">
+      <div className="flex max-w-2xl flex-col items-start gap-4">
         <Alert variant="error" message="We couldn't load your cart. Please try again." />
         {onRetry && (
           <Button type="button" onClick={onRetry}>
@@ -85,18 +100,15 @@ export function CartPage({
       ))}
 
       {lines.length === 0 ? (
-        <div className="flex flex-col items-center">
-          <EmptyState message="Your cart is empty." />
-          <Link
-            href="/shop"
-            className="rounded-md bg-brand-dark-green px-4 py-2 text-text-on-brand hover:bg-brand-green"
-          >
+        <div className="flex flex-col items-center rounded-card border border-dashed border-outline-variant bg-surface-container-lowest px-4 pb-12">
+          <EmptyState message="Your cart is empty." icon="shopping-cart" />
+          <Link href="/shop" className={buttonLinkClassName("primary", "lg")}>
             Browse the shop
           </Link>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-6 desktop:grid-cols-[1fr_20rem]">
-          <ul aria-label="Cart items" className="flex flex-col gap-4">
+        <div className={GRID_CLASSES}>
+          <ul aria-label="Cart items" className="flex min-w-0 flex-col gap-4 desktop:col-span-8">
             {lines.map((line) => (
               <li key={line.productId}>
                 <CartLineItem
@@ -124,36 +136,54 @@ function CartSummary({ cart, canCheckout }: { cart: CartModel; canCheckout: bool
   const ready = canCheckout && !blocked;
   return (
     <section
-      aria-label="Cart summary"
-      className="flex h-fit flex-col gap-3 rounded-md border border-border-default bg-white p-4"
+      aria-labelledby="cart-summary-heading"
+      className="flex flex-col gap-6 rounded-panel border border-outline-variant/20 bg-surface-container-low p-6 tablet:p-8 desktop:sticky desktop:top-24 desktop:col-span-4"
     >
-      <h2 className="text-h4 font-semibold text-text-primary">Summary</h2>
-      <p className="text-body text-text-primary">
-        {count} item{count === 1 ? "" : "s"}
+      <h2 id="cart-summary-heading" className="font-headline text-headline-md text-on-surface">
+        Cart summary
+      </h2>
+      <dl className="flex flex-col gap-3 border-b border-outline-variant/30 pb-6">
+        <div className="flex items-baseline justify-between gap-4">
+          <dt className="text-body-md text-on-surface-variant">Items</dt>
+          <dd className="font-label text-label-caps font-bold tabular-nums text-on-surface">
+            {count} item{count === 1 ? "" : "s"}
+          </dd>
+        </div>
+      </dl>
+      <p className="flex items-start gap-2 text-caption text-on-surface-variant">
+        <Icon name="receipt-long" className="mt-px h-4 w-4 text-outline" />
+        <span>Your total is calculated at checkout from current prices.</span>
       </p>
-      <p className="text-caption text-text-secondary">Your total is calculated at checkout from current prices.</p>
       {blocked && (
-        <p className="rounded-md border-l-4 border-l-warning bg-warning-bg px-3 py-2 text-caption text-text-primary">
-          Some items need your attention before you can check out.
+        <p className="flex items-start gap-2 rounded-control border border-warning-outline bg-warning-container px-3 py-2 text-caption text-on-warning-container">
+          <Icon name="warning" className="mt-px h-4 w-4" />
+          <span>Some items need your attention before you can check out.</span>
         </p>
       )}
       {!blocked && priceChanged && (
-        <p className="rounded-md bg-neutral-50 px-3 py-2 text-caption text-text-secondary">
-          Some prices have changed. You&apos;ll confirm the new prices at checkout.
+        <p className="flex items-start gap-2 rounded-control border border-info-outline bg-info-container px-3 py-2 text-caption text-on-info-container">
+          <Icon name="info" className="mt-px h-4 w-4 text-info" />
+          <span>Some prices have changed. You&apos;ll confirm the new prices at checkout.</span>
         </p>
       )}
-      {ready ? (
+      <div className="flex flex-col gap-3">
+        {ready ? (
+          <Link href="/checkout" className={`${buttonLinkClassName("primary", "lg")} w-full`}>
+            Proceed to checkout
+            <Icon name="arrow-forward" className="h-4 w-4" />
+          </Link>
+        ) : (
+          <Button type="button" size="lg" className="w-full" disabled>
+            Proceed to checkout
+          </Button>
+        )}
         <Link
-          href="/checkout"
-          className="rounded-md bg-brand-dark-green px-4 py-2 text-center font-semibold text-text-on-brand hover:bg-brand-green"
+          href="/shop"
+          className="self-center rounded-sm px-2 py-2.5 text-caption font-semibold text-primary underline-offset-4 hover:underline"
         >
-          Proceed to checkout
+          Continue shopping
         </Link>
-      ) : (
-        <Button type="button" disabled>
-          Proceed to checkout
-        </Button>
-      )}
+      </div>
     </section>
   );
 }

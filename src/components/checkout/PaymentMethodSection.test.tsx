@@ -43,4 +43,28 @@ describe("PaymentMethodSection", () => {
     expect(cash).toBeDisabled();
     expect(cash).toHaveAccessibleDescription(PAYMENT_COPY.cashNeedsPhysical);
   });
+
+  // Redesign Batch 6.
+  it("is a group named by its step heading", () => {
+    render(
+      <PaymentMethodSection value={null} onChange={vi.fn()} cash={{ offered: true, eligible: true, maxTotal: MAX }} />
+    );
+    expect(screen.getByRole("group", { name: "Payment" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Payment" })).toBeInTheDocument();
+  });
+
+  it("an ineligible cash option says Not available in text, not only by fading", () => {
+    render(
+      <PaymentMethodSection value={null} onChange={vi.fn()} cash={{ offered: true, eligible: false, maxTotal: MAX }} />
+    );
+    expect(screen.getByText("Not available")).toBeInTheDocument();
+  });
+
+  it("names no payment provider and shows no card fields", () => {
+    render(
+      <PaymentMethodSection value={null} onChange={vi.fn()} cash={{ offered: true, eligible: true, maxTotal: MAX }} />
+    );
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.queryByText(/visa|mastercard|paypal|stripe|whish/i)).not.toBeInTheDocument();
+  });
 });

@@ -128,4 +128,36 @@ describe("CartLineItem", () => {
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
     expect(screen.getByText("Product no longer available")).toBeInTheDocument();
   });
+
+  // Redesign Batch 6 — presentation, still role/name/text based.
+  it("price changed: both prices carry visible text labels, not colour or strike-through alone", () => {
+    renderLine({ priceChanged: true, currentPrice: { amountCents: 3000, currency: "USD" } });
+    expect(screen.getByText("Price when added")).toBeInTheDocument();
+    expect(screen.getByText("Current price")).toBeInTheDocument();
+  });
+
+  it("STL: a fixed quantity as text, never an input or stepper", () => {
+    renderLine({ productType: "stl", quantity: 1, maxQuantity: null, name: "Dragon STL", slug: "dragon-stl" });
+    expect(screen.getByText("Quantity: 1")).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: /quantity/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
+  });
+
+  it("physical: the stepper is a named group showing the server quantity", () => {
+    renderLine({ quantity: 3 });
+    expect(screen.getByRole("group", { name: "Quantity of Dragon" })).toHaveTextContent("3");
+  });
+
+  it("missing image: a decorative placeholder (no img), the name and actions still present", () => {
+    renderLine({ coverImage: null });
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Dragon" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove Dragon from cart" })).toBeInTheDocument();
+  });
+
+  it("a long product name is rendered whole (wrapping is CSS, never truncation)", () => {
+    const longName = "Articulated Dragon with Fully Posable Wings and Interlocking Tail Segments, Extra Large Edition";
+    renderLine({ name: longName });
+    expect(screen.getByRole("heading", { level: 2, name: longName })).toBeInTheDocument();
+  });
 });

@@ -135,4 +135,23 @@ describe("CartPage", () => {
     renderPage({ cart: cart([]), notice: "Verify your email address to add or change items in your cart." });
     expect(screen.getByText(/verify your email address/i)).toBeInTheDocument();
   });
+
+  // Redesign Batch 6.
+  it("populated: the summary is a region named by its own heading, with a real Continue shopping link", () => {
+    renderPage({ cart: cart([line()]) });
+    const summary = screen.getByRole("region", { name: "Cart summary" });
+    expect(within(summary).getByRole("heading", { level: 2, name: "Cart summary" })).toBeInTheDocument();
+    expect(within(summary).getByRole("link", { name: "Continue shopping" })).toHaveAttribute("href", "/shop");
+  });
+
+  it("offers no clear-cart action (the backend has no such route)", () => {
+    renderPage({ cart: cart([line(), line({ productId: "p-2", name: "Knight" })]) });
+    expect(screen.queryByRole("button", { name: /clear|empty cart|remove all/i })).not.toBeInTheDocument();
+  });
+
+  it("loading: skeleton blocks are hidden from assistive technology", () => {
+    renderPage({ isLoading: true });
+    expect(screen.queryByRole("list")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
 });

@@ -106,4 +106,32 @@ describe("FulfillmentSection", () => {
     await userEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(onRetryAddresses).toHaveBeenCalled();
   });
+
+  // Redesign Batch 6.
+  it("the step heading is an h2 that names the method group", () => {
+    render(<FulfillmentSection {...props()} />);
+    expect(screen.getByRole("heading", { level: 2, name: "Delivery or pickup" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Delivery or pickup" })).toBeInTheDocument();
+  });
+
+  it("delivery: the address group is labelled and the default address says so in text", () => {
+    render(<FulfillmentSection {...props({ value: "delivery" })} />);
+    const group = screen.getByRole("group", { name: "Delivery address" });
+    expect(group).toHaveTextContent("Default");
+  });
+
+  it("pickup only shows pickup details; delivery only shows addresses", () => {
+    const { rerender } = render(<FulfillmentSection {...props({ value: "pickup" })} />);
+    expect(screen.queryByRole("group", { name: "Delivery address" })).not.toBeInTheDocument();
+    rerender(<FulfillmentSection {...props({ value: "delivery" })} />);
+    expect(screen.queryByLabelText("Contact phone")).not.toBeInTheDocument();
+    expect(screen.queryByText("Pickup location")).not.toBeInTheDocument();
+  });
+
+  it("disabled while submitting: every choice is locked", () => {
+    render(<FulfillmentSection {...props({ value: "delivery", disabled: true })} />);
+    for (const radio of screen.getAllByRole("radio")) {
+      expect(radio).toBeDisabled();
+    }
+  });
 });

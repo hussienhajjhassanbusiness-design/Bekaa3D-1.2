@@ -1,7 +1,8 @@
 import Link from "next/link";
 import type { Ref } from "react";
 import { PriceDisplay } from "@/components/catalog/PriceDisplay";
-import { Button } from "@/components/forms/Button";
+import { Button, buttonLinkClassName } from "@/components/forms/Button";
+import { Icon } from "@/components/ui/Icon";
 import { FULFILLMENT_COPY } from "@/lib/checkout/checkoutCopy";
 import type { PickupOption } from "@/lib/checkout/checkoutEligibility";
 import type { CheckoutResultModel } from "@/lib/checkout/checkoutModel";
@@ -18,6 +19,8 @@ export interface CheckoutConfirmationProps {
 }
 
 const UNKNOWN_PRODUCT = "An STL file";
+const CARD_CLASSES =
+  "rounded-card border border-outline-variant/30 bg-surface-container-lowest p-5 shadow-sm tablet:p-8";
 
 function formatDate(iso: string): string {
   return new Intl.DateTimeFormat("en-GB", { dateStyle: "long" }).format(new Date(iso));
@@ -34,6 +37,12 @@ function formatDate(iso: string): string {
 //
 // Phase 5E: "View order" opens the real order page (/account/orders/{id},
 // GET /me/orders/{id}), which shows the server's current state.
+//
+// Redesign Batch 6: a result card (cash = check glyph, online = "continues
+// on another page" glyph — an unpaid order is never given a success
+// treatment), mono order number, the amount due / payment-page callout,
+// then the server's lines and totals and the fulfillment in cards. Every
+// figure is still a CheckoutRead value; nothing is summed here.
 export function CheckoutConfirmation({
   result,
   names,
@@ -48,15 +57,37 @@ export function CheckoutConfirmation({
   }));
 
   return (
-    <section aria-labelledby="checkout-result-heading" className="flex flex-col gap-6">
-      <div className="flex flex-col gap-2">
-        <h2 id="checkout-result-heading" ref={headingRef} tabIndex={-1} className="text-h2 font-bold text-text-primary">
-          {cash ? "Order placed" : "Your order is awaiting payment"}
-        </h2>
-        <p className="text-body text-text-primary">
-          Order number <span className="font-semibold">{result.orderNumber}</span>
-        </p>
-        {cash ? <CashDue result={result} /> : <OnlineDue result={result} onContinueToPayment={onContinueToPayment} />}
+    <section aria-labelledby="checkout-result-heading" className="flex max-w-3xl flex-col gap-6">
+      <div className={CARD_CLASSES}>
+        <div className="flex items-start gap-4">
+          <span
+            aria-hidden="true"
+            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${
+              cash ? "bg-secondary-container text-on-secondary-container" : "bg-surface-container text-primary"
+            }`}
+          >
+            <Icon name={cash ? "check-circle" : "open-in-new"} className="h-6 w-6" />
+          </span>
+          <div className="flex min-w-0 flex-col gap-1">
+            <h2
+              id="checkout-result-heading"
+              ref={headingRef}
+              tabIndex={-1}
+              className="break-words font-headline text-headline-lg text-on-surface outline-none"
+            >
+              {cash ? "Order placed" : "Your order is awaiting payment"}
+            </h2>
+            <p className="text-body-md text-on-surface-variant">
+              Order number{" "}
+              <span className="font-label text-label-caps font-bold tracking-wider text-on-surface">
+                {result.orderNumber}
+              </span>
+            </p>
+          </div>
+        </div>
+        <div className="mt-6 flex flex-col gap-3">
+          {cash ? <CashDue result={result} /> : <OnlineDue result={result} onContinueToPayment={onContinueToPayment} />}
+        </div>
       </div>
 
       {dropped.length > 0 && (
@@ -66,37 +97,39 @@ export function CheckoutConfirmation({
         />
       )}
 
-      <section
-        aria-label="Order items"
-        className="flex flex-col gap-3 rounded-md border border-border-default bg-white p-4"
-      >
-        <ul className="flex flex-col gap-2">
+      <section aria-label="Order items" className={`${CARD_CLASSES} flex flex-col gap-5`}>
+        <ul className="flex flex-col divide-y divide-outline-variant/30">
           {result.lines.map((line) => (
-            <li key={line.id} className="flex flex-wrap items-center justify-between gap-2 text-body text-text-primary">
-              <span>
-                {line.name} <span className="text-text-secondary">× {line.quantity}</span>
+            <li
+              key={line.id}
+              className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-3 text-body-md text-on-surface first:pt-0"
+            >
+              <span className="min-w-0 break-words">
+                {line.name} <span className="text-on-surface-variant">× {line.quantity}</span>
               </span>
-              <PriceDisplay amountCents={line.lineTotal.amountCents} currency={line.lineTotal.currency} />
+              <span className="font-label text-label-caps font-bold tabular-nums">
+                <PriceDisplay amountCents={line.lineTotal.amountCents} currency={line.lineTotal.currency} />
+              </span>
             </li>
           ))}
         </ul>
-        <OrderSummary
-          subtotalCents={result.subtotal.amountCents}
-          totalCents={result.total.amountCents}
-          currency={result.total.currency}
-        />
+        <div className="border-t border-outline-variant/40 pt-5">
+          <OrderSummary
+            subtotalCents={result.subtotal.amountCents}
+            totalCents={result.total.amountCents}
+            currency={result.total.currency}
+            emphasis
+          />
+        </div>
       </section>
 
       <FulfillmentSummary result={result} pickup={pickup} />
 
-      <div className="flex flex-wrap gap-4">
-        <Link
-          href={`/account/orders/${encodeURIComponent(result.orderId)}`}
-          className="font-semibold text-brand-dark-green underline"
-        >
+      <div className="flex flex-wrap gap-3">
+        <Link href={`/account/orders/${encodeURIComponent(result.orderId)}`} className={buttonLinkClassName("primary")}>
           View order
         </Link>
-        <Link href="/shop" className="font-semibold text-brand-dark-green underline">
+        <Link href="/shop" className={buttonLinkClassName("outline")}>
           Continue shopping
         </Link>
       </div>
@@ -109,7 +142,7 @@ function CashDue({ result }: { result: CheckoutResultModel }) {
   return (
     <>
       {result.paymentDue && result.amountDue && (
-        <p className="rounded-md border-l-4 border-l-info bg-info-bg p-3 text-body text-text-primary">
+        <p className="rounded-card border border-info-outline bg-info-container p-4 text-body text-on-info-container">
           Payment due in cash {where}:{" "}
           <span className="font-semibold">
             <PriceDisplay amountCents={result.amountDue.amountCents} currency={result.amountDue.currency} />
@@ -117,7 +150,10 @@ function CashDue({ result }: { result: CheckoutResultModel }) {
           . This order hasn&apos;t been paid yet.
         </p>
       )}
-      <p className="text-body text-text-secondary">We&apos;ve sent the order details to your email.</p>
+      <p className="flex items-center gap-2 text-body text-on-surface-variant">
+        <Icon name="mail" className="h-4 w-4" />
+        We&apos;ve sent the order details to your email.
+      </p>
     </>
   );
 }
@@ -126,7 +162,7 @@ function OnlineDue({ result, onContinueToPayment }: { result: CheckoutResultMode
   if (result.next === "online-redirect") {
     return (
       <div className="flex flex-col items-start gap-3">
-        <p className="text-body text-text-primary">
+        <p className="text-body-md text-on-surface">
           Nothing has been paid yet. Continue to the payment page to pay for this order.
         </p>
         <Button type="button" onClick={onContinueToPayment}>
@@ -136,7 +172,10 @@ function OnlineDue({ result, onContinueToPayment }: { result: CheckoutResultMode
     );
   }
   return (
-    <p role="alert" className="rounded-md border-l-4 border-l-warning bg-warning-bg p-3 text-body text-text-primary">
+    <p
+      role="alert"
+      className="rounded-card border border-warning-outline bg-warning-container p-4 text-body text-on-warning-container"
+    >
       The payment page isn&apos;t available right now, so nothing has been charged. Please contact us to complete this
       order.
     </p>
@@ -145,31 +184,48 @@ function OnlineDue({ result, onContinueToPayment }: { result: CheckoutResultMode
 
 function FulfillmentSummary({ result, pickup }: { result: CheckoutResultModel; pickup: PickupOption }) {
   if (result.fulfillmentMethod === null) {
-    return <p className="text-body text-text-secondary">{FULFILLMENT_COPY.digitalOnly}</p>;
+    return (
+      <p className="flex items-start gap-3 rounded-card bg-surface-container-low p-4 text-body text-on-surface">
+        <Icon name="mail" className="mt-px h-5 w-5 text-primary" />
+        <span>{FULFILLMENT_COPY.digitalOnly}</span>
+      </p>
+    );
   }
   return (
-    <section aria-label="Fulfillment" className="flex flex-col gap-2 text-body text-text-primary">
+    <section
+      aria-label="Fulfillment"
+      className={`${CARD_CLASSES} flex flex-col gap-3 break-words text-body-md text-on-surface`}
+    >
       {result.fulfillmentMethod === "delivery" && result.deliveryAddress && (
-        <div>
-          <p className="font-semibold">Delivery to</p>
-          <p>{result.deliveryAddress.recipientName}</p>
-          {result.deliveryAddress.lines.map((line) => (
-            <p key={line} className="text-text-secondary">
-              {line}
-            </p>
-          ))}
-          <p className="mt-2 text-caption text-text-secondary">{FULFILLMENT_COPY.courierFee}</p>
+        <div className="flex items-start gap-3">
+          <Icon name="local-shipping" className="mt-0.5 h-5 w-5 text-primary" />
+          <div className="min-w-0">
+            <p className="font-label text-label-caps uppercase text-on-surface-variant">Delivery to</p>
+            <p className="mt-1">{result.deliveryAddress.recipientName}</p>
+            {result.deliveryAddress.lines.map((line) => (
+              <p key={line} className="text-on-surface-variant">
+                {line}
+              </p>
+            ))}
+            <p className="mt-2 text-caption text-on-surface-variant">{FULFILLMENT_COPY.courierFee}</p>
+          </div>
         </div>
       )}
       {result.fulfillmentMethod === "pickup" && (
-        <div>
-          <p className="font-semibold">Pickup</p>
-          {pickup.address && <p className="whitespace-pre-line text-text-secondary">{pickup.address}</p>}
-          {pickup.hours && <p className="whitespace-pre-line text-caption text-text-secondary">{pickup.hours}</p>}
+        <div className="flex items-start gap-3">
+          <Icon name="storefront" className="mt-0.5 h-5 w-5 text-primary" />
+          <div className="min-w-0">
+            <p className="font-label text-label-caps uppercase text-on-surface-variant">Pickup</p>
+            {pickup.address && <p className="mt-1 whitespace-pre-line text-on-surface-variant">{pickup.address}</p>}
+            {pickup.hours && <p className="whitespace-pre-line text-caption text-on-surface-variant">{pickup.hours}</p>}
+          </div>
         </div>
       )}
       {result.estimatedDispatchAt && (
-        <p className="text-text-secondary">Estimated dispatch: {formatDate(result.estimatedDispatchAt)}.</p>
+        <p className="flex items-center gap-2 border-t border-outline-variant/30 pt-3 text-on-surface-variant">
+          <Icon name="schedule" className="h-4 w-4" />
+          Estimated dispatch: {formatDate(result.estimatedDispatchAt)}.
+        </p>
       )}
     </section>
   );

@@ -6,6 +6,7 @@ import { AUTH_SESSION_QUERY_KEY } from "@/lib/auth/authSession";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { CART_MESSAGES, describeCartWriteError } from "@/lib/cart/cartErrors";
 import { useCart, useRemoveCartItem, useSetCartItemQuantity } from "@/lib/cart/useCart";
+import { Container } from "@/components/ui/Container";
 import { CartPage } from "./CartPage";
 
 function withoutKey(record: Readonly<Record<string, string>>, key: string): Readonly<Record<string, string>> {
@@ -40,7 +41,10 @@ export function CartView() {
       await write();
       return true;
     } catch (error) {
-      setLineErrors((current) => ({ ...current, [productId]: describeCartWriteError(error).message }));
+      setLineErrors((current) => ({
+        ...current,
+        [productId]: describeCartWriteError(error).message,
+      }));
       return false;
     } finally {
       setPending((current) => {
@@ -68,17 +72,29 @@ export function CartView() {
   const authFailed = auth.isError && !auth.user;
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 tablet:px-6 desktop:px-8">
-      <h1 ref={headingRef} tabIndex={-1} className="text-h1 font-bold text-text-primary">
-        Your cart
-      </h1>
+    <Container className="flex flex-col gap-8 py-10 tablet:py-12 desktop:gap-12 desktop:py-16">
+      {/* Stitch S6 page header: display-role h1 + one-line description. */}
+      <div className="flex max-w-2xl flex-col gap-3">
+        <h1
+          ref={headingRef}
+          tabIndex={-1}
+          className="break-words font-display text-display text-on-surface outline-none"
+        >
+          Your cart
+        </h1>
+        <p className="text-body-md text-on-surface-variant">
+          Review your physical items and STL files before you check out.
+        </p>
+      </div>
       <CartPage
         cart={cartQuery.data ?? null}
         isLoading={!authFailed && cartQuery.isPending && cartQuery.fetchStatus !== "idle"}
         isError={authFailed || cartQuery.isError}
         onRetry={() =>
           authFailed
-            ? void queryClient.invalidateQueries({ queryKey: AUTH_SESSION_QUERY_KEY })
+            ? void queryClient.invalidateQueries({
+                queryKey: AUTH_SESSION_QUERY_KEY,
+              })
             : void cartQuery.refetch()
         }
         onQuantityChange={handleQuantityChange}
@@ -88,6 +104,6 @@ export function CartView() {
         notice={auth.user && !auth.user.emailVerified ? CART_MESSAGES.verifyEmail : undefined}
         canCheckout={Boolean(auth.user?.emailVerified)}
       />
-    </div>
+    </Container>
   );
 }

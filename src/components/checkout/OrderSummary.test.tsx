@@ -41,4 +41,12 @@ describe("OrderSummary", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
   });
+
+  // Redesign Batch 6 — `emphasis` changes presentation only.
+  it("emphasis renders exactly the same supplied amounts, nothing more", () => {
+    render(<OrderSummary subtotalCents={1000} totalCents={1250} currency="USD" emphasis />);
+    expect(screen.getByText("$10.00")).toBeInTheDocument();
+    expect(screen.getByText("$12.50")).toBeInTheDocument();
+    expect(screen.queryByText(/shipping/i)).not.toBeInTheDocument();
+  });
 });

@@ -10,6 +10,10 @@ export interface OrderSummaryProps {
   subtotalCents?: number;
   totalCents?: number;
   currency: string;
+  // Presentation only (redesign Batch 6, checkout confirmation): the total
+  // row in the Stitch summary-total role. Omitted = unchanged rendering,
+  // so the account Orders page is untouched until its own batch.
+  emphasis?: boolean;
 }
 
 const PLACEHOLDER = "Order total will be confirmed at submission.";
@@ -19,7 +23,7 @@ const PLACEHOLDER = "Order total will be confirmed at submission.";
 // Display-only — this component NEVER sums line items or infers one
 // amount field from the others. If, say, `subtotalCents` is omitted,
 // it stays omitted; nothing here computes it.
-export function OrderSummary({ subtotalCents, totalCents, currency }: OrderSummaryProps) {
+export function OrderSummary({ subtotalCents, totalCents, currency, emphasis = false }: OrderSummaryProps) {
   const hasAnyAmount = subtotalCents !== undefined || totalCents !== undefined;
 
   if (!hasAnyAmount) {
@@ -38,9 +42,15 @@ export function OrderSummary({ subtotalCents, totalCents, currency }: OrderSumma
       )}
       {totalCents !== undefined && (
         <div className="flex items-center justify-between gap-2">
-          <dt className="text-body font-semibold text-text-primary">Total</dt>
-          <dd className="font-semibold">
-            <PriceDisplay amountCents={totalCents} currency={currency} />
+          <dt
+            className={
+              emphasis ? "font-headline text-headline-md text-on-surface" : "text-body font-semibold text-text-primary"
+            }
+          >
+            Total
+          </dt>
+          <dd className={emphasis ? undefined : "font-semibold"}>
+            <PriceDisplay amountCents={totalCents} currency={currency} size={emphasis ? "summary" : undefined} />
           </dd>
         </div>
       )}

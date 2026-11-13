@@ -51,4 +51,13 @@ describe("ConsentCheckboxGroup", () => {
     expect(box).toHaveAttribute("aria-invalid", "true");
     expect(box).toHaveAccessibleDescription("Please accept.");
   });
+
+  // Redesign Batch 6.
+  it("is a group named by its step heading, and each checkbox is named by its full text", () => {
+    render(<ConsentCheckboxGroup showDigital showCash values={NONE} onChange={vi.fn()} errors={{}} />);
+    expect(screen.getByRole("group", { name: "Confirm" })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: CONSENT_COPY.terms })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: CONSENT_COPY.digitalFinalSale })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: CONSENT_COPY.cashTerms })).not.toBeChecked();
+  });
 });
