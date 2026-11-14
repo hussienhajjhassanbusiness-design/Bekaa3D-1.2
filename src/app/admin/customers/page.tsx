@@ -38,9 +38,9 @@ export default function AdminCustomersPage() {
 
   return (
     <>
-      <h1 className="text-h1 font-bold text-text-primary">Customers</h1>
+      <h1 className="break-words font-headline text-headline-lg text-on-surface">Customers</h1>
       {isError && <Alert variant="error" message={describeAdminError(error)} />}
-      <div className="mt-4">
+      <div className="mt-6">
         <AdminTable
           columns={COLUMNS}
           rows={data?.items ?? []}
@@ -59,7 +59,10 @@ export default function AdminCustomersPage() {
             }
           }}
           rowActions={(row) => (
-            <Link href={`/admin/customers/${row.id}`} className="text-text-link underline">
+            <Link
+              href={`/admin/customers/${row.id}`}
+              className="font-semibold text-primary underline underline-offset-2 hover:text-primary-container"
+            >
               View
             </Link>
           )}

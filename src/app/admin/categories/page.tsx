@@ -9,13 +9,13 @@ const CATEGORY_CONFIG: ReferenceDataEntityConfig = {
   emptyStateMessage: "No categories yet — create one.",
   hasSwatchField: true,
   swatchFieldLabel: "Slug",
-  renderSwatch: (value) => <span className="text-caption text-text-secondary">/{value}</span>,
+  renderSwatch: (value) => <span className="font-label text-label-sm text-on-surface-variant">/{value}</span>,
 };
 
 export default function AdminCategoriesPage() {
   return (
     <>
-      <h1 className="text-h1 font-bold text-text-primary">Categories</h1>
+      <h1 className="break-words font-headline text-headline-lg text-on-surface">Categories</h1>
       <div className="mt-4">
         <AdminReferenceDataPage resource="categories" config={CATEGORY_CONFIG} />
       </div>

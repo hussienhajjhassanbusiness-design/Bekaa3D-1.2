@@ -27,7 +27,10 @@ const COLUMNS: readonly AdminTableColumn<RefundDetailDTO>[] = [
   {
     header: "Refund",
     render: (row) => (
-      <Link href={`/admin/refunds/${row.id}`} className="font-semibold text-text-link underline">
+      <Link
+        href={`/admin/refunds/${row.id}`}
+        className="whitespace-nowrap font-label font-semibold text-primary underline underline-offset-2 hover:text-primary-container"
+      >
         Order {row.order_number}
       </Link>
     ),
@@ -74,16 +77,19 @@ function AdminRefundsPageContent() {
 
   return (
     <>
-      <h1 className="text-h1 font-bold text-text-primary">Refunds</h1>
+      <h1 className="break-words font-headline text-headline-lg text-on-surface">Refunds</h1>
       {(customerId || orderId) && (
-        <p className="mt-2 text-body text-text-primary">
+        <p className="mt-4 rounded-control border border-info-outline bg-info-container px-4 py-3 font-body text-body-md text-on-info-container">
           Showing one {customerId ? "customer" : "order"}&apos;s refunds.{" "}
-          <Link href="/admin/refunds" className="text-text-link underline">
+          <Link
+            href="/admin/refunds"
+            className="font-semibold text-primary underline underline-offset-2 hover:text-primary-container"
+          >
             Show all
           </Link>
         </p>
       )}
-      <div className="mt-4 grid gap-3 tablet:grid-cols-2 desktop:grid-cols-5">
+      <div className="mt-6 grid gap-4 rounded-card border border-outline-variant/40 bg-surface-container-lowest p-4 shadow-sm tablet:p-6 tablet:grid-cols-2 desktop:grid-cols-5">
         <TextField label="Recorded from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
         <TextField label="Recorded to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
         <SelectField
@@ -123,7 +129,7 @@ function AdminRefundsPageContent() {
           <Alert variant="error" message={describeAdminError(error)} />
         </div>
       )}
-      <div className="mt-4">
+      <div className="mt-6">
         <AdminTable
           columns={COLUMNS}
           rows={data?.items ?? []}

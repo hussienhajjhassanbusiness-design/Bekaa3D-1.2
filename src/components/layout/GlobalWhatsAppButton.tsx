@@ -2,6 +2,7 @@
 
 import { FloatingWhatsAppButton } from "./FloatingWhatsAppButton";
 import { usePublicSettings } from "@/lib/settings/usePublicSettings";
+import { useAdminChrome } from "./useAdminChrome";
 
 // #FVS022-FLOATING-WHATSAPP-GLOBAL
 //
@@ -14,5 +15,8 @@ import { usePublicSettings } from "@/lib/settings/usePublicSettings";
 // never a hardcoded fallback.
 export function GlobalWhatsAppButton() {
   const settingsQuery = usePublicSettings();
+  // Storefront chrome: not shown inside the admin shell (Batch 9, D5).
+  const adminChrome = useAdminChrome();
+  if (adminChrome) return null;
   return <FloatingWhatsAppButton whatsappNumber={settingsQuery.data?.whatsappNumber ?? null} />;
 }

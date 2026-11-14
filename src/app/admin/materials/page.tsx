@@ -12,7 +12,7 @@ const MATERIAL_CONFIG: ReferenceDataEntityConfig = {
 export default function AdminMaterialsPage() {
   return (
     <>
-      <h1 className="text-h1 font-bold text-text-primary">Materials</h1>
+      <h1 className="break-words font-headline text-headline-lg text-on-surface">Materials</h1>
       <div className="mt-4">
         <AdminReferenceDataPage resource="materials" config={MATERIAL_CONFIG} />
       </div>

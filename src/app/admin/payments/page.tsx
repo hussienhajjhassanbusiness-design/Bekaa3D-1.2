@@ -30,7 +30,10 @@ const COLUMNS: readonly AdminTableColumn<AdminPaymentReadDTO>[] = [
   {
     header: "Payment",
     render: (row) => (
-      <Link href={`/admin/payments/${row.id}`} className="font-semibold text-text-link underline">
+      <Link
+        href={`/admin/payments/${row.id}`}
+        className="whitespace-nowrap font-label font-semibold text-primary underline underline-offset-2 hover:text-primary-container"
+      >
         {row.order_number ? `Order ${row.order_number}` : "View payment"}
       </Link>
     ),
@@ -82,19 +85,26 @@ function AdminPaymentsPageContent() {
 
   return (
     <>
-      <h1 className="text-h1 font-bold text-text-primary">Payments</h1>
+      <h1 className="break-words font-headline text-headline-lg text-on-surface">Payments</h1>
       {orderId && (
-        <p className="mt-2 text-body text-text-primary">
+        <p className="mt-4 rounded-control border border-info-outline bg-info-container px-4 py-3 font-body text-body-md text-on-info-container">
           Showing one order&apos;s payments.{" "}
-          <Link href="/admin/payments" className="text-text-link underline">
+          <Link
+            href="/admin/payments"
+            className="font-semibold text-primary underline underline-offset-2 hover:text-primary-container"
+          >
             Show all
           </Link>
         </p>
       )}
-      <div className="mt-4 grid gap-3 tablet:grid-cols-2 desktop:grid-cols-5">
+      <div className="mt-6 grid gap-4 rounded-card border border-outline-variant/40 bg-surface-container-lowest p-4 shadow-sm tablet:p-6 tablet:grid-cols-2 desktop:grid-cols-5">
         <TextField label="Started from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
         <TextField label="Started to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-        <SelectField label="Status" value={filters.status ?? ""} onChange={(e) => set("status", (e.target.value || undefined) as Filters["status"])}>
+        <SelectField
+          label="Status"
+          value={filters.status ?? ""}
+          onChange={(e) => set("status", (e.target.value || undefined) as Filters["status"])}
+        >
           <option value="">Any status</option>
           {STATUSES.map((s) => (
             <option key={s} value={s}>
@@ -102,7 +112,11 @@ function AdminPaymentsPageContent() {
             </option>
           ))}
         </SelectField>
-        <SelectField label="Provider" value={filters.provider ?? ""} onChange={(e) => set("provider", (e.target.value || undefined) as Filters["provider"])}>
+        <SelectField
+          label="Provider"
+          value={filters.provider ?? ""}
+          onChange={(e) => set("provider", (e.target.value || undefined) as Filters["provider"])}
+        >
           <option value="">Any</option>
           <option value="mock">Online (mock provider)</option>
           <option value="cash">Cash</option>
@@ -121,7 +135,7 @@ function AdminPaymentsPageContent() {
           <Alert variant="error" message={describeAdminError(error)} />
         </div>
       )}
-      <div className="mt-4">
+      <div className="mt-6">
         <AdminTable
           columns={COLUMNS}
           rows={data?.items ?? []}

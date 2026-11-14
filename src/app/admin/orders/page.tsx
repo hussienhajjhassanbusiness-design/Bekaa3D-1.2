@@ -40,7 +40,10 @@ const COLUMNS: readonly AdminTableColumn<AdminOrderSummaryReadDTO>[] = [
   {
     header: "Order",
     render: (row) => (
-      <Link href={`/admin/orders/${row.id}`} className="font-semibold text-text-link underline">
+      <Link
+        href={`/admin/orders/${row.id}`}
+        className="whitespace-nowrap font-label font-semibold text-primary underline underline-offset-2 hover:text-primary-container"
+      >
         {row.order_number}
       </Link>
     ),
@@ -65,7 +68,10 @@ const COLUMNS: readonly AdminTableColumn<AdminOrderSummaryReadDTO>[] = [
         paymentMethodLabel(row.payment_method)
       ),
   },
-  { header: "Total", render: (row) => <PriceDisplay amountCents={row.total.amount_cents} currency={row.total.currency} /> },
+  {
+    header: "Total",
+    render: (row) => <PriceDisplay amountCents={row.total.amount_cents} currency={row.total.currency} />,
+  },
   { header: "Placed", render: (row) => formatOrderDate(row.placed_at) },
 ];
 
@@ -101,16 +107,19 @@ function AdminOrdersPageContent() {
 
   return (
     <>
-      <h1 className="text-h1 font-bold text-text-primary">Orders</h1>
+      <h1 className="break-words font-headline text-headline-lg text-on-surface">Orders</h1>
       {customerId && (
-        <p className="mt-2 text-body text-text-primary">
+        <p className="mt-4 rounded-control border border-info-outline bg-info-container px-4 py-3 font-body text-body-md text-on-info-container">
           Showing one customer&apos;s orders.{" "}
-          <Link href="/admin/orders" className="text-text-link underline">
+          <Link
+            href="/admin/orders"
+            className="font-semibold text-primary underline underline-offset-2 hover:text-primary-container"
+          >
             Show all
           </Link>
         </p>
       )}
-      <div className="mt-4 grid gap-3 tablet:grid-cols-2 desktop:grid-cols-6">
+      <div className="mt-6 grid gap-4 rounded-card border border-outline-variant/40 bg-surface-container-lowest p-4 shadow-sm tablet:p-6 tablet:grid-cols-2 desktop:grid-cols-6">
         <TextField label="Placed from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
         <TextField label="Placed to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
         <SelectField
@@ -158,7 +167,7 @@ function AdminOrdersPageContent() {
           <Alert variant="error" message={describeAdminError(error)} />
         </div>
       )}
-      <div className="mt-4">
+      <div className="mt-6">
         <AdminTable
           columns={COLUMNS}
           rows={data?.items ?? []}

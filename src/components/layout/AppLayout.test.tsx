@@ -15,6 +15,9 @@ vi.mock("next/navigation", () => ({ usePathname: () => "/" }));
 vi.mock("./HeaderCartLink", () => ({ HeaderCartLink: () => <a href="/cart">Cart</a> }));
 // The header auth entry reads the auth session (HeaderAccountLink.test.tsx).
 vi.mock("./HeaderAccountLink", () => ({ HeaderAccountLink: () => <a href="/login">Sign in</a> }));
+// Storefront chrome (Batch 9): these tests cover the non-admin case;
+// SiteChrome.test.tsx covers the admin switch.
+vi.mock("./useAdminChrome", () => ({ useAdminChrome: () => false }));
 
 describe("AppLayout", () => {
   it("renders exactly one header, one main, and one footer landmark", () => {
@@ -83,10 +86,7 @@ describe("AppLayout", () => {
     // real-content keyboard order once T05b lands.
     const user = userEvent.setup();
     render(
-      <AppLayout
-        header={<button>Header action</button>}
-        footer={<button>Footer action</button>}
-      >
+      <AppLayout header={<button>Header action</button>} footer={<button>Footer action</button>}>
         <button>Main action</button>
       </AppLayout>
     );

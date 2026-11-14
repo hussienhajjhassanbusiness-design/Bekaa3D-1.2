@@ -40,7 +40,10 @@ const COLUMNS: readonly AdminTableColumn<CustomRequestSummaryDTO>[] = [
   {
     header: "Project",
     render: (row) => (
-      <Link href={`/admin/custom-requests/${row.id}`} className="break-words text-text-link underline">
+      <Link
+        href={`/admin/custom-requests/${row.id}`}
+        className="break-words font-semibold text-primary underline underline-offset-2 hover:text-primary-container"
+      >
         {row.project_title}
       </Link>
     ),
@@ -57,7 +60,11 @@ const COLUMNS: readonly AdminTableColumn<CustomRequestSummaryDTO>[] = [
   {
     header: "Quote",
     render: (row) =>
-      row.quoted_amount_cents !== null && row.currency ? <PriceDisplay amountCents={row.quoted_amount_cents} currency={row.currency} /> : "—",
+      row.quoted_amount_cents !== null && row.currency ? (
+        <PriceDisplay amountCents={row.quoted_amount_cents} currency={row.currency} />
+      ) : (
+        "—"
+      ),
   },
   { header: "Images", render: (row) => row.attachment_count },
   { header: "Submitted", render: (row) => formatOrderDate(row.created_at) },
@@ -85,14 +92,14 @@ export default function AdminCustomRequestsPage() {
 
   return (
     <>
-      <h1 className="text-h1 font-bold text-text-primary">Bring Your Idea</h1>
-      <p className="mt-2 text-body text-text-secondary">
-        Custom print requests. Follow up by email or phone, then move each request along. A request is a lead: quotes are
-        recorded here, never charged.
+      <h1 className="break-words font-headline text-headline-lg text-on-surface">Bring Your Idea</h1>
+      <p className="mt-2 max-w-3xl font-body text-body-md text-on-surface-variant">
+        Custom print requests. Follow up by email or phone, then move each request along. A request is a lead: quotes
+        are recorded here, never charged.
       </p>
       <CustomRequestFunnel />
-      <h2 className="mt-6 text-h3 font-semibold text-text-primary">Requests</h2>
-      <div className="mt-3 grid gap-3 tablet:grid-cols-3">
+      <h2 className="mt-10 font-headline text-headline-md text-on-surface">Requests</h2>
+      <div className="mt-4 grid gap-4 rounded-card border border-outline-variant/40 bg-surface-container-lowest p-4 shadow-sm tablet:p-6 tablet:grid-cols-3">
         <SelectField
           label="Status"
           value={status}
@@ -145,7 +152,7 @@ export default function AdminCustomRequestsPage() {
           <Alert variant="error" message={describeAdminError(list.error)} />
         </div>
       )}
-      <div className="mt-4">
+      <div className="mt-6">
         <AdminTable
           columns={COLUMNS}
           rows={list.data?.items ?? []}

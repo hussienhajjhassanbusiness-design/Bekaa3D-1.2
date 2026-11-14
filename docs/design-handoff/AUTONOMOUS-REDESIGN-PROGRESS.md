@@ -8,3 +8,10 @@ STATUS: COMPLETE
 STARTING COMMIT: 94c1fd2
 COMMIT: (the commit containing this line — see `git log --grep "batch 8"`)
 GATE: lint 0/0 · typecheck ✓ · unit 2398/2398 · build ✓ · E2E 236/236
+Batch 8 commit: bac94dd
+
+## BATCH 9 — Admin shell + navigation + list/queue pages
+STATUS: COMPLETE
+STARTING COMMIT: bac94dd
+COMMIT: (the commit containing this line — see `git log --grep "batch 9"`)
+GATE: lint 0/0 · typecheck ✓ · unit 2410/2410 · build ✓ · E2E 240/240

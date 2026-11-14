@@ -16,7 +16,7 @@ const COLOUR_CONFIG: ReferenceDataEntityConfig = {
 export default function AdminColoursPage() {
   return (
     <>
-      <h1 className="text-h1 font-bold text-text-primary">Colours</h1>
+      <h1 className="break-words font-headline text-headline-lg text-on-surface">Colours</h1>
       <div className="mt-4">
         <AdminReferenceDataPage resource="colours" config={COLOUR_CONFIG} />
       </div>

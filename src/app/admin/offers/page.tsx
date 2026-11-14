@@ -8,11 +8,7 @@ import { StatusBadge } from "@/components/admin/StatusBadge";
 import { Alert } from "@/components/feedback/Alert";
 import { SelectField } from "@/components/forms/SelectField";
 import { describeAdminError } from "@/lib/admin/adminErrorMessages";
-import {
-  adminOfferKeys,
-  offersAdminApi,
-  type AdminOffersQueryParams,
-} from "@/lib/admin/offers/offersAdminApi";
+import { adminOfferKeys, offersAdminApi, type AdminOffersQueryParams } from "@/lib/admin/offers/offersAdminApi";
 import { useCursorPagination } from "@/lib/admin/useCursorPagination";
 import type { ApiError } from "@/lib/api/ApiError";
 import {
@@ -35,12 +31,18 @@ const COLUMNS: readonly AdminTableColumn<AdminOfferSummaryReadDTO>[] = [
   {
     header: "Product",
     render: (row) => (
-      <Link href={`/admin/offers/${encodeURIComponent(row.id)}`} className="text-text-link underline">
+      <Link
+        href={`/admin/offers/${encodeURIComponent(row.id)}`}
+        className="font-semibold text-primary underline underline-offset-2 hover:text-primary-container"
+      >
         {offerProductName(row.product.name)}
       </Link>
     ),
   },
-  { header: "Customer", render: (row) => <span className="break-all">{row.customer.email ?? "Unknown customer"}</span> },
+  {
+    header: "Customer",
+    render: (row) => <span className="break-all">{row.customer.email ?? "Unknown customer"}</span>,
+  },
   {
     header: "Status",
     render: (row) => {
@@ -53,7 +55,7 @@ const COLUMNS: readonly AdminTableColumn<AdminOfferSummaryReadDTO>[] = [
     header: "Deadline",
     render: (row) => {
       const deadline = offerDeadline(row);
-      if (!deadline) return <span className="text-text-secondary">—</span>;
+      if (!deadline) return <span className="text-on-surface-variant">—</span>;
       return `${deadline.kind === "checkout" ? "Checkout by" : "Reply by"} ${formatOrderDateTime(deadline.at)}`;
     },
   },
@@ -76,10 +78,10 @@ export default function AdminOffersPage() {
 
   return (
     <>
-      <h1 className="text-h1 font-bold text-text-primary">Offers</h1>
-      <p className="mt-2 text-body text-text-secondary">
-        Customers&apos; price offers on STL products. Offers waiting for your reply come first, soonest deadline first. An
-        offer expires if its reply deadline passes.
+      <h1 className="break-words font-headline text-headline-lg text-on-surface">Offers</h1>
+      <p className="mt-2 max-w-3xl font-body text-body-md text-on-surface-variant">
+        Customers&apos; price offers on STL products. Offers waiting for your reply come first, soonest deadline first.
+        An offer expires if its reply deadline passes.
       </p>
       <div className="mt-4 max-w-xs">
         <SelectField
@@ -100,7 +102,7 @@ export default function AdminOffersPage() {
           <Alert variant="error" message={describeAdminError(list.error)} />
         </div>
       )}
-      <div className="mt-4">
+      <div className="mt-6">
         <AdminTable
           columns={COLUMNS}
           rows={list.data?.items ?? []}

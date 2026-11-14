@@ -3,6 +3,9 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/apiClient";
 import { GlobalWhatsAppButton } from "./GlobalWhatsAppButton";
+// Storefront chrome (Batch 9): these tests cover the non-admin case;
+// SiteChrome.test.tsx covers the admin switch.
+vi.mock("./useAdminChrome", () => ({ useAdminChrome: () => false }));
 
 function renderButton() {
   const queryClient = new QueryClient();

@@ -26,9 +26,11 @@ const RANGE_ERROR = "Choose a range of at most 366 days, with the end after the 
 
 function Stat({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="rounded-md border border-border-default p-3">
-      <dt className="text-caption text-text-secondary">{label}</dt>
-      <dd className="mt-1 text-h3 font-semibold text-text-primary">{children}</dd>
+    <div className="min-w-0 rounded-card border border-outline-variant/40 bg-surface-container-lowest p-4 shadow-sm tablet:p-5">
+      <dt className="font-label text-label-sm uppercase text-on-surface-variant">{label}</dt>
+      <dd className="mt-2 break-words font-headline text-headline-md text-on-surface tablet:text-headline-lg">
+        {children}
+      </dd>
     </div>
   );
 }
@@ -49,31 +51,44 @@ export function CustomRequestFunnel() {
   const lastDay = data ? formatOrderDate(new Date(new Date(data.to).getTime() - 1).toISOString()) : "";
 
   return (
-    <section aria-labelledby="byi-funnel" className="mt-6 rounded-md bg-surface-subtle p-4">
-      <h2 id="byi-funnel" className="text-h3 font-semibold text-text-primary">
+    <section
+      aria-labelledby="byi-funnel"
+      className="mt-6 rounded-card border border-outline-variant/40 bg-surface-container-low p-4 tablet:p-6"
+    >
+      <h2 id="byi-funnel" className="font-headline text-headline-md text-on-surface">
         Funnel
       </h2>
-      <p className="mt-1 text-caption text-text-secondary">
+      <p className="mt-1 max-w-3xl font-body text-body-md text-on-surface-variant">
         Requests submitted in the range, and how far they got. A stage counts every request that ever reached it.
       </p>
-      <div className="mt-3 grid gap-3 tablet:grid-cols-2">
-        <TextField label="Submitted from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} hint="Blank: the last 90 days." />
+      <div className="mt-4 grid gap-4 tablet:grid-cols-2">
+        <TextField
+          label="Submitted from"
+          type="date"
+          value={from}
+          onChange={(e) => setFrom(e.target.value)}
+          hint="Blank: the last 90 days."
+        />
         <TextField label="Submitted to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
       </div>
       {funnel.isError && (
         <div className="mt-3">
           <Alert
             variant="error"
-            message={funnel.error?.kind === "http" && funnel.error.status === 422 ? RANGE_ERROR : describeAdminError(funnel.error)}
+            message={
+              funnel.error?.kind === "http" && funnel.error.status === 422
+                ? RANGE_ERROR
+                : describeAdminError(funnel.error)
+            }
           />
         </div>
       )}
       {data && (
         <>
-          <p className="mt-3 text-body text-text-primary">
+          <p className="mt-4 font-label text-label-sm uppercase text-on-surface-variant">
             {formatOrderDate(data.from)} – {lastDay}
           </p>
-          <dl className="mt-2 grid grid-cols-2 gap-2 tablet:grid-cols-4">
+          <dl className="mt-3 grid grid-cols-2 gap-3 tablet:grid-cols-4">
             <Stat label="Submitted">{data.submitted}</Stat>
             <Stat label="Contacted">{data.contacted}</Stat>
             <Stat label="Quoted">{data.quoted}</Stat>

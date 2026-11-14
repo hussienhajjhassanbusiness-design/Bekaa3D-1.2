@@ -73,12 +73,18 @@ export function AdminReferenceDataPage({ resource, config }: AdminReferenceDataP
   }
 
   if (isError) {
-    return <Alert variant="error" message={`Couldn't load ${config.entityLabelPlural.toLowerCase()}. Please try again.`} />;
+    return (
+      <Alert variant="error" message={`Couldn't load ${config.entityLabelPlural.toLowerCase()}. Please try again.`} />
+    );
   }
 
   return (
     <>
-      {bannerMessage && <Alert variant="error" message={bannerMessage} />}
+      {bannerMessage && (
+        <div className="mb-4">
+          <Alert variant="error" message={bannerMessage} />
+        </div>
+      )}
       <ReferenceDataManager
         config={config}
         entries={entries ?? []}

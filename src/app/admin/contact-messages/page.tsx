@@ -34,7 +34,10 @@ const COLUMNS: readonly AdminTableColumn<ContactMessageDTO>[] = [
   {
     header: "From",
     render: (row) => (
-      <Link href={`/admin/contact-messages/${row.id}`} className="text-text-link underline">
+      <Link
+        href={`/admin/contact-messages/${row.id}`}
+        className="font-semibold text-primary underline underline-offset-2 hover:text-primary-container"
+      >
         {row.name}
       </Link>
     ),
@@ -44,7 +47,7 @@ const COLUMNS: readonly AdminTableColumn<ContactMessageDTO>[] = [
     header: "Subject",
     render: (row) => (
       <span>
-        {row.subject ?? <span className="text-text-secondary">No subject</span>}
+        {row.subject ?? <span className="text-on-surface-variant">No subject</span>}
         {row.order_id && (
           <span className="ml-2">
             <StatusBadge label="Order problem" tone="negative" />
@@ -85,13 +88,17 @@ export default function AdminContactMessagesPage() {
 
   return (
     <>
-      <h1 className="text-h1 font-bold text-text-primary">Contact messages</h1>
-      <p className="mt-2 text-body text-text-secondary">
+      <h1 className="break-words font-headline text-headline-lg text-on-surface">Contact messages</h1>
+      <p className="mt-2 max-w-3xl font-body text-body-md text-on-surface-variant">
         Messages from the contact form and customers&apos; order problem reports. Reply by email, then move the message
         along. Opening a message doesn&apos;t mark it read.
       </p>
-      <div className="mt-4 grid gap-3 tablet:grid-cols-3">
-        <SelectField label="Status" value={status} onChange={(e) => setStatus(normalizeContactStatusFilter(e.target.value))}>
+      <div className="mt-6 grid gap-4 rounded-card border border-outline-variant/40 bg-surface-container-lowest p-4 shadow-sm tablet:p-6 tablet:grid-cols-3">
+        <SelectField
+          label="Status"
+          value={status}
+          onChange={(e) => setStatus(normalizeContactStatusFilter(e.target.value))}
+        >
           <option value="all">Any status</option>
           {CONTACT_MESSAGE_STATUSES.map((value) => (
             <option key={value} value={value}>
@@ -139,7 +146,7 @@ export default function AdminContactMessagesPage() {
           <Alert variant="error" message={describeAdminError(list.error)} />
         </div>
       )}
-      <div className="mt-4">
+      <div className="mt-6">
         <AdminTable
           columns={COLUMNS}
           rows={list.data?.items ?? []}

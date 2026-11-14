@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { AdminShell } from "./AdminShell";
 import { useAuth, type AuthContextValue } from "@/lib/auth/AuthProvider";
 import type { SafeUser } from "@/lib/auth/authSession";
@@ -70,7 +71,22 @@ describe("AdminShell", () => {
 
     const nav = screen.getByRole("navigation", { name: "Admin" });
     const links = Array.from(nav.querySelectorAll("a")).map((a) => a.textContent);
-    expect(links).toEqual(["Orders", "STL deliveries", "Offers", "Payments", "Refunds", "Cash blocks", "Contact messages", "Bring Your Idea", "Settings", "Customers", "Categories", "Materials", "Colours", "Products"]);
+    expect(links).toEqual([
+      "Orders",
+      "STL deliveries",
+      "Offers",
+      "Payments",
+      "Refunds",
+      "Cash blocks",
+      "Contact messages",
+      "Bring Your Idea",
+      "Settings",
+      "Customers",
+      "Categories",
+      "Materials",
+      "Colours",
+      "Products",
+    ]);
     expect(nav.textContent).not.toMatch(/cancellation|shipping|entitlement/i);
   });
 
@@ -123,7 +139,11 @@ describe("AdminShell", () => {
     expect(screen.getByText(/404/)).toBeInTheDocument();
   });
 
-  it("never creates a second <main> landmark", () => {
+  // Batch 9 (D5): the admin shell owns the chrome for an administrator —
+  // SiteChrome renders no storefront <main> then — so the shell supplies the
+  // page's single main landmark (the skip-link target), with the sidebar
+  // outside it.
+  it("renders exactly one <main id='main-content'> landmark, with the admin nav outside it", () => {
     mockedUseAuth.mockReturnValue(authState({ isAuthenticated: true, user: ADMIN_USER }));
     render(
       <AdminShell>
@@ -131,6 +151,99 @@ describe("AdminShell", () => {
       </AdminShell>
     );
 
-    expect(document.querySelectorAll("main")).toHaveLength(0);
+    expect(document.querySelectorAll("main")).toHaveLength(1);
+    const main = screen.getByRole("main");
+    expect(main).toHaveAttribute("id", "main-content");
+    expect(main).toHaveAttribute("tabindex", "-1");
+    expect(main).not.toContainElement(screen.getByRole("navigation", { name: "Admin" }));
+  });
+});
+
+describe("AdminShell (redesign Batch 9 drawer and top bar)", () => {
+  // jsdom has no matchMedia; the open drawer listens for the desktop breakpoint.
+  type ChangeListener = (event: { matches: boolean }) => void;
+  let mediaListeners: ChangeListener[] = [];
+  beforeEach(() => {
+    mediaListeners = [];
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: (_type: string, listener: ChangeListener) => mediaListeners.push(listener),
+      removeEventListener: (_type: string, listener: ChangeListener) => {
+        mediaListeners = mediaListeners.filter((l) => l !== listener);
+      },
+    })) as unknown as typeof window.matchMedia;
+  });
+
+  it("closes the drawer when the viewport grows to the desktop sidebar width", async () => {
+    const user = userEvent.setup();
+    renderAdmin();
+    await user.click(screen.getByRole("button", { name: "Open admin menu" }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    act(() => mediaListeners.forEach((listener) => listener({ matches: true })));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  function renderAdmin() {
+    mockedUseAuth.mockReturnValue(authState({ isAuthenticated: true, user: ADMIN_USER }));
+    return render(
+      <AdminShell>
+        <div>content</div>
+      </AdminShell>
+    );
+  }
+
+  it("names the current area and the signed-in administrator in the top bar", () => {
+    mockPathname = "/admin/orders/abc";
+    renderAdmin();
+    const banner = screen.getByRole("banner");
+    expect(banner).toHaveTextContent("Orders");
+    expect(banner).toHaveTextContent("admin@example.com");
+  });
+
+  it("groups the nav under section labels without changing the link order", () => {
+    renderAdmin();
+    const nav = screen.getByRole("navigation", { name: "Admin" });
+    for (const label of ["Fulfilment", "Money", "Enquiries", "Store", "Catalogue"]) {
+      expect(nav).toHaveTextContent(label);
+    }
+  });
+
+  it("opens the nav drawer as a labelled modal dialog, moves focus in, and closes on Escape with focus returned", async () => {
+    const user = userEvent.setup();
+    renderAdmin();
+    const trigger = screen.getByRole("button", { name: "Open admin menu" });
+    await user.click(trigger);
+    const dialog = screen.getByRole("dialog", { name: "Admin menu" });
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+    expect(screen.getByRole("button", { name: "Close admin menu" })).toHaveFocus();
+    expect(within(dialog).getByRole("navigation", { name: "Admin" })).toBeInTheDocument();
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it("closes the drawer when the route changes", async () => {
+    const user = userEvent.setup();
+    const { rerender } = renderAdmin();
+    await user.click(screen.getByRole("button", { name: "Open admin menu" }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    mockPathname = "/admin/payments";
+    rerender(
+      <AdminShell>
+        <div>content</div>
+      </AdminShell>
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("marks the active item inside the drawer too", async () => {
+    const user = userEvent.setup();
+    mockPathname = "/admin/refunds";
+    renderAdmin();
+    await user.click(screen.getByRole("button", { name: "Open admin menu" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByRole("link", { name: "Refunds" })).toHaveAttribute("aria-current", "page");
   });
 });

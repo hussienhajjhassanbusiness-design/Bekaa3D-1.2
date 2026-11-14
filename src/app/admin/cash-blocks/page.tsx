@@ -13,7 +13,12 @@ import { Button } from "@/components/forms/Button";
 import { SelectField } from "@/components/forms/SelectField";
 import { TextField } from "@/components/forms/TextField";
 import { describeAdminError } from "@/lib/admin/adminErrorMessages";
-import { cashBlockKeys, cashBlocksApi, type CashPaymentBlockPageDTO, type CashPaymentBlockReadDTO } from "@/lib/admin/cashBlocks/cashBlocksApi";
+import {
+  cashBlockKeys,
+  cashBlocksApi,
+  type CashPaymentBlockPageDTO,
+  type CashPaymentBlockReadDTO,
+} from "@/lib/admin/cashBlocks/cashBlocksApi";
 import { describeCancelReason } from "@/lib/admin/orders/adminOrderPresentation";
 import { adminOrderKeys } from "@/lib/admin/orders/adminOrdersApi";
 import { useCursorPagination } from "@/lib/admin/useCursorPagination";
@@ -54,7 +59,10 @@ function AdminCashBlocksPageContent() {
 
   // Phone search: a mutation (a POST), so the number is never cached under a key.
   const [phone, setPhone] = useState("");
-  const search = useMutation({ mutationFn: (p: string) => cashBlocksApi.searchBlocks({ phone: p, active }), retry: false });
+  const search = useMutation({
+    mutationFn: (p: string) => cashBlocksApi.searchBlocks({ phone: p, active }),
+    retry: false,
+  });
 
   const [target, setTarget] = useState<CashPaymentBlockReadDTO | null>(null);
   const clear = useMutation({ mutationFn: (id: string) => cashBlocksApi.clearBlock(id), retry: false });
@@ -82,7 +90,10 @@ function AdminCashBlocksPageContent() {
     {
       header: "Order",
       render: (r) => (
-        <Link href={`/admin/orders/${r.order_id}`} className="text-text-link underline">
+        <Link
+          href={`/admin/orders/${r.order_id}`}
+          className="font-semibold text-primary underline underline-offset-2 hover:text-primary-container"
+        >
           {r.order_number}
         </Link>
       ),
@@ -98,20 +109,23 @@ function AdminCashBlocksPageContent() {
 
   return (
     <>
-      <h1 className="text-h1 font-bold text-text-primary">Cash blocks</h1>
-      <p className="mt-2 text-body text-text-secondary">
-        A block is added automatically when a cash order is refused or not collected. It keeps that customer and phone from paying
-        cash until you clear it. It doesn&apos;t deactivate the account.
+      <h1 className="break-words font-headline text-headline-lg text-on-surface">Cash blocks</h1>
+      <p className="mt-2 max-w-3xl font-body text-body-md text-on-surface-variant">
+        A block is added automatically when a cash order is refused or not collected. It keeps that customer and phone
+        from paying cash until you clear it. It doesn&apos;t deactivate the account.
       </p>
       {customerId && (
-        <p className="mt-2 text-body text-text-primary">
+        <p className="mt-4 rounded-control border border-info-outline bg-info-container px-4 py-3 font-body text-body-md text-on-info-container">
           Showing one customer&apos;s blocks.{" "}
-          <Link href="/admin/cash-blocks" className="text-text-link underline">
+          <Link
+            href="/admin/cash-blocks"
+            className="font-semibold text-primary underline underline-offset-2 hover:text-primary-container"
+          >
             Show all
           </Link>
         </p>
       )}
-      <div className="mt-4 grid gap-3 tablet:grid-cols-2">
+      <div className="mt-6 grid gap-4 rounded-card border border-outline-variant/40 bg-surface-container-lowest p-4 shadow-sm tablet:p-6 tablet:grid-cols-2">
         <SelectField
           label="Show"
           value={active === undefined ? "" : String(active)}
@@ -121,9 +135,15 @@ function AdminCashBlocksPageContent() {
           <option value="false">Cleared blocks</option>
           <option value="">All blocks</option>
         </SelectField>
-        <form onSubmit={submitSearch} className="flex items-end gap-2" noValidate>
-          <div className="flex-1">
-            <TextField label="Find by contact phone" type="tel" autoComplete="off" value={phone} onChange={(e) => setPhone(e.target.value)} />
+        <form onSubmit={submitSearch} className="flex flex-wrap items-end gap-3" noValidate>
+          <div className="w-full sm:w-auto sm:flex-1">
+            <TextField
+              label="Find by contact phone"
+              type="tel"
+              autoComplete="off"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+            />
           </div>
           <Button type="submit" isLoading={search.isPending}>
             Search
@@ -152,7 +172,7 @@ function AdminCashBlocksPageContent() {
           <Alert variant="error" message={describeAdminError(list.error)} />
         </div>
       )}
-      <div className="mt-4">
+      <div className="mt-6">
         <AdminTable
           columns={columns}
           rows={rows}

@@ -28,7 +28,11 @@ export default function AdminStlDeliveriesPage() {
   async function confirm() {
     if (!row) return;
     const target = row;
-    if (await write.run(() => adminOrdersApi.transitionLine(target.order_id, target.item_id, { target_status: "delivered" }))) {
+    if (
+      await write.run(() =>
+        adminOrdersApi.transitionLine(target.order_id, target.item_id, { target_status: "delivered" })
+      )
+    ) {
       setRow(null);
     }
   }
@@ -38,7 +42,10 @@ export default function AdminStlDeliveriesPage() {
     {
       header: "Order",
       render: (r) => (
-        <Link href={`/admin/orders/${r.order_id}`} className="text-text-link underline">
+        <Link
+          href={`/admin/orders/${r.order_id}`}
+          className="font-semibold text-primary underline underline-offset-2 hover:text-primary-container"
+        >
           {r.order_number}
         </Link>
       ),
@@ -50,8 +57,8 @@ export default function AdminStlDeliveriesPage() {
 
   return (
     <>
-      <h1 className="text-h1 font-bold text-text-primary">STL deliveries</h1>
-      <p className="mt-2 text-body text-text-secondary">
+      <h1 className="break-words font-headline text-headline-lg text-on-surface">STL deliveries</h1>
+      <p className="mt-2 max-w-3xl font-body text-body-md text-on-surface-variant">
         Email each file to the customer yourself, then mark it emailed here.
       </p>
       {isError && (
@@ -59,7 +66,7 @@ export default function AdminStlDeliveriesPage() {
           <Alert variant="error" message={describeAdminError(error)} />
         </div>
       )}
-      <div className="mt-4">
+      <div className="mt-6">
         <AdminTable
           columns={columns}
           rows={data?.items ?? []}
@@ -90,8 +97,8 @@ export default function AdminStlDeliveriesPage() {
         title="Mark this STL file emailed?"
         description={
           <p>
-            Confirm you have emailed “{row?.product_name}” to {row?.customer_email} (order {row?.order_number}). The customer
-            will see it as emailed.
+            Confirm you have emailed “{row?.product_name}” to {row?.customer_email} (order {row?.order_number}). The
+            customer will see it as emailed.
           </p>
         }
         confirmLabel="Mark emailed"

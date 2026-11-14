@@ -2,6 +2,8 @@
 
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/forms/Button";
+import { Icon } from "@/components/ui/Icon";
+import { StatusBadge } from "./StatusBadge";
 import { TextField } from "@/components/forms/TextField";
 import { ConfirmDialog } from "@/components/feedback/ConfirmDialog";
 import type {
@@ -101,88 +103,105 @@ export function ReferenceDataManager({
   }
 
   return (
-    <section>
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-h3 font-bold text-text-primary">{config.entityLabelPlural}</h2>
+    <section className="overflow-hidden rounded-card border border-outline-variant/40 bg-surface-container-lowest shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-outline-variant/40 px-4 py-4 tablet:px-6">
+        <h2 className="font-headline text-headline-md text-on-surface">{config.entityLabelPlural}</h2>
         <Button type="button" onClick={openCreate}>
+          <Icon name="add" className="h-5 w-5" />
           Add {config.entityLabelSingular}
         </Button>
       </div>
 
+      {formMode.kind !== "closed" && (
+        <form
+          onSubmit={handleSubmit}
+          className="flex flex-col gap-4 border-b border-outline-variant/40 bg-surface-container-low px-4 py-6 tablet:px-6"
+        >
+          <div className="grid gap-4 tablet:grid-cols-2">
+            <TextField
+              label="Name"
+              value={draftName}
+              onChange={(event) => setDraftName(event.target.value)}
+              error={fieldErrors?.name}
+            />
+            {config.hasSwatchField && (
+              <TextField
+                label={config.swatchFieldLabel ?? "Value"}
+                value={draftSwatchValue}
+                onChange={(event) => setDraftSwatchValue(event.target.value)}
+                error={fieldErrors?.swatchValue}
+              />
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button type="submit" disabled={isSaving} isLoading={isSaving}>
+              Save
+            </Button>
+            <Button type="button" variant="outline" onClick={closeForm}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      )}
+
       {isLoading ? (
-        <div role="status">
+        <div role="status" className="flex flex-col gap-3 p-4 tablet:p-6">
           <span className="sr-only">Loading…</span>
+          {[0, 1, 2].map((index) => (
+            <div
+              key={index}
+              aria-hidden="true"
+              className="h-10 animate-pulse rounded-control bg-surface-container-low motion-reduce:animate-none"
+            />
+          ))}
         </div>
       ) : entries.length === 0 ? (
-        <p className="mt-4 text-body text-text-secondary">{config.emptyStateMessage}</p>
+        <p className="px-6 py-12 text-center font-body text-body-md text-on-surface-variant">
+          {config.emptyStateMessage}
+        </p>
       ) : (
-        <ul className="mt-4">
+        <ul className="divide-y divide-outline-variant/30">
           {entries.map((entry) => (
             <li
               key={entry.id}
-              className="flex flex-col gap-3 border-b border-border-default py-4 tablet:flex-row tablet:items-center tablet:justify-between"
+              className="flex flex-col gap-3 px-4 py-4 tablet:flex-row tablet:items-center tablet:justify-between tablet:px-6"
             >
-              <div className="flex items-center gap-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-3">
                 {config.renderSwatch && entry.swatchValue && config.renderSwatch(entry.swatchValue)}
-                <span className="text-body text-text-primary">{entry.name}</span>
-                {entry.isArchived && (
-                  <span className="rounded-pill bg-neutral-200 px-2 py-0.5 text-caption font-semibold text-text-secondary">
-                    Archived
-                  </span>
-                )}
-                {!entry.isArchived && entry.isActive === false && (
-                  <span className="rounded-pill bg-warning-bg px-2 py-0.5 text-caption font-semibold text-warning-text">
-                    Disabled
-                  </span>
-                )}
+                <span className="break-words font-body text-body-md font-semibold text-on-surface">{entry.name}</span>
+                {entry.isArchived && <StatusBadge label="Archived" tone="neutral" />}
+                {!entry.isArchived && entry.isActive === false && <StatusBadge label="Disabled" tone="warning" />}
               </div>
-              <div className="flex items-center gap-2">
-                <Button type="button" onClick={() => openEdit(entry)}>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button type="button" variant="outline" size="sm" className="min-h-11" onClick={() => openEdit(entry)}>
                   Edit
                 </Button>
                 {onToggleActive && !entry.isArchived && (
                   <Button
                     type="button"
+                    variant="outline"
+                    size="sm"
+                    className="min-h-11"
                     disabled={isTogglingActive}
                     onClick={() => onToggleActive(entry.id, entry.isActive === false)}
                   >
                     {entry.isActive === false ? "Enable" : "Disable"}
                   </Button>
                 )}
-                <Button type="button" onClick={() => setArchiveTargetId(entry.id)} disabled={entry.isArchived}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="min-h-11 text-error"
+                  onClick={() => setArchiveTargetId(entry.id)}
+                  disabled={entry.isArchived}
+                >
                   Archive
                 </Button>
               </div>
             </li>
           ))}
         </ul>
-      )}
-
-      {formMode.kind !== "closed" && (
-        <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-3">
-          <TextField
-            label="Name"
-            value={draftName}
-            onChange={(event) => setDraftName(event.target.value)}
-            error={fieldErrors?.name}
-          />
-          {config.hasSwatchField && (
-            <TextField
-              label={config.swatchFieldLabel ?? "Value"}
-              value={draftSwatchValue}
-              onChange={(event) => setDraftSwatchValue(event.target.value)}
-              error={fieldErrors?.swatchValue}
-            />
-          )}
-          <div className="flex items-center gap-2">
-            <Button type="submit" disabled={isSaving} isLoading={isSaving}>
-              Save
-            </Button>
-            <Button type="button" onClick={closeForm}>
-              Cancel
-            </Button>
-          </div>
-        </form>
       )}
 
       <ConfirmDialog
