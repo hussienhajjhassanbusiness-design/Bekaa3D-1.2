@@ -34,10 +34,19 @@ export function ProductTypeSelector({ mode, value, onChange }: ProductTypeSelect
 
   return (
     <fieldset>
-      <legend className="text-label font-semibold uppercase tracking-label text-text-primary">Product type</legend>
-      <div role="radiogroup" aria-describedby={isLocked ? explanationId : undefined} className="mt-2 flex gap-4">
+      <legend className="font-label text-label-sm uppercase text-on-surface-variant">Product type</legend>
+      <div
+        role="radiogroup"
+        aria-describedby={isLocked ? explanationId : undefined}
+        className="mt-2 grid gap-3 tablet:grid-cols-2"
+      >
         {OPTIONS.map((option) => (
-          <label key={option.value} className="flex items-center gap-2 text-body text-text-primary">
+          <label
+            key={option.value}
+            className={`flex min-h-12 items-center gap-3 rounded-control border p-3 font-body text-body-md text-on-surface ${
+              value === option.value ? "border-primary bg-primary/5 font-semibold" : "border-outline-variant"
+            } ${isLocked ? "cursor-not-allowed opacity-70" : "cursor-pointer hover:bg-surface-container-low"}`}
+          >
             <input
               type="radio"
               name={name}
@@ -45,13 +54,14 @@ export function ProductTypeSelector({ mode, value, onChange }: ProductTypeSelect
               checked={value === option.value}
               disabled={isLocked}
               onChange={() => onChange(option.value)}
+              className="h-5 w-5 accent-primary"
             />
             {option.label}
           </label>
         ))}
       </div>
       {isLocked && (
-        <p id={explanationId} className="mt-2 text-caption text-text-secondary">
+        <p id={explanationId} className="mt-2 text-caption text-on-surface-variant">
           Product type can&apos;t be changed after creation.
         </p>
       )}

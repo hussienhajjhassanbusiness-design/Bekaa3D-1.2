@@ -6,7 +6,8 @@ import { useParams } from "next/navigation";
 import { LoadingSpinner } from "@/components/feedback/LoadingSpinner";
 import { Alert } from "@/components/feedback/Alert";
 import { ConfirmDialog } from "@/components/feedback/ConfirmDialog";
-import { Button } from "@/components/forms/Button";
+import { Button, buttonLinkClassName } from "@/components/forms/Button";
+import { AdminBackLink } from "@/components/admin/adminUi";
 import { StatusBadge, describeAdminAccountStatus } from "@/components/admin/StatusBadge";
 import { NotFoundContent } from "@/components/feedback/NotFoundContent";
 import { useAdminUser } from "@/lib/admin/customers/useAdminUser";
@@ -63,45 +64,64 @@ export default function AdminCustomerDetailPage() {
 
   return (
     <>
-      <h1 className="text-h1 font-bold text-text-primary">{user.email}</h1>
-      {actionError && <Alert variant="error" message={actionError} />}
+      <div>
+        <AdminBackLink href="/admin/customers">Customers</AdminBackLink>
+      </div>
+      <h1 className="mt-2 break-all font-headline text-headline-lg text-on-surface">{user.email}</h1>
+      {actionError && (
+        <div className="mt-4">
+          <Alert variant="error" message={actionError} />
+        </div>
+      )}
 
-      <dl className="mt-4 grid gap-3 tablet:grid-cols-2">
+      <dl className="mt-6 grid gap-4 rounded-card border border-outline-variant/40 bg-surface-container-lowest p-5 shadow-sm tablet:p-6 tablet:grid-cols-2">
         <div>
-          <dt className="text-label font-semibold uppercase tracking-label text-text-secondary">Status</dt>
+          <dt className="font-label text-label-sm uppercase text-on-surface-variant">Status</dt>
           <dd className="mt-1">
             <StatusBadge label={label} tone={tone} />
           </dd>
         </div>
         <div>
-          <dt className="text-label font-semibold uppercase tracking-label text-text-secondary">Role</dt>
-          <dd className="mt-1 text-body text-text-primary">{user.role}</dd>
+          <dt className="font-label text-label-sm uppercase text-on-surface-variant">Role</dt>
+          <dd className="mt-1 font-body text-body-md capitalize text-on-surface">{user.role}</dd>
         </div>
         <div>
-          <dt className="text-label font-semibold uppercase tracking-label text-text-secondary">Email verified</dt>
-          <dd className="mt-1 text-body text-text-primary">{user.email_verified_at ? "Yes" : "No"}</dd>
+          <dt className="font-label text-label-sm uppercase text-on-surface-variant">Email verified</dt>
+          <dd className="mt-1 text-body-md text-on-surface">{user.email_verified_at ? "Yes" : "No"}</dd>
         </div>
         <div>
-          <dt className="text-label font-semibold uppercase tracking-label text-text-secondary">Joined</dt>
-          <dd className="mt-1 text-body text-text-primary">{new Date(user.created_at).toLocaleDateString()}</dd>
+          <dt className="font-label text-label-sm uppercase text-on-surface-variant">Joined</dt>
+          <dd className="mt-1 text-body-md text-on-surface">{new Date(user.created_at).toLocaleDateString()}</dd>
         </div>
       </dl>
 
-      <nav aria-label="Customer records" className="mt-4 flex flex-wrap gap-4 text-body">
-        <Link href={`/admin/orders?customer_id=${user.id}`} className="text-text-link underline">
+      <nav aria-label="Customer records" className="mt-6 flex flex-wrap gap-3">
+        <Link href={`/admin/orders?customer_id=${user.id}`} className={buttonLinkClassName("outline")}>
           Orders
         </Link>
-        <Link href={`/admin/refunds?customer_id=${user.id}&queue=false`} className="text-text-link underline">
+        <Link href={`/admin/refunds?customer_id=${user.id}&queue=false`} className={buttonLinkClassName("outline")}>
           Refunds
         </Link>
-        <Link href={`/admin/cash-blocks?customer_id=${user.id}`} className="text-text-link underline">
+        <Link href={`/admin/cash-blocks?customer_id=${user.id}`} className={buttonLinkClassName("outline")}>
           Cash blocks
         </Link>
       </nav>
 
-      <Button className="mt-6" onClick={() => setConfirmOpen(true)}>
-        {actionLabel}
-      </Button>
+      <section
+        aria-labelledby="customer-access-heading"
+        className="mt-6 max-w-form rounded-card border border-error/30 border-t-4 border-t-error bg-surface-container-lowest p-5 shadow-sm tablet:p-6"
+      >
+        <h2 id="customer-access-heading" className="font-headline text-headline-md text-on-surface">
+          Account access
+        </h2>
+        <Button
+          className={`mt-4 ${user.is_active ? "text-error" : ""}`}
+          variant={user.is_active ? "outline" : "primary"}
+          onClick={() => setConfirmOpen(true)}
+        >
+          {actionLabel}
+        </Button>
+      </section>
 
       <ConfirmDialog
         open={confirmOpen}

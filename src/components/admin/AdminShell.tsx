@@ -188,7 +188,7 @@ function AdminShellInner({ children }: { children: ReactNode }) {
         <main id="main-content" tabIndex={-1} className="min-w-0 flex-1 outline-none">
           <section
             aria-label="Admin content"
-            className="mx-auto w-full max-w-content px-4 py-6 tablet:px-8 tablet:py-8 desktop:py-10"
+            className="mx-auto w-full max-w-content break-words px-4 py-6 tablet:px-8 tablet:py-8 desktop:py-10"
           >
             {children}
           </section>

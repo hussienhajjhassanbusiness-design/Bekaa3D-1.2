@@ -1,5 +1,6 @@
 "use client";
 
+import { fieldControlClasses } from "@/components/forms/fieldStyles";
 import { useId } from "react";
 import { TextField } from "@/components/forms/TextField";
 import { MoneyInput } from "@/components/forms/MoneyInput";
@@ -27,7 +28,7 @@ export function SettingControl({ setting, onChange }: SettingControlProps) {
   if (setting.type === "boolean") {
     return (
       <div>
-        <span id={labelId} className="text-label font-semibold uppercase tracking-label text-text-primary">
+        <span id={labelId} className="font-label text-label-sm uppercase text-on-surface">
           {setting.label}
         </span>
         <button
@@ -37,19 +38,19 @@ export function SettingControl({ setting, onChange }: SettingControlProps) {
           aria-labelledby={labelId}
           aria-describedby={describedBy}
           onClick={() => onChange(!setting.value)}
-          className={`mt-1 inline-flex h-6 w-11 items-center rounded-pill border border-border-default transition-colors ${
-            setting.value ? "bg-brand-dark-green" : "bg-neutral-200"
+          className={`mt-2 inline-flex h-6 w-11 items-center rounded-pill transition-colors duration-200 motion-reduce:transition-none ${
+            setting.value ? "bg-primary" : "bg-outline"
           }`}
         >
           <span
             aria-hidden="true"
-            className={`h-5 w-5 rounded-pill bg-white transition-transform ${
+            className={`h-5 w-5 rounded-pill bg-surface-container-lowest shadow-sm transition-transform duration-200 motion-reduce:transition-none ${
               setting.value ? "translate-x-5" : "translate-x-0.5"
             }`}
           />
         </button>
         {hasDescription && (
-          <p id={descriptionId} className="mt-1 text-caption text-text-secondary">
+          <p id={descriptionId} className="mt-1 text-caption text-on-surface-variant">
             {setting.description}
           </p>
         )}
@@ -60,7 +61,7 @@ export function SettingControl({ setting, onChange }: SettingControlProps) {
   if (setting.type === "number") {
     return (
       <div>
-        <label htmlFor={inputId} className="block text-label font-semibold uppercase tracking-label text-text-primary">
+        <label htmlFor={inputId} className="block font-label text-label-sm uppercase text-on-surface">
           {setting.label}
           {setting.unit && <span className="font-normal"> ({setting.unit})</span>}
         </label>
@@ -75,13 +76,11 @@ export function SettingControl({ setting, onChange }: SettingControlProps) {
           max={setting.max}
           step={setting.step}
           aria-describedby={describedBy}
-          onChange={(event) =>
-            onChange(event.target.value === "" ? null : event.target.valueAsNumber)
-          }
-          className="mt-1 w-full rounded-sm border border-border-default px-3 py-2 text-body text-text-primary"
+          onChange={(event) => onChange(event.target.value === "" ? null : event.target.valueAsNumber)}
+          className={`mt-2 ${fieldControlClasses(false)}`}
         />
         {hasDescription && (
-          <p id={descriptionId} className="mt-1 text-caption text-text-secondary">
+          <p id={descriptionId} className="mt-1 text-caption text-on-surface-variant">
             {setting.description}
           </p>
         )}
@@ -108,8 +107,10 @@ export function SettingControl({ setting, onChange }: SettingControlProps) {
     // non-editable fallback rather than a raw JSON textarea editor.
     return (
       <div>
-        <span className="text-label font-semibold uppercase tracking-label text-text-primary">{setting.label}</span>
-        <p className="mt-1 text-caption text-text-secondary">This setting can&rsquo;t be edited from this screen.</p>
+        <span className="font-label text-label-sm uppercase text-on-surface">{setting.label}</span>
+        <p className="mt-1 text-caption text-on-surface-variant">
+          This setting can&rsquo;t be edited from this screen.
+        </p>
       </div>
     );
   }

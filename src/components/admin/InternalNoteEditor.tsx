@@ -1,5 +1,7 @@
 "use client";
 
+import { Icon } from "@/components/ui/Icon";
+import { fieldControlClasses } from "@/components/forms/fieldStyles";
 import { useId, useState } from "react";
 import { Button } from "@/components/forms/Button";
 
@@ -28,17 +30,21 @@ export function InternalNoteEditor({ note, onSave, isSaving = false, errorMessag
 
   return (
     <div>
-      <label htmlFor={labelId} className="block text-label font-semibold uppercase tracking-label text-danger">
+      <label
+        htmlFor={labelId}
+        className="flex items-center gap-2 font-label text-label-sm uppercase text-on-surface-variant"
+      >
+        <Icon name="lock" className="h-4 w-4 text-primary" />
         Internal note — not visible to customers
       </label>
       <textarea
         id={labelId}
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
-        className="mt-1 w-full rounded-sm border border-border-default px-3 py-2 text-body"
+        className={`mt-2 ${fieldControlClasses(false)}`}
       />
       {errorMessage && (
-        <p role="alert" className="mt-1 text-caption text-danger">
+        <p role="alert" className="mt-1 text-caption text-error">
           {errorMessage}
         </p>
       )}

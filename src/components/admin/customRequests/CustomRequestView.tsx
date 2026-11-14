@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState, type ReactNode } from "react";
-import Link from "next/link";
+import { AdminBackLink, AdminField as Field } from "@/components/admin/adminUi";
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AdminActionDialog } from "@/components/admin/orders/AdminActionDialog";
 import { InternalNoteEditor } from "@/components/admin/InternalNoteEditor";
@@ -70,15 +70,6 @@ function formatSize(bytes: number): string {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div>
-      <dt className="text-label font-semibold uppercase tracking-label text-text-secondary">{label}</dt>
-      <dd className="mt-1 break-words text-body text-text-primary">{children}</dd>
-    </div>
-  );
-}
-
 function AttachmentRow({ requestId, attachment }: { requestId: string; attachment: CustomRequestAttachmentDTO }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -106,9 +97,9 @@ function AttachmentRow({ requestId, attachment }: { requestId: string; attachmen
   }
 
   return (
-    <li className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border-default py-2">
-      <span className="break-all text-body text-text-primary">{attachment.original_filename}</span>
-      <span className="text-caption text-text-secondary">
+    <li className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-outline-variant/40 py-2">
+      <span className="break-all text-body-md text-on-surface">{attachment.original_filename}</span>
+      <span className="text-caption text-on-surface-variant">
         {formatSize(attachment.size_bytes)} · kept until {formatOrderDate(attachment.expires_at)}
       </span>
       <Button
@@ -121,7 +112,7 @@ function AttachmentRow({ requestId, attachment }: { requestId: string; attachmen
         Download
       </Button>
       {error && (
-        <p role="alert" className="w-full text-caption text-danger">
+        <p role="alert" className="w-full text-caption text-error">
           {error}
         </p>
       )}
@@ -227,26 +218,30 @@ export function CustomRequestView({ requestId }: { requestId: string }) {
 
   return (
     <>
-      <p>
-        <Link href="/admin/custom-requests" className="text-text-link underline">
-          ← Bring Your Idea
-        </Link>
-      </p>
-      <h1 className="mt-2 break-words text-h1 font-bold text-text-primary">{lead.project_title}</h1>
+      <div>
+        <AdminBackLink href="/admin/custom-requests">Bring Your Idea</AdminBackLink>
+      </div>
+      <h1 className="mt-2 break-words font-headline text-headline-lg text-on-surface">{lead.project_title}</h1>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <StatusBadge label={label} tone={tone} />
-        <span className="text-caption text-text-secondary">Outcome: {describeOutcome(lead.outcome)}</span>
+        <span className="text-caption text-on-surface-variant">Outcome: {describeOutcome(lead.outcome)}</span>
       </div>
 
-      <section aria-labelledby="byi-requester" className="mt-6">
-        <h2 id="byi-requester" className="text-h3 font-semibold text-text-primary">
+      <section
+        aria-labelledby="byi-requester"
+        className="mt-6 flex flex-col gap-3 rounded-card border border-outline-variant/40 bg-surface-container-lowest p-5 shadow-sm tablet:p-6"
+      >
+        <h2 id="byi-requester" className="font-headline text-headline-md text-on-surface">
           Requester
         </h2>
         <dl className="mt-2 grid gap-3 tablet:grid-cols-3">
           <Field label="Name">{lead.name}</Field>
           <Field label="Email">
             {SIMPLE_EMAIL.test(lead.email) ? (
-              <a href={`mailto:${lead.email}`} className="text-text-link underline">
+              <a
+                href={`mailto:${lead.email}`}
+                className="font-semibold text-primary underline underline-offset-2 hover:text-primary-container"
+              >
                 {lead.email}
               </a>
             ) : (
@@ -257,11 +252,14 @@ export function CustomRequestView({ requestId }: { requestId: string }) {
         </dl>
       </section>
 
-      <section aria-labelledby="byi-idea" className="mt-6">
-        <h2 id="byi-idea" className="text-h3 font-semibold text-text-primary">
+      <section
+        aria-labelledby="byi-idea"
+        className="mt-6 flex flex-col gap-3 rounded-card border border-outline-variant/40 bg-surface-container-lowest p-5 shadow-sm tablet:p-6"
+      >
+        <h2 id="byi-idea" className="font-headline text-headline-md text-on-surface">
           The idea
         </h2>
-        <p className="mt-2 whitespace-pre-wrap break-words rounded-md border border-border-default p-4 text-body text-text-primary">
+        <p className="whitespace-pre-wrap break-words rounded-control bg-surface-container-low p-4 font-body text-body-md text-on-surface">
           {lead.description}
         </p>
         <dl className="mt-3 grid gap-3 tablet:grid-cols-3">
@@ -271,12 +269,15 @@ export function CustomRequestView({ requestId }: { requestId: string }) {
         </dl>
       </section>
 
-      <section aria-labelledby="byi-images" className="mt-6">
-        <h2 id="byi-images" className="text-h3 font-semibold text-text-primary">
+      <section
+        aria-labelledby="byi-images"
+        className="mt-6 flex flex-col gap-3 rounded-card border border-outline-variant/40 bg-surface-container-lowest p-5 shadow-sm tablet:p-6"
+      >
+        <h2 id="byi-images" className="font-headline text-headline-md text-on-surface">
           Reference images
         </h2>
         {lead.attachments.length === 0 ? (
-          <p className="mt-2 text-body text-text-secondary">No images, or they have expired.</p>
+          <p className="mt-2 text-body-md text-on-surface-variant">No images, or they have expired.</p>
         ) : (
           <ul className="mt-2">
             {lead.attachments.map((attachment) => (
@@ -286,8 +287,11 @@ export function CustomRequestView({ requestId }: { requestId: string }) {
         )}
       </section>
 
-      <section aria-labelledby="byi-pipeline" className="mt-6">
-        <h2 id="byi-pipeline" className="text-h3 font-semibold text-text-primary">
+      <section
+        aria-labelledby="byi-pipeline"
+        className="mt-6 flex flex-col gap-3 rounded-card border border-outline-variant/40 bg-surface-container-lowest p-5 shadow-sm tablet:p-6"
+      >
+        <h2 id="byi-pipeline" className="font-headline text-headline-md text-on-surface">
           Pipeline
         </h2>
         <dl className="mt-2 grid gap-3 tablet:grid-cols-3">
@@ -317,12 +321,15 @@ export function CustomRequestView({ requestId }: { requestId: string }) {
             ))}
           </div>
         ) : (
-          <p className="mt-3 text-body text-text-secondary">This request is finished. No further moves.</p>
+          <p className="mt-3 text-body-md text-on-surface-variant">This request is finished. No further moves.</p>
         )}
       </section>
 
-      <section aria-labelledby="byi-notes" className="mt-6">
-        <h2 id="byi-notes" className="text-h3 font-semibold text-text-primary">
+      <section
+        aria-labelledby="byi-notes"
+        className="mt-6 flex flex-col gap-3 rounded-card border border-outline-variant/40 bg-surface-container-lowest p-5 shadow-sm tablet:p-6"
+      >
+        <h2 id="byi-notes" className="font-headline text-headline-md text-on-surface">
           Notes
         </h2>
         <div className="mt-2">
@@ -334,7 +341,7 @@ export function CustomRequestView({ requestId }: { requestId: string }) {
             errorMessage={notesStatus && !notesStatus.ok ? notesStatus.message : undefined}
           />
           {notesStatus?.ok && (
-            <p role="status" className="mt-1 text-caption text-success">
+            <p role="status" className="mt-2 flex items-center gap-1 font-label text-label-sm uppercase text-primary">
               {notesStatus.message}
             </p>
           )}

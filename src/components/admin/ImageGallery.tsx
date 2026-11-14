@@ -103,47 +103,81 @@ export function ImageGallery({
 
   return (
     <>
-      <ul>
-      {images.map((image, index) => (
-        <li key={image.id} className="flex items-center gap-3 border-b border-border-default py-3">
-          {/* Plain <img>, not next/image: the real image host/URL format
+      <ul className="divide-y divide-outline-variant/30">
+        {images.map((image, index) => (
+          <li key={image.id} className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0">
+            {/* Plain <img>, not next/image: the real image host/URL format
               is still an open gap (FRONTEND-VERTICAL-SLICE-PLAN.md §17's
               "Image/asset URL format" item) — next/image's remote-pattern
               allowlist can't be configured safely until that's confirmed. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={image.src} alt={image.accessibleLabel} className="h-16 w-16 rounded-sm object-cover" />
-          <span className="text-body text-text-primary">{image.accessibleLabel}</span>
-          {image.isCover && (
-            <span className="rounded-pill bg-brand-dark-green/15 px-2 py-0.5 text-caption font-semibold text-brand-dark-green">
-              Cover
-            </span>
-          )}
-          {onUpdateAltText && (
-            <AltTextEditor
-              label={`Alt text (image ${index + 1})`}
-              altText={image.altText ?? ""}
-              onSave={(next) => onUpdateAltText(image.id, next)}
-              isSaving={isUpdatingAltText}
-            />
-          )}
-          <div className="ml-auto flex items-center gap-2">
-            <Button type="button" onClick={() => move(index, -1)} disabled={index === 0}>
-              Move up
-            </Button>
-            <Button type="button" onClick={() => move(index, 1)} disabled={index === images.length - 1}>
-              Move down
-            </Button>
-            {!image.isCover && (
-              <Button type="button" onClick={() => onSetCover(image.id)}>
-                Set as cover
-              </Button>
+            <div className="flex min-w-0 items-center gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={image.src}
+                alt={image.accessibleLabel}
+                className="h-16 w-16 shrink-0 rounded-control border border-outline-variant/40 bg-surface-container-low object-cover"
+              />
+              <span className="min-w-0 break-words font-body text-body-md text-on-surface">
+                {image.accessibleLabel}
+              </span>
+              {image.isCover && (
+                <span className="shrink-0 rounded-full bg-secondary-container px-3 py-1 font-label text-label-sm uppercase text-on-secondary-container">
+                  Cover
+                </span>
+              )}
+            </div>
+            {onUpdateAltText && (
+              <AltTextEditor
+                label={`Alt text (image ${index + 1})`}
+                altText={image.altText ?? ""}
+                onSave={(next) => onUpdateAltText(image.id, next)}
+                isSaving={isUpdatingAltText}
+              />
             )}
-            <Button type="button" onClick={() => setDeleteTargetId(image.id)}>
-              Delete
-            </Button>
-          </div>
-        </li>
-      ))}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="min-h-11"
+                onClick={() => move(index, -1)}
+                disabled={index === 0}
+              >
+                Move up
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="min-h-11"
+                onClick={() => move(index, 1)}
+                disabled={index === images.length - 1}
+              >
+                Move down
+              </Button>
+              {!image.isCover && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="min-h-11"
+                  onClick={() => onSetCover(image.id)}
+                >
+                  Set as cover
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="min-h-11 text-error"
+                onClick={() => setDeleteTargetId(image.id)}
+              >
+                Delete
+              </Button>
+            </div>
+          </li>
+        ))}
       </ul>
 
       <ConfirmDialog
@@ -177,9 +211,11 @@ function AltTextEditor({ label, altText, onSave, isSaving }: AltTextEditorProps)
   const [draft, setDraft] = useState(altText);
 
   return (
-    <div className="flex items-center gap-2">
-      <TextField label={label} value={draft} onChange={(event) => setDraft(event.target.value)} />
-      <Button type="button" isLoading={isSaving} onClick={() => onSave(draft)}>
+    <div className="flex flex-wrap items-end gap-2">
+      <div className="min-w-0 flex-1 basis-48">
+        <TextField label={label} value={draft} onChange={(event) => setDraft(event.target.value)} />
+      </div>
+      <Button type="button" variant="outline" className="min-h-12" isLoading={isSaving} onClick={() => onSave(draft)}>
         Save alt text
       </Button>
     </div>

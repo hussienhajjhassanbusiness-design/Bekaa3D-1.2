@@ -1,5 +1,6 @@
 "use client";
 
+import { fieldControlClasses } from "@/components/forms/fieldStyles";
 import { useId, useState, type ChangeEvent, type KeyboardEvent } from "react";
 
 export interface ComboboxOption {
@@ -83,7 +84,7 @@ export function SearchableCombobox({ label, options, onChange, placeholder }: Se
 
   return (
     <div>
-      <label htmlFor={inputId} className="block text-label font-semibold uppercase tracking-label text-text-primary">
+      <label htmlFor={inputId} className="block font-label text-label-sm uppercase text-on-surface">
         {label}
       </label>
       <input
@@ -102,13 +103,17 @@ export function SearchableCombobox({ label, options, onChange, placeholder }: Se
           setActiveIndex(-1);
         }}
         onKeyDown={handleKeyDown}
-        className="mt-1 w-full rounded-sm border border-border-default px-3 py-2 text-body text-text-primary"
+        className={`mt-2 ${fieldControlClasses(false)}`}
       />
 
       {isOpen && (
-        <ul id={listboxId} role="listbox" className="mt-1 rounded-sm border border-border-default bg-white">
+        <ul
+          id={listboxId}
+          role="listbox"
+          className="mt-1 overflow-hidden rounded-control border border-outline-variant bg-surface-container-lowest shadow-lg"
+        >
           {filteredOptions.length === 0 ? (
-            <li className="px-3 py-2 text-caption text-text-secondary">No results found.</li>
+            <li className="px-3 py-2 text-caption text-on-surface-variant">No results found.</li>
           ) : (
             filteredOptions.map((option, index) => (
               <li
@@ -120,7 +125,7 @@ export function SearchableCombobox({ label, options, onChange, placeholder }: Se
                   event.preventDefault();
                   selectOption(option);
                 }}
-                className={`cursor-pointer px-3 py-2 text-body text-text-primary ${
+                className={`cursor-pointer px-3 py-2 text-body-md text-on-surface ${
                   index === activeIndex ? "bg-neutral-100" : ""
                 }`}
               >

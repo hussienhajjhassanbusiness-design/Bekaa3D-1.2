@@ -1,5 +1,7 @@
 "use client";
 
+import { buttonLinkClassName } from "@/components/forms/Button";
+import { Icon } from "@/components/ui/Icon";
 import { useState } from "react";
 import Link from "next/link";
 import { LoadingSpinner } from "@/components/feedback/LoadingSpinner";
@@ -29,7 +31,10 @@ export default function AdminSettingsPage() {
   const { data: settings, isLoading, isError } = useAdminSettings();
   const updateMutation = useAdminSettingUpdate();
   const [rowStates, setRowStates] = useState<Record<string, RowState>>({});
-  const [pendingConfirmation, setPendingConfirmation] = useState<{ setting: EditableSetting; value: EditableSettingValue } | null>(null);
+  const [pendingConfirmation, setPendingConfirmation] = useState<{
+    setting: EditableSetting;
+    value: EditableSettingValue;
+  } | null>(null);
 
   function setRowState(key: string, state: RowState) {
     setRowStates((current) => ({ ...current, [key]: state }));
@@ -63,8 +68,11 @@ export default function AdminSettingsPage() {
 
   return (
     <>
-      <h1 className="text-h1 font-bold text-text-primary">Settings</h1>
-      <div className="mt-4">
+      <h1 className="break-words font-headline text-headline-lg text-on-surface">Settings</h1>
+      <p className="mt-2 max-w-3xl font-body text-body-md text-on-surface-variant">
+        Store settings take effect as soon as you save each one.
+      </p>
+      <div className="mt-6 max-w-form divide-y divide-outline-variant/30 rounded-card border border-outline-variant/40 bg-surface-container-lowest px-5 shadow-sm tablet:px-6">
         {settings.map((setting) => (
           <SettingRow
             key={setting.key}
@@ -76,12 +84,21 @@ export default function AdminSettingsPage() {
         ))}
       </div>
 
-      <section className="mt-8 border-t border-border-default pt-4">
-        <h2 className="text-h3 font-bold text-text-primary">Security</h2>
-        <p className="mt-1 text-body text-text-secondary">
+      <section
+        aria-labelledby="settings-security-heading"
+        className="mt-6 max-w-form rounded-card border border-outline-variant/40 bg-surface-container-lowest p-5 shadow-sm tablet:p-6"
+      >
+        <h2
+          id="settings-security-heading"
+          className="flex items-center gap-2 font-headline text-headline-md text-on-surface"
+        >
+          <Icon name="lock" className="h-5 w-5 text-primary" />
+          Security
+        </h2>
+        <p className="mt-1 text-body-md text-on-surface-variant">
           Regenerate your two-factor recovery codes if you&rsquo;ve lost the current ones.
         </p>
-        <Link href="/admin/mfa/recovery-codes" className="mt-2 inline-block text-text-link underline">
+        <Link href="/admin/mfa/recovery-codes" className={`${buttonLinkClassName("outline")} mt-4`}>
           Regenerate recovery codes
         </Link>
       </section>

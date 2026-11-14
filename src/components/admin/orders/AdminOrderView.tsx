@@ -1,7 +1,7 @@
 "use client";
 
+import { AdminBackLink, AdminSection as Section, AdminRow as Row } from "@/components/admin/adminUi";
 import Link from "next/link";
-import type { ReactNode } from "react";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { InternalNoteEditor } from "@/components/admin/InternalNoteEditor";
 import { PriceDisplay } from "@/components/catalog/PriceDisplay";
@@ -38,18 +38,18 @@ export function AdminOrderView({ order }: { order: AdminOrderDetailDTO }) {
   const lineName = new Map(order.lines.map((line) => [line.id, line.name]));
 
   return (
-    <article aria-labelledby="admin-order-heading" className="flex flex-col gap-6">
+    <article aria-labelledby="admin-order-heading" className="flex min-w-0 flex-col gap-6 break-words">
       <header className="flex flex-col gap-2">
-        <Link href="/admin/orders" className="self-start text-body text-text-link underline">
-          Back to orders
-        </Link>
+        <div>
+          <AdminBackLink href="/admin/orders">Back to orders</AdminBackLink>
+        </div>
         <div className="flex flex-wrap items-center gap-3">
-          <h1 id="admin-order-heading" className="text-h1 font-bold text-text-primary">
+          <h1 id="admin-order-heading" className="break-words font-headline text-headline-lg text-on-surface">
             Order {order.order_number}
           </h1>
           <StatusBadge label={status.label} tone={status.tone} />
         </div>
-        <p className="text-body text-text-secondary">
+        <p className="text-body-md text-on-surface-variant">
           Placed {formatOrderDateTime(order.placed_at)} by {order.customer_email}
           {order.source === "offer" ? " · from an accepted offer" : ""}
         </p>
@@ -60,7 +60,7 @@ export function AdminOrderView({ order }: { order: AdminOrderDetailDTO }) {
       <div className="flex flex-col gap-6 desktop:flex-row desktop:items-start">
         <div className="flex min-w-0 flex-1 flex-col gap-6">
           <Section title="Items">
-            <ul className="flex flex-col divide-y divide-border-default">
+            <ul className="flex flex-col divide-y divide-outline-variant/30">
               {order.lines.map((line) => (
                 <li key={line.id} className="flex flex-col gap-2 py-3">
                   <LineRow line={line} />
@@ -73,7 +73,7 @@ export function AdminOrderView({ order }: { order: AdminOrderDetailDTO }) {
           <Fulfillment order={order} />
 
           <Section title="History">
-            <ol className="flex flex-col gap-2">
+            <ol className="flex flex-col">
               {order.status_history.map((entry, index) => {
                 const label = entry.order_item_id === null ? "Order" : (lineName.get(entry.order_item_id) ?? "An item");
                 const product = order.lines.find((l) => l.id === entry.order_item_id)?.product_type ?? "physical";
@@ -82,14 +82,29 @@ export function AdminOrderView({ order }: { order: AdminOrderDetailDTO }) {
                     ? describeOrderStatus(entry.to_status).label
                     : describeAdminLineStatus(entry.to_status, product).label;
                 const who =
-                  entry.actor_user_id === null ? "System" : entry.actor_user_id === order.customer_id ? "Customer" : "Staff";
+                  entry.actor_user_id === null
+                    ? "System"
+                    : entry.actor_user_id === order.customer_id
+                      ? "Customer"
+                      : "Staff";
                 return (
-                  <li key={`${entry.at}-${index}`} className="text-body text-text-primary">
+                  <li
+                    key={`${entry.at}-${index}`}
+                    className="relative border-l-2 border-outline-variant/50 pb-4 pl-5 font-body text-body-md text-on-surface last:border-l-transparent last:pb-0"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="absolute -left-1.75 top-1.5 h-3 w-3 rounded-full border-2 border-surface-container-lowest bg-primary"
+                    />
                     <span className="font-semibold">{label}:</span> {to}
-                    <span className="block text-caption text-text-secondary">
+                    <span className="block text-caption text-on-surface-variant">
                       {formatOrderDateTime(entry.at)} · {who}
                     </span>
-                    {entry.reason && <span className="block whitespace-pre-line text-caption text-text-secondary">“{entry.reason}”</span>}
+                    {entry.reason && (
+                      <span className="block whitespace-pre-line text-caption text-on-surface-variant">
+                        “{entry.reason}”
+                      </span>
+                    )}
                   </li>
                 );
               })}
@@ -99,7 +114,7 @@ export function AdminOrderView({ order }: { order: AdminOrderDetailDTO }) {
 
         <div className="flex flex-col gap-6 desktop:w-96 desktop:shrink-0">
           <Section title="Payment">
-            <dl className="flex flex-col gap-2 text-body">
+            <dl className="flex flex-col gap-2 text-body-md">
               <Row label="Method">{paymentMethodLabel(order.payment_method)}</Row>
               <Row label="Subtotal">
                 <Amount price={order.subtotal} />
@@ -117,19 +132,22 @@ export function AdminOrderView({ order }: { order: AdminOrderDetailDTO }) {
               )}
             </dl>
             {order.payments.length === 0 ? (
-              <p className="text-caption text-text-secondary">No payment recorded yet.</p>
+              <p className="text-caption text-on-surface-variant">No payment recorded yet.</p>
             ) : (
               <ul className="flex flex-col gap-2">
                 {order.payments.map((p) => {
                   const d = describePaymentStatus(p.status);
                   return (
-                    <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 text-body">
+                    <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 text-body-md">
                       <span>
-                        <Link href={`/admin/payments/${p.id}`} className="text-text-link underline">
+                        <Link
+                          href={`/admin/payments/${p.id}`}
+                          className="font-semibold text-primary underline underline-offset-2 hover:text-primary-container"
+                        >
                           Payment
                         </Link>{" "}
                         <StatusBadge label={d.label} tone={d.tone} />{" "}
-                        <span className="text-caption text-text-secondary">
+                        <span className="text-caption text-on-surface-variant">
                           {describePaymentProvider(p.provider)} · {formatOrderDateTime(p.initiated_at)}
                         </span>
                       </span>
@@ -148,13 +166,18 @@ export function AdminOrderView({ order }: { order: AdminOrderDetailDTO }) {
                 {(order.refunds ?? []).map((r) => {
                   const d = describeAdminRefundStatus(r.status);
                   return (
-                    <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 text-body">
+                    <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 text-body-md">
                       <span>
-                        <Link href={`/admin/refunds/${r.id}`} className="text-text-link underline">
+                        <Link
+                          href={`/admin/refunds/${r.id}`}
+                          className="font-semibold text-primary underline underline-offset-2 hover:text-primary-container"
+                        >
                           {describeAdminRefundKind(r.kind)}
                         </Link>{" "}
                         <StatusBadge label={d.label} tone={d.tone} />
-                        <span className="block text-caption text-text-secondary">{formatOrderDate(r.created_at)}</span>
+                        <span className="block text-caption text-on-surface-variant">
+                          {formatOrderDate(r.created_at)}
+                        </span>
                       </span>
                       <Amount price={r.amount} />
                     </li>
@@ -164,13 +187,16 @@ export function AdminOrderView({ order }: { order: AdminOrderDetailDTO }) {
             </Section>
           )}
 
-          {((order.chargebacks ?? []).length > 0 || (order.payment_reached_paid && order.payment_method === "online")) && (
+          {((order.chargebacks ?? []).length > 0 ||
+            (order.payment_reached_paid && order.payment_method === "online")) && (
             <Section title="Chargebacks">
               <CreateChargeback order={order} />
               <ul className="flex flex-col gap-2">
                 {(order.chargebacks ?? []).map((c) => (
-                  <li key={c.id} className="flex flex-wrap justify-between gap-2 text-body">
-                    <span className="text-caption text-text-secondary">Received {formatOrderDate(c.received_at)}</span>
+                  <li key={c.id} className="flex flex-wrap justify-between gap-2 text-body-md">
+                    <span className="text-caption text-on-surface-variant">
+                      Received {formatOrderDate(c.received_at)}
+                    </span>
                     <Amount price={c.charged} />
                   </li>
                 ))}
@@ -196,7 +222,9 @@ function AdminNote({ order }: { order: AdminOrderDetailDTO }) {
         note={order.admin_note ?? ""}
         isSaving={write.state.kind === "pending"}
         errorMessage={write.state.kind === "error" ? write.state.message : undefined}
-        onSave={(draft) => void write.run(() => adminOrdersApi.updateNote(order.id, { admin_note: draft.trim() ? draft : null }))}
+        onSave={(draft) =>
+          void write.run(() => adminOrdersApi.updateNote(order.id, { admin_note: draft.trim() ? draft : null }))
+        }
       />
     </Section>
   );
@@ -207,22 +235,28 @@ function LineRow({ line }: { line: AdminOrderLineReadDTO }) {
   return (
     <div className="flex flex-col gap-1 tablet:flex-row tablet:items-start tablet:justify-between">
       <div className="min-w-0">
-        <p className="font-semibold text-text-primary">{line.name}</p>
-        <p className="text-caption text-text-secondary">
+        <p className="font-semibold text-on-surface">{line.name}</p>
+        <p className="text-caption text-on-surface-variant">
           {line.product_type === "stl" ? "STL file (emailed by hand)" : "Printed item"} · Qty {line.quantity} ×{" "}
           <Amount price={line.unit_price} />
         </p>
         <div className="mt-1 flex flex-wrap items-center gap-2">
           <StatusBadge label={s.label} tone={s.tone} />
-          {line.cancel_reason && <span className="text-caption text-text-secondary">{describeCancelReason(line.cancel_reason)}</span>}
+          {line.cancel_reason && (
+            <span className="text-caption text-on-surface-variant">{describeCancelReason(line.cancel_reason)}</span>
+          )}
           {line.fulfilled_at && line.product_type === "stl" && (
-            <span className="text-caption text-text-secondary">Emailed {formatOrderDate(line.fulfilled_at)}</span>
+            <span className="text-caption text-on-surface-variant">Emailed {formatOrderDate(line.fulfilled_at)}</span>
           )}
           {line.receipt_confirmed_at && (
-            <span className="text-caption text-text-secondary">Customer confirmed receipt {formatOrderDate(line.receipt_confirmed_at)}</span>
+            <span className="text-caption text-on-surface-variant">
+              Customer confirmed receipt {formatOrderDate(line.receipt_confirmed_at)}
+            </span>
           )}
           {line.problem_reported_at && (
-            <span className="text-caption text-danger">Problem reported {formatOrderDate(line.problem_reported_at)}</span>
+            <span className="text-caption text-error">
+              Problem reported {formatOrderDate(line.problem_reported_at)}
+            </span>
           )}
         </div>
       </div>
@@ -233,51 +267,39 @@ function LineRow({ line }: { line: AdminOrderLineReadDTO }) {
 
 function Fulfillment({ order }: { order: AdminOrderDetailDTO }) {
   const a = order.delivery_address;
-  const place = a ? [a.street, a.area, a.city, a.governorate ? governorateLabel(a.governorate) : null].filter(Boolean).join(", ") : "";
+  const place = a
+    ? [a.street, a.area, a.city, a.governorate ? governorateLabel(a.governorate) : null].filter(Boolean).join(", ")
+    : "";
   return (
     <Section title="Fulfillment">
-      <dl className="flex flex-col gap-2 text-body">
+      <dl className="flex flex-col gap-2 text-body-md">
         <Row label="Method">{fulfillmentLabel(order.fulfillment_method)}</Row>
         {a && (
           <Row label="Deliver to">
             <span className="text-right">
               {a.recipient_name && <span className="block">{a.recipient_name}</span>}
               {place && <span className="block">{place}</span>}
-              {a.landmark_notes && <span className="block text-text-secondary">{a.landmark_notes}</span>}
+              {a.landmark_notes && <span className="block text-on-surface-variant">{a.landmark_notes}</span>}
             </span>
           </Row>
         )}
         {order.contact_phone && <Row label="Contact phone">{order.contact_phone}</Row>}
-        {order.estimated_dispatch_at && <Row label="Estimated ready">{formatOrderDate(order.estimated_dispatch_at)}</Row>}
+        {order.estimated_dispatch_at && (
+          <Row label="Estimated ready">{formatOrderDate(order.estimated_dispatch_at)}</Row>
+        )}
       </dl>
       {order.delivery_fee_note && (
-        <p className="text-caption text-text-secondary">The courier sets and collects the delivery fee separately.</p>
+        <p className="text-caption text-on-surface-variant">
+          The courier sets and collects the delivery fee separately.
+        </p>
       )}
       {order.customer_note && (
         <div>
-          <p className="text-label font-semibold uppercase tracking-label text-text-secondary">Customer note</p>
-          <p className="whitespace-pre-line text-body text-text-primary">{order.customer_note}</p>
+          <p className="font-label text-label-sm uppercase text-on-surface-variant">Customer note</p>
+          <p className="whitespace-pre-line text-body-md text-on-surface">{order.customer_note}</p>
         </div>
       )}
     </Section>
-  );
-}
-
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section aria-label={title} className="flex flex-col gap-3 rounded-md border border-border-default bg-white p-4">
-      <h2 className="text-h3 font-bold text-text-primary">{title}</h2>
-      {children}
-    </section>
-  );
-}
-
-function Row({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex justify-between gap-3">
-      <dt className="text-text-secondary">{label}</dt>
-      <dd className="text-text-primary">{children}</dd>
-    </div>
   );
 }
 

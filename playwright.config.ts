@@ -86,6 +86,7 @@ export default defineConfig({
         "account-commerce-responsive.spec.ts",
         "public-forms-responsive.spec.ts",
         "admin-shell-responsive.spec.ts",
+        "admin-detail-responsive.spec.ts",
       ],
       // Uses the system-installed Microsoft Edge (Chromium-based) via
       // Playwright's "channel" option instead of Playwright's own bundled

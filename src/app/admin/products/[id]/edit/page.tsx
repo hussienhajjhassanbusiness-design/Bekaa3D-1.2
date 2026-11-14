@@ -1,5 +1,6 @@
 "use client";
 
+import { AdminBackLink } from "@/components/admin/adminUi";
 import { useState } from "react";
 import { useParams } from "next/navigation";
 import { LoadingSpinner } from "@/components/feedback/LoadingSpinner";
@@ -184,47 +185,61 @@ export default function AdminProductEditPage() {
 
   return (
     <>
-      <h1 className="text-h1 font-bold text-text-primary">Edit {product.name}</h1>
-      {bannerMessage && <Alert variant="error" message={bannerMessage} />}
-
-      <div className="mt-4 max-w-2xl">
-        <ProductForm
-          mode="edit"
-          value={form}
-          onChange={setForm}
-          categories={referenceData.categories}
-          materials={referenceData.materials}
-          colours={referenceData.colours}
-          fieldErrors={fieldErrors}
-          isSubmitting={updateMutation.isPending}
-          submitLabel="Save changes"
-          onSubmit={() => void handleSubmit()}
-        />
+      <div>
+        <AdminBackLink href={`/admin/products/${product.id}`}>Back to product</AdminBackLink>
       </div>
+      <h1 className="mt-2 break-words font-headline text-headline-lg text-on-surface">Edit {product.name}</h1>
+      {bannerMessage && (
+        <div className="mt-4">
+          <Alert variant="error" message={bannerMessage} />
+        </div>
+      )}
 
-      <section className="mt-8 max-w-2xl">
-        <h2 className="text-h3 font-bold text-text-primary">Images</h2>
-        {imageError && <Alert variant="error" message={imageError} />}
-        <div className="mt-4">
-          <FileUploader
-            label="Add images"
-            config={PRODUCT_IMAGE_UPLOAD_CONFIG}
-            driver={uploadDriver}
-            multiple
+      {/* D5 split: form (7) | images (5) from 1280; stacked below. */}
+      <div className="mt-6 grid max-w-content gap-gutter xl:grid-cols-12 xl:items-start">
+        <div className="min-w-0 xl:col-span-7">
+          <ProductForm
+            mode="edit"
+            value={form}
+            onChange={setForm}
+            categories={referenceData.categories}
+            materials={referenceData.materials}
+            colours={referenceData.colours}
+            fieldErrors={fieldErrors}
+            isSubmitting={updateMutation.isPending}
+            submitLabel="Save changes"
+            onSubmit={() => void handleSubmit()}
           />
         </div>
-        <div className="mt-4">
-          <ImageGallery
-            images={toGalleryImages(product.images, product.name)}
-            onReorder={(nextIds) => void handleReorder(nextIds)}
-            onSetCover={(imageId) => void handleSetCover(imageId)}
-            onDelete={handleDeleteImage}
-            onUpdateAltText={(imageId, nextAltText) => void handleUpdateAltText(imageId, nextAltText)}
-            isDeleting={deleteMutation.isPending}
-            isUpdatingAltText={altTextMutation.isPending}
-          />
-        </div>
-      </section>
+
+        <section
+          aria-labelledby="product-images-heading"
+          className="min-w-0 rounded-card border border-outline-variant/40 bg-surface-container-lowest p-5 shadow-sm tablet:p-6 xl:col-span-5"
+        >
+          <h2 id="product-images-heading" className="font-headline text-headline-md text-on-surface">
+            Images
+          </h2>
+          {imageError && (
+            <div className="mt-4">
+              <Alert variant="error" message={imageError} />
+            </div>
+          )}
+          <div className="mt-4">
+            <FileUploader label="Add images" config={PRODUCT_IMAGE_UPLOAD_CONFIG} driver={uploadDriver} multiple />
+          </div>
+          <div className="mt-4">
+            <ImageGallery
+              images={toGalleryImages(product.images, product.name)}
+              onReorder={(nextIds) => void handleReorder(nextIds)}
+              onSetCover={(imageId) => void handleSetCover(imageId)}
+              onDelete={handleDeleteImage}
+              onUpdateAltText={(imageId, nextAltText) => void handleUpdateAltText(imageId, nextAltText)}
+              isDeleting={deleteMutation.isPending}
+              isUpdatingAltText={altTextMutation.isPending}
+            />
+          </div>
+        </section>
+      </div>
     </>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState, type ReactNode } from "react";
+import { AdminBackLink, AdminField as Field } from "@/components/admin/adminUi";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AdminActionDialog } from "@/components/admin/orders/AdminActionDialog";
@@ -45,15 +46,6 @@ function statusError(error: unknown): string {
   if (e?.kind === "csrf" || (e?.kind === "http" && e.code === "CSRF_INVALID")) return MESSAGES.csrf;
   if (e?.kind === "http" && e.status === 409) return MESSAGES.conflict;
   return describeAdminError(error);
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div>
-      <dt className="text-label font-semibold uppercase tracking-label text-text-secondary">{label}</dt>
-      <dd className="mt-1 break-words text-body text-text-primary">{children}</dd>
-    </div>
-  );
 }
 
 export function ContactMessageView({ messageId }: { messageId: string }) {
@@ -107,21 +99,24 @@ export function ContactMessageView({ messageId }: { messageId: string }) {
 
   return (
     <>
-      <p>
-        <Link href="/admin/contact-messages" className="text-text-link underline">
-          ← Contact messages
-        </Link>
-      </p>
-      <h1 className="mt-2 break-words text-h1 font-bold text-text-primary">{message.subject ?? "No subject"}</h1>
+      <div>
+        <AdminBackLink href="/admin/contact-messages">Contact messages</AdminBackLink>
+      </div>
+      <h1 className="mt-2 break-words font-headline text-headline-lg text-on-surface">
+        {message.subject ?? "No subject"}
+      </h1>
       <div className="mt-2">
         <StatusBadge label={label} tone={tone} />
       </div>
 
-      <dl className="mt-4 grid gap-3 tablet:grid-cols-2">
+      <dl className="mt-6 grid gap-4 rounded-card border border-outline-variant/40 bg-surface-container-lowest p-5 shadow-sm tablet:p-6 tablet:grid-cols-2">
         <Field label="From">{message.name}</Field>
         <Field label="Email">
           {SIMPLE_EMAIL.test(message.email) ? (
-            <a href={`mailto:${message.email}`} className="text-text-link underline">
+            <a
+              href={`mailto:${message.email}`}
+              className="font-semibold text-primary underline underline-offset-2 hover:text-primary-container"
+            >
               {message.email}
             </a>
           ) : (
@@ -133,13 +128,19 @@ export function ContactMessageView({ messageId }: { messageId: string }) {
         <Field label="Last updated">{formatOrderDateTime(message.updated_at)}</Field>
         {message.order_id && (
           <Field label="Order problem report">
-            <Link href={`/admin/orders/${encodeURIComponent(message.order_id)}`} className="text-text-link underline">
+            <Link
+              href={`/admin/orders/${encodeURIComponent(message.order_id)}`}
+              className="font-semibold text-primary underline underline-offset-2 hover:text-primary-container"
+            >
               View order
             </Link>
             {message.user_id && (
               <>
                 {" · "}
-                <Link href={`/admin/customers/${encodeURIComponent(message.user_id)}`} className="text-text-link underline">
+                <Link
+                  href={`/admin/customers/${encodeURIComponent(message.user_id)}`}
+                  className="font-semibold text-primary underline underline-offset-2 hover:text-primary-container"
+                >
                   View customer
                 </Link>
               </>
@@ -148,21 +149,29 @@ export function ContactMessageView({ messageId }: { messageId: string }) {
         )}
       </dl>
 
-      <section aria-labelledby="contact-message-body" className="mt-6">
-        <h2 id="contact-message-body" className="text-h3 font-semibold text-text-primary">
+      <section
+        aria-labelledby="contact-message-body"
+        className="mt-6 flex flex-col gap-3 rounded-card border border-outline-variant/40 bg-surface-container-lowest p-5 shadow-sm tablet:p-6"
+      >
+        <h2 id="contact-message-body" className="font-headline text-headline-md text-on-surface">
           Message
         </h2>
-        <p className="mt-2 whitespace-pre-wrap break-words rounded-md border border-border-default p-4 text-body text-text-primary">
+        <p className="whitespace-pre-wrap break-words rounded-control bg-surface-container-low p-4 font-body text-body-md text-on-surface">
           {message.message}
         </p>
       </section>
 
       {actions.length > 0 && (
-        <section aria-labelledby="contact-message-actions" className="mt-6">
-          <h2 id="contact-message-actions" className="text-h3 font-semibold text-text-primary">
+        <section
+          aria-labelledby="contact-message-actions"
+          className="mt-6 flex flex-col gap-3 rounded-card border border-outline-variant/40 bg-surface-container-lowest p-5 shadow-sm tablet:p-6"
+        >
+          <h2 id="contact-message-actions" className="font-headline text-headline-md text-on-surface">
             Status
           </h2>
-          <p className="mt-1 text-caption text-text-secondary">Status only moves forward and can&apos;t be undone.</p>
+          <p className="mt-1 text-caption text-on-surface-variant">
+            Status only moves forward and can&apos;t be undone.
+          </p>
           <div className="mt-2 flex flex-wrap gap-2">
             {actions.map((action, index) => (
               <Button
@@ -186,8 +195,8 @@ export function ContactMessageView({ messageId }: { messageId: string }) {
         title={target ? `${target.label}?` : ""}
         description={
           <p>
-            The message becomes “{target ? describeContactMessageStatus(target.nextStatus).label : ""}”. It can&apos;t be moved
-            back.
+            The message becomes “{target ? describeContactMessageStatus(target.nextStatus).label : ""}”. It can&apos;t
+            be moved back.
           </p>
         }
         confirmLabel={target?.label ?? "Confirm"}

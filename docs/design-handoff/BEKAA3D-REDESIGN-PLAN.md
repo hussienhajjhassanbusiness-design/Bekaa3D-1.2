@@ -479,6 +479,38 @@ Not built: the Stitch Admin Login (admins use `/login` + MFA), social login, rem
 
 **Deferred:** the reference-data card repeats the page title as its h2 (kept: the component's tests and region name rely on it); detail/form pages and Settings are Batch 10.
 
+### Batch 10 — Admin details, forms, actions, financial workflows: COMPLETE
+
+**Scope:** `/admin/orders/[id]`, `/admin/payments/[id]`, `/admin/refunds/[id]`, `/admin/offers/[id]`, `/admin/contact-messages/[id]`, `/admin/custom-requests/[id]`, `/admin/customers/[id]`, `/admin/products/new`, `/admin/products/[id]`, `/admin/products/[id]/edit` (form, images, uploader, gallery), `/admin/settings`, plus the shared action dialog, line / order-level actions (fulfilment transitions, cash handover, cancel), payment recovery (check with provider, confirm by hand, manual release, late capture), create refund, chargebacks, refund settle / fail / void / reissue, internal notes and setting controls. `/admin/mfa/setup` and `/admin/mfa/recovery-codes` already use the Batch 4 auth card (unchanged). Visual only: no endpoint, request body, idempotency key, CSRF header, confirmation, busy lock, transition source (`available_actions` / `allowed_actions` / eligibility helpers), amount or Problem.code mapping changed; every amount is a server field; no optimistic success. `src/lib/**` untouched. No new backend capability: no STL upload/download/entitlement (ADR-019), no shipping settings (ADR-024), no contact assignments/replies, no chargeback update/resolve, no refund void/reissue workaround.
+
+**Shared building blocks (new `components/admin/adminUi.tsx`, presentation only):** `AdminSection` (white card named by its visible h2, optional description, `tone="danger"` = error top rule for financial/irreversible areas), `AdminRow` (mono label / right-aligned value; `breakAll` for opaque references), `AdminField` (stacked mono label + value), `AdminBackLink`, `ADMIN_LINK_CLASSES`. They replace six identical page-local `Section` / `Row` / `Field` helpers (same names via import aliases, same semantics: `aria-label` regions, `<dl>` content).
+
+**Token pass:** every Batch 10 file moved off the legacy palette/type (`text-text-*`, `text-h1/h3`, `text-body`, `border-border-default`, `rounded-md`, `bg-white`, `text-danger`, `bg-brand-dark-green`, `bg-neutral-200`) to the Stitch tokens. Raw `<input>/<textarea>` controls (product description / SEO description, internal notes, combobox, numeric setting) use the shared `fieldControlClasses` (48px, accessible border, error ring). `text-caption` (a defined alias) is left for the Batch 11 alias removal.
+
+**Order detail / fulfilment:** back link, h1 + status pill, placed line; Order actions card; Items | Payment split from 1024 (384px side column); line actions still exactly the server's `available_actions`; cash handover still needs the exact amount; Fulfilment facts as mono rows; History as a §45 timeline (`<ol>`, decorative dots); internal note editor with a lock glyph (label text unchanged). Refund / chargeback lists and `CreateRefund` / `CreateChargeback` flows unchanged.
+
+**Payments / refunds:** detail facts on the shared rows (references break anywhere); "Payment actions" and "Refund actions" sections danger-toned; recovery confirmation checkbox 20px with its label; mock-provider restrictions and eligibility unchanged.
+
+**Action dialog (`AdminActionDialog`):** Batch 5 dialog language — headline-md title, description, divided footer, outline "Back" + primary/destructive confirm, stacked full-width below 768; DialogShell focus trap / Escape / busy lock / focus return unchanged.
+
+**Offers:** the admin offer page now uses the Batch 7 `account` appearance of `OfferFacts` / `OfferHistory` inside an "Offer details" card, a "Your reply" card and the History timeline (Batch 7 deferral closed); moves still exactly `allowed_actions`; no local minimum.
+
+**Contact / BYI detail:** back link, h1, status, facts card, message in a tinted block, Status / Pipeline / Images / Notes as cards; forward-only status moves, quote MoneyInput, won/lost, notes and admin-auth image download unchanged (images still never inlined).
+
+**Customer detail:** back link, email h1 (breaks anywhere), facts card, "Customer records" as outline button-links (same URLs), an "Account access" danger card with Deactivate (outline, error ink) / Reactivate (primary); confirmation copy unchanged. No analytics.
+
+**Products:** detail header with a real link styled as the Edit button (was a button nested in a link) and an outline Delete (ConfirmDialog unchanged); new/edit forms as card sections (type selector as radio cards, 44px checkbox rows), lg submit; edit page D5 split — form (7) | Images card (5) from 1280; gallery rows wrap (outline 44px Move up / Move down / Set as cover / Delete in error ink; alt-text editor wraps). Upload / delete / retry / reorder semantics unchanged.
+
+**Settings:** h1 + factual description, rows in one divided card (`max-w-form`), outline Save per row with a "Saved" check, switch recoloured primary / outline (track at least 3:1), Security card with an outline "Regenerate recovery codes" link. Only the settings the API returns (no free-shipping threshold or shipping fee).
+
+**Responsive QA** (production build; 320 / 375 / 768 / 1024 / 1280 / 1440, new `admin-detail-responsive.spec.ts`; screenshots reviewed at 1280): order detail with six long-named lines, long notes and a long customer email; a contact message with an unbroken 120-character token; settings; new-product form; the cash-handover dialog at 320 (inside the viewport, 44px buttons, Escape closes). **Found and fixed:** a 125px page overflow at 320 on order detail from an unbroken customer email — inherited `break-words` on the admin content region and detail roots (tables keep their sizing).
+
+**Tests:** unit 2410 → **2414** (+4: new `adminUi.test`). No existing assertion changed. E2E 240 → **245** (+5: `admin-detail-responsive.spec.ts`). All admin workflow specs (`admin-orders`, `admin-payments`, `admin-operations`, `admin-routes`, `contact`, `bring-your-idea`, `offers`) pass unchanged.
+
+**Gate:** lint ✓ (0/0) · typecheck ✓ · unit **2414/2414** (241 files) · build ✓ · E2E **245/245**.
+
+**Deferred (Batch 11):** `text-caption` / legacy alias removal; the MFA countdown announcement; payment-detail and refund-detail width sweeps (their flows are covered by `admin-payments.spec.ts`); the whole-app consistency sweep.
+
 ---
 
 ## 1. High-risk areas and how to restyle them safely

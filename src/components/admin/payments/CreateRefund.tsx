@@ -51,7 +51,8 @@ export function CreateRefund({ order }: { order: AdminOrderDetailDTO }) {
       .map((line) => ({ order_item_id: line.id, amount_cents: amounts[line.id] ?? 0 }))
       .filter((item) => item.amount_cents > 0);
     for (const item of items) {
-      if (item.amount_cents > (serverLines[item.order_item_id] ?? 0)) next[item.order_item_id] = "More than this item's refundable balance.";
+      if (item.amount_cents > (serverLines[item.order_item_id] ?? 0))
+        next[item.order_item_id] = "More than this item's refundable balance.";
     }
     const total = items.reduce((sum, item) => sum + item.amount_cents, 0);
     if (items.length === 0) next.form = "Enter an amount for at least one item.";
@@ -59,7 +60,10 @@ export function CreateRefund({ order }: { order: AdminOrderDetailDTO }) {
     if (!reason.trim()) next.reason = "Enter a reason.";
     setErrors(next);
     if (Object.keys(next).length > 0) return;
-    const body: RefundCreateDTO = { items: [...items].sort((a, b) => a.order_item_id.localeCompare(b.order_item_id)), reason: reason.trim() };
+    const body: RefundCreateDTO = {
+      items: [...items].sort((a, b) => a.order_item_id.localeCompare(b.order_item_id)),
+      reason: reason.trim(),
+    };
     const key = tracker.keyFor(JSON.stringify({ order: order.id, ...body }));
     let failure: unknown = null;
     const created = await write.run(async () => {
@@ -99,8 +103,9 @@ export function CreateRefund({ order }: { order: AdminOrderDetailDTO }) {
         title="Record a refund?"
         description={
           <p>
-            Pay the refund in the provider&apos;s dashboard (or hand back the cash), then mark it settled from the refund page.
-            Left to refund on the payment: <PriceDisplay amountCents={balance.payment_cents} currency={currency} />.
+            Pay the refund in the provider&apos;s dashboard (or hand back the cash), then mark it settled from the
+            refund page. Left to refund on the payment:{" "}
+            <PriceDisplay amountCents={balance.payment_cents} currency={currency} />.
           </p>
         }
         confirmLabel="Record refund"

@@ -1,5 +1,6 @@
 "use client";
 
+import { AdminBackLink, AdminRow, AdminSection as Section } from "@/components/admin/adminUi";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { AdminActionDialog } from "@/components/admin/orders/AdminActionDialog";
@@ -35,13 +36,13 @@ export function AdminPaymentView({ detail }: { detail: AdminPaymentDetailDTO }) 
   const orderStatus = describeOrderStatus(order.status);
 
   return (
-    <article aria-labelledby="payment-heading" className="flex flex-col gap-6">
+    <article aria-labelledby="payment-heading" className="flex min-w-0 flex-col gap-6 break-words">
       <header className="flex flex-col gap-2">
-        <Link href="/admin/payments" className="self-start text-body text-text-link underline">
-          Back to payments
-        </Link>
+        <div>
+          <AdminBackLink href="/admin/payments">Back to payments</AdminBackLink>
+        </div>
         <div className="flex flex-wrap items-center gap-3">
-          <h1 id="payment-heading" className="text-h1 font-bold text-text-primary">
+          <h1 id="payment-heading" className="break-words font-headline text-headline-lg text-on-surface">
             Payment for order {order.order_number}
           </h1>
           <StatusBadge label={status.label} tone={status.tone} />
@@ -52,7 +53,7 @@ export function AdminPaymentView({ detail }: { detail: AdminPaymentDetailDTO }) 
 
       <div className="grid gap-6 desktop:grid-cols-2">
         <Section title="Payment">
-          <dl className="flex flex-col gap-2 text-body">
+          <dl className="flex flex-col gap-2 text-body-md">
             <Row label="Provider">{describePaymentProvider(payment.provider)}</Row>
             <Row label="Amount">
               <PriceDisplay amountCents={payment.amount_cents} currency={payment.currency} />
@@ -67,14 +68,21 @@ export function AdminPaymentView({ detail }: { detail: AdminPaymentDetailDTO }) 
             {payment.verified_at && <Row label="Verified">{formatOrderDateTime(payment.verified_at)}</Row>}
             {payment.failed_at && <Row label="Failed">{formatOrderDateTime(payment.failed_at)}</Row>}
             {payment.expired_at && <Row label="Expired">{formatOrderDateTime(payment.expired_at)}</Row>}
-            {payment.late_captured_at && <Row label="Captured late">{formatOrderDateTime(payment.late_captured_at)}</Row>}
-            {payment.unprocessed_event_count > 0 && <Row label="Unprocessed events">{payment.unprocessed_event_count}</Row>}
+            {payment.late_captured_at && (
+              <Row label="Captured late">{formatOrderDateTime(payment.late_captured_at)}</Row>
+            )}
+            {payment.unprocessed_event_count > 0 && (
+              <Row label="Unprocessed events">{payment.unprocessed_event_count}</Row>
+            )}
           </dl>
         </Section>
         <Section title="Order">
-          <dl className="flex flex-col gap-2 text-body">
+          <dl className="flex flex-col gap-2 text-body-md">
             <Row label="Order">
-              <Link href={`/admin/orders/${order.id}`} className="text-text-link underline">
+              <Link
+                href={`/admin/orders/${order.id}`}
+                className="font-semibold text-primary underline underline-offset-2 hover:text-primary-container"
+              >
                 {order.order_number}
               </Link>
             </Row>
@@ -92,15 +100,19 @@ export function AdminPaymentView({ detail }: { detail: AdminPaymentDetailDTO }) 
 
       <Section title="Provider events">
         {detail.events.length === 0 ? (
-          <p className="text-caption text-text-secondary">No provider events received.</p>
+          <p className="text-caption text-on-surface-variant">No provider events received.</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {detail.events.map((e) => (
-              <li key={e.id} className="text-body text-text-primary">
+              <li key={e.id} className="text-body-md text-on-surface">
                 {e.event_type ?? "Event"} · received {formatOrderDateTime(e.received_at)}
-                <span className="block text-caption text-text-secondary">
+                <span className="block text-caption text-on-surface-variant">
                   {e.signature_valid === false ? "Invalid signature · " : ""}
-                  {e.processing_error ? "Processing failed" : e.processed_at ? `Processed ${formatOrderDateTime(e.processed_at)}` : "Not processed yet"}
+                  {e.processing_error
+                    ? "Processing failed"
+                    : e.processed_at
+                      ? `Processed ${formatOrderDateTime(e.processed_at)}`
+                      : "Not processed yet"}
                 </span>
               </li>
             ))}
@@ -110,13 +122,13 @@ export function AdminPaymentView({ detail }: { detail: AdminPaymentDetailDTO }) 
 
       <Section title="History">
         {detail.history.length === 0 ? (
-          <p className="text-caption text-text-secondary">No recorded actions.</p>
+          <p className="text-caption text-on-surface-variant">No recorded actions.</p>
         ) : (
           <ol className="flex flex-col gap-2">
             {detail.history.map((h, i) => (
-              <li key={`${h.created_at}-${i}`} className="text-body text-text-primary">
+              <li key={`${h.created_at}-${i}`} className="text-body-md text-on-surface">
                 {describePaymentHistoryAction(h.action)}
-                <span className="block text-caption text-text-secondary">
+                <span className="block text-caption text-on-surface-variant">
                   {formatOrderDateTime(h.created_at)} · {h.actor_user_id ? "Staff" : "System"}
                 </span>
               </li>
@@ -156,31 +168,50 @@ function PaymentActions({ detail }: { detail: AdminPaymentDetailDTO }) {
     if (reason.trim().length < 10) next.reason = "Explain in at least 10 characters.";
     setErrors(next);
     if (Object.keys(next).length > 0) return;
-    const body = { provider_reference: reference.trim(), verified_amount_cents: cents ?? 0, verified_currency: detail.payment.currency, reason: reason.trim() };
+    const body = {
+      provider_reference: reference.trim(),
+      verified_amount_cents: cents ?? 0,
+      verified_currency: detail.payment.currency,
+      reason: reason.trim(),
+    };
     if (await write.run(() => adminPaymentsApi.confirmPayment(detail.payment.id, body))) setOpen(null);
   }
 
   const error = write.state.kind === "error" ? write.state.message : null;
   return (
-    <section aria-label="Payment actions" className="flex flex-col gap-3 rounded-md border border-border-default bg-white p-4">
-      <h2 className="text-h3 font-bold text-text-primary">Payment actions</h2>
-      {queued && <Alert variant="info" message="Check requested. The result appears here once the provider answers; refresh in a moment." />}
+    <section
+      aria-label="Payment actions"
+      className="flex flex-col gap-3 rounded-card border border-error/30 border-t-4 border-t-error bg-surface-container-lowest p-5 shadow-sm tablet:p-6"
+    >
+      <h2 className="font-headline text-headline-md text-on-surface">Payment actions</h2>
+      {queued && (
+        <Alert
+          variant="info"
+          message="Check requested. The result appears here once the provider answers; refresh in a moment."
+        />
+      )}
       <div className="flex flex-wrap gap-2">
         {actions.includes("reconcile") && (
-          <Button type="button" onClick={() => {
+          <Button
+            type="button"
+            onClick={() => {
               write.reset();
               setOpen("reconcile");
-            }}>
+            }}
+          >
             Check with provider
           </Button>
         )}
         <PaymentRecoveryActions detail={detail} />
         {actions.includes("confirm") && (
-          <Button type="button" onClick={() => {
+          <Button
+            type="button"
+            onClick={() => {
               write.reset();
               setErrors({});
               setOpen("confirm");
-            }}>
+            }}
+          >
             Confirm by hand
           </Button>
         )}
@@ -188,7 +219,9 @@ function PaymentActions({ detail }: { detail: AdminPaymentDetailDTO }) {
       <AdminActionDialog
         open={open === "reconcile"}
         title="Check this payment with the provider?"
-        description={<p>Asks the provider for this payment&apos;s status. The result is applied by the server when it answers.</p>}
+        description={
+          <p>Asks the provider for this payment&apos;s status. The result is applied by the server when it answers.</p>
+        }
         confirmLabel="Check with provider"
         pending={write.state.kind === "pending"}
         error={error}
@@ -198,35 +231,47 @@ function PaymentActions({ detail }: { detail: AdminPaymentDetailDTO }) {
       <AdminActionDialog
         open={open === "confirm"}
         title="Confirm this payment by hand?"
-        description={<p>Only after checking the provider&apos;s dashboard. The amount must match the payment exactly.</p>}
+        description={
+          <p>Only after checking the provider&apos;s dashboard. The amount must match the payment exactly.</p>
+        }
         confirmLabel="Confirm payment"
         pending={write.state.kind === "pending"}
         error={error}
         onConfirm={() => void confirm()}
         onClose={() => setOpen(null)}
       >
-        <TextField label="Provider reference" value={reference} maxLength={255} onChange={(e) => setReference(e.target.value)} error={errors.reference} />
-        <MoneyInput label="Amount the provider shows" currencyLabel={detail.payment.currency} valueCents={cents} onChangeCents={setCents} error={errors.amount} />
-        <TextAreaField label="Reason" rows={3} maxLength={REFUND_TEXT_MAX} value={reason} onChange={(e) => setReason(e.target.value)} error={errors.reason} />
+        <TextField
+          label="Provider reference"
+          value={reference}
+          maxLength={255}
+          onChange={(e) => setReference(e.target.value)}
+          error={errors.reference}
+        />
+        <MoneyInput
+          label="Amount the provider shows"
+          currencyLabel={detail.payment.currency}
+          valueCents={cents}
+          onChangeCents={setCents}
+          error={errors.amount}
+        />
+        <TextAreaField
+          label="Reason"
+          rows={3}
+          maxLength={REFUND_TEXT_MAX}
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          error={errors.reason}
+        />
       </AdminActionDialog>
     </section>
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section aria-label={title} className="flex flex-col gap-3 rounded-md border border-border-default bg-white p-4">
-      <h2 className="text-h3 font-bold text-text-primary">{title}</h2>
-      {children}
-    </section>
-  );
-}
-
+// Provider references and ids are long opaque strings: break anywhere.
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex justify-between gap-3">
-      <dt className="text-text-secondary">{label}</dt>
-      <dd className="break-all text-right text-text-primary">{children}</dd>
-    </div>
+    <AdminRow label={label} breakAll>
+      {children}
+    </AdminRow>
   );
 }

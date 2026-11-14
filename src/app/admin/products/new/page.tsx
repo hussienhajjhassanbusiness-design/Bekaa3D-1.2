@@ -1,5 +1,6 @@
 "use client";
 
+import { AdminBackLink } from "@/components/admin/adminUi";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Alert } from "@/components/feedback/Alert";
@@ -56,9 +57,16 @@ export default function AdminNewProductPage() {
 
   return (
     <>
-      <h1 className="text-h1 font-bold text-text-primary">New product</h1>
-      {bannerMessage && <Alert variant="error" message={bannerMessage} />}
-      <div className="mt-4 max-w-2xl">
+      <div>
+        <AdminBackLink href="/admin/products">Products</AdminBackLink>
+      </div>
+      <h1 className="mt-2 break-words font-headline text-headline-lg text-on-surface">New product</h1>
+      {bannerMessage && (
+        <div className="mt-4">
+          <Alert variant="error" message={bannerMessage} />
+        </div>
+      )}
+      <div className="mt-6 max-w-form">
         <ProductForm
           mode="create"
           value={form}

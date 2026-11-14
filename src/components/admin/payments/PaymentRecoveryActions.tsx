@@ -35,14 +35,20 @@ const PAID_LIKE = new Set(["paid", "partially_refunded", "refunded"]);
 export function PaymentRecoveryActions({ detail }: { detail: AdminPaymentDetailDTO }) {
   const canRelease = detail.available_actions.includes("release_order");
   const canCapture =
-    detail.available_actions.includes("confirm") && !PAID_LIKE.has(detail.payment.status) && detail.payment.late_captured_at === null;
+    detail.available_actions.includes("confirm") &&
+    !PAID_LIKE.has(detail.payment.status) &&
+    detail.payment.late_captured_at === null;
   const [open, setOpen] = useState<"release" | "capture" | null>(null);
   if (!canRelease && !canCapture && open === null) return null;
 
   return (
     <>
-      {(canRelease || open === "release") && <ReleaseOrder detail={detail} open={open === "release"} setOpen={(v) => setOpen(v ? "release" : null)} />}
-      {(canCapture || open === "capture") && <RecordCapture detail={detail} open={open === "capture"} setOpen={(v) => setOpen(v ? "capture" : null)} />}
+      {(canRelease || open === "release") && (
+        <ReleaseOrder detail={detail} open={open === "release"} setOpen={(v) => setOpen(v ? "release" : null)} />
+      )}
+      {(canCapture || open === "capture") && (
+        <RecordCapture detail={detail} open={open === "capture"} setOpen={(v) => setOpen(v ? "capture" : null)} />
+      )}
     </>
   );
 }
@@ -93,8 +99,8 @@ function ReleaseOrder({ detail, open, setOpen }: Control) {
         title="Release this unpaid order?"
         description={
           <p>
-            Cancels order {detail.order.order_number}, which was never paid, and frees its stock. The provider is not contacted. This
-            can&apos;t be undone.
+            Cancels order {detail.order.order_number}, which was never paid, and frees its stock. The provider is not
+            contacted. This can&apos;t be undone.
           </p>
         }
         confirmLabel="Release order"
@@ -114,13 +120,19 @@ function ReleaseOrder({ detail, open, setOpen }: Control) {
         />
         {pendingEvents > 0 && (
           <div>
-            <label className="flex items-start gap-2 text-body text-text-primary">
-              <input type="checkbox" checked={reviewed} onChange={(e) => setReviewed(e.target.checked)} className="mt-1" />
+            <label className="flex cursor-pointer items-start gap-3 font-body text-body-md text-on-surface">
+              <input
+                type="checkbox"
+                checked={reviewed}
+                onChange={(e) => setReviewed(e.target.checked)}
+                className="mt-0.5 h-5 w-5 shrink-0 accent-primary"
+              />
               <span>
-                I reviewed the {pendingEvents} unprocessed provider event{pendingEvents === 1 ? "" : "s"} for this payment.
+                I reviewed the {pendingEvents} unprocessed provider event{pendingEvents === 1 ? "" : "s"} for this
+                payment.
               </span>
             </label>
-            {errors.reviewed && <p className="mt-1 text-caption text-danger">{errors.reviewed}</p>}
+            {errors.reviewed && <p className="mt-1 text-caption text-error">{errors.reviewed}</p>}
           </div>
         )}
       </AdminActionDialog>
@@ -161,9 +173,12 @@ function RecordCapture({ detail, open, setOpen }: Control) {
   return (
     <>
       {refundId && (
-        <p className="text-body text-text-primary">
+        <p className="text-body-md text-on-surface">
           Late capture recorded.{" "}
-          <Link href={`/admin/refunds/${refundId}`} className="text-text-link underline">
+          <Link
+            href={`/admin/refunds/${refundId}`}
+            className="font-semibold text-primary underline underline-offset-2 hover:text-primary-container"
+          >
             Open its refund obligation
           </Link>
         </p>
@@ -184,8 +199,8 @@ function RecordCapture({ detail, open, setOpen }: Control) {
         title="Record a late capture?"
         description={
           <p>
-            Use only when the provider&apos;s dashboard shows money captured for this attempt with a different amount. A refund
-            obligation is created for you to pay back and settle.
+            Use only when the provider&apos;s dashboard shows money captured for this attempt with a different amount. A
+            refund obligation is created for you to pay back and settle.
           </p>
         }
         confirmLabel="Record late capture"
@@ -194,9 +209,28 @@ function RecordCapture({ detail, open, setOpen }: Control) {
         onConfirm={() => void confirm()}
         onClose={() => setOpen(false)}
       >
-        <MoneyInput label="Captured amount" currencyLabel={detail.payment.currency} valueCents={cents} onChangeCents={setCents} error={errors.amount} />
-        <TextField label="Dashboard reference" maxLength={255} value={reference} onChange={(e) => setReference(e.target.value)} error={errors.reference} />
-        <TextAreaField label="Reason" rows={3} maxLength={REFUND_TEXT_MAX} value={reason} onChange={(e) => setReason(e.target.value)} error={errors.reason} />
+        <MoneyInput
+          label="Captured amount"
+          currencyLabel={detail.payment.currency}
+          valueCents={cents}
+          onChangeCents={setCents}
+          error={errors.amount}
+        />
+        <TextField
+          label="Dashboard reference"
+          maxLength={255}
+          value={reference}
+          onChange={(e) => setReference(e.target.value)}
+          error={errors.reference}
+        />
+        <TextAreaField
+          label="Reason"
+          rows={3}
+          maxLength={REFUND_TEXT_MAX}
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          error={errors.reason}
+        />
       </AdminActionDialog>
     </>
   );

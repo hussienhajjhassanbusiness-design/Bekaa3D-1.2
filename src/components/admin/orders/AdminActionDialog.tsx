@@ -49,20 +49,25 @@ export function AdminActionDialog({
     <DialogShell open={open} onClose={onClose} isBusy={pending} labelledBy={titleId} describedBy={descriptionId}>
       <form noValidate onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div>
-          <h2 id={titleId} className="text-h3 font-bold text-text-primary">
+          <h2 id={titleId} className="font-headline text-headline-md text-on-surface">
             {title}
           </h2>
-          <div id={descriptionId} className="mt-2 text-body text-text-secondary">
+          <div id={descriptionId} className="mt-2 break-words font-body text-body-md text-on-surface-variant">
             {description}
           </div>
         </div>
         {children}
         {error && <Alert variant="error" message={error} />}
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onClose} disabled={pending}>
+        <div className="flex flex-col-reverse gap-3 border-t border-outline-variant/30 pt-4 tablet:flex-row tablet:justify-end">
+          <Button type="button" variant="outline" onClick={onClose} disabled={pending} className="w-full tablet:w-auto">
             Back
           </Button>
-          <Button type="submit" variant={destructive ? "destructive" : "primary"} isLoading={pending}>
+          <Button
+            type="submit"
+            variant={destructive ? "destructive" : "primary"}
+            isLoading={pending}
+            className="w-full tablet:w-auto"
+          >
             {confirmLabel}
           </Button>
         </div>

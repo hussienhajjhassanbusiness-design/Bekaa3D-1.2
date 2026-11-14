@@ -7,7 +7,11 @@ import { MoneyInput } from "@/components/forms/MoneyInput";
 import { SelectField } from "@/components/forms/SelectField";
 import { TextAreaField } from "@/components/forms/TextAreaField";
 import { adminOrdersApi } from "@/lib/admin/orders/adminOrdersApi";
-import { canRecordCashHandover, describeCancelReason, orderCancelOffer } from "@/lib/admin/orders/adminOrderPresentation";
+import {
+  canRecordCashHandover,
+  describeCancelReason,
+  orderCancelOffer,
+} from "@/lib/admin/orders/adminOrderPresentation";
 import type { AdminOrderDetailDTO, CancelReason } from "@/lib/admin/orders/adminOrderTypes";
 import { useAdminOrderWrite } from "@/lib/admin/orders/useAdminOrders";
 import { AdminActionDialog } from "./AdminActionDialog";
@@ -40,8 +44,11 @@ export function OrderLevelActions({ order }: { order: AdminOrderDetailDTO }) {
   if (!showHandover && !showCancel) return null;
 
   return (
-    <section aria-label="Order actions" className="flex flex-col gap-3 rounded-md border border-border-default bg-white p-4">
-      <h2 className="text-h3 font-bold text-text-primary">Order actions</h2>
+    <section
+      aria-label="Order actions"
+      className="flex flex-col gap-3 rounded-card border border-outline-variant/40 bg-surface-container-lowest p-5 shadow-sm tablet:p-6"
+    >
+      <h2 className="font-headline text-headline-md text-on-surface">Order actions</h2>
       <div className="flex flex-col gap-2 tablet:flex-row tablet:flex-wrap">
         {showHandover && (
           <CashHandover order={order} open={open === "handover"} setOpen={(v) => setOpen(v ? "handover" : null)} />
@@ -179,8 +186,8 @@ function CancelOrder({
         description={
           <p>
             Cancels every printed item not yet shipped or collected. STL files are not affected.
-            {order.payment_reached_paid ? " The cancelled items will be refunded to the customer." : ""} This can&apos;t be
-            undone.
+            {order.payment_reached_paid ? " The cancelled items will be refunded to the customer." : ""} This can&apos;t
+            be undone.
           </p>
         }
         confirmLabel="Cancel order"

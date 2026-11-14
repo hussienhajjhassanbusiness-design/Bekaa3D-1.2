@@ -1,5 +1,6 @@
 "use client";
 
+import { Icon } from "@/components/ui/Icon";
 import { useState } from "react";
 import { Button } from "@/components/forms/Button";
 import { Alert } from "@/components/feedback/Alert";
@@ -35,13 +36,21 @@ export function SettingRow({ setting, onSave, status = "idle", errorMessage }: S
   }
 
   return (
-    <div data-testid="setting-row" className="flex flex-col gap-3 border-b border-border-default py-4 tablet:flex-row tablet:items-start tablet:justify-between">
+    <div
+      data-testid="setting-row"
+      className="flex flex-col gap-3 py-5 tablet:flex-row tablet:items-start tablet:justify-between"
+    >
       <SettingControl setting={draftSetting} onChange={setDraftValue} />
-      <div className="flex items-center gap-2">
-        <Button onClick={handleSave} isLoading={status === "saving"}>
+      <div className="flex shrink-0 items-center gap-3 tablet:pt-6">
+        <Button variant="outline" onClick={handleSave} isLoading={status === "saving"}>
           Save
         </Button>
-        {status === "saved" && <span className="text-caption text-success">Saved</span>}
+        {status === "saved" && (
+          <span className="inline-flex items-center gap-1 font-label text-label-sm uppercase text-primary">
+            <Icon name="check-circle" className="h-4 w-4" />
+            Saved
+          </span>
+        )}
       </div>
       {status === "error" && errorMessage && <Alert variant="error" message={errorMessage} />}
     </div>

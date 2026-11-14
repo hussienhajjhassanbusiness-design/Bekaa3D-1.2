@@ -11,7 +11,11 @@ import { TextAreaField } from "@/components/forms/TextAreaField";
 import { TextField } from "@/components/forms/TextField";
 import type { AdminOrderDetailDTO } from "@/lib/admin/orders/adminOrderTypes";
 import { adminPaymentsApi } from "@/lib/admin/payments/adminPaymentsApi";
-import { readAvailableBalances, readChargeableCents, REFUND_TEXT_MAX } from "@/lib/admin/payments/adminPaymentPresentation";
+import {
+  readAvailableBalances,
+  readChargeableCents,
+  REFUND_TEXT_MAX,
+} from "@/lib/admin/payments/adminPaymentPresentation";
 import type { ChargebackCreateDTO } from "@/lib/admin/payments/adminPaymentTypes";
 import { useRefundAttemptTracker } from "@/lib/admin/payments/refundIdempotency";
 import { useAdminFinancialWrite } from "@/lib/admin/payments/useAdminPayments";
@@ -32,7 +36,9 @@ const DISPUTE_REFERENCE_MAX = 200;
 export function CreateChargeback({ order }: { order: AdminOrderDetailDTO }) {
   const write = useAdminFinancialWrite();
   const tracker = useRefundAttemptTracker();
-  const online = order.payments.filter((p) => p.provider !== "cash" && ["paid", "partially_refunded", "refunded"].includes(p.status));
+  const online = order.payments.filter(
+    (p) => p.provider !== "cash" && ["paid", "partially_refunded", "refunded"].includes(p.status)
+  );
   const [open, setOpen] = useState(false);
   const [paymentId, setPaymentId] = useState(online[0]?.id ?? "");
   const [reference, setReference] = useState("");
@@ -41,7 +47,9 @@ export function CreateChargeback({ order }: { order: AdminOrderDetailDTO }) {
   const [reason, setReason] = useState("");
   const [amounts, setAmounts] = useState<Record<string, number | null>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [server, setServer] = useState<{ chargeable: number | null; balances: Record<string, number> | null } | null>(null);
+  const [server, setServer] = useState<{ chargeable: number | null; balances: Record<string, number> | null } | null>(
+    null
+  );
   const [recorded, setRecorded] = useState(false);
 
   if (online.length === 0 && !open) return null;
@@ -91,7 +99,9 @@ export function CreateChargeback({ order }: { order: AdminOrderDetailDTO }) {
 
   return (
     <>
-      {recorded && <Alert variant="success" message="Chargeback recorded. The order's refunds and balances are updated below." />}
+      {recorded && (
+        <Alert variant="success" message="Chargeback recorded. The order's refunds and balances are updated below." />
+      )}
       {online.length > 0 && (
         <Button
           type="button"
@@ -112,8 +122,8 @@ export function CreateChargeback({ order }: { order: AdminOrderDetailDTO }) {
         title="Record a chargeback?"
         description={
           <p>
-            Record a dispute the bank already charged back. It voids this payment&apos;s open refunds and absorbs them. A recorded
-            chargeback can&apos;t be edited.
+            Record a dispute the bank already charged back. It voids this payment&apos;s open refunds and absorbs them.
+            A recorded chargeback can&apos;t be edited.
           </p>
         }
         confirmLabel="Record chargeback"
@@ -124,7 +134,12 @@ export function CreateChargeback({ order }: { order: AdminOrderDetailDTO }) {
         onClose={() => setOpen(false)}
       >
         {online.length > 1 && (
-          <SelectField label="Payment" value={paymentId} onChange={(e) => setPaymentId(e.target.value)} error={errors.payment}>
+          <SelectField
+            label="Payment"
+            value={paymentId}
+            onChange={(e) => setPaymentId(e.target.value)}
+            error={errors.payment}
+          >
             {online.map((p) => (
               <option key={p.id} value={p.id}>
                 {`${(p.amount.amount_cents / 100).toFixed(2)} ${p.amount.currency} · ${new Date(p.initiated_at).toLocaleDateString("en-GB")}`}
@@ -139,16 +154,28 @@ export function CreateChargeback({ order }: { order: AdminOrderDetailDTO }) {
           onChange={(e) => setReference(e.target.value)}
           error={errors.reference}
         />
-        <MoneyInput label="Amount charged back" currencyLabel={currency} valueCents={charged} onChangeCents={setCharged} error={errors.charged} />
-        <TextField label="Received at" type="datetime-local" value={receivedAt} onChange={(e) => setReceivedAt(e.target.value)} error={errors.received} />
+        <MoneyInput
+          label="Amount charged back"
+          currencyLabel={currency}
+          valueCents={charged}
+          onChangeCents={setCharged}
+          error={errors.charged}
+        />
+        <TextField
+          label="Received at"
+          type="datetime-local"
+          value={receivedAt}
+          onChange={(e) => setReceivedAt(e.target.value)}
+          error={errors.received}
+        />
         {server?.chargeable !== null && server?.chargeable !== undefined && (
-          <p className="text-body text-text-primary">
-            Items must total <PriceDisplay amountCents={server.chargeable} currency={currency} /> (the charge left after the open
-            refunds).
+          <p className="text-body-md text-on-surface">
+            Items must total <PriceDisplay amountCents={server.chargeable} currency={currency} /> (the charge left after
+            the open refunds).
           </p>
         )}
         <fieldset className="flex flex-col gap-2">
-          <legend className="text-label font-semibold uppercase tracking-label text-text-primary">Items covered (optional)</legend>
+          <legend className="font-label text-label-sm uppercase text-on-surface">Items covered (optional)</legend>
           {order.lines.map((line) => (
             <MoneyInput
               key={line.id}
@@ -163,7 +190,14 @@ export function CreateChargeback({ order }: { order: AdminOrderDetailDTO }) {
             />
           ))}
         </fieldset>
-        <TextAreaField label="Reason" rows={3} maxLength={REFUND_TEXT_MAX} value={reason} onChange={(e) => setReason(e.target.value)} error={errors.reason} />
+        <TextAreaField
+          label="Reason"
+          rows={3}
+          maxLength={REFUND_TEXT_MAX}
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          error={errors.reason}
+        />
       </AdminActionDialog>
     </>
   );

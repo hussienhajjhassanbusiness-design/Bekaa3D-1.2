@@ -1,7 +1,8 @@
 "use client";
 
+import { AdminBackLink, AdminField as Field, AdminSection } from "@/components/admin/adminUi";
 import Link from "next/link";
-import { useRef, useState, type ReactNode } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { Alert } from "@/components/feedback/Alert";
@@ -37,15 +38,6 @@ type AdminAnswer =
   | { move: "accept"; expectedAmountCents: number }
   | { move: "counter"; amountCents: number; message?: string }
   | { move: "reject"; reason?: string };
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div>
-      <dt className="text-label font-semibold uppercase tracking-label text-text-secondary">{label}</dt>
-      <dd className="mt-1 break-words text-body text-text-primary">{children}</dd>
-    </div>
-  );
-}
 
 // #FVS-OFFERS-ADMIN-DETAIL (phase 6C) — /admin/offers/[id]
 // (GET /api/v1/admin/offers/{id}). The buttons are exactly the server's
@@ -112,7 +104,13 @@ export function AdminOfferView({ offerId }: { offerId: string }) {
       setMove(null);
     } catch (error) {
       if (isMfaRequiredError(error)) {
-        setFailure({ kind: "message", message: describeAdminError(error), refetchOffer: false, refetchProduct: false, refetchAuth: false });
+        setFailure({
+          kind: "message",
+          message: describeAdminError(error),
+          refetchOffer: false,
+          refetchProduct: false,
+          refetchAuth: false,
+        });
         return;
       }
       const outcome = describeOfferError(error, "answer");
@@ -129,47 +127,61 @@ export function AdminOfferView({ offerId }: { offerId: string }) {
   const dialogOpen = move !== null;
 
   return (
-    <div className="flex flex-col gap-6">
-      <p>
-        <Link href="/admin/offers" className="text-text-link underline">
-          ← Offers
-        </Link>
-      </p>
+    <div className="flex min-w-0 flex-col gap-6 break-words">
+      <div>
+        <AdminBackLink href="/admin/offers">Offers</AdminBackLink>
+      </div>
       <div className="flex flex-col gap-2">
-        <h1 className="break-words text-h1 font-bold text-text-primary">Offer on {offerProductName(offer.product.name)}</h1>
+        <h1 className="break-words font-headline text-headline-lg text-on-surface">
+          Offer on {offerProductName(offer.product.name)}
+        </h1>
         <div>
           <StatusBadge label={status.label} tone={status.tone} />
         </div>
       </div>
 
       {success && (
-        <p role="status" className="rounded-md border-l-4 border-l-success bg-success-bg p-3 text-body text-text-primary">
+        <p
+          role="status"
+          className="rounded-card border border-primary/20 border-l-4 border-l-primary bg-surface-container-low p-4 font-body text-body-md text-on-surface"
+        >
           {success}
         </p>
       )}
       {failure && !dialogOpen && <Alert variant="error" message={failure.message} />}
 
-      <OfferFacts offer={offer}>
-        <Field label="Customer">
-          {offer.customer.email ?? "Unknown customer"}
-          {" · "}
-          <Link href={`/admin/customers/${encodeURIComponent(offer.customer.id)}`} className="text-text-link underline">
-            View customer
-          </Link>
-        </Field>
-        <Field label="Product">
-          <Link href={`/admin/products/${encodeURIComponent(offer.product.id)}`} className="text-text-link underline">
-            {offerProductName(offer.product.name)}
-          </Link>
-        </Field>
-      </OfferFacts>
+      <AdminSection title="Offer details">
+        <OfferFacts offer={offer} appearance="account">
+          <Field label="Customer">
+            {offer.customer.email ?? "Unknown customer"}
+            {" · "}
+            <Link
+              href={`/admin/customers/${encodeURIComponent(offer.customer.id)}`}
+              className="font-semibold text-primary underline underline-offset-2 hover:text-primary-container"
+            >
+              View customer
+            </Link>
+          </Field>
+          <Field label="Product">
+            <Link
+              href={`/admin/products/${encodeURIComponent(offer.product.id)}`}
+              className="font-semibold text-primary underline underline-offset-2 hover:text-primary-container"
+            >
+              {offerProductName(offer.product.name)}
+            </Link>
+          </Field>
+        </OfferFacts>
+      </AdminSection>
 
       {moves.length > 0 ? (
-        <section aria-labelledby="admin-offer-actions" className="flex flex-col gap-2">
-          <h2 id="admin-offer-actions" className="text-h3 font-semibold text-text-primary">
+        <section
+          aria-labelledby="admin-offer-actions"
+          className="flex flex-col gap-3 rounded-card border border-outline-variant/40 bg-surface-container-lowest p-5 shadow-sm tablet:p-6"
+        >
+          <h2 id="admin-offer-actions" className="font-headline text-headline-md text-on-surface">
             Your reply
           </h2>
-          <p className="text-caption text-text-secondary">Each reply is final and can&apos;t be undone.</p>
+          <p className="text-caption text-on-surface-variant">Each reply is final and can&apos;t be undone.</p>
           <div className="flex flex-wrap gap-2">
             {moves.map((item) => (
               <Button
@@ -190,11 +202,11 @@ export function AdminOfferView({ offerId }: { offerId: string }) {
         </section>
       ) : (
         offer.status === "awaiting_customer" && (
-          <p className="text-body text-text-secondary">Waiting for the customer to reply.</p>
+          <p className="text-body-md text-on-surface-variant">Waiting for the customer to reply.</p>
         )
       )}
 
-      <OfferHistory rounds={offer.rounds} perspective="admin" />
+      <OfferHistory rounds={offer.rounds} perspective="admin" appearance="account" />
 
       <OfferMoveDialog
         move={move}

@@ -1,5 +1,6 @@
 "use client";
 
+import { fieldControlClasses } from "@/components/forms/fieldStyles";
 import type { FormEvent } from "react";
 import { TextField } from "@/components/forms/TextField";
 import { SelectField } from "@/components/forms/SelectField";
@@ -72,8 +73,8 @@ export function ProductForm({
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-6">
       <fieldset disabled={isSubmitting} className="contents">
-        <section className="flex flex-col gap-4">
-          <h2 className="text-h3 font-bold text-text-primary">Product type</h2>
+        <section className="flex flex-col gap-4 rounded-card border border-outline-variant/40 bg-surface-container-lowest p-5 shadow-sm tablet:p-6">
+          <h2 className="font-headline text-headline-md text-on-surface">Product type</h2>
           <ProductTypeSelector
             mode={mode}
             value={value.type as ProductTypeOption}
@@ -81,9 +82,14 @@ export function ProductForm({
           />
         </section>
 
-        <section className="flex flex-col gap-4">
-          <h2 className="text-h3 font-bold text-text-primary">Basic information</h2>
-          <TextField label="Name" value={value.name} onChange={(e) => patch({ name: e.target.value })} error={fieldErrors?.name} />
+        <section className="flex flex-col gap-4 rounded-card border border-outline-variant/40 bg-surface-container-lowest p-5 shadow-sm tablet:p-6">
+          <h2 className="font-headline text-headline-md text-on-surface">Basic information</h2>
+          <TextField
+            label="Name"
+            value={value.name}
+            onChange={(e) => patch({ name: e.target.value })}
+            error={fieldErrors?.name}
+          />
           <TextField
             label="Slug"
             hint="Lowercase letters, digits, and single hyphens only — not auto-generated from the name."
@@ -112,36 +118,55 @@ export function ProductForm({
             error={fieldErrors?.priceCents}
           />
           <label className="block">
-            <span className="text-label font-semibold uppercase tracking-label text-text-primary">Description</span>
+            <span className="font-label text-label-sm uppercase text-on-surface">Description</span>
             <textarea
               value={value.description}
               onChange={(e) => patch({ description: e.target.value })}
               rows={4}
-              className="mt-1 w-full rounded-sm border border-border-default px-3 py-2 text-body text-text-primary"
+              className={`mt-2 ${fieldControlClasses(false)}`}
             />
           </label>
         </section>
 
-        <section className="flex flex-col gap-3">
-          <h2 className="text-h3 font-bold text-text-primary">Visibility and availability</h2>
-          <label className="flex items-center gap-2 text-body text-text-primary">
-            <input type="checkbox" checked={value.isVisible} onChange={(e) => patch({ isVisible: e.target.checked })} />
+        <section className="flex flex-col gap-4 rounded-card border border-outline-variant/40 bg-surface-container-lowest p-5 shadow-sm tablet:p-6">
+          <h2 className="font-headline text-headline-md text-on-surface">Visibility and availability</h2>
+          <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-control px-1 font-body text-body-md text-on-surface hover:bg-surface-container-low">
+            <input
+              type="checkbox"
+              className="h-5 w-5 accent-primary"
+              checked={value.isVisible}
+              onChange={(e) => patch({ isVisible: e.target.checked })}
+            />
             Visible on the storefront
           </label>
-          <label className="flex items-center gap-2 text-body text-text-primary">
-            <input type="checkbox" checked={value.isFeatured} onChange={(e) => patch({ isFeatured: e.target.checked })} />
+          <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-control px-1 font-body text-body-md text-on-surface hover:bg-surface-container-low">
+            <input
+              type="checkbox"
+              className="h-5 w-5 accent-primary"
+              checked={value.isFeatured}
+              onChange={(e) => patch({ isFeatured: e.target.checked })}
+            />
             Featured
           </label>
-          <label className="flex items-center gap-2 text-body text-text-primary">
-            <input type="checkbox" checked={value.isAvailable} onChange={(e) => patch({ isAvailable: e.target.checked })} />
+          <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-control px-1 font-body text-body-md text-on-surface hover:bg-surface-container-low">
+            <input
+              type="checkbox"
+              className="h-5 w-5 accent-primary"
+              checked={value.isAvailable}
+              onChange={(e) => patch({ isAvailable: e.target.checked })}
+            />
             Available for purchase
           </label>
         </section>
 
         {value.type === "physical" && (
-          <section className="flex flex-col gap-4">
-            <h2 className="text-h3 font-bold text-text-primary">Physical product details</h2>
-            <SelectField label="Material" value={value.materialId} onChange={(e) => patch({ materialId: e.target.value })}>
+          <section className="flex flex-col gap-4 rounded-card border border-outline-variant/40 bg-surface-container-lowest p-5 shadow-sm tablet:p-6">
+            <h2 className="font-headline text-headline-md text-on-surface">Physical product details</h2>
+            <SelectField
+              label="Material"
+              value={value.materialId}
+              onChange={(e) => patch({ materialId: e.target.value })}
+            >
               <option value="">None</option>
               {materials.map((material) => (
                 <option key={material.id} value={material.id}>
@@ -226,16 +251,16 @@ export function ProductForm({
           </section>
         )}
 
-        <section className="flex flex-col gap-4">
-          <h2 className="text-h3 font-bold text-text-primary">SEO</h2>
+        <section className="flex flex-col gap-4 rounded-card border border-outline-variant/40 bg-surface-container-lowest p-5 shadow-sm tablet:p-6">
+          <h2 className="font-headline text-headline-md text-on-surface">SEO</h2>
           <TextField label="SEO title" value={value.seoTitle} onChange={(e) => patch({ seoTitle: e.target.value })} />
           <label className="block">
-            <span className="text-label font-semibold uppercase tracking-label text-text-primary">SEO description</span>
+            <span className="font-label text-label-sm uppercase text-on-surface">SEO description</span>
             <textarea
               value={value.seoDescription}
               onChange={(e) => patch({ seoDescription: e.target.value })}
               rows={2}
-              className="mt-1 w-full rounded-sm border border-border-default px-3 py-2 text-body text-text-primary"
+              className={`mt-2 ${fieldControlClasses(false)}`}
             />
           </label>
           <TextField
@@ -246,9 +271,11 @@ export function ProductForm({
           />
         </section>
 
-        <Button type="submit" isLoading={isSubmitting}>
-          {submitLabel}
-        </Button>
+        <div className="flex justify-end">
+          <Button type="submit" size="lg" isLoading={isSubmitting} className="w-full tablet:w-auto">
+            {submitLabel}
+          </Button>
+        </div>
       </fieldset>
     </form>
   );
