@@ -303,7 +303,11 @@ describe("FileUploader (deferred selection mode, no driver)", () => {
     const onSelectionChange = vi.fn();
     const user = userEvent.setup();
     render(
-      <FileUploader label="Attachments" config={{ allowedMimeTypes: ["image/png"] }} onSelectionChange={onSelectionChange} />
+      <FileUploader
+        label="Attachments"
+        config={{ allowedMimeTypes: ["image/png"] }}
+        onSelectionChange={onSelectionChange}
+      />
     );
     const file = makeFile("notes.txt", "text/plain");
 
@@ -382,5 +386,36 @@ describe("FileUploader (deferred selection mode, no driver)", () => {
 
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
+  });
+});
+
+describe("FileUploader dropzone (redesign Batch 8)", () => {
+  it("keeps the native file input as the focusable, labelled control (drag/drop is never the only way)", () => {
+    render(<FileUploader label="Attachments" hint="Images only." config={{ maxFiles: 5 }} />);
+    const input = screen.getByLabelText("Attachments");
+    input.focus();
+    expect(input).toHaveFocus();
+    expect(input).toHaveAccessibleDescription("Images only.");
+    expect(input).not.toHaveAttribute("tabindex", "-1");
+  });
+
+  it("shows each selected file's size and the selected count against the limit", async () => {
+    const user = userEvent.setup();
+    render(<FileUploader label="Attachments" config={{ maxFiles: 2 }} multiple />);
+    await user.upload(screen.getByLabelText("Attachments"), [
+      makeFile("a.png", "image/png"),
+      makeFile("b.png", "image/png"),
+    ]);
+    expect(screen.getByText("2 / 2 · limit reached")).toBeInTheDocument();
+    expect(screen.getAllByText(/\d+ (B|KB|MB)$/)).toHaveLength(2);
+  });
+
+  it("highlights the zone while files are dragged over it", () => {
+    render(<FileUploader label="Attachments" config={{}} />);
+    const zone = screen.getByTestId("file-dropzone");
+    fireEvent.dragOver(zone);
+    expect(zone).toHaveAttribute("data-dragging", "true");
+    fireEvent.dragLeave(zone);
+    expect(zone).not.toHaveAttribute("data-dragging");
   });
 });

@@ -26,3 +26,19 @@ describe("SuccessReceipt", () => {
     expect(screen.getByRole("status")).toBeInTheDocument();
   });
 });
+
+describe("SuccessReceipt (redesign Batch 8)", () => {
+  it("announces the optional title together with the message, and renders actions outside the status", () => {
+    render(
+      <SuccessReceipt
+        title="Message sent"
+        message="We'll reply by email."
+        actions={<button type="button">Again</button>}
+      />
+    );
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent("Message sent");
+    expect(status).toHaveTextContent("We'll reply by email.");
+    expect(status).not.toContainElement(screen.getByRole("button", { name: "Again" }));
+  });
+});

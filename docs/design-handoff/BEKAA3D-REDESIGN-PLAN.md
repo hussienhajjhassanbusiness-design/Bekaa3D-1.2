@@ -431,6 +431,32 @@ Not built: the Stitch Admin Login (admins use `/login` + MFA), social login, rem
 
 **Deferred to Batch 8+:** admin offer page restyle (switch `AdminOfferView` to the `account`-style facts/history or an admin variant — Batch 10); real wishlist/offer thumbnails once list contracts carry images and the media host is configured; a status filter on Orders if the owner wants one (the API supports `status`, the UI never built it — not added in a visual batch); the auth MFA countdown accessibility fix stays in Batch 11.
 
+### Batch 8 — Contact and Bring Your Idea (public): COMPLETE
+
+**Scope:** `/contact`, `/bring-your-idea`. Visual only: no endpoint, request body, schema, field, captcha lifecycle (fresh single-use token per attempt, reset in `finally`), error mapping (`describeGuestSubmissionFailure` / `describeCustomRequestFailure`), upload precheck or limit changed. `src/lib/**` untouched. Admin contact/BYI queues and details are Batches 9–10. `/about` was not touched (no change needed for this run's scope).
+
+**Direct vs DERIVED:** `/contact` = S9 `contact_us_bekaa3d_inquiry` (Direct). `/bring-your-idea` = DERIVED (S9 hero + form card, D8 dropzone §30).
+
+**Shared building blocks (new `components/forms/PublicFormLayout.tsx`, presentation only):** `PublicFormPage` (S9 boxed hero §9 with one h1, factual pill, 7/5 split stacked below 1024), `PublicFormCard` (white form card named by its h2; full-bleed below 640px with a 16px gutter, as the Batch 4 auth card, so the 300px captcha frame fits at 320), `PublicAsideCard` (tinted "Direct channels" / plain), `PublicAsideRow` (40px icon tile + mono label + value). No generic form abstraction: each form keeps its own schema, hooks and submission.
+
+**Contact:** Name | Email and Phone (optional) | Subject (optional) pair up from 768; Message; captcha; lg "Send message" with send glyph (spinner while pending). Aside "Other ways to reach us" (new `ContactChannels`): email reply channel always; WhatsApp link, pickup address and pickup hours **only when configured in public settings** (shared `usePublicSettings` query, no second fetch). Plus a "Have something custom in mind?" card linking to `/bring-your-idea`. Card heading is "Write to us" (a heading containing "message" collided with the Message field's label lookup).
+
+**Bring Your Idea:** two fieldsets with real legends ("Your details", "Your idea"; decorative mono step numbers `aria-hidden`), material | colour paired from 768, dropzone, captcha + lg "Send my idea". Aside: "What happens next" (send → we contact you by email or phone → nothing ordered or charged) and "Reference images" (the real limits: 5 files, JPEG/PNG/WebP, 10 MB, no 3D files). No budget/deadline/quantity/STL field.
+
+**FileUploader (shared, also used by admin product images):** §30 dashed dropzone (upload glyph circle, "Drop files here or browse", mono "N / max selected · limit reached"); the native file input stays the real control (visually hidden but focusable; the zone shows the focus ring via `focus-within`; clicking the zone opens the picker; drop is an extra, never the only path); drag-over highlight; §30 file rows with image glyph, wrapped file name (`break-all`), mono size, 44px Remove (accessible name "Remove <file>" via `aria-label`) / Cancel / Retry; progress and errors unchanged; precheck, queue, driver seam and announcements unchanged.
+
+**SuccessReceipt:** §48 result card (verified glyph in a lime circle, optional primary title, message) — still one `role="status"` holding title + message; optional `actions` rendered outside it ("Send another message/idea"). Titles "Message sent" / "Idea received"; messages unchanged; no receipt id, deadline, quote or tracking. Focus still moves to the receipt wrapper.
+
+**Stitch deviations:** no Company field or Subject select (not in the contract — Subject stays free text); no map, office address, business hours / "Open now", phone, social links or FAQ (mock data; no real FAQ copy); the "4h average response" pill replaced by the factual "We reply by email" / "No order, no payment"; form card full-bleed below 640 (captcha width).
+
+**Icons:** `send`, `upload-file` added to the local `Icon` set.
+
+**Responsive QA** (production build, 320 / 375 / 768 / 1024 / 1280 / 1440, new `public-forms-responsive.spec.ts`; screenshots reviewed at 375 and 1280 against S9): no horizontal overflow with long validation errors, a 100-character name, three files incl. a very long file name and a refused `.stl`; 300px captcha frame inside the viewport at every width (found and fixed at 320 by the full-bleed card); 44px submit and Remove targets; success receipt at 320; native file input reached by Tab with a visible ring.
+
+**Tests:** unit 2391 → **2398** (+7): new `ContactChannels.test` (3: configured rows, email-only when nothing configured, BYI link), `SuccessReceipt` (+1: title + message in the status, actions outside), `FileUploader` (+3: native input focusable and described, size + count, drag-over state). No existing assertion changed. E2E 233 → **236**: new `public-forms-responsive.spec.ts` (3); `contact.spec` and `bring-your-idea.spec` pass unchanged.
+
+**Gate:** lint ✓ (0/0) · typecheck ✓ · unit **2398/2398** (239 files) · build ✓ · E2E **236/236**.
+
 ---
 
 ## 1. High-risk areas and how to restyle them safely

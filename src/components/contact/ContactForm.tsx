@@ -8,11 +8,17 @@ import { TextField } from "@/components/forms/TextField";
 import { TextAreaField } from "@/components/forms/TextAreaField";
 import { Button } from "@/components/forms/Button";
 import { Alert } from "@/components/feedback/Alert";
+import { Icon } from "@/components/ui/Icon";
 import { SuccessReceipt } from "@/components/feedback/SuccessReceipt";
 import { CaptchaWidget } from "@/components/forms/CaptchaWidget";
 import { useCaptchaToken } from "@/lib/captcha/useCaptchaToken";
 import { captchaFailureMessage } from "@/lib/captcha/captchaErrors";
-import { CONTACT_LIMITS, toContactPayload, useSubmitContactMessage, type ContactFormValues } from "@/lib/contact/contactApi";
+import {
+  CONTACT_LIMITS,
+  toContactPayload,
+  useSubmitContactMessage,
+  type ContactFormValues,
+} from "@/lib/contact/contactApi";
 import { describeGuestSubmissionFailure } from "@/lib/forms/guestSubmissionErrors";
 import { isPhoneShaped } from "@/lib/forms/guestFieldRules";
 
@@ -65,26 +71,47 @@ function ContactFields({ captcha }: { captcha: ReactNode }) {
     formState: { errors, isSubmitting },
   } = useFormContext<ContactFormValues>();
   return (
-    <div className="flex flex-col gap-4">
-      <TextField label="Name" autoComplete="name" maxLength={CONTACT_LIMITS.name} error={errors.name?.message} {...register("name")} />
-      <TextField
-        label="Email"
-        type="email"
-        inputMode="email"
-        autoComplete="email"
-        maxLength={CONTACT_LIMITS.email}
-        error={errors.email?.message}
-        {...register("email")}
-      />
-      <TextField
-        label="Phone (optional)"
-        type="tel"
-        autoComplete="tel"
-        maxLength={CONTACT_LIMITS.phone}
-        error={errors.phone?.message}
-        {...register("phone")}
-      />
-      <TextField label="Subject (optional)" maxLength={CONTACT_LIMITS.subject} error={errors.subject?.message} {...register("subject")} />
+    <div className="flex flex-col gap-6">
+      <div className="grid grid-cols-1 gap-6 tablet:grid-cols-2">
+        <div className="min-w-0">
+          <TextField
+            label="Name"
+            autoComplete="name"
+            maxLength={CONTACT_LIMITS.name}
+            error={errors.name?.message}
+            {...register("name")}
+          />
+        </div>
+        <div className="min-w-0">
+          <TextField
+            label="Email"
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            maxLength={CONTACT_LIMITS.email}
+            error={errors.email?.message}
+            {...register("email")}
+          />
+        </div>
+        <div className="min-w-0">
+          <TextField
+            label="Phone (optional)"
+            type="tel"
+            autoComplete="tel"
+            maxLength={CONTACT_LIMITS.phone}
+            error={errors.phone?.message}
+            {...register("phone")}
+          />
+        </div>
+        <div className="min-w-0">
+          <TextField
+            label="Subject (optional)"
+            maxLength={CONTACT_LIMITS.subject}
+            error={errors.subject?.message}
+            {...register("subject")}
+          />
+        </div>
+      </div>
       <TextAreaField
         label="Message"
         rows={6}
@@ -94,9 +121,12 @@ function ContactFields({ captcha }: { captcha: ReactNode }) {
         {...register("message")}
       />
       {captcha}
-      <Button type="submit" isLoading={isSubmitting} className="w-full tablet:w-auto">
-        Send message
-      </Button>
+      <div>
+        <Button type="submit" size="lg" isLoading={isSubmitting} className="w-full tablet:w-auto">
+          Send message
+          {!isSubmitting && <Icon name="send" className="h-5 w-5" />}
+        </Button>
+      </div>
     </div>
   );
 }
@@ -139,31 +169,35 @@ export function ContactForm() {
 
   if (sent) {
     return (
-      <div ref={statusRef} tabIndex={-1} className="mt-6 outline-none">
-        <SuccessReceipt message={SUCCESS_MESSAGE} />
-        <Button
-          type="button"
-          variant="secondary"
-          className="mt-4"
-          onClick={() => {
-            setSent(false);
-            setFormKey((k) => k + 1);
-          }}
-        >
-          Send another message
-        </Button>
+      <div ref={statusRef} tabIndex={-1} className="outline-none">
+        <SuccessReceipt
+          title="Message sent"
+          message={SUCCESS_MESSAGE}
+          actions={
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setSent(false);
+                setFormKey((k) => k + 1);
+              }}
+            >
+              Send another message
+            </Button>
+          }
+        />
       </div>
     );
   }
 
   return (
-    <div className="mt-6">
+    <div>
       {failure && (
-        <div className="mb-4">
+        <div className="mb-6">
           <Alert variant="error" message={failure} />
         </div>
       )}
-      <Form key={formKey} schema={contactSchema} defaultValues={DEFAULTS} onSubmit={handleSubmit} className="max-w-[560px]">
+      <Form key={formKey} schema={contactSchema} defaultValues={DEFAULTS} onSubmit={handleSubmit}>
         <ContactFields
           captcha={<CaptchaWidget ref={captchaWidgetRef} siteKey={captchaSiteKey} onToken={onCaptchaToken} />}
         />

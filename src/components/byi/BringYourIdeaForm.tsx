@@ -10,6 +10,7 @@ import { Button } from "@/components/forms/Button";
 import { FileUploader } from "@/components/forms/FileUploader";
 import { CaptchaWidget } from "@/components/forms/CaptchaWidget";
 import { Alert } from "@/components/feedback/Alert";
+import { Icon } from "@/components/ui/Icon";
 import { SuccessReceipt } from "@/components/feedback/SuccessReceipt";
 import { useCaptchaToken } from "@/lib/captcha/useCaptchaToken";
 import { captchaFailureMessage } from "@/lib/captcha/captchaErrors";
@@ -79,6 +80,11 @@ const UPLOAD_CONFIG = {
   maxFiles: BYI_LIMITS.maxAttachments,
 };
 
+// Section legends: headline-md with a mono step number (decorative order cue).
+const LEGEND_CLASSES = "mb-6 flex items-center gap-3 font-headline text-headline-md text-on-surface";
+const STEP_CLASSES =
+  "flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 font-label text-label-sm text-primary";
+
 const SUCCESS_MESSAGE = "Thanks — we've received your idea. We'll contact you by email or phone to talk it through.";
 
 function ByiFields({ uploader, captcha }: { uploader: ReactNode; captcha: ReactNode }) {
@@ -87,62 +93,108 @@ function ByiFields({ uploader, captcha }: { uploader: ReactNode; captcha: ReactN
     formState: { errors, isSubmitting },
   } = useFormContext<CustomRequestFormValues>();
   return (
-    <div className="flex flex-col gap-4">
-      <fieldset className="flex flex-col gap-4">
-        <legend className="text-h3 font-semibold text-text-primary">Your details</legend>
-        <TextField label="Name" autoComplete="name" maxLength={BYI_LIMITS.name} error={errors.name?.message} {...register("name")} />
-        <TextField
-          label="Email"
-          type="email"
-          inputMode="email"
-          autoComplete="email"
-          maxLength={BYI_LIMITS.email}
-          error={errors.email?.message}
-          {...register("email")}
-        />
-        <TextField label="Phone" type="tel" autoComplete="tel" maxLength={BYI_LIMITS.phone} error={errors.phone?.message} {...register("phone")} />
+    <div className="flex flex-col gap-10">
+      <fieldset className="flex min-w-0 flex-col gap-6">
+        <legend className={LEGEND_CLASSES}>
+          <span aria-hidden="true" className={STEP_CLASSES}>
+            01
+          </span>
+          Your details
+        </legend>
+        <div className="grid grid-cols-1 gap-6 tablet:grid-cols-2">
+          <div className="min-w-0 tablet:col-span-2">
+            <TextField
+              label="Name"
+              autoComplete="name"
+              maxLength={BYI_LIMITS.name}
+              error={errors.name?.message}
+              {...register("name")}
+            />
+          </div>
+          <div className="min-w-0">
+            <TextField
+              label="Email"
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              maxLength={BYI_LIMITS.email}
+              error={errors.email?.message}
+              {...register("email")}
+            />
+          </div>
+          <div className="min-w-0">
+            <TextField
+              label="Phone"
+              type="tel"
+              autoComplete="tel"
+              maxLength={BYI_LIMITS.phone}
+              error={errors.phone?.message}
+              {...register("phone")}
+            />
+          </div>
+        </div>
       </fieldset>
-      <fieldset className="mt-2 flex flex-col gap-4">
-        <legend className="text-h3 font-semibold text-text-primary">Your idea</legend>
-        <TextField
-          label="Project title"
-          maxLength={BYI_LIMITS.projectTitle}
-          error={errors.project_title?.message}
-          {...register("project_title")}
-        />
-        <TextAreaField
-          label="Description"
-          rows={6}
-          maxLength={BYI_LIMITS.description}
-          hint="What should it do or look like? Up to 5000 characters."
-          error={errors.description?.message}
-          {...register("description")}
-        />
-        <TextField
-          label="Preferred material (optional)"
-          maxLength={BYI_LIMITS.preference}
-          error={errors.preferred_material?.message}
-          {...register("preferred_material")}
-        />
-        <TextField
-          label="Preferred colour (optional)"
-          maxLength={BYI_LIMITS.preference}
-          error={errors.preferred_colour?.message}
-          {...register("preferred_colour")}
-        />
-        <TextField
-          label="Dimensions (optional)"
-          maxLength={BYI_LIMITS.dimensions}
-          hint="For example 10 × 5 × 3 cm."
-          error={errors.dimensions?.message}
-          {...register("dimensions")}
-        />
-        {uploader}
-      </fieldset>
-      {captcha}
-      <Button type="submit" isLoading={isSubmitting} className="w-full tablet:w-auto">
-        Send my idea
-      </Button>
+      <div className="border-t border-outline-variant/40 pt-8">
+        <fieldset className="flex min-w-0 flex-col gap-6">
+          <legend className={LEGEND_CLASSES}>
+            <span aria-hidden="true" className={STEP_CLASSES}>
+              02
+            </span>
+            Your idea
+          </legend>
+          <div className="flex flex-col gap-6">
+            <TextField
+              label="Project title"
+              maxLength={BYI_LIMITS.projectTitle}
+              error={errors.project_title?.message}
+              {...register("project_title")}
+            />
+            <TextAreaField
+              label="Description"
+              rows={6}
+              maxLength={BYI_LIMITS.description}
+              hint="What should it do or look like? Up to 5000 characters."
+              error={errors.description?.message}
+              {...register("description")}
+            />
+            <div className="grid grid-cols-1 gap-6 tablet:grid-cols-2">
+              <div className="min-w-0">
+                <TextField
+                  label="Preferred material (optional)"
+                  maxLength={BYI_LIMITS.preference}
+                  error={errors.preferred_material?.message}
+                  {...register("preferred_material")}
+                />
+              </div>
+              <div className="min-w-0">
+                <TextField
+                  label="Preferred colour (optional)"
+                  maxLength={BYI_LIMITS.preference}
+                  error={errors.preferred_colour?.message}
+                  {...register("preferred_colour")}
+                />
+              </div>
+            </div>
+            <TextField
+              label="Dimensions (optional)"
+              maxLength={BYI_LIMITS.dimensions}
+              hint="For example 10 × 5 × 3 cm."
+              error={errors.dimensions?.message}
+              {...register("dimensions")}
+            />
+            {uploader}
+          </div>
+        </fieldset>
+      </div>
+      <div className="flex flex-col gap-6 border-t border-outline-variant/40 pt-8">
+        {captcha}
+        <div>
+          <Button type="submit" size="lg" isLoading={isSubmitting} className="w-full tablet:w-auto">
+            Send my idea
+            {!isSubmitting && <Icon name="send" className="h-5 w-5" />}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -184,32 +236,36 @@ export function BringYourIdeaForm() {
 
   if (sent) {
     return (
-      <div ref={statusRef} tabIndex={-1} className="mt-6 outline-none">
-        <SuccessReceipt message={SUCCESS_MESSAGE} />
-        <Button
-          type="button"
-          variant="secondary"
-          className="mt-4"
-          onClick={() => {
-            setSent(false);
-            setAttachments([]);
-            setFormKey((k) => k + 1);
-          }}
-        >
-          Send another idea
-        </Button>
+      <div ref={statusRef} tabIndex={-1} className="outline-none">
+        <SuccessReceipt
+          title="Idea received"
+          message={SUCCESS_MESSAGE}
+          actions={
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setSent(false);
+                setAttachments([]);
+                setFormKey((k) => k + 1);
+              }}
+            >
+              Send another idea
+            </Button>
+          }
+        />
       </div>
     );
   }
 
   return (
-    <div className="mt-6">
+    <div>
       {failure && (
-        <div className="mb-4">
+        <div className="mb-6">
           <Alert variant="error" message={failure} />
         </div>
       )}
-      <Form key={formKey} schema={byiSchema} defaultValues={DEFAULTS} onSubmit={handleSubmit} className="max-w-[640px]">
+      <Form key={formKey} schema={byiSchema} defaultValues={DEFAULTS} onSubmit={handleSubmit}>
         <ByiFields
           uploader={
             <FileUploader

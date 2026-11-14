@@ -2,7 +2,19 @@
 
 import { useId, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { Button } from "@/components/forms/Button";
-import { precheckFiles, type UploadPrecheckRejection, type UploadQueueItem, type UploadValidationConfig } from "./uploadTypes";
+import {
+  FIELD_ERROR_CLASSES,
+  FIELD_HINT_CLASSES,
+  FIELD_LABEL_CLASSES,
+  FieldErrorIcon,
+} from "@/components/forms/fieldStyles";
+import { Icon } from "@/components/ui/Icon";
+import {
+  precheckFiles,
+  type UploadPrecheckRejection,
+  type UploadQueueItem,
+  type UploadValidationConfig,
+} from "./uploadTypes";
 
 export interface UploadDriverHandlers {
   onProgress: (percent: number) => void;
@@ -71,12 +83,22 @@ function createLocalId(): string {
 // upload starts the moment a file is accepted. `driver` absent →
 // deferred selection: accepted files sit in memory as "selected" and
 // are reported via `onSelectionChange`; nothing is ever sent.
-export function FileUploader({ label, config, driver, multiple = false, onSelectionChange, accept, hint }: FileUploaderProps) {
+export function FileUploader({
+  label,
+  config,
+  driver,
+  multiple = false,
+  onSelectionChange,
+  accept,
+  hint,
+}: FileUploaderProps) {
   const inputId = useId();
   const hintId = useId();
   const [queue, setQueue] = useState<UploadQueueItem[]>([]);
   const [localRejections, setLocalRejections] = useState<readonly UploadPrecheckRejection[]>([]);
   const [announcement, setAnnouncement] = useState("");
+  const [isDragging, setIsDragging] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
   const controllersRef = useRef(new Map<string, AbortController>());
   const cancelledIdsRef = useRef(new Set<string>());
 
@@ -197,69 +219,150 @@ export function FileUploader({ label, config, driver, multiple = false, onSelect
     }
   }
 
+  const atLimit = config.maxFiles !== undefined && queue.length >= config.maxFiles;
+
   return (
-    <div data-testid="file-dropzone" onDrop={handleDrop} onDragOver={(event) => event.preventDefault()}>
-      <label htmlFor={inputId} className="block text-label font-semibold uppercase tracking-label text-text-primary">
+    <div>
+      <label htmlFor={inputId} className={FIELD_LABEL_CLASSES}>
         {label}
       </label>
       {hint && (
-        <p id={hintId} className="mt-1 text-caption text-text-secondary">
+        <p id={hintId} className={FIELD_HINT_CLASSES}>
           {hint}
         </p>
       )}
-      <input
-        id={inputId}
-        type="file"
-        multiple={multiple}
-        accept={accept}
-        aria-describedby={hint ? hintId : undefined}
-        onChange={handleInputChange}
-        className="mt-1 max-w-full"
-      />
+      {/* Stitch §30 dropzone. The real control is the native file input
+          (visually hidden but focusable, so keyboard and screen-reader users
+          get the platform picker); clicking anywhere in the zone opens it and
+          dropping files is an extra, never the only, way in. */}
+      <div
+        data-testid="file-dropzone"
+        data-dragging={isDragging || undefined}
+        onClick={(event) => {
+          if (event.target !== inputRef.current) inputRef.current?.click();
+        }}
+        onDrop={(event) => {
+          setIsDragging(false);
+          handleDrop(event);
+        }}
+        onDragOver={(event) => {
+          event.preventDefault();
+          if (!isDragging) setIsDragging(true);
+        }}
+        onDragLeave={() => setIsDragging(false)}
+        className={`group relative mt-2 flex cursor-pointer flex-col items-center justify-center rounded-card border-2 border-dashed px-4 py-8 text-center transition-colors duration-200 ease-standard focus-within:border-primary focus-within:shadow-focus-ring tablet:px-10 tablet:py-10 motion-reduce:transition-none ${
+          isDragging
+            ? "border-primary bg-primary/5"
+            : "border-outline bg-surface-container-low/50 hover:border-primary hover:bg-primary/5"
+        }`}
+      >
+        <input
+          ref={inputRef}
+          id={inputId}
+          type="file"
+          multiple={multiple}
+          accept={accept}
+          aria-describedby={hint ? hintId : undefined}
+          onChange={handleInputChange}
+          className="sr-only"
+        />
+        <span className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary transition-transform duration-200 ease-standard group-hover:scale-110 motion-reduce:transition-none motion-reduce:group-hover:scale-100">
+          <Icon name="upload-file" className="h-8 w-8" />
+        </span>
+        <span aria-hidden="true" className="mt-4 font-headline text-title-sm text-on-surface">
+          Drop files here or <span className="text-primary underline underline-offset-2">browse</span>
+        </span>
+        {config.maxFiles !== undefined && (
+          <span aria-hidden="true" className="mt-2 font-label text-label-sm uppercase text-on-surface-variant">
+            {queue.length} / {config.maxFiles} {atLimit ? "· limit reached" : "selected"}
+          </span>
+        )}
+      </div>
 
       <div role="status" aria-live="polite" className="sr-only">
         {announcement}
       </div>
 
       {localRejections.map((rejection, index) => (
-        <p key={index} role="alert" className="mt-2 text-caption text-danger">
-          {rejection.reason}
+        <p key={index} role="alert" className={FIELD_ERROR_CLASSES}>
+          <FieldErrorIcon />
+          <span className="min-w-0 break-words">{rejection.reason}</span>
         </p>
       ))}
 
       {queue.length > 0 && (
-        <ul className="mt-2">
+        <ul className="mt-4 flex flex-col gap-2">
           {queue.map((item) => (
-            <li key={item.id} className="flex flex-wrap items-center gap-2 py-1">
-              <span className="break-all text-body text-text-primary">{item.file.name}</span>
-
-              {item.status === "uploading" && (
-                <progress value={item.progress} max={100} aria-label={`Uploading ${item.file.name}`} />
-              )}
-
-              {item.status === "done" && <span className="text-caption text-success">Uploaded</span>}
-
-              {item.status === "failed" && (
-                <p role="alert" className="text-caption text-danger">
-                  {item.rejectionReason ?? GENERIC_FAILURE_MESSAGE}
+            <li
+              key={item.id}
+              className="flex flex-wrap items-center gap-3 rounded-control border border-outline-variant bg-surface-container-lowest p-3"
+            >
+              <Icon name="image" className="h-5 w-5 text-primary" />
+              <div className="min-w-0 flex-1">
+                <p className="break-all font-body text-body-md font-semibold text-on-surface">{item.file.name}</p>
+                <p className="font-label text-label-sm uppercase text-on-surface-variant">
+                  {formatFileSize(item.file.size)}
                 </p>
-              )}
+
+                {item.status === "uploading" && (
+                  <progress
+                    value={item.progress}
+                    max={100}
+                    aria-label={`Uploading ${item.file.name}`}
+                    className="mt-2 h-1 w-full overflow-hidden rounded-full accent-primary"
+                  />
+                )}
+
+                {item.status === "done" && (
+                  <p className="mt-1 flex items-center gap-1 text-caption text-success">
+                    <Icon name="check-circle" className="h-4 w-4" />
+                    Uploaded
+                  </p>
+                )}
+
+                {item.status === "failed" && (
+                  <p role="alert" className={FIELD_ERROR_CLASSES}>
+                    <FieldErrorIcon />
+                    <span className="min-w-0 break-words">{item.rejectionReason ?? GENERIC_FAILURE_MESSAGE}</span>
+                  </p>
+                )}
+              </div>
 
               {(item.status === "queued" || item.status === "uploading") && (
-                <Button type="button" onClick={() => handleCancel(item.id)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="min-h-11"
+                  onClick={() => handleCancel(item.id)}
+                >
                   Cancel
                 </Button>
               )}
 
               {item.status === "failed" && (
-                <Button type="button" onClick={() => handleRetry(item.id)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="min-h-11"
+                  onClick={() => handleRetry(item.id)}
+                >
                   Retry
                 </Button>
               )}
 
               {item.status === "selected" && (
-                <Button type="button" onClick={() => handleRemove(item.id)}>
-                  Remove {item.file.name}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="min-h-11 text-error enabled:hover:bg-error/5"
+                  aria-label={`Remove ${item.file.name}`}
+                  onClick={() => handleRemove(item.id)}
+                >
+                  <Icon name="close" className="h-4 w-4" />
+                  Remove
                 </Button>
               )}
             </li>
@@ -268,4 +371,10 @@ export function FileUploader({ label, config, driver, multiple = false, onSelect
       )}
     </div>
   );
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
