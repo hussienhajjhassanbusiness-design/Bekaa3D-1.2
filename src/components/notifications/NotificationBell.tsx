@@ -93,13 +93,13 @@ export function NotificationBell({ unreadCount, open, onOpenChange, children }: 
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
         onClick={() => onOpenChange(!open)}
-        className="relative rounded-full p-2 text-text-primary"
+        className="relative rounded-full p-2 text-on-surface"
       >
         <BellIcon />
         {unreadCount > 0 && (
           <span
             aria-hidden="true"
-            className="absolute right-0 top-0 rounded-pill bg-danger px-1 text-caption text-white"
+            className="absolute right-0 top-0 rounded-full bg-error px-1 text-xs text-on-error"
           >
             {unreadCount}
           </span>
@@ -111,7 +111,7 @@ export function NotificationBell({ unreadCount, open, onOpenChange, children }: 
           id={panelId}
           role="dialog"
           aria-label="Notifications"
-          className="fixed inset-0 z-50 overflow-y-auto bg-white p-4 tablet:absolute tablet:inset-auto tablet:right-0 tablet:top-full tablet:mt-2 tablet:w-96 tablet:rounded-xl tablet:border tablet:border-border-default tablet:shadow-elevation-3"
+          className="fixed inset-0 z-50 overflow-y-auto bg-surface-container-lowest p-4 tablet:absolute tablet:inset-auto tablet:right-0 tablet:top-full tablet:mt-2 tablet:w-96 tablet:rounded-card tablet:border tablet:border-outline-variant tablet:shadow-2xl"
         >
           {children}
         </div>

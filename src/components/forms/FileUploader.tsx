@@ -314,7 +314,7 @@ export function FileUploader({
                 )}
 
                 {item.status === "done" && (
-                  <p className="mt-1 flex items-center gap-1 text-caption text-success">
+                  <p className="mt-1 flex items-center gap-1 text-xs text-primary">
                     <Icon name="check-circle" className="h-4 w-4" />
                     Uploaded
                   </p>

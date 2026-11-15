@@ -84,7 +84,7 @@ export function CartLineItem({ line, pending = false, errorMessage, onQuantityCh
               {line.slug ? (
                 <Link
                   href={`/shop/${line.slug}`}
-                  className="rounded-sm transition-colors duration-200 hover:text-primary hover:underline motion-reduce:transition-none"
+                  className="rounded-badge transition-colors duration-200 hover:text-primary hover:underline motion-reduce:transition-none"
                 >
                   {name}
                 </Link>
@@ -160,13 +160,13 @@ export function CartLineItem({ line, pending = false, errorMessage, onQuantityCh
                 </button>
               </div>
               {line.maxQuantity !== null && !line.overCap && (
-                <p className="text-caption text-on-surface-variant">Maximum {line.maxQuantity} per order</p>
+                <p className="text-xs text-on-surface-variant">Maximum {line.maxQuantity} per order</p>
               )}
             </div>
           ) : (
             <div className="flex flex-col gap-1">
               <p className="font-label text-label-caps uppercase text-on-surface-variant">Quantity: {line.quantity}</p>
-              {isStl && <p className="text-caption text-on-surface-variant">STL files are sold one copy per order.</p>}
+              {isStl && <p className="text-xs text-on-surface-variant">STL files are sold one copy per order.</p>}
             </div>
           )}
 
@@ -175,7 +175,7 @@ export function CartLineItem({ line, pending = false, errorMessage, onQuantityCh
             onClick={() => onRemove(line.productId)}
             disabled={pending}
             aria-label={`Remove ${name} from cart`}
-            className="-mr-2 inline-flex min-h-11 items-center gap-2 rounded-control px-3 text-body font-medium text-on-surface-variant transition-colors duration-200 ease-standard enabled:hover:bg-error-container/60 enabled:hover:text-error disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
+            className="-mr-2 inline-flex min-h-11 items-center gap-2 rounded-control px-3 text-sm font-medium text-on-surface-variant transition-colors duration-200 ease-standard enabled:hover:bg-error-container/60 enabled:hover:text-error disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
           >
             <Icon name="delete" className="h-5 w-5" />
             Remove
@@ -185,7 +185,7 @@ export function CartLineItem({ line, pending = false, errorMessage, onQuantityCh
         {pending && <p className="sr-only">Updating {name}…</p>}
 
         {errorMessage && (
-          <p role="alert" className="flex items-start gap-2 text-caption text-error">
+          <p role="alert" className="flex items-start gap-2 text-xs text-error">
             <Icon name="error" className="mt-px h-4 w-4" />
             <span className="min-w-0">{errorMessage}</span>
           </p>
@@ -248,7 +248,7 @@ function LineNotice({
   children: ReactNode;
 }) {
   return (
-    <div className={`flex items-start gap-2 rounded-control border px-3 py-2 text-caption ${NOTICE_TONES[tone].box}`}>
+    <div className={`flex items-start gap-2 rounded-control border px-3 py-2 text-xs ${NOTICE_TONES[tone].box}`}>
       <Icon name={icon} className={`mt-px h-4 w-4 ${NOTICE_TONES[tone].icon}`} />
       <div className="min-w-0 flex-1">{children}</div>
     </div>

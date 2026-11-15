@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { buttonLinkClassName } from "@/components/forms/Button";
+import { Icon } from "@/components/ui/Icon";
 
 // #SECURITY-ORDER-IDOR-HIDING
 //
@@ -13,14 +15,21 @@ import Link from "next/link";
 // independently-maintained copies.
 export function NotFoundContent() {
   return (
-    <>
-      <h1 className="text-h1 font-bold text-text-primary">404 — Page not found</h1>
-      <p className="text-body text-text-secondary">
+    // Batch 11: the §49 empty-state composition (lavender circle, neutral
+    // glyph, one primary action) so the 404 never looks unfinished. It is
+    // self-centring, so it reads the same in the storefront, the account
+    // shell and the admin content region.
+    <div className="mx-auto flex w-full max-w-xl flex-col items-center px-margin-mobile py-16 text-center tablet:py-24">
+      <div className="flex h-24 w-24 items-center justify-center rounded-full bg-surface-container">
+        <Icon name="search" className="h-12 w-12 text-outline" strokeWidth={1.5} />
+      </div>
+      <h1 className="mt-6 font-headline text-headline-lg text-on-surface">404 — Page not found</h1>
+      <p className="mt-3 text-body-md text-on-surface-variant">
         The page you&rsquo;re looking for doesn&rsquo;t exist or may have been moved.
       </p>
-      <Link href="/" className="text-text-link underline">
+      <Link href="/" className={`mt-8 ${buttonLinkClassName("primary")}`}>
         Back to home
       </Link>
-    </>
+    </div>
   );
 }

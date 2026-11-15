@@ -48,7 +48,7 @@ export function Toast({ message, variant, onDismiss }: ToastProps) {
       }`}
     >
       <Icon name={icon.name} className={`h-5 w-5 ${icon.className}`} />
-      <p className="min-w-0 flex-1 break-words text-body">{message}</p>
+      <p className="min-w-0 flex-1 break-words text-sm">{message}</p>
       {onDismiss && (
         <button
           type="button"

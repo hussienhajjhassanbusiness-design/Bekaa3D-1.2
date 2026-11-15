@@ -29,12 +29,12 @@ export function CheckoutLineIssues({ message, items, showCartLink = false }: Che
       role="alert"
       className="flex w-full flex-col gap-3 rounded-card border border-warning-outline bg-warning-container p-4 text-on-warning-container tablet:p-5"
     >
-      <p className="flex items-start gap-3 text-body font-semibold">
+      <p className="flex items-start gap-3 text-sm font-semibold">
         <Icon name="warning" className="h-5 w-5" />
         <span className="min-w-0">{message}</span>
       </p>
       {items.length > 0 && (
-        <ul className="flex flex-col divide-y divide-outline-variant/40 rounded-control border border-warning-outline bg-surface-container-lowest text-body text-on-surface">
+        <ul className="flex flex-col divide-y divide-outline-variant/40 rounded-control border border-warning-outline bg-surface-container-lowest text-sm text-on-surface">
           {items.map((item) => (
             <li key={item.productId} className="break-words px-3 py-2.5">
               <span className="font-semibold">{item.name}</span>
@@ -46,7 +46,7 @@ export function CheckoutLineIssues({ message, items, showCartLink = false }: Che
       {showCartLink && (
         <Link
           href="/cart"
-          className="inline-flex min-h-11 items-center gap-2 self-start rounded-sm font-semibold text-primary underline decoration-1 underline-offset-4 hover:decoration-2"
+          className="inline-flex min-h-11 items-center gap-2 self-start rounded-badge font-semibold text-primary underline decoration-1 underline-offset-4 hover:decoration-2"
         >
           Review your cart
           <Icon name="arrow-forward" className="h-4 w-4" />

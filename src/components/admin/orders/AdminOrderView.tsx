@@ -97,11 +97,11 @@ export function AdminOrderView({ order }: { order: AdminOrderDetailDTO }) {
                       className="absolute -left-1.75 top-1.5 h-3 w-3 rounded-full border-2 border-surface-container-lowest bg-primary"
                     />
                     <span className="font-semibold">{label}:</span> {to}
-                    <span className="block text-caption text-on-surface-variant">
+                    <span className="block text-xs text-on-surface-variant">
                       {formatOrderDateTime(entry.at)} · {who}
                     </span>
                     {entry.reason && (
-                      <span className="block whitespace-pre-line text-caption text-on-surface-variant">
+                      <span className="block whitespace-pre-line text-xs text-on-surface-variant">
                         “{entry.reason}”
                       </span>
                     )}
@@ -132,7 +132,7 @@ export function AdminOrderView({ order }: { order: AdminOrderDetailDTO }) {
               )}
             </dl>
             {order.payments.length === 0 ? (
-              <p className="text-caption text-on-surface-variant">No payment recorded yet.</p>
+              <p className="text-xs text-on-surface-variant">No payment recorded yet.</p>
             ) : (
               <ul className="flex flex-col gap-2">
                 {order.payments.map((p) => {
@@ -147,7 +147,7 @@ export function AdminOrderView({ order }: { order: AdminOrderDetailDTO }) {
                           Payment
                         </Link>{" "}
                         <StatusBadge label={d.label} tone={d.tone} />{" "}
-                        <span className="text-caption text-on-surface-variant">
+                        <span className="text-xs text-on-surface-variant">
                           {describePaymentProvider(p.provider)} · {formatOrderDateTime(p.initiated_at)}
                         </span>
                       </span>
@@ -175,7 +175,7 @@ export function AdminOrderView({ order }: { order: AdminOrderDetailDTO }) {
                           {describeAdminRefundKind(r.kind)}
                         </Link>{" "}
                         <StatusBadge label={d.label} tone={d.tone} />
-                        <span className="block text-caption text-on-surface-variant">
+                        <span className="block text-xs text-on-surface-variant">
                           {formatOrderDate(r.created_at)}
                         </span>
                       </span>
@@ -194,7 +194,7 @@ export function AdminOrderView({ order }: { order: AdminOrderDetailDTO }) {
               <ul className="flex flex-col gap-2">
                 {(order.chargebacks ?? []).map((c) => (
                   <li key={c.id} className="flex flex-wrap justify-between gap-2 text-body-md">
-                    <span className="text-caption text-on-surface-variant">
+                    <span className="text-xs text-on-surface-variant">
                       Received {formatOrderDate(c.received_at)}
                     </span>
                     <Amount price={c.charged} />
@@ -236,25 +236,25 @@ function LineRow({ line }: { line: AdminOrderLineReadDTO }) {
     <div className="flex flex-col gap-1 tablet:flex-row tablet:items-start tablet:justify-between">
       <div className="min-w-0">
         <p className="font-semibold text-on-surface">{line.name}</p>
-        <p className="text-caption text-on-surface-variant">
+        <p className="text-xs text-on-surface-variant">
           {line.product_type === "stl" ? "STL file (emailed by hand)" : "Printed item"} · Qty {line.quantity} ×{" "}
           <Amount price={line.unit_price} />
         </p>
         <div className="mt-1 flex flex-wrap items-center gap-2">
           <StatusBadge label={s.label} tone={s.tone} />
           {line.cancel_reason && (
-            <span className="text-caption text-on-surface-variant">{describeCancelReason(line.cancel_reason)}</span>
+            <span className="text-xs text-on-surface-variant">{describeCancelReason(line.cancel_reason)}</span>
           )}
           {line.fulfilled_at && line.product_type === "stl" && (
-            <span className="text-caption text-on-surface-variant">Emailed {formatOrderDate(line.fulfilled_at)}</span>
+            <span className="text-xs text-on-surface-variant">Emailed {formatOrderDate(line.fulfilled_at)}</span>
           )}
           {line.receipt_confirmed_at && (
-            <span className="text-caption text-on-surface-variant">
+            <span className="text-xs text-on-surface-variant">
               Customer confirmed receipt {formatOrderDate(line.receipt_confirmed_at)}
             </span>
           )}
           {line.problem_reported_at && (
-            <span className="text-caption text-error">
+            <span className="text-xs text-error">
               Problem reported {formatOrderDate(line.problem_reported_at)}
             </span>
           )}
@@ -289,7 +289,7 @@ function Fulfillment({ order }: { order: AdminOrderDetailDTO }) {
         )}
       </dl>
       {order.delivery_fee_note && (
-        <p className="text-caption text-on-surface-variant">
+        <p className="text-xs text-on-surface-variant">
           The courier sets and collects the delivery fee separately.
         </p>
       )}

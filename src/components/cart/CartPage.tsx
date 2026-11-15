@@ -150,18 +150,18 @@ function CartSummary({ cart, canCheckout }: { cart: CartModel; canCheckout: bool
           </dd>
         </div>
       </dl>
-      <p className="flex items-start gap-2 text-caption text-on-surface-variant">
+      <p className="flex items-start gap-2 text-xs text-on-surface-variant">
         <Icon name="receipt-long" className="mt-px h-4 w-4 text-outline" />
         <span>Your total is calculated at checkout from current prices.</span>
       </p>
       {blocked && (
-        <p className="flex items-start gap-2 rounded-control border border-warning-outline bg-warning-container px-3 py-2 text-caption text-on-warning-container">
+        <p className="flex items-start gap-2 rounded-control border border-warning-outline bg-warning-container px-3 py-2 text-xs text-on-warning-container">
           <Icon name="warning" className="mt-px h-4 w-4" />
           <span>Some items need your attention before you can check out.</span>
         </p>
       )}
       {!blocked && priceChanged && (
-        <p className="flex items-start gap-2 rounded-control border border-info-outline bg-info-container px-3 py-2 text-caption text-on-info-container">
+        <p className="flex items-start gap-2 rounded-control border border-info-outline bg-info-container px-3 py-2 text-xs text-on-info-container">
           <Icon name="info" className="mt-px h-4 w-4 text-info" />
           <span>Some prices have changed. You&apos;ll confirm the new prices at checkout.</span>
         </p>
@@ -179,7 +179,7 @@ function CartSummary({ cart, canCheckout }: { cart: CartModel; canCheckout: bool
         )}
         <Link
           href="/shop"
-          className="self-center rounded-sm px-2 py-2.5 text-caption font-semibold text-primary underline-offset-4 hover:underline"
+          className="self-center rounded-badge px-2 py-2.5 text-xs font-semibold text-primary underline-offset-4 hover:underline"
         >
           Continue shopping
         </Link>

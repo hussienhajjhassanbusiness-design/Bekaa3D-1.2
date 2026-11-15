@@ -14,18 +14,17 @@
  * --spacing-*, --container-*, --ease-*, --breakpoint-*) generates the matching
  * utility (e.g. --color-primary -> bg-primary / text-primary / border-primary).
  *
- * Structure:
- *   1. Stitch tokens under their Stitch/MD3 names (use these in new code).
- *   2. LEGACY ALIASES — the pre-Stitch semantic names (brand-dark-green,
- *      text-primary, border-default, danger, h1…). Each is a var() pointer to
- *      a Stitch token, never a second hex value, so there is one source of
- *      truth and every un-migrated screen picks up the Stitch palette.
- *      Batches 2–10 move call sites to the Stitch names; Batch 11 deletes an
- *      alias once `grep` shows it unused (BEKAA3D-TOKEN-MIGRATION.md §0).
+ * Only Stitch tokens under their Stitch/MD3 names live here. The pre-Stitch
+ * compatibility aliases (brand-dark-green, text-text-primary, danger, text-h1,
+ * text-body, text-caption, rounded-md, shadow-elevation-*…) were removed in
+ * redesign Batch 11 after every call site moved to these names
+ * (BEKAA3D-TOKEN-MIGRATION.md §0). Secondary body and captions use
+ * Tailwind's own text-sm (14/20) and text-xs (12/16), exactly the values the
+ * aliases had and the classes Stitch itself uses. Do not reintroduce them.
  */
 @theme {
   /* ================================================================
-   * 1. STITCH TOKENS
+   * STITCH TOKENS
    * ================================================================ */
 
   /* ---- Colour: brand roles (DESIGN-TOKENS §1.1) ---- */
@@ -146,9 +145,7 @@
   --text-label-micro--font-weight: 600;
 
   /* ---- Spacing & layout (DESIGN-TOKENS §3–§4) ----
-     Base unit stays Tailwind's 4px (--spacing: 0.25rem, not overridden).
-     These are prepared for the shell batches; Batch 1 applies none of them
-     to a layout. */
+     Base unit stays Tailwind's 4px (--spacing: 0.25rem, not overridden). */
   --spacing-gutter: 24px; /* common grid gap */
   --spacing-margin-mobile: 16px; /* page gutter < 768px */
   --spacing-margin-desktop: 64px; /* storefront page gutter >= 1024px */
@@ -184,85 +181,6 @@
      Translate Stitch md: -> tablet:, lg: -> desktop:. ---- */
   --breakpoint-tablet: 768px;
   --breakpoint-desktop: 1024px;
-
-  /* ================================================================
-   * 2. LEGACY ALIASES (remove in Batch 11 once unused)
-   * ================================================================ */
-
-  /* Brand */
-  --color-brand-dark-green: var(--color-primary);
-  --color-brand-green: var(--color-secondary);
-  --color-brand-lime: var(--color-secondary-container);
-  --color-ink: var(--color-on-surface);
-
-  /* Status — -bg variants point at real MD3 containers instead of the old
-     8% tints. success-bg is lime at 40% (COMPONENT-MIGRATION Alert spec) so
-     the legacy left-rail banners stay a tint, not a solid lime block. */
-  --color-success: var(--color-primary);
-  --color-success-bg: color-mix(in srgb, var(--color-secondary-container) 40%, transparent);
-  --color-warning-bg: var(--color-warning-container);
-  --color-warning-text: var(--color-on-warning-container);
-  --color-danger: var(--color-error);
-  --color-danger-bg: var(--color-error-container);
-  --color-info-bg: var(--color-info-container);
-
-  /* Neutral scale -> Stitch roles (TOKEN-MIGRATION §1 "Neutral scale") */
-  --color-neutral-50: var(--color-surface-container-low);
-  --color-neutral-100: var(--color-surface-container);
-  --color-neutral-200: var(--color-surface-container-high);
-  --color-neutral-300: var(--color-outline-variant);
-  --color-neutral-400: var(--color-outline);
-  --color-neutral-500: var(--color-outline);
-  --color-neutral-600: var(--color-on-surface-variant);
-  --color-neutral-700: var(--color-on-surface-variant);
-  --color-neutral-800: var(--color-on-surface);
-  --color-neutral-900: var(--color-on-surface);
-
-  /* Text */
-  --color-text-primary: var(--color-on-surface);
-  --color-text-secondary: var(--color-on-surface-variant);
-  --color-text-disabled: var(--color-outline);
-  --color-text-on-brand: var(--color-on-primary);
-  --color-text-link: var(--color-primary);
-
-  /* Surfaces & borders */
-  --color-surface-base: var(--color-surface-container-lowest);
-  --color-surface-subtle: var(--color-surface-container-low);
-  --color-surface-sunken: var(--color-surface-container);
-  --color-border-default: var(--color-outline-variant);
-  --color-border-strong: var(--color-outline);
-  --color-border-focus: var(--color-primary);
-
-  /* Type scale. text-body (14px) is deliberately KEPT: it is Stitch's
-     "secondary body" (text-sm). Primary paragraphs move to text-body-md
-     per batch rather than reflowing 109 files at once. text-h2 stays 24px
-     until each call site picks headline-lg or headline-md. */
-  --text-h1: var(--text-headline-lg);
-  --text-h1--line-height: var(--text-headline-lg--line-height);
-  --text-h1--letter-spacing: var(--text-headline-lg--letter-spacing);
-  --text-h2: 24px;
-  --text-h2--line-height: 32px;
-  --text-h3: var(--text-headline-md);
-  --text-h3--line-height: var(--text-headline-md--line-height);
-  --text-h4: var(--text-title-sm);
-  --text-h4--line-height: var(--text-title-sm--line-height);
-  --text-body: 14px;
-  --text-body--line-height: 20px;
-  --text-caption: 12px;
-  --text-caption--line-height: 16px;
-  --text-label: 12px;
-  --text-label--line-height: 16px; /* kept 16px (not 1.0) so wrapped labels do not collide */
-  --tracking-label: 0.05em; /* Stitch label-caps tracking (was 0.04em) */
-
-  /* Radius */
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-pill: 9999px;
-
-  /* Elevation — re-pointed onto the Stitch e1 / e4 / e5 levels */
-  --shadow-elevation-1: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-elevation-2: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-  --shadow-elevation-3: 0 25px 50px -12px rgb(0 0 0 / 0.25);
 }
 
 /* ---- Non-utility design variables ---- */
@@ -282,7 +200,7 @@
 
 @layer base {
   /* Mobile type step-down (RESPONSIVE-SPECS §1): display 48 -> 36,
-     headline-lg 32 -> 24 (text-h1 follows headline-lg). */
+     headline-lg 32 -> 24. */
   @media (width < 768px) {
     :root {
       --text-display: 36px;
@@ -382,6 +300,18 @@
  * is always paired with the ring — never a bare removal (WCAG 2.4.7).
  */
 :focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus-ring);
+}
+
+/*
+ * Batch 11 (keyboard audit): Chromium stops matching :focus-visible on a
+ * date/time input once Tab moves into its day/year segments, so the ring
+ * above vanished mid-field (only a 1px border change remained). These
+ * inputs are only ever focused into a segment, so show the same ring on
+ * plain :focus.
+ */
+input:is([type="date"], [type="time"], [type="datetime-local"], [type="month"], [type="week"]):focus {
   outline: none;
   box-shadow: var(--shadow-focus-ring);
 }

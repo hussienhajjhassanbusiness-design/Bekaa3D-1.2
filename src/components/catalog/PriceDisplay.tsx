@@ -1,6 +1,5 @@
-// Optional Stitch price roles (COMPONENT-SPECS §17). Omitted = no classes,
-// the price inherits its surroundings exactly as before, so every existing
-// call site is unchanged until its own batch opts in.
+// Optional Stitch price roles (COMPONENT-SPECS §17). Omitted = no classes:
+// the price inherits the typography of its surroundings.
 export type PriceDisplaySize = "card" | "summary" | "detail";
 
 export interface PriceDisplayProps {

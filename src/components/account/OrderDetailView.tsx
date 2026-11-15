@@ -184,7 +184,7 @@ function TotalsSection({ order }: { order: OrderDetailModel }) {
         )}
       </dl>
       {order.hasDeliveryFeeNote && (
-        <p className="flex items-start gap-2 text-body text-on-surface-variant">
+        <p className="flex items-start gap-2 text-sm text-on-surface-variant">
           <Icon name="info" className="mt-0.5 h-4 w-4 shrink-0 text-info" />
           {FULFILLMENT_COPY.courierFee}
         </p>
@@ -238,7 +238,7 @@ function FulfillmentSection({ order, pickup }: { order: OrderDetailModel; pickup
                 <p className={ACCOUNT_TERM}>Pickup location</p>
                 <p className="mt-1 whitespace-pre-line text-on-surface-variant">{pickup.address}</p>
                 {pickup.hours && (
-                  <p className="mt-1 whitespace-pre-line text-body text-on-surface-variant">{pickup.hours}</p>
+                  <p className="mt-1 whitespace-pre-line text-sm text-on-surface-variant">{pickup.hours}</p>
                 )}
               </div>
             )}

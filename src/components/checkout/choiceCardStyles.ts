@@ -15,9 +15,9 @@ export const CHOICE_INPUT_CLASSES = "mt-0.5 h-5 w-5 shrink-0 cursor-[inherit] ac
 
 export const CHOICE_TITLE_CLASSES = "block font-headline text-title-sm text-on-surface";
 
-export const CHOICE_HINT_CLASSES = "mt-1 block text-caption text-on-surface-variant";
+export const CHOICE_HINT_CLASSES = "mt-1 block text-xs text-on-surface-variant";
 
 export const STEP_CARD_CLASSES =
   "min-w-0 rounded-card border border-outline-variant/30 bg-surface-container-lowest p-5 shadow-sm tablet:p-8";
 
-export const FIELD_ERROR_CLASSES = "mt-2 flex items-start gap-1.5 text-caption text-error";
+export const FIELD_ERROR_CLASSES = "mt-2 flex items-start gap-1.5 text-xs text-error";

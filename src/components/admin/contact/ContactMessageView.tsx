@@ -169,7 +169,7 @@ export function ContactMessageView({ messageId }: { messageId: string }) {
           <h2 id="contact-message-actions" className="font-headline text-headline-md text-on-surface">
             Status
           </h2>
-          <p className="mt-1 text-caption text-on-surface-variant">
+          <p className="mt-1 text-xs text-on-surface-variant">
             Status only moves forward and can&apos;t be undone.
           </p>
           <div className="mt-2 flex flex-wrap gap-2">

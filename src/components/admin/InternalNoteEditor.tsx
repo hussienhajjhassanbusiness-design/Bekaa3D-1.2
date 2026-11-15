@@ -44,7 +44,7 @@ export function InternalNoteEditor({ note, onSave, isSaving = false, errorMessag
         className={`mt-2 ${fieldControlClasses(false)}`}
       />
       {errorMessage && (
-        <p role="alert" className="mt-1 text-caption text-error">
+        <p role="alert" className="mt-1 text-xs text-error">
           {errorMessage}
         </p>
       )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { z } from "zod";
 import { useFormContext } from "react-hook-form";
@@ -95,6 +95,17 @@ function mfaFailureMessage(error: unknown): { message: string; resetToLogin: boo
   return { message: MFA_GENERIC_FAILURE_MESSAGE, resetToLogin: false };
 }
 
+const MFA_CODE_EXPIRED_COPY = "This code has expired.";
+
+// Batch 11 (countdown accessibility): the spoken form of the time left when
+// the challenge starts — minutes for anything a minute or longer, so the
+// one announcement is short ("Code expires in 5 minutes.").
+function describeMfaTimeLeft(seconds: number): string {
+  if (seconds < 60) return `${seconds} second${seconds === 1 ? "" : "s"}`;
+  const minutes = Math.round(seconds / 60);
+  return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+}
+
 interface MfaVerifyStepProps {
   challenge: MfaChallengeState;
   onVerified: () => void;
@@ -120,6 +131,29 @@ function MfaVerifyStep({ challenge, onVerified, onResetToLogin }: MfaVerifyStepP
   // request is in flight; the request itself is unchanged.
   const [isVerifying, setIsVerifying] = useState(false);
   const { remainingSeconds, isActive } = useCooldown(challenge.deadline);
+
+  // Batch 11 — countdown accessibility (same pattern as the resend page).
+  // The visible countdown still updates every second, but it is no longer
+  // a live region: that re-announced it on every tick. A separate polite
+  // sr-only region speaks exactly twice — the time left when the step
+  // appears, and the moment the code expires. `isActive` flips only at
+  // those boundaries (useCooldown), so watching it, never remainingSeconds,
+  // is what keeps the announcements from repeating. Countdown semantics
+  // and the challenge itself are unchanged.
+  const wasActiveRef = useRef<boolean | null>(null);
+  const [countdownAnnouncement, setCountdownAnnouncement] = useState("");
+  useEffect(() => {
+    const previous = wasActiveRef.current;
+    wasActiveRef.current = isActive;
+    if (previous === null) {
+      const secondsLeft = Math.max(0, Math.ceil((challenge.deadline - Date.now()) / 1000));
+      setCountdownAnnouncement(
+        isActive ? `Code expires in ${describeMfaTimeLeft(secondsLeft)}.` : MFA_CODE_EXPIRED_COPY
+      );
+    } else if (previous && !isActive) {
+      setCountdownAnnouncement(MFA_CODE_EXPIRED_COPY);
+    }
+  }, [isActive, challenge.deadline]);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -182,8 +216,11 @@ function MfaVerifyStep({ challenge, onVerified, onResetToLogin }: MfaVerifyStepP
             onChange={(event) => setRecoveryCode(event.target.value)}
           />
         )}
-        <p className="mt-2 text-caption text-on-surface-variant" role="status">
-          {isActive ? `Code expires in ${remainingSeconds} seconds.` : "This code has expired."}
+        <p className="mt-2 text-xs text-on-surface-variant" data-testid="mfa-countdown">
+          {isActive ? `Code expires in ${remainingSeconds} seconds.` : MFA_CODE_EXPIRED_COPY}
+        </p>
+        <p aria-live="polite" data-testid="mfa-countdown-live-region" className="sr-only">
+          {countdownAnnouncement}
         </p>
         <Button type="submit" size="lg" isLoading={isVerifying} className="mt-6 w-full">
           Verify

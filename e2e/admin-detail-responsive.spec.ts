@@ -131,8 +131,101 @@ function bigOrder(): Json {
   });
 }
 
+// Batch 11: payment / refund detail with long opaque references and long
+// free text (the Batch 10 deferral); shapes as in admin-payments.spec.ts.
+const PAYMENT_ID = uuid(41);
+const REFUND_ID = uuid(51);
+const LONG_REF = `mock_${"a1b2c3d4".repeat(12)}`;
+const NOW = "2026-11-12T09:00:00Z";
+const PAYMENT_DETAIL = {
+  payment: {
+    id: PAYMENT_ID,
+    order_id: ORDER_ID,
+    order_number: "B3D-PAID0001",
+    provider: "mock",
+    status: "pending",
+    amount_cents: 3600,
+    currency: "USD",
+    captured_amount_cents: null,
+    captured_currency: null,
+    provider_payment_id: LONG_REF,
+    initiated_at: "2026-11-10T10:00:00Z",
+    verified_at: null,
+    failed_at: null,
+    expired_at: null,
+    late_captured_at: null,
+    needs_manual_confirmation: true,
+    unprocessed_event_count: 2,
+  },
+  order: {
+    id: ORDER_ID,
+    order_number: "B3D-PAID0001",
+    status: "awaiting_payment",
+    total_cents: 3600,
+    currency: "USD",
+    placed_at: "2026-11-10T10:00:00Z",
+    cancelled_at: null,
+    hold_expires_at: null,
+    manual_release_available_at: null,
+  },
+  events: [],
+  history: [{ action: "payment.initiated", actor_user_id: null, created_at: NOW, data: null }],
+  available_actions: ["reconcile", "confirm_manually"],
+};
+const REFUND_DETAIL = {
+  id: REFUND_ID,
+  order_id: ORDER_ID,
+  order_number: "B3D-PAID0001",
+  customer_id: "c-1",
+  payment_id: PAYMENT_ID,
+  payment_provider: "mock",
+  kind: "admin",
+  status: "failed",
+  owed: true,
+  amount_cents: 3600,
+  currency: "USD",
+  reason: LONG_NOTE,
+  requested_by: "admin-1",
+  approved_by: "admin-1",
+  items: [{ order_item_id: uuid(211), product_name: `${LONG_NAME} #1`, amount_cents: 3600 }],
+  reissue_of_refund_id: null,
+  reissued_by_refund_id: null,
+  reissued_at: null,
+  settled_at: null,
+  settled_by: null,
+  settlement_reference: null,
+  settlement_note: null,
+  failed_at: NOW,
+  failed_by: "admin-1",
+  failure_reason: `Bank rejected the transfer: ${LONG_REF}`,
+  voided_at: null,
+  voided_by: null,
+  void_reason: null,
+  created_at: NOW,
+};
+const CASH_BLOCKS = [1, 2].map((n) => ({
+  id: `b-${n}`,
+  customer_id: `c-${n}`,
+  order_id: uuid(80 + n),
+  order_number: `B3D-REFU000${n}`,
+  reason: "refused",
+  created_at: "2026-11-09T10:00:00Z",
+  active: true,
+  cleared_at: null,
+  cleared_by: null,
+}));
+
 async function asAdmin(page: Page) {
   await page.context().addCookies([{ name: "csrf_token", value: "e2e-csrf-value", url: E2E_ORIGIN }]);
+  await page.route(/\/api\/v1\/admin\/payments\/[^/?]+$/, (r) =>
+    r.fulfill({ contentType: "application/json", body: JSON.stringify(PAYMENT_DETAIL) })
+  );
+  await page.route(/\/api\/v1\/admin\/refunds\/[^/?]+$/, (r) =>
+    r.fulfill({ contentType: "application/json", body: JSON.stringify(REFUND_DETAIL) })
+  );
+  await page.route(/\/api\/v1\/admin\/cash-blocks(\?.*)?$/, (r) =>
+    r.fulfill({ contentType: "application/json", body: JSON.stringify({ items: CASH_BLOCKS, next_cursor: null }) })
+  );
   await stubEmptyCart(page);
   await page.route(/\/api\/v1\/me$/, (r) =>
     r.fulfill({ contentType: "application/json", body: JSON.stringify(ADMIN_ME) })
@@ -182,6 +275,11 @@ const ROUTES: { path: string; heading: RegExp }[] = [
   { path: `/admin/contact-messages/${uuid(10)}`, heading: /a very long subject line/i },
   { path: "/admin/settings", heading: /^settings$/i },
   { path: "/admin/products/new", heading: /new product/i },
+  { path: `/admin/payments/${PAYMENT_ID}`, heading: /payment for order b3d-paid0001/i },
+  { path: `/admin/refunds/${REFUND_ID}`, heading: /for order b3d-paid0001/i },
+  // Batch 11 regression: a table with row actions (its sr-only "Actions"
+  // header) used to widen the whole page by 231px at 320.
+  { path: "/admin/cash-blocks", heading: /^cash blocks$/i },
 ];
 
 for (const route of ROUTES) {
@@ -196,6 +294,8 @@ for (const route of ROUTES) {
       await expectNoOverflow(page, `${width}px ${route.path}`);
       for (const button of await page.getByRole("main").getByRole("button").all()) {
         if (!(await button.isVisible())) continue;
+        // Row actions live inside a table's own horizontal-scroll region.
+        if (await button.evaluate((b) => b.closest('[role="region"][aria-label="Results"]') !== null)) continue;
         const box = (await button.boundingBox())!;
         expect(box.x + box.width, `${width}px: button clipped`).toBeLessThanOrEqual(width);
       }

@@ -40,15 +40,15 @@ export function DefaultAddressSelector({ options, onSelect, pendingId = null }: 
 
   return (
     <fieldset aria-busy={isPending || undefined} aria-describedby={isPending ? statusId : undefined}>
-      <legend className="text-label font-semibold uppercase tracking-label text-text-primary">Default address</legend>
+      <legend className="font-label text-label-caps uppercase leading-4 text-on-surface">Default address</legend>
       {isPending && (
-        <p id={statusId} role="status" className="mt-1 text-caption text-text-secondary">
+        <p id={statusId} role="status" className="mt-1 text-xs text-on-surface-variant">
           Updating default address…
         </p>
       )}
       <div className="mt-2 flex flex-col gap-2">
         {options.map((option) => (
-          <label key={option.id} className="flex items-center gap-2 text-body text-text-primary">
+          <label key={option.id} className="flex items-center gap-2 text-sm text-on-surface">
             <input
               type="radio"
               name={groupName}

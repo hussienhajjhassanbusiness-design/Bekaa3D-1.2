@@ -230,30 +230,19 @@ describe("CustomerOfferView structure (Batch 7)", () => {
   });
 });
 
-describe("shared offer facts / history appearance", () => {
-  it("defaults to the original rendering (the admin page is not redesigned in Batch 7)", () => {
+describe("shared offer facts / history", () => {
+  // Batch 11: one Stitch rendering for customer and admin (the pre-redesign
+  // "default" appearance was removed once both pages used the same one).
+  it("renders the server facts in a <dl> and the history as an ordered list in a card", () => {
     const { container } = render(
       <>
-        <OfferFacts offer={offerDetail()} />
-        <OfferHistory rounds={offerDetail().rounds} perspective="admin" />
-      </>
-    );
-    expect(container.querySelector("dt")).toHaveClass("text-text-secondary");
-    expect(container.querySelector("section")).not.toHaveClass("rounded-card");
-  });
-
-  it("account appearance keeps the same facts and an ordered history list", () => {
-    render(
-      <>
-        <OfferFacts
-          offer={offerDetail({ agreed_amount: { amount_cents: 1700, currency: "USD" } })}
-          appearance="account"
-        />
-        <OfferHistory rounds={offerDetail().rounds} perspective="customer" appearance="account" />
+        <OfferFacts offer={offerDetail({ agreed_amount: { amount_cents: 1700, currency: "USD" } })} />
+        <OfferHistory rounds={offerDetail().rounds} perspective="customer" />
       </>
     );
     expect(screen.getByText("Agreed price")).toBeInTheDocument();
     expect(screen.getByText("Last amount on the table")).toBeInTheDocument();
+    expect(container.querySelector("dl")).not.toBeNull();
     expect(screen.getByRole("heading", { level: 2, name: "History" })).toBeInTheDocument();
     expect(screen.getByRole("list").tagName).toBe("OL");
   });

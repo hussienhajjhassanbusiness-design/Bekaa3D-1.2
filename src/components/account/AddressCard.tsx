@@ -110,12 +110,15 @@ const TERM_CLASSES = "font-label text-label-sm uppercase tracking-widest text-on
 
 function AddressDetail({ icon, term, children }: { icon: IconName; term: string; children: ReactNode }) {
   return (
-    <div className="flex items-start gap-3">
-      <Icon name={icon} className="mt-0.5 h-5 w-5 text-primary" />
-      <div className="min-w-0">
-        <dt className={TERM_CLASSES}>{term}</dt>
-        <dd className="mt-1 text-body-md text-on-surface">{children}</dd>
-      </div>
+    // Batch 11: dt/dd are direct children of the dl's row div (valid <dl>
+    // grouping); the decorative glyph sits inside the dt, offset into the
+    // row's left padding, so the layout is unchanged.
+    <div className="relative min-w-0 pl-8">
+      <dt className={TERM_CLASSES}>
+        <Icon name={icon} className="absolute left-0 top-0.5 h-5 w-5 text-primary" />
+        {term}
+      </dt>
+      <dd className="mt-1 text-body-md text-on-surface">{children}</dd>
     </div>
   );
 }

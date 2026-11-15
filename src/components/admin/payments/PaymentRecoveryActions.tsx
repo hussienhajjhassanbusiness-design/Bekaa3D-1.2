@@ -132,7 +132,7 @@ function ReleaseOrder({ detail, open, setOpen }: Control) {
                 payment.
               </span>
             </label>
-            {errors.reviewed && <p className="mt-1 text-caption text-error">{errors.reviewed}</p>}
+            {errors.reviewed && <p className="mt-1 text-xs text-error">{errors.reviewed}</p>}
           </div>
         )}
       </AdminActionDialog>

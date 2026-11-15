@@ -61,7 +61,7 @@ export function ProductTypeSelector({ mode, value, onChange }: ProductTypeSelect
         ))}
       </div>
       {isLocked && (
-        <p id={explanationId} className="mt-2 text-caption text-on-surface-variant">
+        <p id={explanationId} className="mt-2 text-xs text-on-surface-variant">
           Product type can&apos;t be changed after creation.
         </p>
       )}

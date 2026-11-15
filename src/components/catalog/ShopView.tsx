@@ -222,6 +222,10 @@ export function ShopView() {
           </aside>
 
           <div className="min-w-0 flex-1">
+            {/* Batch 11: names the results so the product cards' h3s sit
+                under an h2 at every width (below 1024 the Filters h2 is in
+                the closed drawer, which left an h1 → h3 skip). */}
+            <h2 className="sr-only">Products</h2>
             {/* Stitch results toolbar (COMPONENT-SPECS §20). */}
             <div className="mb-8 flex flex-wrap items-center justify-between gap-4 rounded-card border border-outline-variant/30 bg-surface-container-lowest p-4 shadow-sm">
               <div className="flex flex-wrap items-center gap-4">

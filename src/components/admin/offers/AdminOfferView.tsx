@@ -151,7 +151,7 @@ export function AdminOfferView({ offerId }: { offerId: string }) {
       {failure && !dialogOpen && <Alert variant="error" message={failure.message} />}
 
       <AdminSection title="Offer details">
-        <OfferFacts offer={offer} appearance="account">
+        <OfferFacts offer={offer}>
           <Field label="Customer">
             {offer.customer.email ?? "Unknown customer"}
             {" · "}
@@ -181,7 +181,7 @@ export function AdminOfferView({ offerId }: { offerId: string }) {
           <h2 id="admin-offer-actions" className="font-headline text-headline-md text-on-surface">
             Your reply
           </h2>
-          <p className="text-caption text-on-surface-variant">Each reply is final and can&apos;t be undone.</p>
+          <p className="text-xs text-on-surface-variant">Each reply is final and can&apos;t be undone.</p>
           <div className="flex flex-wrap gap-2">
             {moves.map((item) => (
               <Button
@@ -206,7 +206,7 @@ export function AdminOfferView({ offerId }: { offerId: string }) {
         )
       )}
 
-      <OfferHistory rounds={offer.rounds} perspective="admin" appearance="account" />
+      <OfferHistory rounds={offer.rounds} perspective="admin" />
 
       <OfferMoveDialog
         move={move}

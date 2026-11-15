@@ -167,7 +167,7 @@ export function CustomerOfferView({ offerId }: { offerId: string }) {
         {failure && !dialogOpen && <Alert variant="error" message={failure.message} />}
 
         <AccountSection title="Offer details" icon="sell">
-          <OfferFacts offer={offer} appearance="account" />
+          <OfferFacts offer={offer} />
         </AccountSection>
 
         {moves.length > 0 && (
@@ -206,7 +206,7 @@ export function CustomerOfferView({ offerId }: { offerId: string }) {
           </p>
         )}
 
-        <OfferHistory rounds={offer.rounds} perspective="customer" appearance="account" />
+        <OfferHistory rounds={offer.rounds} perspective="customer" />
       </div>
 
       <OfferMoveDialog

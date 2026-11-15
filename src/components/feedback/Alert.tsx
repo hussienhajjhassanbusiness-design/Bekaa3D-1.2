@@ -41,7 +41,7 @@ export function Alert({ message, variant }: AlertProps) {
       className={`flex items-start gap-3 rounded-card border p-4 ${VARIANT_CLASSES[variant]}`}
     >
       <Icon name={icon.name} className={`h-5 w-5 ${icon.className}`} />
-      <p className="min-w-0 break-words text-body">{message}</p>
+      <p className="min-w-0 break-words text-sm">{message}</p>
     </div>
   );
 }

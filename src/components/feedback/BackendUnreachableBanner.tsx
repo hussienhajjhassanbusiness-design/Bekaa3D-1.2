@@ -8,9 +8,9 @@ import { LoadingSpinner } from "./LoadingSpinner";
 // danger token family (same visual severity), distinguished from each
 // other only by message copy, per the task's own explicit instruction not
 // to merge them into identical text.
-const NOT_READY_CLASSES = "bg-warning-bg border-l-warning";
-const FAILURE_CLASSES = "bg-danger-bg border-l-danger";
-const BANNER_BASE_CLASSES = "rounded-md border-l-4 p-4 text-text-primary";
+const NOT_READY_CLASSES = "bg-warning-container border-l-warning";
+const FAILURE_CLASSES = "bg-error-container border-l-error";
+const BANNER_BASE_CLASSES = "rounded-card border-l-4 p-4 text-on-surface";
 
 // FVS001-T13b — the UI/accessibility consumer of FVS001-T13a's useReadiness.
 // This component deliberately contains NO process.env.NODE_ENV check: an
@@ -33,21 +33,21 @@ export function BackendUnreachableBanner() {
     case "not-ready":
       return (
         <div role="status" aria-live="polite" className={`${BANNER_BASE_CLASSES} ${NOT_READY_CLASSES}`}>
-          <p className="text-body">The backend is reachable but not ready yet.</p>
+          <p className="text-sm">The backend is reachable but not ready yet.</p>
         </div>
       );
 
     case "unreachable":
       return (
         <div role="alert" aria-live="assertive" className={`${BANNER_BASE_CLASSES} ${FAILURE_CLASSES}`}>
-          <p className="text-body">The backend could not be reached.</p>
+          <p className="text-sm">The backend could not be reached.</p>
         </div>
       );
 
     case "timeout":
       return (
         <div role="alert" aria-live="assertive" className={`${BANNER_BASE_CLASSES} ${FAILURE_CLASSES}`}>
-          <p className="text-body">The backend readiness check timed out.</p>
+          <p className="text-sm">The backend readiness check timed out.</p>
         </div>
       );
   }

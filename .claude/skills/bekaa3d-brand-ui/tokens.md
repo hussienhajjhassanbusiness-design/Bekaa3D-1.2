@@ -92,8 +92,8 @@ Families are self-hosted with `next/font/local` (`src/app/fonts.ts`, vendored OF
 | `title-sm` | 16 / 1.5 / 600 | Compact card / row title |
 | `body-lg` | 18 / 1.6 | Intro / lead paragraph |
 | `body-md` | 16 / 1.5 | Body paragraphs, form input text |
-| `body` | 14 / 20 | Secondary body, compact UI, table cells (Stitch `text-sm`) |
-| `caption` | 12 / 16 | Helper, meta, error text |
+| `text-sm` (Tailwind) | 14 / 20 | Secondary body, compact UI, table cells (Stitch `text-sm`) |
+| `text-xs` (Tailwind) | 12 / 16 | Helper, meta, error text (Stitch `text-xs`) |
 | `label-caps` | 12 / 1.0 / 600 / 0.05em | Labels, buttons (pair with `font-label uppercase`; use `leading-4` where text can wrap) |
 | `label-sm` | 11 / 1.0 / 600 / 0.05em | Status badges, chips |
 | `label-micro` | 10 / 1.0 / 600 / 0.05em | Micro labels — never in `outline` colour |
@@ -154,36 +154,9 @@ Colours 200ms (Tailwind default duration is set to 200ms), cards 300ms, image zo
 - Disabled: `opacity-50 cursor-not-allowed`, no hover change; pair with a reason where one exists.
 - Status never by colour alone.
 
-## 8. Legacy aliases (remove in Batch 11)
+## 8. Legacy aliases (removed in Batch 11)
 
-These pre-Stitch names still compile so un-migrated screens keep working. Each is a `var()` pointer to a Stitch token in `globals.css` — not a second value. New code must use the Stitch name.
-
-| Legacy | → Stitch |
-|---|---|
-| `brand-dark-green` | `primary` |
-| `brand-green` | `secondary` |
-| `brand-lime` | `secondary-container` |
-| `ink`, `text-primary`, `neutral-800/900` | `on-surface` |
-| `text-secondary`, `neutral-600/700` | `on-surface-variant` |
-| `text-disabled`, `neutral-400/500`, `border-strong` | `outline` |
-| `text-on-brand` | `on-primary` |
-| `text-link`, `border-focus` | `primary` |
-| `surface-base` | `surface-container-lowest` |
-| `surface-subtle`, `neutral-50` | `surface-container-low` |
-| `surface-sunken`, `neutral-100` | `surface-container` |
-| `neutral-200` | `surface-container-high` |
-| `border-default`, `neutral-300` | `outline-variant` |
-| `success` | `primary` |
-| `success-bg` | `secondary-container` at 40% |
-| `danger` / `danger-bg` | `error` / `error-container` |
-| `warning-bg` / `warning-text` | `warning-container` / `on-warning-container` |
-| `info-bg` | `info-container` |
-| `text-h1` | `headline-lg` (incl. mobile step-down) |
-| `text-h3` / `text-h4` | `headline-md` / `title-sm` |
-| `text-h2` | kept 24/32 until each call site picks `headline-lg` or `headline-md` |
-| `text-label` + `tracking-label` | 12/16, 0.05em (pair with `font-label` when migrating) |
-| `rounded-sm` / `rounded-md` / `rounded-pill` | `rounded-badge` / `rounded-control` / `rounded-full` |
-| `shadow-elevation-1/2/3` | e1 / `shadow-lg` / `shadow-2xl` |
+The pre-Stitch compatibility names (`brand-dark-green`, `brand-green`, `brand-lime`, `ink`, `text-text-*`, `neutral-50…900`, `surface-base/subtle/sunken`, `border-default/strong/focus`, `success`, `success-bg`, `danger`, `danger-bg`, `warning-bg`, `warning-text`, `info-bg`, `text-h1…h4`, `text-body`, `text-caption`, `text-label`, `tracking-label`, `rounded-md`, `rounded-pill`, `shadow-elevation-1/2/3`) no longer exist in `globals.css`. A class using one silently generates no CSS, so do not reintroduce them. Migration used: secondary body → `text-sm`, caption → `text-xs`, `rounded-sm/md/pill` → `rounded-badge/control/full`, `shadow-elevation-1/3` → `shadow-sm` / `shadow-2xl`, colours per the Stitch role table in §1.
 
 ## Open items
 

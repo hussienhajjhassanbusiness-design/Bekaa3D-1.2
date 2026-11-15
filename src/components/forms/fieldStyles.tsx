@@ -37,9 +37,9 @@ export function fieldControlClasses(hasError: boolean, options: { mono?: boolean
   );
 }
 
-export const FIELD_HINT_CLASSES = "mt-2 text-caption text-on-surface-variant";
+export const FIELD_HINT_CLASSES = "mt-2 text-xs text-on-surface-variant";
 
-export const FIELD_ERROR_CLASSES = "mt-2 flex items-start gap-1.5 text-caption text-error";
+export const FIELD_ERROR_CLASSES = "mt-2 flex items-start gap-1.5 text-xs text-error";
 
 // Decorative leading icon inside the control (COMPONENT-SPECS §27 "leading
 // icon": Stitch login/forgot email and password fields). The control adds

@@ -271,8 +271,14 @@ test.describe("Account orders (Phase 5E / FVS-029)", () => {
     await expect(page).toHaveURL(/\/account\/orders$/);
     await expect(page.getByRole("link", { name: "Orders" })).toHaveAttribute("aria-current", "page");
 
-    const numbers = await page.getByRole("link", { name: /^Order B3D-/ }).allTextContents();
-    expect(numbers).toEqual(["Order B3D-2026-000001", "Order B3D-2026-000002", "Order B3D-2026-000003", "Order B3D-2026-000004"]);
+    // Batch 11 (test quality): a retrying assertion. The former one-shot
+    // allTextContents() snapshot could read the list before it rendered.
+    await expect(page.getByRole("link", { name: /^Order B3D-/ })).toHaveText([
+      "Order B3D-2026-000001",
+      "Order B3D-2026-000002",
+      "Order B3D-2026-000003",
+      "Order B3D-2026-000004",
+    ]);
 
     const cash = card(page, "B3D-2026-000001");
     await expect(cash).toContainText("In progress");

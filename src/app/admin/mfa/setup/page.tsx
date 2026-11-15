@@ -141,7 +141,7 @@ export default function MfaSetupPage() {
               <p className="font-label text-label-caps uppercase text-on-surface-variant">Setup key</p>
               <p className="mt-2 break-all font-label text-body-md text-on-surface">{step.setup.secret}</p>
             </div>
-            <p className="break-all text-caption text-on-surface-variant">
+            <p className="break-all text-xs text-on-surface-variant">
               {redactOtpauthSecret(step.setup.otpauth_uri, step.setup.secret)}
             </p>
           </div>

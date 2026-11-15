@@ -54,14 +54,14 @@ export function CheckoutItems({ cart, children }: CheckoutItemsProps) {
                   </p>
                   <p className="font-label text-label-caps font-bold tabular-nums text-primary">
                     <PriceDisplay amountCents={price.amountCents} currency={price.currency} />
-                    <span className="font-body text-caption font-normal text-on-surface-variant"> each</span>
+                    <span className="font-body text-xs font-normal text-on-surface-variant"> each</span>
                   </p>
                 </div>
-                <p className="text-caption text-on-surface-variant">
+                <p className="text-xs text-on-surface-variant">
                   {isStl ? "STL file (sent by email)" : "Physical item"} · Qty {line.quantity}
                 </p>
                 {line.priceChanged && (
-                  <p className="flex items-center gap-1.5 text-caption font-semibold text-on-warning-container">
+                  <p className="flex items-center gap-1.5 text-xs font-semibold text-on-warning-container">
                     <Icon name="warning" className="h-4 w-4" />
                     Price updated
                   </p>
@@ -71,7 +71,7 @@ export function CheckoutItems({ cart, children }: CheckoutItemsProps) {
           );
         })}
       </ul>
-      <p className="flex items-start gap-2 border-t border-outline-variant/40 pt-5 text-caption text-on-surface-variant">
+      <p className="flex items-start gap-2 border-t border-outline-variant/40 pt-5 text-xs text-on-surface-variant">
         <Icon name="receipt-long" className="mt-px h-4 w-4 text-outline" />
         <span>
           Your order total is calculated from current prices when you place your order, and shown on the next screen.

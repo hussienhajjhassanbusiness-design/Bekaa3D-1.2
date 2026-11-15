@@ -99,7 +99,7 @@ function AttachmentRow({ requestId, attachment }: { requestId: string; attachmen
   return (
     <li className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-outline-variant/40 py-2">
       <span className="break-all text-body-md text-on-surface">{attachment.original_filename}</span>
-      <span className="text-caption text-on-surface-variant">
+      <span className="text-xs text-on-surface-variant">
         {formatSize(attachment.size_bytes)} · kept until {formatOrderDate(attachment.expires_at)}
       </span>
       <Button
@@ -112,7 +112,7 @@ function AttachmentRow({ requestId, attachment }: { requestId: string; attachmen
         Download
       </Button>
       {error && (
-        <p role="alert" className="w-full text-caption text-error">
+        <p role="alert" className="w-full text-xs text-error">
           {error}
         </p>
       )}
@@ -224,7 +224,7 @@ export function CustomRequestView({ requestId }: { requestId: string }) {
       <h1 className="mt-2 break-words font-headline text-headline-lg text-on-surface">{lead.project_title}</h1>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <StatusBadge label={label} tone={tone} />
-        <span className="text-caption text-on-surface-variant">Outcome: {describeOutcome(lead.outcome)}</span>
+        <span className="text-xs text-on-surface-variant">Outcome: {describeOutcome(lead.outcome)}</span>
       </div>
 
       <section

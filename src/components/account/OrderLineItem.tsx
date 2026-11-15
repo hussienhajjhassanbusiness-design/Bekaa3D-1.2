@@ -43,7 +43,7 @@ export function OrderLineItem({ line, awaitingPayment }: OrderLineItemProps) {
             <PriceDisplay amountCents={line.lineTotal.amountCents} currency={line.lineTotal.currency} />
           </span>
         </div>
-        <p className="flex flex-wrap items-center gap-x-2 text-body text-on-surface-variant">
+        <p className="flex flex-wrap items-center gap-x-2 text-sm text-on-surface-variant">
           <Icon name={isStl ? "mail" : "deployed-code"} className="h-4 w-4 shrink-0" />
           <span>
             {isStl ? "STL file, sent by email" : "Physical item"} · Qty {line.quantity} ×{" "}
@@ -77,7 +77,7 @@ function LineNotes({ line, awaitingPayment }: OrderLineItemProps) {
 
   if (notes.length === 0) return null;
   return (
-    <ul className="flex flex-col gap-1 rounded-control bg-surface-container-low px-3 py-2 text-body text-on-surface-variant">
+    <ul className="flex flex-col gap-1 rounded-control bg-surface-container-low px-3 py-2 text-sm text-on-surface-variant">
       {notes.map((note) => (
         <li key={note} className="break-words">
           {note}

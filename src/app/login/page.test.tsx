@@ -655,3 +655,55 @@ describe("Login (/login) — Batch 4 auth card", () => {
     expect(screen.getByRole("button", { name: /verify/i })).toBeEnabled();
   });
 });
+
+// Batch 11 — MFA countdown accessibility. The visible countdown keeps
+// ticking, but it must not be a live region (it re-announced every second);
+// a separate polite region speaks only at the start and at expiry.
+describe("Login (/login) — MFA countdown announcements", () => {
+  async function reachMfaStep(user: ReturnType<typeof userEvent.setup>, expiresInSeconds: number) {
+    const loginMutateAsync = vi.fn().mockResolvedValue({
+      kind: "mfaChallenge",
+      data: { challenge_id: "secret-challenge-id", expires_in_seconds: expiresInSeconds },
+    });
+    mockedUseLogin.mockReturnValue({ mutateAsync: loginMutateAsync } as never);
+    render(<Login />);
+    await fillValidForm(user);
+    await user.click(screen.getByRole("button", { name: /log ?in|sign ?in/i }));
+    await screen.findByLabelText(/verification code/i);
+  }
+
+  it("keeps the visible countdown out of every live region and status role", async () => {
+    const user = userEvent.setup();
+    await reachMfaStep(user, 300);
+
+    const countdown = screen.getByTestId("mfa-countdown");
+    expect(countdown).toHaveTextContent(/code expires in \d+ seconds/i);
+    expect(countdown.closest("[aria-live], [role='status'], [role='alert']")).toBeNull();
+  });
+
+  it("announces the time left once, and does not re-announce as the countdown ticks", async () => {
+    const user = userEvent.setup();
+    await reachMfaStep(user, 300);
+
+    const liveRegion = screen.getByTestId("mfa-countdown-live-region");
+    expect(liveRegion).toHaveAttribute("aria-live", "polite");
+    await waitFor(() => expect(liveRegion).toHaveTextContent("Code expires in 5 minutes."));
+    const visibleBefore = screen.getByTestId("mfa-countdown").textContent;
+
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+
+    expect(screen.getByTestId("mfa-countdown").textContent).not.toBe(visibleBefore);
+    expect(liveRegion).toHaveTextContent("Code expires in 5 minutes.");
+  });
+
+  it("announces expiry once the code expires, and the visible text says so too", async () => {
+    const user = userEvent.setup();
+    await reachMfaStep(user, 2);
+
+    const liveRegion = screen.getByTestId("mfa-countdown-live-region");
+    await waitFor(() => expect(liveRegion).toHaveTextContent("This code has expired."), { timeout: 4000 });
+    expect(screen.getByTestId("mfa-countdown")).toHaveTextContent("This code has expired.");
+    // The verify step itself is unchanged: still the same form, nothing resubmitted.
+    expect(screen.getByRole("button", { name: /verify/i })).toBeInTheDocument();
+  });
+});

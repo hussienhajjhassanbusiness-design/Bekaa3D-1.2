@@ -11,8 +11,7 @@ export interface OrderSummaryProps {
   totalCents?: number;
   currency: string;
   // Presentation only (redesign Batch 6, checkout confirmation): the total
-  // row in the Stitch summary-total role. Omitted = unchanged rendering,
-  // so the account Orders page is untouched until its own batch.
+  // row in the Stitch summary-total role. Omitted = the compact rendering.
   emphasis?: boolean;
 }
 
@@ -27,14 +26,14 @@ export function OrderSummary({ subtotalCents, totalCents, currency, emphasis = f
   const hasAnyAmount = subtotalCents !== undefined || totalCents !== undefined;
 
   if (!hasAnyAmount) {
-    return <p className="text-body text-text-secondary">{PLACEHOLDER}</p>;
+    return <p className="text-sm text-on-surface-variant">{PLACEHOLDER}</p>;
   }
 
   return (
     <dl className="flex flex-col gap-2">
       {subtotalCents !== undefined && (
         <div className="flex items-center justify-between gap-2">
-          <dt className="text-body text-text-secondary">Subtotal</dt>
+          <dt className="text-sm text-on-surface-variant">Subtotal</dt>
           <dd>
             <PriceDisplay amountCents={subtotalCents} currency={currency} />
           </dd>
@@ -44,7 +43,7 @@ export function OrderSummary({ subtotalCents, totalCents, currency, emphasis = f
         <div className="flex items-center justify-between gap-2">
           <dt
             className={
-              emphasis ? "font-headline text-headline-md text-on-surface" : "text-body font-semibold text-text-primary"
+              emphasis ? "font-headline text-headline-md text-on-surface" : "text-sm font-semibold text-on-surface"
             }
           >
             Total

@@ -56,7 +56,7 @@ Generic dropshipping-store look, random one-off colours, inconsistent card style
 | Muted text | `outline` | `#707a6c` |
 | Border | `outline-variant` | `#bfcaba` |
 
-Type roles: `text-display` (48, 36 on mobile) · `text-headline-lg` (32, 24 on mobile) · `text-headline-md` (20) · `text-title-sm` (16/600) · `text-body-lg` (18) · `text-body-md` (16) · `text-body` (14, secondary/compact) · `text-caption` (12) · `font-label text-label-caps uppercase` (12 mono). Families: `font-headline`/`font-display`, `font-body`, `font-label`.
+Type roles: `text-display` (48, 36 on mobile) · `text-headline-lg` (32, 24 on mobile) · `text-headline-md` (20) · `text-title-sm` (16/600) · `text-body-lg` (18) · `text-body-md` (16) · `text-sm` (14, secondary/compact) · `text-xs` (12, captions/helper) · `font-label text-label-caps uppercase` (12 mono). Families: `font-headline`/`font-display`, `font-body`, `font-label`.
 
 Shape: `rounded-badge` 4 · `rounded-control` 8 · `rounded-card` 12 · `rounded-panel` 16 · `rounded-banner` 24 · `rounded-full` pills.
 
@@ -95,4 +95,4 @@ Every interactive element needs distinct, visible default → hover → focus-vi
 | Colour-only status | Always pair colour with a text label (and an icon shape where used). |
 | Removing focus rings for aesthetics | Never — the global ring stays. |
 | Rewriting a label's casing to get UPPERCASE | Use the `uppercase` class; source text (and accessible names) stay as written. |
-| Using a legacy alias in new code (`brand-dark-green`, `text-text-primary`, `danger`, `text-h1`…) | Use the Stitch name. Aliases exist only so un-migrated screens keep working; Batch 11 removes them. |
+| Using a removed legacy alias (`brand-dark-green`, `text-text-primary`, `danger`, `text-h1`, `text-body`, `text-caption`…) | Use the Stitch name. The aliases were deleted in Batch 11; a class using one generates no CSS. |

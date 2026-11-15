@@ -15,7 +15,7 @@ export function CheckoutDisabledBanner({ reason }: CheckoutDisabledBannerProps) 
   return (
     <p
       role="alert"
-      className="flex items-start gap-3 rounded-card border border-error/20 bg-error-container p-4 text-body text-on-error-container"
+      className="flex items-start gap-3 rounded-card border border-error/20 bg-error-container p-4 text-sm text-on-error-container"
     >
       <Icon name="error" className="h-5 w-5 text-error" />
       <span className="min-w-0">{reason}</span>

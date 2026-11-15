@@ -2,7 +2,7 @@
 
 **Goal:** current working Bekaa3D **plus** the Stitch "Precision Engineering System" design language. This is a re-skin, not a rebuild.
 
-**Status:** Batch 1 (tokens, fonts, global foundation, shared primitives), Batch 2 (storefront Header, mobile navigation, Footer, ProductCard), Batch 3 (Home, Shop, Product Detail, WhatsApp action, skip link), Batch 4 (authentication and verification surfaces), Batch 5 (account shell, Profile, Addresses, Notifications), Batch 6 (Cart and Checkout) and Batch 7 (Orders, order detail, payment UI, checkout return, Offers, Wishlist) **complete** — see "Batch status" below. Batches 8–11 not started.
+**Status:** **COMPLETE.** Batches 1–11 are done — see "Batch status" below. Batch 11 (final consistency, accessibility and hardening) removed the last compatibility token aliases and closed every deferral.
 
 Companion documents:
 - [BEKAA3D-TOKEN-MIGRATION.md](./BEKAA3D-TOKEN-MIGRATION.md): what every token becomes, and the alias-first strategy
@@ -509,7 +509,41 @@ Not built: the Stitch Admin Login (admins use `/login` + MFA), social login, rem
 
 **Gate:** lint ✓ (0/0) · typecheck ✓ · unit **2414/2414** (241 files) · build ✓ · E2E **245/245**.
 
-**Deferred (Batch 11):** `text-caption` / legacy alias removal; the MFA countdown announcement; payment-detail and refund-detail width sweeps (their flows are covered by `admin-payments.spec.ts`); the whole-app consistency sweep.
+**Deferred (Batch 11):** `text-caption` / legacy alias removal; the MFA countdown announcement; payment-detail and refund-detail width sweeps (their flows are covered by `admin-payments.spec.ts`); the whole-app consistency sweep. *(All closed in Batch 11.)*
+
+### Batch 11 — Final consistency, accessibility and hardening: COMPLETE
+
+**Scope:** cleanup and hardening only. No new feature, endpoint, business rule, route or server-state ownership change; no backend change. `src/lib/**` untouched.
+
+**Token cleanup (aliases removed).** Every pre-Stitch compatibility alias was migrated and then deleted from `globals.css`: `brand-dark-green/green/lime`, `ink`, `success`, `success-bg`, `danger`, `danger-bg`, `warning-bg`, `warning-text`, `info-bg`, `neutral-50…900`, `text-text-*`, `surface-base/subtle/sunken`, `border-default/strong/focus`, `text-h1…h4`, `text-body`, `text-caption`, `text-label`, `tracking-label`, `rounded-sm/md/pill`, `shadow-elevation-1/2/3`. ~160 class call sites in ~45 files moved by exact-equivalent mapping: secondary body `text-body` → Tailwind `text-sm` (14/20) and caption `text-caption` → `text-xs` (12/16) — identical values, and the classes Stitch itself uses — colours to their Stitch roles, `rounded-sm/md/pill` → `rounded-badge/control/full`, `shadow-elevation-1/3` → `shadow-sm` / `shadow-2xl`. **Retained:** none. `--radius-lg` (8px) stays: it is Stitch's own `rounded-lg`. A new guard test (`src/app/legacyTokens.test.ts`) fails if an alias class reappears in `src/` or is redefined (an unknown Tailwind class otherwise generates no CSS silently). `bekaa3d-brand-ui` `SKILL.md` / `tokens.md` updated to the final names.
+
+**MFA countdown (accessibility).** The visible "Code expires in N seconds." text still ticks every second but is no longer a `role="status"` live region. A separate polite `sr-only` region announces exactly twice: the time left when the step appears ("Code expires in 5 minutes.") and "This code has expired." at expiry (same pattern as the resend page; it watches `isActive`, never the ticking seconds). Countdown semantics, challenge handling and single-use behaviour unchanged. +3 regression tests in `login/page.test.tsx`.
+
+**Consistency changes.** `/about` (never redesigned) now uses the storefront `Container`, mono eyebrow + display h1, the approved copy in one white card and two CTAs to existing routes (Shop, Contact); S8's photo hero, stats, team and gallery are omitted (no approved assets or numbers). 404 (`NotFoundContent`) and the render-error fallback (`error.tsx`) use the §49 composition (96px circle glyph, headline-lg h1, body-md, one primary action); `global-error.tsx` is tokenised and supplies its own `<main>`. `OfferFacts` / `OfferHistory` lost their unused pre-redesign "default" appearance (both pages already used the Stitch one; the `appearance` prop was removed). `BackendUnreachableBanner` (dev-only), `WishlistButton` error popover and the unmounted `NotificationBell` / `DefaultAddressSelector` moved to tokens. Typography audit: every heading uses a Stitch role; no hex literal or raw white/black remains in components except the documented WhatsApp brand fills and white glows.
+
+**Accessibility results.** Automated axe-core 4.13 sweep (WCAG 2.0/2.1/2.2 A+AA + best-practice) on the end state of every smoke E2E test (245) plus 17 extra admin/public routes, at 1280 and 375 px — 50+ distinct routes, 530 scans, production build. **Found and fixed:** invalid `<dl>` grouping on address cards (icon wrapper between `dl > div` and `dt/dd`); an h1 → h3 skip on `/shop` below 1024px (the Filters h2 lives in the closed drawer) — results now have an `sr-only` "Products" h2; a render error on an admin route lost its `<main>`/skip target (root `error.tsx` replaces the admin layout) — new `app/admin/error.tsx` renders the same fallback inside `AdminShell`. After fixes: 0 violations on app routes (the only remaining hits are the E2E-only fake payment page). Landmarks: exactly one visible h1 and one `<main>` on every scanned route; banner + Main/Footer navs + contentinfo on storefront/account; `nav "Admin"` + banner on admin; skip link target present everywhere.
+
+**Keyboard results.** Tab walk (40 stops) on every scanned end state at 1280 and 375: every stop has a visible indicator and stays in view. **Found and fixed:** Chromium stops matching `:focus-visible` on a date input once Tab moves into its day/year segments (admin orders/refunds/contact filters), leaving only a 1px border change — date/time inputs now show the global ring on `:focus`. Dialog focus trap / Escape / focus return, the mobile and admin drawers, shop filters and checkout remain covered by their existing specs. No hover-only actions found.
+
+**Responsive results.** Page overflow measured at 320 / 375 / 768 / 1024 / 1280 / 1440 on every scanned end state. **Found and fixed:** `/admin/cash-blocks` overflowed by 231px at 320 — the `sr-only` "Actions" header inside `AdminTable`'s scroll region was absolutely positioned against the page; the scroll region is now `relative`. `admin-detail-responsive.spec.ts` gained payment detail (long provider reference, manual-confirmation actions), refund detail (failed refund, long reason) and the cash-blocks regression (the Batch 10 deferral).
+
+**Reduced motion.** Every hover transform, image zoom and spinner has a `motion-reduce:` guard, and the global reduced-motion block neutralises transitions/animations. No change needed.
+
+**Icons.** All local `Icon` glyphs are referenced; every one renders `aria-hidden` / `focusable="false"`; icon-only buttons have names (axe `button-name` clean); no remote Material Symbols / Google font request. No change needed.
+
+**Performance findings.** Three self-hosted variable woff2 (≈120KB total, `display: swap`, same-origin); images sit in fixed aspect boxes (no layout shift), card images lazy; polling bounded (order polling only while the server reports a transient state, paused in background tabs; readiness poll is dev-only). Plain `<img>` is deliberate until the media host is configured. No evidence-backed optimisation was warranted; nothing changed.
+
+**Security findings (manual — the automated `/security-review` needs a git remote; this repo has none and was not pushed).** No `dangerouslySetInnerHTML`/`eval`; no browser storage of tokens, challenge ids or recovery codes; CSRF header on every mutation (cookie-read); returnTo is same-origin-path only; reset/verify tokens read from the hash and stripped; payment redirect only to absolute http(s) URLs and never to the `mock` provider in a production build; user-scoped queries cleared on logout/user change; attachment downloads via blob with browser-sanitised filenames; production CSP with only Turnstile as an external origin; raw backend `detail` never rendered. **Residual note (low, unchanged):** the 409 "payment already active" resume link checks http(s) only, not the provider guard, because that problem body carries no provider name; the URL is server-issued and the backend refuses `mock` outside dev/test/staging.
+
+**Test-quality findings.** Fixed one fragile assertion (`account-orders.spec.ts`: a one-shot `allTextContents()` snapshot → retrying `toHaveText`; it read an empty list under load). Reviewed and kept: two 4-second waits in `payment-result.spec.ts` (deliberate negative assertions that polling stopped); `smoke.spec.ts`'s atomic text snapshot (documented); CSS assertions limited to focus-ring presence and the WhatsApp contrast fill. Smoke specs are backend-independent by design.
+
+**Stitch visual QA (1280).** Home, Shop, Product detail, Contact, Login, Register, Forgot password, Admin Products, Admin Orders and Admin Offers compared with their references: same compositions, type pairing, surfaces, radii and CTA hierarchy. Remaining differences are the accepted ones (real data, product-image placeholders, real logo, accessibility deviations listed in earlier batches, unsupported Stitch features). No design drift needing a fix.
+
+**Remaining intentional items.** `DefaultAddressSelector` and `NotificationBell` are unmounted (kept: valid per the backend reconciliation; a header bell needs an unread-count endpoint). An administrator visiting an *unknown* `/admin/*` URL gets the global 404 without the admin shell (a catch-all admin route would change anonymous behaviour). No `TODO`/`FIXME`/temporary/migration-alias markers remain in `src/` or `e2e/`.
+
+**Tests:** unit 2414 → **2418** (+3 MFA announcements, +2 token guard, −1 by merging the two offer-appearance tests). E2E 245 → **248** (+3 in `admin-detail-responsive.spec.ts`).
+
+**Gate:** see the progress file (`AUTONOMOUS-REDESIGN-PROGRESS.md`).
 
 ---
 

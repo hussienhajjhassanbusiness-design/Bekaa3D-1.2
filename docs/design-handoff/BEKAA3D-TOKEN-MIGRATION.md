@@ -1,6 +1,6 @@
 # Bekaa3D: Token Migration (current app → Stitch)
 
-Status: **planning only**. Nothing in `src/` has been changed. Batch 1 of [BEKAA3D-REDESIGN-PLAN.md](./BEKAA3D-REDESIGN-PLAN.md) carries this out.
+Status: **done.** Batch 1 of [BEKAA3D-REDESIGN-PLAN.md](./BEKAA3D-REDESIGN-PLAN.md) adopted the Stitch tokens with compatibility aliases; Batch 11 migrated every remaining call site and **deleted all aliases** (none retained; `src/app/legacyTokens.test.ts` guards against their return). The tables below are the original planning record.
 
 Sources compared:
 - **Current:** `src/app/globals.css` (Tailwind v4 `@theme`, no `tailwind.config.*`, transcribed from `.claude/skills/bekaa3d-brand-ui/tokens.md`), `src/app/layout.tsx` (no font loading), and class usage counted across `src/**/*.tsx` excluding tests.

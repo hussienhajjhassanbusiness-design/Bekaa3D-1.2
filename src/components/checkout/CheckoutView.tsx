@@ -66,7 +66,7 @@ type Phase =
 const VALIDATION_SUMMARY = "Please check the highlighted details before placing your order.";
 // Inline text links on checkout states (primary ink, underlined, 44px row).
 const TEXT_LINK_CLASS =
-  "inline-flex min-h-11 items-center gap-2 rounded-sm font-semibold text-primary underline decoration-1 underline-offset-4 hover:decoration-2";
+  "inline-flex min-h-11 items-center gap-2 rounded-badge font-semibold text-primary underline decoration-1 underline-offset-4 hover:decoration-2";
 // A state panel that replaces the form (result, unknown outcome, guards).
 const STATE_CARD_CLASS =
   "flex max-w-3xl flex-col items-start gap-4 rounded-card border border-outline-variant/30 bg-surface-container-lowest p-5 shadow-sm tablet:p-8";
@@ -282,7 +282,7 @@ export function CheckoutView() {
         >
           Payment not started
         </h2>
-        <p className="flex items-start gap-3 rounded-card border border-warning-outline bg-warning-container p-4 text-body text-on-warning-container">
+        <p className="flex items-start gap-3 rounded-card border border-warning-outline bg-warning-container p-4 text-sm text-on-warning-container">
           <Icon name="warning" className="h-5 w-5" />
           <span>{phase.message}</span>
         </p>
@@ -344,7 +344,7 @@ export function CheckoutView() {
         </h2>
         <p
           role="alert"
-          className="flex items-start gap-3 rounded-card border border-warning-outline bg-warning-container p-4 text-body text-on-warning-container"
+          className="flex items-start gap-3 rounded-card border border-warning-outline bg-warning-container p-4 text-sm text-on-warning-container"
         >
           <Icon name="warning" className="h-5 w-5" />
           <span>{phase.message}</span>
@@ -502,7 +502,7 @@ export function CheckoutView() {
               complete={fulfillmentChosen}
             />
             {cart.containsDigital && (
-              <p className="mt-6 flex items-start gap-2 rounded-control bg-surface-container-low px-3 py-2 text-caption text-on-surface-variant">
+              <p className="mt-6 flex items-start gap-2 rounded-control bg-surface-container-low px-3 py-2 text-xs text-on-surface-variant">
                 <Icon name="mail" className="mt-px h-4 w-4 text-primary" />
                 <span>{FULFILLMENT_COPY.mixedDigital}</span>
               </p>
@@ -511,7 +511,7 @@ export function CheckoutView() {
         ) : (
           <section aria-labelledby="checkout-digital-heading" className={STEP_CARD_CLASSES}>
             <CheckoutStepHeading id="checkout-digital-heading" step={1} title="Delivery" complete />
-            <p className="flex items-start gap-3 rounded-control bg-surface-container-low p-4 text-body text-on-surface">
+            <p className="flex items-start gap-3 rounded-control bg-surface-container-low p-4 text-sm text-on-surface">
               <Icon name="mail" className="mt-px h-5 w-5 text-primary" />
               <span>{FULFILLMENT_COPY.digitalOnly}</span>
             </p>
@@ -574,19 +574,19 @@ export function CheckoutView() {
               Place order
             </Button>
             {submitting && (
-              <p role="status" className="text-center text-caption text-on-surface-variant">
+              <p role="status" className="text-center text-xs text-on-surface-variant">
                 Placing your order…
               </p>
             )}
             {priceBlocked && (
-              <p className="flex items-start gap-2 text-caption text-on-warning-container">
+              <p className="flex items-start gap-2 text-xs text-on-warning-container">
                 <Icon name="warning" className="mt-px h-4 w-4" />
                 <span>Accept the new prices above before placing your order.</span>
               </p>
             )}
           </div>
         </CheckoutItems>
-        <Link href="/cart" className={`${TEXT_LINK_CLASS} self-center text-caption`}>
+        <Link href="/cart" className={`${TEXT_LINK_CLASS} self-center text-xs`}>
           <Icon name="arrow-back" className="h-4 w-4" />
           Back to your cart
         </Link>

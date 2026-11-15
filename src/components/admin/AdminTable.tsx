@@ -107,7 +107,7 @@ export function AdminTable<T>({
           role="region"
           aria-label="Results"
           tabIndex={0}
-          className="overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+          className="relative overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
         >
           <table className="w-full min-w-[640px] border-collapse text-left">
             <thead>

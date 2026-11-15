@@ -38,19 +38,19 @@ export function SettingControl({ setting, onChange }: SettingControlProps) {
           aria-labelledby={labelId}
           aria-describedby={describedBy}
           onClick={() => onChange(!setting.value)}
-          className={`mt-2 inline-flex h-6 w-11 items-center rounded-pill transition-colors duration-200 motion-reduce:transition-none ${
+          className={`mt-2 inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 motion-reduce:transition-none ${
             setting.value ? "bg-primary" : "bg-outline"
           }`}
         >
           <span
             aria-hidden="true"
-            className={`h-5 w-5 rounded-pill bg-surface-container-lowest shadow-sm transition-transform duration-200 motion-reduce:transition-none ${
+            className={`h-5 w-5 rounded-full bg-surface-container-lowest shadow-sm transition-transform duration-200 motion-reduce:transition-none ${
               setting.value ? "translate-x-5" : "translate-x-0.5"
             }`}
           />
         </button>
         {hasDescription && (
-          <p id={descriptionId} className="mt-1 text-caption text-on-surface-variant">
+          <p id={descriptionId} className="mt-1 text-xs text-on-surface-variant">
             {setting.description}
           </p>
         )}
@@ -80,7 +80,7 @@ export function SettingControl({ setting, onChange }: SettingControlProps) {
           className={`mt-2 ${fieldControlClasses(false)}`}
         />
         {hasDescription && (
-          <p id={descriptionId} className="mt-1 text-caption text-on-surface-variant">
+          <p id={descriptionId} className="mt-1 text-xs text-on-surface-variant">
             {setting.description}
           </p>
         )}
@@ -108,7 +108,7 @@ export function SettingControl({ setting, onChange }: SettingControlProps) {
     return (
       <div>
         <span className="font-label text-label-sm uppercase text-on-surface">{setting.label}</span>
-        <p className="mt-1 text-caption text-on-surface-variant">
+        <p className="mt-1 text-xs text-on-surface-variant">
           This setting can&rsquo;t be edited from this screen.
         </p>
       </div>

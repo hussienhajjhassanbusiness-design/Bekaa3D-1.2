@@ -142,7 +142,7 @@ function CashDue({ result }: { result: CheckoutResultModel }) {
   return (
     <>
       {result.paymentDue && result.amountDue && (
-        <p className="rounded-card border border-info-outline bg-info-container p-4 text-body text-on-info-container">
+        <p className="rounded-card border border-info-outline bg-info-container p-4 text-sm text-on-info-container">
           Payment due in cash {where}:{" "}
           <span className="font-semibold">
             <PriceDisplay amountCents={result.amountDue.amountCents} currency={result.amountDue.currency} />
@@ -150,7 +150,7 @@ function CashDue({ result }: { result: CheckoutResultModel }) {
           . This order hasn&apos;t been paid yet.
         </p>
       )}
-      <p className="flex items-center gap-2 text-body text-on-surface-variant">
+      <p className="flex items-center gap-2 text-sm text-on-surface-variant">
         <Icon name="mail" className="h-4 w-4" />
         We&apos;ve sent the order details to your email.
       </p>
@@ -174,7 +174,7 @@ function OnlineDue({ result, onContinueToPayment }: { result: CheckoutResultMode
   return (
     <p
       role="alert"
-      className="rounded-card border border-warning-outline bg-warning-container p-4 text-body text-on-warning-container"
+      className="rounded-card border border-warning-outline bg-warning-container p-4 text-sm text-on-warning-container"
     >
       The payment page isn&apos;t available right now, so nothing has been charged. Please contact us to complete this
       order.
@@ -185,7 +185,7 @@ function OnlineDue({ result, onContinueToPayment }: { result: CheckoutResultMode
 function FulfillmentSummary({ result, pickup }: { result: CheckoutResultModel; pickup: PickupOption }) {
   if (result.fulfillmentMethod === null) {
     return (
-      <p className="flex items-start gap-3 rounded-card bg-surface-container-low p-4 text-body text-on-surface">
+      <p className="flex items-start gap-3 rounded-card bg-surface-container-low p-4 text-sm text-on-surface">
         <Icon name="mail" className="mt-px h-5 w-5 text-primary" />
         <span>{FULFILLMENT_COPY.digitalOnly}</span>
       </p>
@@ -207,7 +207,7 @@ function FulfillmentSummary({ result, pickup }: { result: CheckoutResultModel; p
                 {line}
               </p>
             ))}
-            <p className="mt-2 text-caption text-on-surface-variant">{FULFILLMENT_COPY.courierFee}</p>
+            <p className="mt-2 text-xs text-on-surface-variant">{FULFILLMENT_COPY.courierFee}</p>
           </div>
         </div>
       )}
@@ -217,7 +217,7 @@ function FulfillmentSummary({ result, pickup }: { result: CheckoutResultModel; p
           <div className="min-w-0">
             <p className="font-label text-label-caps uppercase text-on-surface-variant">Pickup</p>
             {pickup.address && <p className="mt-1 whitespace-pre-line text-on-surface-variant">{pickup.address}</p>}
-            {pickup.hours && <p className="whitespace-pre-line text-caption text-on-surface-variant">{pickup.hours}</p>}
+            {pickup.hours && <p className="whitespace-pre-line text-xs text-on-surface-variant">{pickup.hours}</p>}
           </div>
         </div>
       )}

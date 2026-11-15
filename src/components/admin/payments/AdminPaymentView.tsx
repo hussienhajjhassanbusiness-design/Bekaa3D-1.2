@@ -100,13 +100,13 @@ export function AdminPaymentView({ detail }: { detail: AdminPaymentDetailDTO }) 
 
       <Section title="Provider events">
         {detail.events.length === 0 ? (
-          <p className="text-caption text-on-surface-variant">No provider events received.</p>
+          <p className="text-xs text-on-surface-variant">No provider events received.</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {detail.events.map((e) => (
               <li key={e.id} className="text-body-md text-on-surface">
                 {e.event_type ?? "Event"} · received {formatOrderDateTime(e.received_at)}
-                <span className="block text-caption text-on-surface-variant">
+                <span className="block text-xs text-on-surface-variant">
                   {e.signature_valid === false ? "Invalid signature · " : ""}
                   {e.processing_error
                     ? "Processing failed"
@@ -122,13 +122,13 @@ export function AdminPaymentView({ detail }: { detail: AdminPaymentDetailDTO }) 
 
       <Section title="History">
         {detail.history.length === 0 ? (
-          <p className="text-caption text-on-surface-variant">No recorded actions.</p>
+          <p className="text-xs text-on-surface-variant">No recorded actions.</p>
         ) : (
           <ol className="flex flex-col gap-2">
             {detail.history.map((h, i) => (
               <li key={`${h.created_at}-${i}`} className="text-body-md text-on-surface">
                 {describePaymentHistoryAction(h.action)}
-                <span className="block text-caption text-on-surface-variant">
+                <span className="block text-xs text-on-surface-variant">
                   {formatOrderDateTime(h.created_at)} · {h.actor_user_id ? "Staff" : "System"}
                 </span>
               </li>

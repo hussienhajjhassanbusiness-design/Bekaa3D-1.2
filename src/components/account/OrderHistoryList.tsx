@@ -155,7 +155,7 @@ function OrderRow({ order }: { order: OrderSummaryModel }) {
       </div>
 
       {order.paymentDue && order.amountDue && (
-        <p className="flex items-start gap-2 self-start rounded-control border border-info-outline bg-info-container px-3 py-2 text-body text-on-info-container">
+        <p className="flex items-start gap-2 self-start rounded-control border border-info-outline bg-info-container px-3 py-2 text-sm text-on-info-container">
           <Icon name="payments" className="mt-0.5 h-4 w-4 shrink-0 text-info" />
           <span>
             Payment due in cash:{" "}

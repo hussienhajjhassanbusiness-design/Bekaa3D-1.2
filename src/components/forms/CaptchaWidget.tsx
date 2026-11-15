@@ -98,7 +98,7 @@ export function CaptchaWidget({ siteKey, onToken, ref, align = "start" }: Captch
     return (
       <p
         role="alert"
-        className={`mt-4 text-caption text-danger ${align === "center" ? "text-center" : ""}`}
+        className={`mt-4 text-xs text-error ${align === "center" ? "text-center" : ""}`}
       >
         {NOT_CONFIGURED_MESSAGE}
       </p>
@@ -111,7 +111,7 @@ export function CaptchaWidget({ siteKey, onToken, ref, align = "start" }: Captch
         <div ref={containerRef} data-testid="captcha-widget" />
       </div>
       {failed && (
-        <p role="alert" className={`mt-2 text-caption text-danger ${align === "center" ? "text-center" : ""}`}>
+        <p role="alert" className={`mt-2 text-xs text-error ${align === "center" ? "text-center" : ""}`}>
           {LOAD_FAILURE_MESSAGE}
         </p>
       )}

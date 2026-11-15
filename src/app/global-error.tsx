@@ -14,28 +14,26 @@ import "./globals.css";
 //
 // Category A only — never route ApiError/RFC 9457/network/health failures
 // here; see error.tsx for the same rule with more detail.
-export default function GlobalError({
-  retry,
-}: {
-  error: Error & { digest?: string };
-  retry: () => void;
-}) {
+export default function GlobalError({ retry }: { error: Error & { digest?: string }; retry: () => void }) {
   return (
     <html lang="en">
       <body>
-        <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-surface-base px-4 text-center">
-          <h1 className="text-h1 font-bold text-text-primary">Something went wrong</h1>
-          <p className="text-body text-text-secondary">
+        {/* Batch 11: Stitch tokens only, no shared components, so this
+            fallback stays independent of whatever failed. It replaces the
+            root layout, so it supplies its own main landmark. */}
+        <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background px-margin-mobile text-center">
+          <h1 className="font-headline text-headline-lg text-on-surface">Something went wrong</h1>
+          <p className="max-w-md text-body-md text-on-surface-variant">
             An unexpected error occurred. Please try again.
           </p>
           <button
             type="button"
             onClick={() => retry()}
-            className="rounded-md bg-brand-dark-green px-4 py-2 text-text-on-brand"
+            className="mt-4 inline-flex min-h-11 items-center justify-center rounded-control bg-primary px-6 py-2.5 font-label text-label-caps uppercase leading-4 text-on-primary transition-colors duration-200 hover:bg-primary-container motion-reduce:transition-none"
           >
             Try again
           </button>
-        </div>
+        </main>
       </body>
     </html>
   );

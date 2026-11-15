@@ -113,7 +113,7 @@ export function SearchableCombobox({ label, options, onChange, placeholder }: Se
           className="mt-1 overflow-hidden rounded-control border border-outline-variant bg-surface-container-lowest shadow-lg"
         >
           {filteredOptions.length === 0 ? (
-            <li className="px-3 py-2 text-caption text-on-surface-variant">No results found.</li>
+            <li className="px-3 py-2 text-xs text-on-surface-variant">No results found.</li>
           ) : (
             filteredOptions.map((option, index) => (
               <li
@@ -126,7 +126,7 @@ export function SearchableCombobox({ label, options, onChange, placeholder }: Se
                   selectOption(option);
                 }}
                 className={`cursor-pointer px-3 py-2 text-body-md text-on-surface ${
-                  index === activeIndex ? "bg-neutral-100" : ""
+                  index === activeIndex ? "bg-surface-container" : ""
                 }`}
               >
                 {option.label}

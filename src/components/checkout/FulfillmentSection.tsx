@@ -42,7 +42,7 @@ export interface FulfillmentSectionProps {
 
 const subLegendClass = "mb-3 font-label text-label-caps uppercase text-on-surface-variant";
 const textLinkClass =
-  "rounded-sm font-semibold text-primary underline decoration-1 underline-offset-4 hover:decoration-2";
+  "rounded-badge font-semibold text-primary underline decoration-1 underline-offset-4 hover:decoration-2";
 
 // #FVS026-FULFILLMENT
 //
@@ -130,7 +130,7 @@ function DeliveryAddressPicker({
   if (addressesLoading) {
     return (
       <div role="status" className="flex flex-col gap-3">
-        <p className="text-body text-on-surface-variant">Loading your addresses…</p>
+        <p className="text-sm text-on-surface-variant">Loading your addresses…</p>
         <div
           aria-hidden="true"
           className="h-24 animate-pulse rounded-card bg-surface-container-low motion-reduce:animate-none"
@@ -141,7 +141,7 @@ function DeliveryAddressPicker({
   if (addressesError) {
     return (
       <div className="flex flex-col items-start gap-3 rounded-card border border-error/20 bg-error-container p-4">
-        <p role="alert" className="flex items-start gap-2 text-body text-on-error-container">
+        <p role="alert" className="flex items-start gap-2 text-sm text-on-error-container">
           <Icon name="error" className="mt-px h-5 w-5 text-error" />
           <span>We couldn&apos;t load your addresses.</span>
         </p>
@@ -156,7 +156,7 @@ function DeliveryAddressPicker({
     <fieldset className="min-w-0" disabled={disabled} aria-describedby={errors.addressId ? errorId : undefined}>
       <legend className={subLegendClass}>Delivery address</legend>
       {addresses.length === 0 ? (
-        <div className="flex items-start gap-3 rounded-card border border-dashed border-outline-variant bg-surface-container-low p-4 text-body text-on-surface">
+        <div className="flex items-start gap-3 rounded-card border border-dashed border-outline-variant bg-surface-container-low p-4 text-sm text-on-surface">
           <Icon name="location-on" className="mt-px h-5 w-5 text-outline" />
           <p>
             You don&apos;t have a saved address yet.{" "}
@@ -192,7 +192,7 @@ function DeliveryAddressPicker({
               </label>
             ))}
           </div>
-          <Link href="/account/addresses" className={`${textLinkClass} self-start py-2 text-caption`}>
+          <Link href="/account/addresses" className={`${textLinkClass} self-start py-2 text-xs`}>
             Manage addresses
           </Link>
         </div>
@@ -203,7 +203,7 @@ function DeliveryAddressPicker({
           <span>{errors.addressId}</span>
         </p>
       )}
-      <p className="mt-4 flex items-start gap-2 rounded-control border border-info-outline bg-info-container px-3 py-2 text-caption text-on-info-container">
+      <p className="mt-4 flex items-start gap-2 rounded-control border border-info-outline bg-info-container px-3 py-2 text-xs text-on-info-container">
         <Icon name="info" className="mt-px h-4 w-4 text-info" />
         <span>{FULFILLMENT_COPY.courierFee} The courier will call the phone number on the address you choose.</span>
       </p>
@@ -214,13 +214,13 @@ function DeliveryAddressPicker({
 function PickupDetails({ pickup, contactPhone, onContactPhoneChange, errors, disabled }: FulfillmentSectionProps) {
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-start gap-3 rounded-card bg-surface-container-low p-4 text-body text-on-surface">
+      <div className="flex items-start gap-3 rounded-card bg-surface-container-low p-4 text-sm text-on-surface">
         <Icon name="storefront" className="mt-px h-5 w-5 text-primary" />
         <div className="min-w-0 break-words">
           <p className="font-label text-label-caps uppercase text-on-surface-variant">Pickup location</p>
           {pickup.address && <p className="mt-1 whitespace-pre-line">{pickup.address}</p>}
           {pickup.hours && (
-            <p className="mt-1 whitespace-pre-line text-caption text-on-surface-variant">{pickup.hours}</p>
+            <p className="mt-1 whitespace-pre-line text-xs text-on-surface-variant">{pickup.hours}</p>
           )}
         </div>
       </div>

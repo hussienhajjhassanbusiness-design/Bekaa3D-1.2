@@ -138,8 +138,8 @@ function VerifiedWishlistButton({ productId, productName, variant }: Omit<Wishli
           role="alert"
           className={
             variant === "full"
-              ? "text-caption text-danger"
-              : "absolute right-0 top-12 z-10 w-56 rounded-md border border-danger bg-danger-bg p-2 text-caption text-text-primary shadow-elevation-1"
+              ? "text-xs text-error"
+              : "absolute right-0 top-12 z-10 w-56 rounded-control border border-error bg-error-container p-2 text-xs text-on-surface shadow-sm"
           }
         >
           {error}

@@ -37,8 +37,8 @@ export function StatusTimeline({ entries }: StatusTimelineProps) {
           <span className="flex min-w-0 flex-1 flex-col gap-0.5 tablet:flex-row tablet:items-baseline tablet:justify-between tablet:gap-4">
             <span className="min-w-0 break-words text-body-md text-on-surface">
               {entry.label}
-              {entry.isCurrent && <span className="ml-2 text-body text-on-surface-variant">(Current)</span>}
-              {entry.isCompleted && <span className="ml-2 text-body text-on-surface-variant">(Completed)</span>}
+              {entry.isCurrent && <span className="ml-2 text-sm text-on-surface-variant">(Current)</span>}
+              {entry.isCompleted && <span className="ml-2 text-sm text-on-surface-variant">(Completed)</span>}
             </span>
             {entry.timeLabel && (
               <span className="shrink-0 font-label text-label-caps uppercase text-on-surface-variant">

@@ -1,6 +1,8 @@
 "use client"; // Error boundaries must be Client Components
 
 import { useEffect } from "react";
+import { Button } from "@/components/forms/Button";
+import { Icon } from "@/components/ui/Icon";
 
 // Category A ONLY (FRONTEND-VERTICAL-SLICE-PLAN.md §17): unexpected
 // React/render/runtime failures caught by Next.js's own App Router segment
@@ -34,18 +36,18 @@ export default function Error({
   }, [error]);
 
   return (
-    <>
-      <h1 className="text-h1 font-bold text-text-primary">Something went wrong</h1>
-      <p className="text-body text-text-secondary">
+    // Batch 11: same centred composition as NotFoundContent (error glyph).
+    <div className="mx-auto flex w-full max-w-xl flex-col items-center px-margin-mobile py-16 text-center tablet:py-24">
+      <div className="flex h-24 w-24 items-center justify-center rounded-full bg-error-container">
+        <Icon name="error" className="h-12 w-12 text-on-error-container" strokeWidth={1.5} />
+      </div>
+      <h1 className="mt-6 font-headline text-headline-lg text-on-surface">Something went wrong</h1>
+      <p className="mt-3 text-body-md text-on-surface-variant">
         An unexpected error occurred while rendering this page.
       </p>
-      <button
-        type="button"
-        onClick={() => retry()}
-        className="rounded-md bg-brand-dark-green px-4 py-2 text-text-on-brand"
-      >
+      <Button type="button" onClick={() => retry()} className="mt-8">
         Try again
-      </button>
-    </>
+      </Button>
+    </div>
   );
 }

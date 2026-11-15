@@ -21,7 +21,7 @@ import { Icon } from "@/components/ui/Icon";
 // with a leading glyph). Behaviour is identical for both appearances.
 const APPEARANCE_CLASSES = {
   default:
-    "whitespace-nowrap rounded-sm px-3 py-2 text-left text-body text-text-primary hover:text-brand-dark-green disabled:opacity-60",
+    "whitespace-nowrap rounded-badge px-3 py-2 text-left text-sm text-on-surface hover:text-primary disabled:opacity-60",
   nav:
     "inline-flex min-h-11 w-full items-center gap-3 whitespace-nowrap rounded-lg px-3 text-left text-body-md text-error " +
     "transition-colors duration-200 ease-standard hover:bg-error-container/50 disabled:opacity-60 desktop:px-4 desktop:py-3 motion-reduce:transition-none",
