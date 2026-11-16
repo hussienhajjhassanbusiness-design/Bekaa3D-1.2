@@ -48,6 +48,7 @@ services:
     build: .
     restart: unless-stopped
     env_file: .env
+    # --timeout-keep-alive: same reason as the Dockerfile CMD; keep the two in step.
     command:
       [
         "uvicorn",
@@ -59,6 +60,8 @@ services:
         "--app-dir",
         "src",
         "--reload",
+        "--timeout-keep-alive",
+        "75",
       ]
     ports:
       - "8000:8000"
