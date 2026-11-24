@@ -18,9 +18,7 @@ const ROWS: Row[] = [
   { id: "r-2", name: "Beta" },
 ];
 
-const COLUMNS = [
-  { header: "Name", render: (row: Row) => row.name },
-];
+const COLUMNS = [{ header: "Name", render: (row: Row) => row.name }];
 
 describe("AdminTable", () => {
   it("renders real table semantics", () => {
@@ -70,6 +68,25 @@ describe("AdminTable", () => {
     expect(onSearchChange).toHaveBeenCalledWith("a");
   });
 
+  it("passes searchFieldProps (hint, placeholder, maxLength) to the search input without overriding its label", () => {
+    render(
+      <AdminTable
+        columns={COLUMNS}
+        rows={ROWS}
+        getRowKey={(row) => row.id}
+        searchValue=""
+        onSearchChange={vi.fn()}
+        searchLabel="Order number"
+        searchFieldProps={{ hint: "Exact match.", placeholder: "B3D-XXXXXXXX", maxLength: 40 }}
+      />
+    );
+
+    const input = screen.getByRole("textbox", { name: "Order number" });
+    expect(input).toHaveAttribute("placeholder", "B3D-XXXXXXXX");
+    expect(input).toHaveAttribute("maxlength", "40");
+    expect(input).toHaveAccessibleDescription("Exact match.");
+  });
+
   it("calls onPrevious when the previous-page control is activated", async () => {
     const onPrevious = vi.fn();
     const user = userEvent.setup();
@@ -93,7 +110,14 @@ describe("AdminTable", () => {
     const onNext = vi.fn();
     const user = userEvent.setup();
     render(
-      <AdminTable columns={COLUMNS} rows={ROWS} getRowKey={(row) => row.id} hasPrevious={false} hasNext onNext={onNext} />
+      <AdminTable
+        columns={COLUMNS}
+        rows={ROWS}
+        getRowKey={(row) => row.id}
+        hasPrevious={false}
+        hasNext
+        onNext={onNext}
+      />
     );
 
     await user.click(screen.getByRole("button", { name: /next/i }));
@@ -103,7 +127,14 @@ describe("AdminTable", () => {
 
   it("disables the previous control at the start boundary", () => {
     render(
-      <AdminTable columns={COLUMNS} rows={ROWS} getRowKey={(row) => row.id} hasPrevious={false} hasNext onNext={vi.fn()} />
+      <AdminTable
+        columns={COLUMNS}
+        rows={ROWS}
+        getRowKey={(row) => row.id}
+        hasPrevious={false}
+        hasNext
+        onNext={vi.fn()}
+      />
     );
     expect(screen.getByRole("button", { name: /previous/i })).toBeDisabled();
   });

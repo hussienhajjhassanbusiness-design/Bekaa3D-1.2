@@ -19,12 +19,13 @@ import { useCursorPagination } from "@/lib/admin/useCursorPagination";
 import { formatOrderDate, fulfillmentLabel, paymentMethodLabel } from "@/lib/orders/orderFormat";
 import { describeOrderStatus } from "@/lib/orders/orderStatus";
 import { useDebouncedValue } from "@/lib/shared/useDebouncedValue";
+import { ORDER_NUMBER_QUERY_MAX_LENGTH, normalizeOrderNumberQuery } from "@/lib/admin/orders/orderNumberQuery";
 
 // FVS-030 (phase 5H) — the fulfillment queue, GET /api/v1/admin/orders.
 // Protection: AdminShell's AdminGuard (admin + MFA); a customer gets 404.
 // Filters are exactly the backend's: status (never pending_payment: unpaid
 // online orders are not in the queue), fulfillment method, payment method,
-// the "cash due" view (payment_due), an order-number lookup, and (phase 6A)
+// the "cash due" view (payment_due), an exact order-number lookup, and (phase 6A)
 // ?customer_id from the customer page plus a placed-date range. Newest
 // first, keyset cursor, no total count, no invented metrics.
 
@@ -85,7 +86,8 @@ function AdminOrdersPageContent() {
   const [to, setTo] = useState("");
   const [filters, setFilters] = useState<Filters>({});
   const [orderNumber, setOrderNumber] = useState("");
-  const number = useDebouncedValue(orderNumber.trim(), 300);
+  // Exact match only (see orderNumberQuery.ts); blank = no filter.
+  const number = useDebouncedValue(normalizeOrderNumberQuery(orderNumber) ?? "", 300);
   const pagination = useCursorPagination(JSON.stringify({ ...filters, number, customerId, from, to }));
   const { data, isLoading, isError, error } = useAdminOrders({
     ...filters,
@@ -173,10 +175,22 @@ function AdminOrdersPageContent() {
           rows={data?.items ?? []}
           getRowKey={(row) => row.id}
           isLoading={isLoading}
-          emptyMessage="No orders match these filters."
+          emptyMessage={
+            number
+              ? `No order has the number ${number}. Check that you entered the full order number.`
+              : "No orders match these filters."
+          }
           searchValue={orderNumber}
           onSearchChange={setOrderNumber}
           searchLabel="Order number"
+          searchFieldProps={{
+            hint: "Enter the full order number. Partial numbers don't match.",
+            placeholder: "B3D-XXXXXXXX",
+            maxLength: ORDER_NUMBER_QUERY_MAX_LENGTH,
+            mono: true,
+            autoComplete: "off",
+            spellCheck: false,
+          }}
           hasPrevious={pagination.hasPrevious}
           hasNext={data?.next_cursor != null}
           onPrevious={pagination.goPrevious}

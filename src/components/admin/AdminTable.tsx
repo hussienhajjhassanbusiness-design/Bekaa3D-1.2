@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { Button } from "@/components/forms/Button";
-import { TextField } from "@/components/forms/TextField";
+import { TextField, type TextFieldProps } from "@/components/forms/TextField";
 import { Icon } from "@/components/ui/Icon";
 
 export interface AdminTableColumn<T> {
@@ -19,6 +19,12 @@ export interface AdminTableProps<T> {
   searchValue?: string;
   onSearchChange?: (value: string) => void;
   searchLabel?: string;
+  // Optional extras for the search input (hint, placeholder, maxLength…),
+  // so a caller can state what the backend filter really matches.
+  searchFieldProps?: Pick<
+    TextFieldProps,
+    "hint" | "placeholder" | "maxLength" | "mono" | "autoComplete" | "spellCheck"
+  >;
   hasPrevious?: boolean;
   hasNext?: boolean;
   onPrevious?: () => void;
@@ -64,6 +70,7 @@ export function AdminTable<T>({
   searchValue,
   onSearchChange,
   searchLabel = "Search",
+  searchFieldProps,
   hasPrevious = false,
   hasNext = false,
   onPrevious,
@@ -76,6 +83,7 @@ export function AdminTable<T>({
         <div className="border-b border-outline-variant/40 p-4 tablet:px-6">
           <div className="max-w-md">
             <TextField
+              {...searchFieldProps}
               label={searchLabel}
               value={searchValue ?? ""}
               onChange={(event) => onSearchChange(event.target.value)}

@@ -38,7 +38,9 @@ describe("/admin/orders", () => {
     const spy = vi.spyOn(adminOrdersApi, "listOrders").mockResolvedValue({ items: [], next_cursor: null });
     renderPage();
     await screen.findByText("No orders match these filters.");
-    const statusOptions = Array.from((screen.getByLabelText("Status") as HTMLSelectElement).options).map((o) => o.value);
+    const statusOptions = Array.from((screen.getByLabelText("Status") as HTMLSelectElement).options).map(
+      (o) => o.value
+    );
     expect(statusOptions).not.toContain("pending_payment");
     await user.selectOptions(screen.getByLabelText("Status"), "in_progress");
     await user.selectOptions(screen.getByLabelText("Fulfillment"), "pickup");
@@ -82,6 +84,55 @@ describe("/admin/orders", () => {
     renderPage();
     await screen.findByText("No orders match these filters.");
     expect(spy.mock.calls[0]![0]).not.toHaveProperty("customer_id");
+  });
+
+  describe("order number search (backend: exact, case-sensitive order_number match)", () => {
+    it("labels the field and says the full number is needed, never promising partial search", async () => {
+      vi.spyOn(adminOrdersApi, "listOrders").mockResolvedValue({ items: [], next_cursor: null });
+      renderPage();
+      const input = await screen.findByRole("textbox", { name: "Order number" });
+      expect(input).toHaveAttribute("placeholder", "B3D-XXXXXXXX");
+      expect(input).toHaveAttribute("maxlength", "40");
+      expect(input).toHaveAccessibleDescription("Enter the full order number. Partial numbers don't match.");
+    });
+
+    it("sends the typed number as order_number, trimmed and upper-cased", async () => {
+      const user = userEvent.setup();
+      const spy = vi
+        .spyOn(adminOrdersApi, "listOrders")
+        .mockResolvedValue({ items: [adminSummaryDTO()], next_cursor: null });
+      renderPage();
+      await user.type(await screen.findByRole("textbox", { name: "Order number" }), " b3d-admin001 ");
+      await waitFor(() =>
+        expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ order_number: "B3D-ADMIN001" }))
+      );
+      expect(screen.getByRole("textbox", { name: "Order number" })).toHaveValue(" b3d-admin001 ");
+    });
+
+    it("shows a specific empty message when no order has that exact number", async () => {
+      const user = userEvent.setup();
+      vi.spyOn(adminOrdersApi, "listOrders").mockResolvedValue({ items: [], next_cursor: null });
+      renderPage();
+      await user.type(await screen.findByRole("textbox", { name: "Order number" }), "B3D-7NJV");
+      expect(
+        await screen.findByText("No order has the number B3D-7NJV. Check that you entered the full order number.")
+      ).toBeInTheDocument();
+    });
+
+    it("clearing the field (or whitespace only) removes the filter and restores the generic empty copy", async () => {
+      const user = userEvent.setup();
+      const spy = vi.spyOn(adminOrdersApi, "listOrders").mockResolvedValue({ items: [], next_cursor: null });
+      renderPage();
+      const input = await screen.findByRole("textbox", { name: "Order number" });
+      await user.type(input, "B3D-ADMIN001");
+      await waitFor(() =>
+        expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ order_number: "B3D-ADMIN001" }))
+      );
+      await user.clear(input);
+      await user.type(input, "   ");
+      await waitFor(() => expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ order_number: undefined })));
+      expect(await screen.findByText("No orders match these filters.")).toBeInTheDocument();
+    });
   });
 
   it("shows safe copy on failure", async () => {
