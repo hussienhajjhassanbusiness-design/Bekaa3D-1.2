@@ -167,7 +167,7 @@ export function CustomerOfferView({ offerId }: { offerId: string }) {
         {failure && !dialogOpen && <Alert variant="error" message={failure.message} />}
 
         <AccountSection title="Offer details" icon="sell">
-          <OfferFacts offer={offer} />
+          <OfferFacts offer={offer} perspective="customer" />
         </AccountSection>
 
         {moves.length > 0 && (

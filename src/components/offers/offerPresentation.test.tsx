@@ -193,7 +193,9 @@ describe("CustomerOfferView structure (Batch 7)", () => {
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
     expect(screen.getByRole("link", { name: "View product" })).toHaveAttribute("href", "/shop/dragon-stl");
     expect(screen.getByRole("link", { name: "Your offers" })).toHaveAttribute("href", "/account/offers");
-    expect(within(screen.getByRole("region", { name: "Offer details" })).getByText("First offer")).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("region", { name: "Offer details" })).getByText("Your first offer")
+    ).toBeInTheDocument();
     // Buttons are exactly the server's allowed moves, one primary first.
     const reply = screen.getByRole("region", { name: "Your reply" });
     expect(
@@ -236,7 +238,10 @@ describe("shared offer facts / history", () => {
   it("renders the server facts in a <dl> and the history as an ordered list in a card", () => {
     const { container } = render(
       <>
-        <OfferFacts offer={offerDetail({ agreed_amount: { amount_cents: 1700, currency: "USD" } })} />
+        <OfferFacts
+          offer={offerDetail({ agreed_amount: { amount_cents: 1700, currency: "USD" } })}
+          perspective="customer"
+        />
         <OfferHistory rounds={offerDetail().rounds} perspective="customer" />
       </>
     );

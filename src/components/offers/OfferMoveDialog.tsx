@@ -17,6 +17,10 @@ export interface OfferMoveDialogProps {
   move: OfferMove | null;
   perspective: OfferPerspective;
   currentAmount: PriceRead;
+  // Today's list price, when the caller has it from the server (the admin
+  // page reads it from GET /admin/products/{id}). Shown as a hint on the
+  // counter amount only; the backend's own 422 stays the authority.
+  listPrice?: PriceRead | null;
   pending: boolean;
   // Frontend-owned copy for a server refusal; the dialog stays open with it.
   error: string | null;
@@ -73,6 +77,7 @@ function OfferMoveDialogInner({
   move,
   perspective,
   currentAmount,
+  listPrice,
   pending,
   error,
   fieldError,
@@ -99,7 +104,11 @@ function OfferMoveDialogInner({
 
   const amountError = localError ?? (fieldError?.name === "amount" ? fieldError.message : undefined);
   const textLabel =
-    move === "counter" ? "Message (optional)" : perspective === "customer" ? "Reason (optional)" : "Reason for the customer (optional)";
+    move === "counter"
+      ? "Message (optional)"
+      : perspective === "customer"
+        ? "Reason (optional)"
+        : "Reason for the customer (optional)";
 
   return (
     <AdminActionDialog
@@ -116,6 +125,7 @@ function OfferMoveDialogInner({
       {needsAmount && (
         <MoneyInput
           label="Your counter-offer"
+          hint={listPrice ? `Up to today's list price, ${formatMoney(listPrice)}.` : undefined}
           currencyLabel={OFFER_CURRENCY}
           valueCents={amountCents}
           onChangeCents={(next) => {

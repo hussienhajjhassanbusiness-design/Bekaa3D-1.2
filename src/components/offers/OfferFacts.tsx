@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { formatMoney, offerDeadline } from "@/lib/offers/offerModel";
+import { formatMoney, offerAmountOwner, offerDeadline, type OfferPerspective } from "@/lib/offers/offerModel";
 import type { OfferDetailReadDTO } from "@/lib/offers/offerTypes";
 import { formatOrderDateTime } from "@/lib/orders/orderFormat";
 
@@ -14,6 +14,14 @@ const STYLE = {
   money: "font-label text-title-sm font-bold text-primary",
 };
 
+function currentAmountLabel(offer: OfferDetailReadDTO, perspective: OfferPerspective): string {
+  if (offer.agreed_amount) return "Last amount on the table";
+  const owner = offerAmountOwner(offer.rounds);
+  if (owner === "customer") return perspective === "admin" ? "Customer's offer" : "Your offer";
+  if (owner === "admin") return perspective === "admin" ? "Your counter-offer" : "Bekaa3D's counter-offer";
+  return "Amount on the table";
+}
+
 function Fact({ label, money = false, children }: { label: string; money?: boolean; children: ReactNode }) {
   return (
     <div className="min-w-0">
@@ -25,16 +33,27 @@ function Fact({ label, money = false, children }: { label: string; money?: boole
 
 // #FVS-OFFERS-FACTS (phase 6C). Only the server's own amounts and instants:
 // nothing is computed from the list price, and a deadline is display only.
-export function OfferFacts({ offer, children }: { offer: OfferDetailReadDTO; children?: ReactNode }) {
+// The amount labels say WHOSE amount it is, read from the server's own
+// round history (the last customer/admin round that put an amount on the
+// table), so "Customer's offer" vs "Your counter-offer" is never guessed.
+export function OfferFacts({
+  offer,
+  perspective,
+  children,
+}: {
+  offer: OfferDetailReadDTO;
+  perspective: OfferPerspective;
+  children?: ReactNode;
+}) {
   const deadline = offerDeadline(offer);
 
   return (
     <dl className={STYLE.list}>
       {children}
-      <Fact label="First offer" money>
+      <Fact label={perspective === "admin" ? "Customer's first offer" : "Your first offer"} money>
         {formatMoney(offer.initial_amount)}
       </Fact>
-      <Fact label={offer.agreed_amount ? "Last amount on the table" : "Amount on the table"} money>
+      <Fact label={currentAmountLabel(offer, perspective)} money>
         {formatMoney(offer.current_amount)}
       </Fact>
       {offer.agreed_amount && (

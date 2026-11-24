@@ -178,6 +178,9 @@ async function install(page: Page, me: Json | null, initial: Json | null = null)
   await page.route(/\/__e2e-mock-pay$/, (r) => r.fulfill({ status: 200, contentType: "text/html", body: "<html><body><h1>Mock payment page</h1></body></html>" }));
 
   // --- admin ---
+  // The admin offer page reads today's list price from the admin product
+  // detail (only `price` is used).
+  await page.route(/\/api\/v1\/admin\/products\/[^/?]+$/, (r) => json(r, { ...STL_DETAIL, version: 1 }));
   await page.route(/\/api\/v1\/admin\/offers(\?.*)?$/, (r) => json(r, { items: fake.offer ? [view(fake, "admin")] : [], next_cursor: null }));
   await page.route(/\/api\/v1\/admin\/offers\/[^/?]+$/, (r) => (fake.offer ? json(r, view(fake, "admin")) : r.fulfill(problem(404, "NOT_FOUND"))));
   await page.route(/\/api\/v1\/admin\/offers\/[^/]+\/(counter|accept|reject)$/, (route) => {
@@ -330,10 +333,15 @@ test.describe("Offers (Phase 6C)", () => {
     await page.getByRole("link", { name: "Dragon STL" }).click();
     await expect(page).toHaveURL(new RegExp(`/admin/offers/${OFFER_ID}$`));
     await expect(page.getByText("Customer offered $15.00")).toBeVisible();
-    await expect(page.getByRole("region", { name: "Your reply" }).getByRole("button")).toHaveText(["Accept offer", "Counter-offer", "Reject offer"]);
+    await expect(page.getByRole("region", { name: "Your reply" }).getByRole("button")).toHaveText(["Accept $15.00", "Counter-offer", "Reject offer"]);
+    const facts = page.getByRole("region", { name: "Offer details" });
+    await expect(facts.getByText("List price today")).toBeVisible();
+    await expect(facts.getByText("$20.00")).toBeVisible();
+    await expect(facts.getByText("Customer's offer", { exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: "Counter-offer" }).click();
     const dialog = page.getByRole("dialog");
+    await expect(dialog.getByText("Up to today's list price, $20.00.")).toBeVisible();
     await dialog.getByLabel("Your counter-offer (USD)").fill("18");
     await dialog.getByLabel("Message (optional)").fill("We can do $18.");
     await dialog.getByRole("button", { name: "Send counter-offer" }).click();
@@ -346,6 +354,7 @@ test.describe("Offers (Phase 6C)", () => {
     });
     await expect(page.getByText("Waiting for the customer", { exact: true })).toBeVisible();
     await expect(page.getByRole("region", { name: "Your reply" })).toHaveCount(0);
+    await expect(facts.getByText("Your counter-offer", { exact: true })).toBeVisible();
   });
 
   test("admin reject goes through a destructive confirmation; a CSRF refusal keeps the dialog open", async ({ page }) => {

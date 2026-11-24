@@ -53,12 +53,17 @@ export function isOfferStatus(value: string): value is OfferStatus {
   return Object.prototype.hasOwnProperty.call(STATUS, value);
 }
 
-export function describeOfferStatus(status: string, perspective: OfferPerspective): { label: string; tone: StatusBadgeTone } {
+export function describeOfferStatus(
+  status: string,
+  perspective: OfferPerspective
+): { label: string; tone: StatusBadgeTone } {
   return isOfferStatus(status) ? STATUS[status][perspective] : { label: "Status unavailable", tone: "neutral" };
 }
 
 export function formatMoney(price: PriceRead): string {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: price.currency }).format(price.amount_cents / 100);
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: price.currency }).format(
+    price.amount_cents / 100
+  );
 }
 
 // The moves the server says this caller may make now, in a fixed display
@@ -70,6 +75,23 @@ const MOVES: Record<OfferPerspective, readonly OfferMove[]> = {
 
 export function allowedMoves(allowed: readonly string[], perspective: OfferPerspective): OfferMove[] {
   return MOVES[perspective].filter((move) => allowed.includes(move));
+}
+
+// Who put `current_amount` on the table: the last customer/admin round that
+// carried an amount (submitted or countered). System rounds (paid, expired…)
+// are ignored. Null when the history has no such round.
+export function offerAmountOwner(rounds: readonly OfferRoundReadDTO[]): "customer" | "admin" | null {
+  for (let index = rounds.length - 1; index >= 0; index -= 1) {
+    const round = rounds[index]!;
+    if (
+      round.amount &&
+      (round.action === "submitted" || round.action === "countered") &&
+      (round.actor === "customer" || round.actor === "admin")
+    ) {
+      return round.actor;
+    }
+  }
+  return null;
 }
 
 // One line of the negotiation history, from the viewer's side.
@@ -108,11 +130,11 @@ export function describeRound(round: OfferRoundReadDTO, perspective: OfferPerspe
 
 // The deadline that matters now: a reply while someone must answer, the
 // checkout window once accepted. Display only; the server enforces both.
-export function offerDeadline(offer: Pick<OfferSummaryReadDTO, "status" | "responds_by" | "checkout_expires_at">):
-  | { kind: "reply"; at: string }
-  | { kind: "checkout"; at: string }
-  | null {
-  if (offer.status === "accepted" && offer.checkout_expires_at) return { kind: "checkout", at: offer.checkout_expires_at };
+export function offerDeadline(
+  offer: Pick<OfferSummaryReadDTO, "status" | "responds_by" | "checkout_expires_at">
+): { kind: "reply"; at: string } | { kind: "checkout"; at: string } | null {
+  if (offer.status === "accepted" && offer.checkout_expires_at)
+    return { kind: "checkout", at: offer.checkout_expires_at };
   if ((offer.status === "awaiting_admin" || offer.status === "awaiting_customer") && offer.responds_by) {
     return { kind: "reply", at: offer.responds_by };
   }

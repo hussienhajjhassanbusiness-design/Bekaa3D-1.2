@@ -17,9 +17,11 @@ import { isMfaRequiredError } from "@/lib/admin/adminRequest";
 import { adminOfferKeys, offersAdminApi } from "@/lib/admin/offers/offersAdminApi";
 import type { ApiError } from "@/lib/api/ApiError";
 import { describeOfferError, type OfferErrorOutcome } from "@/lib/offers/offerErrors";
-import { allowedMoves, describeOfferStatus, offerProductName } from "@/lib/offers/offerModel";
+import { allowedMoves, describeOfferStatus, formatMoney, offerProductName } from "@/lib/offers/offerModel";
 import type { AdminOfferDetailReadDTO, OfferMove } from "@/lib/offers/offerTypes";
 import { isOrderId } from "@/lib/orders/orderModel";
+import { productsAdminApi, productsAdminKeys } from "@/lib/admin/products/productsAdminApi";
+import type { RawAdminProductDetail } from "@/lib/admin/products/productAdminTypes";
 
 const MOVE_LABELS: Record<OfferMove, string> = {
   accept: "Accept offer",
@@ -66,6 +68,17 @@ export function AdminOfferView({ offerId }: { offerId: string }) {
     },
     retry: false,
   });
+  // Today's list price, from the server (the offer's own product summary
+  // carries no price). Display and hint only: Accept/Counter are still
+  // capped by the backend. A failed read simply leaves it out.
+  const productId = detail.data?.product.id;
+  const product = useQuery<RawAdminProductDetail, ApiError>({
+    queryKey: productsAdminKeys.detail(productId ?? ""),
+    queryFn: () => productsAdminApi.getProduct(productId ?? ""),
+    enabled: productId !== undefined,
+    retry: false,
+  });
+  const listPrice = product.data?.price ?? null;
   const inFlight = useRef(false);
   const [move, setMove] = useState<OfferMove | null>(null);
   const [failure, setFailure] = useState<OfferErrorOutcome | null>(null);
@@ -151,7 +164,7 @@ export function AdminOfferView({ offerId }: { offerId: string }) {
       {failure && !dialogOpen && <Alert variant="error" message={failure.message} />}
 
       <AdminSection title="Offer details">
-        <OfferFacts offer={offer}>
+        <OfferFacts offer={offer} perspective="admin">
           <Field label="Customer">
             {offer.customer.email ?? "Unknown customer"}
             {" · "}
@@ -170,6 +183,7 @@ export function AdminOfferView({ offerId }: { offerId: string }) {
               {offerProductName(offer.product.name)}
             </Link>
           </Field>
+          {listPrice && <Field label="List price today">{formatMoney(listPrice)}</Field>}
         </OfferFacts>
       </AdminSection>
 
@@ -195,7 +209,7 @@ export function AdminOfferView({ offerId }: { offerId: string }) {
                   setMove(item);
                 }}
               >
-                {MOVE_LABELS[item]}
+                {item === "accept" ? `Accept ${formatMoney(offer.current_amount)}` : MOVE_LABELS[item]}
               </Button>
             ))}
           </div>
@@ -212,6 +226,7 @@ export function AdminOfferView({ offerId }: { offerId: string }) {
         move={move}
         perspective="admin"
         currentAmount={offer.current_amount}
+        listPrice={listPrice}
         pending={answer.isPending}
         error={dialogOpen && failure ? failure.message : null}
         fieldError={dialogOpen ? (failure?.field ?? null) : null}
