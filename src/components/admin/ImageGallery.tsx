@@ -201,8 +201,8 @@ interface AltTextEditorProps {
   isSaving: boolean;
 }
 
-// Owns only the ephemeral draft of its own row (same pattern as
-// SettingRow's draft value) — the real pending/persisted alt text lives
+// Owns only the ephemeral draft of its own row (a per-row local
+// draft value) — the real pending/persisted alt text lives
 // in the caller's own mutation hook, not here. `label` is per-row and
 // distinguishing (e.g. "Alt text (image 2)") — a shared "Alt text" label
 // repeated identically across every row in a multi-image gallery would be

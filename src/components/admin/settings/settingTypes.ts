@@ -7,7 +7,7 @@
 // `description`, `unit`, `minimum`, `maximum`, `nullable`, `is_public`,
 // `updated_at`, `updated_by`. `src/lib/admin/settings/settingsAdapter.ts`
 // maps that wire shape onto this UI model in one place — this file (and
-// SettingControl/SettingRow) never sees a backend field name directly.
+// SettingControl and the settings page) never sees a backend field name directly.
 //
 // `integer` and `duration` both map onto the one `number` UI variant
 // (duration is just an integer count of seconds server-side) — `unit`
@@ -17,7 +17,7 @@
 // MoneyInput, json (no V1 setting actually has this type) gets a
 // minimal non-editable fallback — never a raw JSON editor.
 //
-// Only the fields SettingControl/SettingRow actually need exist here —
+// Only the fields SettingControl and the settings page actually need exist here —
 // no speculative metadata, no generic schema framework.
 
 export type SettingValueType = "boolean" | "number" | "string" | "money" | "json";
