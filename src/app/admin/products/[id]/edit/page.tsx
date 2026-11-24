@@ -1,7 +1,7 @@
 "use client";
 
 import { AdminBackLink } from "@/components/admin/adminUi";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { LoadingSpinner } from "@/components/feedback/LoadingSpinner";
 import { Alert } from "@/components/feedback/Alert";
@@ -84,6 +84,13 @@ export default function AdminProductEditPage() {
 
   const [fieldErrors, setFieldErrors] = useState<ProductFieldErrors | undefined>(undefined);
   const [bannerMessage, setBannerMessage] = useState<string | null>(null);
+  // Stabilization: a successful save used to give no feedback at all (the
+  // form simply stayed put), so admins could not tell it had worked.
+  const [saved, setSaved] = useState(false);
+  const savedRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (saved) savedRef.current?.scrollIntoView?.({ block: "center" });
+  }, [saved]);
   const [imageError, setImageError] = useState<string | null>(null);
 
   if (isLoading) {
@@ -100,6 +107,7 @@ export default function AdminProductEditPage() {
 
   async function handleSubmit() {
     setBannerMessage(null);
+    setSaved(false);
     const errors: ProductFieldErrors = {};
     if (!form!.name) errors.name = "Name is required.";
     if (!form!.slug || !isValidSlugFormat(form!.slug)) {
@@ -118,6 +126,7 @@ export default function AdminProductEditPage() {
 
     try {
       await updateMutation.mutateAsync(toUpdateBody(form!, product!.version));
+      setSaved(true);
     } catch (error) {
       const result = describeProductError(error);
       if (result.isVersionConflict) {
@@ -189,6 +198,11 @@ export default function AdminProductEditPage() {
         <AdminBackLink href={`/admin/products/${product.id}`}>Back to product</AdminBackLink>
       </div>
       <h1 className="mt-2 break-words font-headline text-headline-lg text-on-surface">Edit {product.name}</h1>
+      {saved && (
+        <div ref={savedRef} className="mt-4">
+          <Alert variant="success" message="Changes saved." />
+        </div>
+      )}
       {bannerMessage && (
         <div className="mt-4">
           <Alert variant="error" message={bannerMessage} />
@@ -201,7 +215,10 @@ export default function AdminProductEditPage() {
           <ProductForm
             mode="edit"
             value={form}
-            onChange={setForm}
+            onChange={(next) => {
+              setSaved(false);
+              setForm(next);
+            }}
             categories={referenceData.categories}
             materials={referenceData.materials}
             colours={referenceData.colours}

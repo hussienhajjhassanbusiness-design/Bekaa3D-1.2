@@ -49,9 +49,11 @@ describe("describeCartWriteError", () => {
     expect(result.message).toBe("You can have at most 5 of this product in your cart. You already have 4.");
   });
 
-  it("QUANTITY_EXCEEDS_LIMIT with max_quantity 1 (an STL) says only one copy fits", () => {
+  it("QUANTITY_EXCEEDS_LIMIT with max_quantity 1 says only one fits, without assuming an STL", () => {
     const result = describeCartWriteError(problem(422, "QUANTITY_EXCEEDS_LIMIT", { max_quantity: 1, current_quantity: 1 }));
     expect(result.message).toBe(CART_MESSAGES.singleCopy);
+    // A physical product can also be limited to one per line.
+    expect(result.message).not.toMatch(/stl/i);
   });
 
   it("QUANTITY_EXCEEDS_LIMIT without a usable max_quantity falls back to generic limit copy", () => {

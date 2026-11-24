@@ -22,7 +22,9 @@ export const CART_MESSAGES = {
   notListed: "This product is no longer available.",
   notPurchasable: "This product can't be bought online right now.",
   quantityLimit: "That quantity is above the limit for this product.",
-  singleCopy: "STL files are sold one copy at a time, and this one is already in your cart.",
+  // Stabilization: a limit of 1 applies to STL files AND to physical products
+  // whose max_quantity_per_line is 1, so the copy must not claim "STL".
+  singleCopy: "Only one of this item can be in your cart, and it's already there.",
   lineLimit: "Your cart is full. Remove a product to add another.",
   alreadyOwned: "You already own this STL file, so it can't be added again.",
   lineGone: "This item is no longer in your cart. Your cart has been refreshed.",

@@ -161,6 +161,38 @@ describe("ProductDetailView", () => {
     expect(await screen.findByRole("link", { name: /chat on whatsapp/i })).toBeInTheDocument();
   });
 
+  // Stabilization: a WhatsApp-only product with no configured number was a dead end.
+  it("points a WhatsApp-only product to Contact when no WhatsApp number is configured", async () => {
+    vi.spyOn(apiClient, "get").mockImplementation(async (path: unknown) => {
+      if ((path as string).startsWith("/api/v1/settings/public")) {
+        return { accepting_orders: true, cash_payment_enabled: true, cash_max_order_total: { amount_cents: 10000, currency: "USD" }, pickup_address: null, pickup_hours: null, whatsapp_number: null };
+      }
+      return { ...physicalDetail, purchase_mode: "whatsapp_only", capabilities: { can_add_to_cart: false, can_offer: false, whatsapp_available: true } };
+    });
+    mockedUseAuth.mockReturnValue(authState());
+
+    renderDetail();
+
+    expect(await screen.findByText(/ordered over whatsapp, which isn.t available right now/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /contact us to order it/i })).toHaveAttribute("href", "/contact");
+    expect(screen.queryByRole("link", { name: /chat on whatsapp/i })).not.toBeInTheDocument();
+  });
+
+  it("does not show the Contact fallback when WhatsApp is configured or the item can go in the cart", async () => {
+    vi.spyOn(apiClient, "get").mockImplementation(async (path: unknown) => {
+      if ((path as string).startsWith("/api/v1/settings/public")) {
+        return { accepting_orders: true, cash_payment_enabled: true, cash_max_order_total: { amount_cents: 10000, currency: "USD" }, pickup_address: null, pickup_hours: null, whatsapp_number: null };
+      }
+      return physicalDetail; // can_add_to_cart: true
+    });
+    mockedUseAuth.mockReturnValue(authState());
+
+    renderDetail();
+
+    await screen.findByRole("heading", { name: "Articulated Dragon" });
+    expect(screen.queryByText(/ordered over whatsapp/i)).not.toBeInTheDocument();
+  });
+
   it("never shows the WhatsApp CTA when whatsapp_available is false", async () => {
     vi.spyOn(apiClient, "get").mockImplementation(async (path: unknown) => {
       if ((path as string).startsWith("/api/v1/settings/public")) {

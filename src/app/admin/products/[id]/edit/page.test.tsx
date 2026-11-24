@@ -136,6 +136,37 @@ describe("AdminProductEditPage", () => {
     expect(body).not.toHaveProperty("type");
   });
 
+  // Stabilization: a successful save used to show nothing at all.
+  it("confirms a successful save with a polite status, cleared by the next edit", async () => {
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
+    const mutateAsync = vi.fn().mockResolvedValue(undefined);
+    mockedUseAdminProductUpdate.mockReturnValue({ mutateAsync, isPending: false } as never);
+    mockedUseAdminProduct.mockReturnValue(queryResult({ data: PRODUCT }));
+    const user = userEvent.setup();
+    render(<AdminProductEditPage />);
+
+    expect(screen.queryByText("Changes saved.")).toBeNull();
+    await user.click(screen.getByRole("button", { name: /save changes/i }));
+
+    expect((await screen.findByText("Changes saved.")).closest("[role=status]")).not.toBeNull();
+    await user.type(screen.getByLabelText("Name"), "!");
+    expect(screen.queryByText("Changes saved.")).toBeNull();
+  });
+
+  it("does not claim a save when the update fails", async () => {
+    const mutateAsync = vi.fn().mockRejectedValue({ kind: "http", status: 500, message: "x", raw: undefined });
+    mockedUseAdminProductUpdate.mockReturnValue({ mutateAsync, isPending: false } as never);
+    mockedUseAdminProduct.mockReturnValue(queryResult({ data: PRODUCT }));
+    const user = userEvent.setup();
+    render(<AdminProductEditPage />);
+
+    await user.click(screen.getByRole("button", { name: /save changes/i }));
+
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(screen.queryByText("Changes saved.")).toBeNull();
+  });
+
   it("on VERSION_CONFLICT, re-fetches and resets the form to the fresh state, showing a banner, without auto-retrying", async () => {
     const freshProduct = { ...PRODUCT, version: 4, name: "Moon Lamp (updated elsewhere)" };
     const mutateAsync = vi.fn().mockRejectedValue({ kind: "http", status: 409, code: "VERSION_CONFLICT", message: "x", raw: undefined });

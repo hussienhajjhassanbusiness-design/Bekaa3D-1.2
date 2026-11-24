@@ -48,6 +48,11 @@ export const CHECKOUT_MESSAGES = {
   cashDisabled: "Cash payment isn't available right now. Please pay online.",
   zeroTotal: "This order can't be placed with this payment method. Please contact us for help.",
   paymentNotAllowed: "This payment method can't be used for this order.",
+  // ADR-048: each physical product names the methods it accepts.
+  onlineNotAccepted: "An item in your order can only be paid in cash. Please choose Pay in cash.",
+  cashNotAccepted: "An item in your order can't be paid in cash. Please pay online.",
+  noCommonPaymentMethod:
+    "The items in your cart can't be paid the same way. Please order them separately. Your cart has been kept.",
   cashLimit: "This order is above the limit for cash payment. Please pay online.",
   cashNotAvailable: "Cash on delivery isn't available for this order. Please pay online.",
   onlineUnavailable: "Online payment isn't available right now. Your cart has been kept.",
@@ -224,6 +229,8 @@ const PAYMENT_REASON_MESSAGES: Readonly<Record<string, string>> = {
   cash_requires_physical: CHECKOUT_MESSAGES.cashNeedsPhysical,
   cash_disabled: CHECKOUT_MESSAGES.cashDisabled,
   zero_total: CHECKOUT_MESSAGES.zeroTotal,
+  online_not_accepted: CHECKOUT_MESSAGES.onlineNotAccepted,
+  cash_not_accepted: CHECKOUT_MESSAGES.cashNotAccepted,
   provider_not_configured: CHECKOUT_MESSAGES.onlineUnavailable,
   provider_required: CHECKOUT_MESSAGES.onlineUnavailable,
   // The frontend never sends a provider with cash, so this is a bug.
@@ -333,6 +340,8 @@ export function describeCheckoutError(error: unknown, context: CheckoutErrorCont
         : CHECKOUT_MESSAGES.cashLimit;
       return { kind: "message", ...flags(message, { refetchSettings: true }) };
     }
+    case "422 NO_COMMON_PAYMENT_METHOD":
+      return { kind: "message", ...flags(CHECKOUT_MESSAGES.noCommonPaymentMethod) };
     case "422 CASH_NOT_AVAILABLE":
       return { kind: "message", ...flags(CHECKOUT_MESSAGES.cashNotAvailable) };
     case "409 IDEMPOTENCY_REQUEST_IN_PROGRESS":

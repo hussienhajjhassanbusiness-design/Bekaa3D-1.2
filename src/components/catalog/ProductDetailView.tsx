@@ -151,6 +151,22 @@ export function ProductDetailView({ slug }: ProductDetailViewProps) {
                 productName={product.name}
               />
             )}
+            {/* Stabilization: a WhatsApp-only product with no WhatsApp number
+                configured (a null public setting) left the page with no way
+                to order and no explanation. Point to Contact instead. */}
+            {product.isAvailable &&
+              product.capabilities.whatsappAvailable &&
+              !product.capabilities.canAddToCart &&
+              settingsQuery.isSuccess &&
+              !settingsQuery.data?.whatsappNumber && (
+                <p className="font-body text-body-md text-on-surface-variant">
+                  This item is ordered over WhatsApp, which isn&apos;t available right now.{" "}
+                  <Link href="/contact" className="font-semibold text-primary underline underline-offset-4">
+                    Contact us to order it
+                  </Link>
+                  .
+                </p>
+              )}
             <WishlistButton productId={product.id} productName={product.name} returnToPath={returnToPath} variant="full" />
             <MakeOfferPanel
               productId={product.id}

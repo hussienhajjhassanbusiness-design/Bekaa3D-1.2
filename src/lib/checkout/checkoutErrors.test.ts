@@ -173,6 +173,22 @@ describe("describeCheckoutError", () => {
     expect(outcome.message).toBe(message);
   });
 
+  // Stabilization: the per-product accepted methods (ADR-048) have their own copy.
+  it("422 PAYMENT_METHOD_NOT_ALLOWED names which method the products refuse", () => {
+    expect(
+      describeCheckoutError(http(422, "PAYMENT_METHOD_NOT_ALLOWED", { reason: "online_not_accepted" })).message
+    ).toBe(CHECKOUT_MESSAGES.onlineNotAccepted);
+    expect(
+      describeCheckoutError(http(422, "PAYMENT_METHOD_NOT_ALLOWED", { reason: "cash_not_accepted" })).message
+    ).toBe(CHECKOUT_MESSAGES.cashNotAccepted);
+  });
+
+  it("422 NO_COMMON_PAYMENT_METHOD asks to order the items separately", () => {
+    expect(describeCheckoutError(http(422, "NO_COMMON_PAYMENT_METHOD", { lines: [] })).message).toBe(
+      CHECKOUT_MESSAGES.noCommonPaymentMethod
+    );
+  });
+
   it("422 CASH_PAYMENT_LIMIT_REACHED names the public cash limit when known", () => {
     expect(
       describeCheckoutError(http(422, "CASH_PAYMENT_LIMIT_REACHED", { reason: "order_total" }), {
