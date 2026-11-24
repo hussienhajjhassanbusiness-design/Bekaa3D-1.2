@@ -17,9 +17,10 @@ export interface OfferMoveDialogProps {
   move: OfferMove | null;
   perspective: OfferPerspective;
   currentAmount: PriceRead;
-  // Today's list price, when the caller has it from the server (the admin
-  // page reads it from GET /admin/products/{id}). Shown as a hint on the
-  // counter amount only; the backend's own 422 stays the authority.
+  // Today's price (the offer ceiling), when the caller has it from the server
+  // (the admin page reads the public product's `price`, promotional while a
+  // promotion applies). Shown as a hint on the counter amount only; the
+  // backend's own 422 stays the authority.
   listPrice?: PriceRead | null;
   pending: boolean;
   // Frontend-owned copy for a server refusal; the dialog stays open with it.
@@ -125,7 +126,7 @@ function OfferMoveDialogInner({
       {needsAmount && (
         <MoneyInput
           label="Your counter-offer"
-          hint={listPrice ? `Up to today's list price, ${formatMoney(listPrice)}.` : undefined}
+          hint={listPrice ? `Up to today's price, ${formatMoney(listPrice)}.` : undefined}
           currencyLabel={OFFER_CURRENCY}
           valueCents={amountCents}
           onChangeCents={(next) => {

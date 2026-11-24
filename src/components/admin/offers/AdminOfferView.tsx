@@ -20,8 +20,8 @@ import { describeOfferError, type OfferErrorOutcome } from "@/lib/offers/offerEr
 import { allowedMoves, describeOfferStatus, formatMoney, offerProductName } from "@/lib/offers/offerModel";
 import type { AdminOfferDetailReadDTO, OfferMove } from "@/lib/offers/offerTypes";
 import { isOrderId } from "@/lib/orders/orderModel";
-import { productsAdminApi, productsAdminKeys } from "@/lib/admin/products/productsAdminApi";
-import type { RawAdminProductDetail } from "@/lib/admin/products/productAdminTypes";
+import { productsApi, productsKeys } from "@/lib/catalog/productsApi";
+import type { ProductDetail } from "@/lib/catalog/productTypes";
 
 const MOVE_LABELS: Record<OfferMove, string> = {
   accept: "Accept offer",
@@ -68,17 +68,21 @@ export function AdminOfferView({ offerId }: { offerId: string }) {
     },
     retry: false,
   });
-  // Today's list price, from the server (the offer's own product summary
-  // carries no price). Display and hint only: Accept/Counter are still
-  // capped by the backend. A failed read simply leaves it out.
-  const productId = detail.data?.product.id;
-  const product = useQuery<RawAdminProductDetail, ApiError>({
-    queryKey: productsAdminKeys.detail(productId ?? ""),
-    queryFn: () => productsAdminApi.getProduct(productId ?? ""),
-    enabled: productId !== undefined,
+  // Today's price, from the server's public product read: the price the shop
+  // charges now, which is also the backend's offer ceiling — the promotional
+  // price while a promotion applies (backend docs/promotions.md). The offer's
+  // own product summary carries no price. Display and hint only: Accept/
+  // Counter are still capped by the backend. A failed read (e.g. a hidden
+  // product, where counter/accept are not offered anyway) leaves it out.
+  const productSlug = detail.data?.product.slug;
+  const product = useQuery<ProductDetail, ApiError>({
+    queryKey: productsKeys.detail(productSlug ?? ""),
+    queryFn: () => productsApi.getProductBySlug(productSlug ?? ""),
+    enabled: productSlug !== undefined,
     retry: false,
   });
   const listPrice = product.data?.price ?? null;
+  const productPromotion = product.data?.promotion ?? null;
   const inFlight = useRef(false);
   const [move, setMove] = useState<OfferMove | null>(null);
   const [failure, setFailure] = useState<OfferErrorOutcome | null>(null);
@@ -183,7 +187,17 @@ export function AdminOfferView({ offerId }: { offerId: string }) {
               {offerProductName(offer.product.name)}
             </Link>
           </Field>
-          {listPrice && <Field label="List price today">{formatMoney(listPrice)}</Field>}
+          {listPrice && (
+            <Field label="Price today">
+              {formatMoney(listPrice)}
+              {productPromotion && product.data && (
+                <span className="text-on-surface-variant">
+                  {" "}
+                  ({productPromotion.name}; list price {formatMoney(product.data.list_price)})
+                </span>
+              )}
+            </Field>
+          )}
         </OfferFacts>
       </AdminSection>
 

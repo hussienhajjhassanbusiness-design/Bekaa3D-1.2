@@ -1,6 +1,16 @@
 {
   "components": {
     "schemas": {
+      "AcceptedPaymentMethods": {
+        "description": "How a physical product may be paid at checkout (BR-019, ADR-048). Not a purchase mode.",
+        "enum": [
+          "online",
+          "cash",
+          "online_or_cash"
+        ],
+        "title": "AcceptedPaymentMethods",
+        "type": "string"
+      },
       "AcceptedPriceIn": {
         "additionalProperties": false,
         "properties": {
@@ -27,6 +37,22 @@
           "currency"
         ],
         "title": "AcceptedPriceIn",
+        "type": "object"
+      },
+      "AccountDeletionRequest": {
+        "additionalProperties": false,
+        "description": "`DELETE /me`: the current password is the fresh-auth check (VS-045).",
+        "properties": {
+          "current_password": {
+            "maxLength": 256,
+            "title": "Current Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "current_password"
+        ],
+        "title": "AccountDeletionRequest",
         "type": "object"
       },
       "AddressCreate": {
@@ -1887,6 +1913,19 @@
             ],
             "title": "Failed At"
           },
+          "hold_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A live attempt on an unpaid order: when the order is released. The customer's contact is on `GET /admin/orders/{order_id}`.",
+            "title": "Hold Expires At"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -1980,7 +2019,8 @@
           "expired_at",
           "late_captured_at",
           "needs_manual_confirmation",
-          "unprocessed_event_count"
+          "unprocessed_event_count",
+          "hold_expires_at"
         ],
         "title": "AdminPaymentRead",
         "type": "object"
@@ -1989,6 +2029,16 @@
         "additionalProperties": false,
         "description": "api-endpoints.md 29.10. `type` and price are required; aggregates are not accepted.",
         "properties": {
+          "accepted_payment_methods": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AcceptedPaymentMethods"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "batch_size": {
             "anyOf": [
               {
@@ -2185,6 +2235,16 @@
       },
       "AdminProductDetail": {
         "properties": {
+          "accepted_payment_methods": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AcceptedPaymentMethods"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "average_rating": {
             "title": "Average Rating",
             "type": "number"
@@ -2414,6 +2474,7 @@
           "is_featured",
           "is_available",
           "purchase_mode",
+          "accepted_payment_methods",
           "material_id",
           "colour_id",
           "dimensions",
@@ -2465,6 +2526,16 @@
         "additionalProperties": false,
         "description": "Every field optional except `version`; `type` and aggregates are refused (extra=forbid).",
         "properties": {
+          "accepted_payment_methods": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AcceptedPaymentMethods"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "batch_size": {
             "anyOf": [
               {
@@ -2704,6 +2775,299 @@
         "title": "AdminProductUpdate",
         "type": "object"
       },
+      "AdminPromotionCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "active": {
+            "default": true,
+            "title": "Active",
+            "type": "boolean"
+          },
+          "badge_text": {
+            "anyOf": [
+              {
+                "maxLength": 24,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Badge Text"
+          },
+          "discount_type": {
+            "$ref": "#/components/schemas/DiscountType"
+          },
+          "discount_value": {
+            "description": "A whole percent from 1 to 100 for `percentage`; cents for `fixed`.",
+            "minimum": 1.0,
+            "title": "Discount Value",
+            "type": "integer"
+          },
+          "ends_at": {
+            "description": "Exclusive.",
+            "format": "date-time",
+            "title": "Ends At",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "product_ids": {
+            "description": "The products of a `selected` scope; empty for any other scope.",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 200,
+            "title": "Product Ids",
+            "type": "array"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/PromotionScope"
+          },
+          "starts_at": {
+            "format": "date-time",
+            "title": "Starts At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "discount_type",
+          "discount_value",
+          "scope",
+          "starts_at",
+          "ends_at"
+        ],
+        "title": "AdminPromotionCreate",
+        "type": "object"
+      },
+      "AdminPromotionList": {
+        "properties": {
+          "items": {
+            "description": "Newest first, at most 200.",
+            "items": {
+              "$ref": "#/components/schemas/AdminPromotionRead"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "AdminPromotionList",
+        "type": "object"
+      },
+      "AdminPromotionRead": {
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "badge_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Badge Text"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "discount_type": {
+            "$ref": "#/components/schemas/DiscountType"
+          },
+          "discount_value": {
+            "description": "A whole percent from 1 to 100 for `percentage`; cents for `fixed`.",
+            "title": "Discount Value",
+            "type": "integer"
+          },
+          "ends_at": {
+            "format": "date-time",
+            "title": "Ends At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "product_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Product Ids",
+            "type": "array"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/PromotionScope"
+          },
+          "starts_at": {
+            "format": "date-time",
+            "title": "Starts At",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PromotionStatus",
+            "description": "Derived now: scheduled, active, ended, inactive."
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "badge_text",
+          "discount_type",
+          "discount_value",
+          "scope",
+          "product_ids",
+          "starts_at",
+          "ends_at",
+          "active",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "AdminPromotionRead",
+        "type": "object"
+      },
+      "AdminPromotionUpdate": {
+        "additionalProperties": false,
+        "description": "Only the fields sent change; the merged promotion is validated as a whole.\n`active: false` switches a promotion off at once; `true` switches it back on.",
+        "properties": {
+          "active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active"
+          },
+          "badge_text": {
+            "anyOf": [
+              {
+                "maxLength": 24,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Badge Text"
+          },
+          "discount_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiscountType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "discount_value": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A whole percent from 1 to 100 for `percentage`; cents for `fixed`.",
+            "title": "Discount Value"
+          },
+          "ends_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ends At"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "product_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "maxItems": 200,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Ids"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PromotionScope"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "starts_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starts At"
+          }
+        },
+        "title": "AdminPromotionUpdate",
+        "type": "object"
+      },
       "AdminRefundBalanceRead": {
         "description": "What can still be refunded, per line and on the paid payment (VS-030 L2, L3).",
         "properties": {
@@ -2726,6 +3090,235 @@
         "title": "AdminRefundBalanceRead",
         "type": "object"
       },
+      "AdminReviewDetail": {
+        "description": "The same fields as a list item, under the api-endpoints name.",
+        "properties": {
+          "badge_shown": {
+            "title": "Badge Shown",
+            "type": "boolean"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "edited": {
+            "title": "Edited",
+            "type": "boolean"
+          },
+          "hidden_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hidden At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_hidden": {
+            "title": "Is Hidden",
+            "type": "boolean"
+          },
+          "is_verified_purchase": {
+            "title": "Is Verified Purchase",
+            "type": "boolean"
+          },
+          "product_id": {
+            "format": "uuid",
+            "title": "Product Id",
+            "type": "string"
+          },
+          "product_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Slug"
+          },
+          "rating": {
+            "title": "Rating",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "product_id",
+          "product_slug",
+          "user_id",
+          "rating",
+          "body",
+          "is_verified_purchase",
+          "badge_shown",
+          "is_hidden",
+          "hidden_at",
+          "created_at",
+          "updated_at",
+          "edited"
+        ],
+        "title": "AdminReviewDetail",
+        "type": "object"
+      },
+      "AdminReviewPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AdminReviewRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "AdminReviewPage",
+        "type": "object"
+      },
+      "AdminReviewRead": {
+        "properties": {
+          "badge_shown": {
+            "title": "Badge Shown",
+            "type": "boolean"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "edited": {
+            "title": "Edited",
+            "type": "boolean"
+          },
+          "hidden_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hidden At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_hidden": {
+            "title": "Is Hidden",
+            "type": "boolean"
+          },
+          "is_verified_purchase": {
+            "title": "Is Verified Purchase",
+            "type": "boolean"
+          },
+          "product_id": {
+            "format": "uuid",
+            "title": "Product Id",
+            "type": "string"
+          },
+          "product_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Slug"
+          },
+          "rating": {
+            "title": "Rating",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "product_id",
+          "product_slug",
+          "user_id",
+          "rating",
+          "body",
+          "is_verified_purchase",
+          "badge_shown",
+          "is_hidden",
+          "hidden_at",
+          "created_at",
+          "updated_at",
+          "edited"
+        ],
+        "title": "AdminReviewRead",
+        "type": "object"
+      },
       "AdminUserDetail": {
         "description": "One account as an administrator sees it (api-endpoints.md 530-532).\n\nV1 design assumption: the endpoint catalogue fixes the schema *names* and\ndescribes the content as \"account status and admin-safe customer summary\"\nwithout listing fields. This is VS-006's `UserProfileRead` plus the two\npieces of account state an administrator manages and a customer cannot see -\n`is_active`, and `created_at` as the account's age.\n\nUsed for both the list items and the detail response. There is no separate\nprofile table, so a narrower list row would differ from this one only by\nomitting fields the same query already loaded.\n\nNothing derived from `password_hash` appears, at any remove, and neither\n`anonymized_at` nor `deleted_at` is exposed: V1 has no endpoint that sets\nthem, so they would be a column this API describes but cannot explain.",
         "properties": {
@@ -2735,7 +3328,6 @@
             "type": "string"
           },
           "email": {
-            "format": "email",
             "title": "Email",
             "type": "string"
           },
@@ -2817,6 +3409,64 @@
           "is_active"
         ],
         "title": "AdminUserUpdate",
+        "type": "object"
+      },
+      "AnalyticsOverview": {
+        "properties": {
+          "buyers": {
+            "title": "Buyers",
+            "type": "integer"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "from": {
+            "format": "date",
+            "title": "From",
+            "type": "string"
+          },
+          "net": {
+            "$ref": "#/components/schemas/StreamCentsRead"
+          },
+          "new_customers": {
+            "title": "New Customers",
+            "type": "integer"
+          },
+          "paid_orders": {
+            "title": "Paid Orders",
+            "type": "integer"
+          },
+          "pending_offers": {
+            "$ref": "#/components/schemas/PendingOfferCounts"
+          },
+          "stl_lines_awaiting_delivery": {
+            "title": "Stl Lines Awaiting Delivery",
+            "type": "integer"
+          },
+          "timezone": {
+            "title": "Timezone",
+            "type": "string"
+          },
+          "to": {
+            "format": "date",
+            "title": "To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "timezone",
+          "currency",
+          "net",
+          "paid_orders",
+          "buyers",
+          "new_customers",
+          "pending_offers",
+          "stl_lines_awaiting_delivery"
+        ],
+        "title": "AnalyticsOverview",
         "type": "object"
       },
       "AuditLogPage": {
@@ -3286,6 +3936,14 @@
             "title": "Items",
             "type": "array"
           },
+          "payment_methods": {
+            "description": "Methods every line's product accepts; owned STLs still count here.",
+            "items": {
+              "$ref": "#/components/schemas/PaymentMethod"
+            },
+            "title": "Payment Methods",
+            "type": "array"
+          },
           "updated_at": {
             "anyOf": [
               {
@@ -3304,6 +3962,7 @@
           "items",
           "contains_physical",
           "contains_digital",
+          "payment_methods",
           "updated_at"
         ],
         "title": "CartRead",
@@ -4103,10 +4762,34 @@
       },
       "CheckoutPaymentRead": {
         "properties": {
+          "hold_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the order is released if still unpaid.",
+            "title": "Hold Expires At"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "next_step": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PaymentNextStep"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`redirect` to `redirect_url`, or `await_admin_contact` for `manual`: the administrator contacts the customer to arrange payment (ADR-049)."
           },
           "provider": {
             "title": "Provider",
@@ -4133,7 +4816,9 @@
           "id",
           "status",
           "provider",
-          "redirect_url"
+          "redirect_url",
+          "next_step",
+          "hold_expires_at"
         ],
         "title": "CheckoutPaymentRead",
         "type": "object"
@@ -4570,7 +5255,7 @@
                 "type": "null"
               }
             ],
-            "description": "Set for a customer's problem report only.",
+            "description": "The account, when the sender was signed in.",
             "title": "User Id"
           }
         },
@@ -5165,6 +5850,68 @@
         "title": "CustomRequestTransition",
         "type": "object"
       },
+      "CustomerAnalytics": {
+        "properties": {
+          "buyers": {
+            "title": "Buyers",
+            "type": "integer"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "from": {
+            "format": "date",
+            "title": "From",
+            "type": "string"
+          },
+          "net_per_buyer_cents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Net Per Buyer Cents"
+          },
+          "new_customers": {
+            "title": "New Customers",
+            "type": "integer"
+          },
+          "registered_customers": {
+            "title": "Registered Customers",
+            "type": "integer"
+          },
+          "repeat_buyers": {
+            "title": "Repeat Buyers",
+            "type": "integer"
+          },
+          "timezone": {
+            "title": "Timezone",
+            "type": "string"
+          },
+          "to": {
+            "format": "date",
+            "title": "To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "timezone",
+          "currency",
+          "registered_customers",
+          "new_customers",
+          "buyers",
+          "repeat_buyers",
+          "net_per_buyer_cents"
+        ],
+        "title": "CustomerAnalytics",
+        "type": "object"
+      },
       "CustomerOrderCancelRequest": {
         "additionalProperties": false,
         "properties": {
@@ -5182,6 +5929,69 @@
           }
         },
         "title": "CustomerOrderCancelRequest",
+        "type": "object"
+      },
+      "DataExportRead": {
+        "properties": {
+          "addresses": {
+            "items": {
+              "$ref": "#/components/schemas/ExportAddress"
+            },
+            "title": "Addresses",
+            "type": "array"
+          },
+          "contact_messages": {
+            "items": {
+              "$ref": "#/components/schemas/ExportContactMessage"
+            },
+            "title": "Contact Messages",
+            "type": "array"
+          },
+          "exported_at": {
+            "format": "date-time",
+            "title": "Exported At",
+            "type": "string"
+          },
+          "format_version": {
+            "title": "Format Version",
+            "type": "integer"
+          },
+          "offers": {
+            "items": {
+              "$ref": "#/components/schemas/ExportOffer"
+            },
+            "title": "Offers",
+            "type": "array"
+          },
+          "orders": {
+            "items": {
+              "$ref": "#/components/schemas/ExportOrder"
+            },
+            "title": "Orders",
+            "type": "array"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ExportProfile"
+          },
+          "reviews": {
+            "items": {
+              "$ref": "#/components/schemas/ExportReview"
+            },
+            "title": "Reviews",
+            "type": "array"
+          }
+        },
+        "required": [
+          "format_version",
+          "exported_at",
+          "profile",
+          "addresses",
+          "orders",
+          "reviews",
+          "offers",
+          "contact_messages"
+        ],
+        "title": "DataExportRead",
         "type": "object"
       },
       "DeliveryAddressRead": {
@@ -5317,6 +6127,14 @@
         "title": "DimensionsRead",
         "type": "object"
       },
+      "DiscountType": {
+        "enum": [
+          "percentage",
+          "fixed"
+        ],
+        "title": "DiscountType",
+        "type": "string"
+      },
       "DroppedLineRead": {
         "properties": {
           "product_id": {
@@ -5335,6 +6153,957 @@
           "reason"
         ],
         "title": "DroppedLineRead",
+        "type": "object"
+      },
+      "ExportAddress": {
+        "properties": {
+          "area": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Area"
+          },
+          "city": {
+            "title": "City",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "deleted": {
+            "title": "Deleted",
+            "type": "boolean"
+          },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At"
+          },
+          "governorate": {
+            "title": "Governorate",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_default": {
+            "title": "Is Default",
+            "type": "boolean"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "landmark_notes": {
+            "title": "Landmark Notes",
+            "type": "string"
+          },
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          },
+          "recipient_name": {
+            "title": "Recipient Name",
+            "type": "string"
+          },
+          "street": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Street"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "recipient_name",
+          "phone",
+          "governorate",
+          "city",
+          "area",
+          "street",
+          "landmark_notes",
+          "is_default",
+          "created_at",
+          "updated_at",
+          "deleted",
+          "deleted_at"
+        ],
+        "title": "ExportAddress",
+        "type": "object"
+      },
+      "ExportContactMessage": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          }
+        },
+        "required": [
+          "subject",
+          "message",
+          "created_at"
+        ],
+        "title": "ExportContactMessage",
+        "type": "object"
+      },
+      "ExportDeliveryAddress": {
+        "properties": {
+          "area": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Area"
+          },
+          "city": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City"
+          },
+          "governorate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Governorate"
+          },
+          "landmark_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Landmark Notes"
+          },
+          "recipient_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipient Name"
+          },
+          "street": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Street"
+          }
+        },
+        "required": [
+          "recipient_name",
+          "governorate",
+          "city",
+          "area",
+          "street",
+          "landmark_notes"
+        ],
+        "title": "ExportDeliveryAddress",
+        "type": "object"
+      },
+      "ExportOffer": {
+        "properties": {
+          "accepted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accepted At"
+          },
+          "agreed_amount": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Money"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "checkout_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkout Expires At"
+          },
+          "cooldown_until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cooldown Until"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "current_amount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "initial_amount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "product_id": {
+            "format": "uuid",
+            "title": "Product Id",
+            "type": "string"
+          },
+          "product_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Name"
+          },
+          "responds_by": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Responds By"
+          },
+          "rounds": {
+            "items": {
+              "$ref": "#/components/schemas/ExportOfferRound"
+            },
+            "title": "Rounds",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "turn": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turn"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "product_id",
+          "product_name",
+          "status",
+          "turn",
+          "initial_amount",
+          "current_amount",
+          "agreed_amount",
+          "responds_by",
+          "accepted_at",
+          "checkout_expires_at",
+          "cooldown_until",
+          "created_at",
+          "updated_at",
+          "rounds"
+        ],
+        "title": "ExportOffer",
+        "type": "object"
+      },
+      "ExportOfferRound": {
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "actor": {
+            "title": "Actor",
+            "type": "string"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Money"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "sequence": {
+            "title": "Sequence",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sequence",
+          "actor",
+          "action",
+          "amount",
+          "message",
+          "created_at"
+        ],
+        "title": "ExportOfferRound",
+        "type": "object"
+      },
+      "ExportOrder": {
+        "properties": {
+          "amount_due": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Money"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cancelled_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelled At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "contact_phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contact Phone"
+          },
+          "customer_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Note"
+          },
+          "delivery_address": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExportDeliveryAddress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "delivery_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivery Email"
+          },
+          "estimated_dispatch_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Dispatch At"
+          },
+          "fulfillment_method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fulfillment Method"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/ExportOrderLine"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "order_number": {
+            "title": "Order Number",
+            "type": "string"
+          },
+          "payment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExportPayment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "payment_due": {
+            "title": "Payment Due",
+            "type": "boolean"
+          },
+          "payment_method": {
+            "title": "Payment Method",
+            "type": "string"
+          },
+          "placed_at": {
+            "format": "date-time",
+            "title": "Placed At",
+            "type": "string"
+          },
+          "refunds": {
+            "items": {
+              "$ref": "#/components/schemas/ExportRefund"
+            },
+            "title": "Refunds",
+            "type": "array"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "status_history": {
+            "items": {
+              "$ref": "#/components/schemas/ExportStatusChange"
+            },
+            "title": "Status History",
+            "type": "array"
+          },
+          "subtotal": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "tax": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "total": {
+            "$ref": "#/components/schemas/Money"
+          }
+        },
+        "required": [
+          "id",
+          "order_number",
+          "source",
+          "status",
+          "payment_method",
+          "fulfillment_method",
+          "payment_due",
+          "amount_due",
+          "subtotal",
+          "tax",
+          "total",
+          "delivery_address",
+          "contact_phone",
+          "delivery_email",
+          "customer_note",
+          "estimated_dispatch_at",
+          "placed_at",
+          "completed_at",
+          "cancelled_at",
+          "lines",
+          "payment",
+          "refunds",
+          "status_history"
+        ],
+        "title": "ExportOrder",
+        "type": "object"
+      },
+      "ExportOrderLine": {
+        "properties": {
+          "cancelled_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelled At"
+          },
+          "fulfilled_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fulfilled At"
+          },
+          "fulfillment_status": {
+            "title": "Fulfillment Status",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "line_total": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "offer_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Offer Id"
+          },
+          "problem_reported_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problem Reported At"
+          },
+          "product_id": {
+            "format": "uuid",
+            "title": "Product Id",
+            "type": "string"
+          },
+          "product_type": {
+            "title": "Product Type",
+            "type": "string"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "receipt_confirmed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Receipt Confirmed At"
+          },
+          "unit_price": {
+            "$ref": "#/components/schemas/Money"
+          }
+        },
+        "required": [
+          "id",
+          "product_id",
+          "product_type",
+          "name",
+          "offer_id",
+          "unit_price",
+          "quantity",
+          "line_total",
+          "fulfillment_status",
+          "fulfilled_at",
+          "cancelled_at",
+          "receipt_confirmed_at",
+          "problem_reported_at"
+        ],
+        "title": "ExportOrderLine",
+        "type": "object"
+      },
+      "ExportPayment": {
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "status",
+          "amount"
+        ],
+        "title": "ExportPayment",
+        "type": "object"
+      },
+      "ExportProfile": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "email_verified": {
+            "title": "Email Verified",
+            "type": "boolean"
+          },
+          "email_verified_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Verified At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "role",
+          "email_verified",
+          "email_verified_at",
+          "created_at"
+        ],
+        "title": "ExportProfile",
+        "type": "object"
+      },
+      "ExportRefund": {
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "status",
+          "amount",
+          "created_at"
+        ],
+        "title": "ExportRefund",
+        "type": "object"
+      },
+      "ExportReview": {
+        "properties": {
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "deleted": {
+            "title": "Deleted",
+            "type": "boolean"
+          },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_hidden": {
+            "title": "Is Hidden",
+            "type": "boolean"
+          },
+          "is_verified_purchase": {
+            "title": "Is Verified Purchase",
+            "type": "boolean"
+          },
+          "product_id": {
+            "format": "uuid",
+            "title": "Product Id",
+            "type": "string"
+          },
+          "product_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Name"
+          },
+          "rating": {
+            "title": "Rating",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "product_id",
+          "product_name",
+          "rating",
+          "body",
+          "is_verified_purchase",
+          "is_hidden",
+          "created_at",
+          "updated_at",
+          "deleted",
+          "deleted_at"
+        ],
+        "title": "ExportReview",
+        "type": "object"
+      },
+      "ExportStatusChange": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "from_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Status"
+          },
+          "order_item_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Item Id"
+          },
+          "to_status": {
+            "title": "To Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "order_item_id",
+          "from_status",
+          "to_status",
+          "at"
+        ],
+        "title": "ExportStatusChange",
         "type": "object"
       },
       "FacetSummary": {
@@ -5379,6 +7148,15 @@
           "south"
         ],
         "title": "Governorate",
+        "type": "string"
+      },
+      "GroupBy": {
+        "enum": [
+          "day",
+          "week",
+          "month"
+        ],
+        "title": "GroupBy",
         "type": "string"
       },
       "HTTPValidationError": {
@@ -5447,10 +7225,18 @@
         "additionalProperties": false,
         "properties": {
           "provider_reference": {
-            "maxLength": 255,
-            "minLength": 1,
-            "title": "Provider Reference",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The transfer's own reference; optional for `manual` only, unique per provider when given (ADR-049). Notes go in `reason`.",
+            "title": "Provider Reference"
           },
           "reason": {
             "maxLength": 1000,
@@ -5472,7 +7258,6 @@
           }
         },
         "required": [
-          "provider_reference",
           "verified_amount_cents",
           "reason"
         ],
@@ -5774,6 +7559,24 @@
         "title": "MfaVerifyRequest",
         "type": "object"
       },
+      "Money": {
+        "properties": {
+          "amount_cents": {
+            "title": "Amount Cents",
+            "type": "integer"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          }
+        },
+        "required": [
+          "amount_cents",
+          "currency"
+        ],
+        "title": "Money",
+        "type": "object"
+      },
       "MoneyRead": {
         "description": "The API's standard money shape (api-endpoints.md 2, ADR-008). Never a\nfloat.",
         "properties": {
@@ -5791,6 +7594,104 @@
           "currency"
         ],
         "title": "MoneyRead",
+        "type": "object"
+      },
+      "MyReviewPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MyReviewRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "MyReviewPage",
+        "type": "object"
+      },
+      "MyReviewRead": {
+        "properties": {
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "edited": {
+            "title": "Edited",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_hidden": {
+            "title": "Is Hidden",
+            "type": "boolean"
+          },
+          "is_verified_purchase": {
+            "title": "Is Verified Purchase",
+            "type": "boolean"
+          },
+          "product_id": {
+            "format": "uuid",
+            "title": "Product Id",
+            "type": "string"
+          },
+          "product_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Slug"
+          },
+          "rating": {
+            "title": "Rating",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "rating",
+          "body",
+          "is_verified_purchase",
+          "created_at",
+          "edited",
+          "product_id",
+          "product_slug",
+          "is_hidden"
+        ],
+        "title": "MyReviewRead",
         "type": "object"
       },
       "NotificationPage": {
@@ -5941,6 +7842,19 @@
             "const": true,
             "title": "Accept Terms",
             "type": "boolean"
+          },
+          "contact_phone": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Lebanese; required when the provider is `manual` (the administrator calls it to arrange payment), refused otherwise (VS-050 Q1).",
+            "title": "Contact Phone"
           },
           "payment_provider": {
             "anyOf": [
@@ -6871,6 +8785,17 @@
           "amount": {
             "$ref": "#/components/schemas/PriceRead"
           },
+          "next_step": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PaymentNextStep"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "While the attempt is live: `await_admin_contact` for `manual` (the administrator contacts the customer to arrange payment); null otherwise."
+          },
           "provider": {
             "title": "Provider",
             "type": "string"
@@ -6883,7 +8808,8 @@
         "required": [
           "status",
           "provider",
-          "amount"
+          "amount",
+          "next_step"
         ],
         "title": "OrderPaymentRead",
         "type": "object"
@@ -7156,11 +9082,20 @@
         "title": "PaymentMethod",
         "type": "string"
       },
+      "PaymentNextStep": {
+        "enum": [
+          "redirect",
+          "await_admin_contact"
+        ],
+        "title": "PaymentNextStep",
+        "type": "string"
+      },
       "PaymentProvider": {
-        "description": "`cash` has no adapter; VS-032 adds the real online value(s).",
+        "description": "`cash` has no adapter; `manual` is V1's online provider (ADR-049).",
         "enum": [
           "mock",
-          "cash"
+          "cash",
+          "manual"
         ],
         "title": "PaymentProvider",
         "type": "string"
@@ -7317,6 +9252,34 @@
         "title": "PaymentSummary",
         "type": "object"
       },
+      "PendingOfferCounts": {
+        "properties": {
+          "accepted": {
+            "title": "Accepted",
+            "type": "integer"
+          },
+          "awaiting_admin": {
+            "title": "Awaiting Admin",
+            "type": "integer"
+          },
+          "awaiting_customer": {
+            "title": "Awaiting Customer",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "awaiting_admin",
+          "awaiting_customer",
+          "accepted",
+          "total"
+        ],
+        "title": "PendingOfferCounts",
+        "type": "object"
+      },
       "PriceIn": {
         "additionalProperties": false,
         "properties": {
@@ -7417,6 +9380,16 @@
       },
       "ProductDetail": {
         "properties": {
+          "accepted_payment_methods": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AcceptedPaymentMethods"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "average_rating": {
             "title": "Average Rating",
             "type": "number"
@@ -7499,6 +9472,10 @@
             "title": "Is Featured",
             "type": "boolean"
           },
+          "list_price": {
+            "$ref": "#/components/schemas/PriceRead",
+            "description": "The product's own price; above `price` only while `promotion` is set."
+          },
           "material": {
             "anyOf": [
               {
@@ -7536,7 +9513,8 @@
             "title": "Og Image Url"
           },
           "price": {
-            "$ref": "#/components/schemas/PriceRead"
+            "$ref": "#/components/schemas/PriceRead",
+            "description": "What the shop charges now: the promotional price while a promotion applies, else the list price. The cart and checkout charge this same price."
           },
           "production_lead_time_days": {
             "anyOf": [
@@ -7548,6 +9526,16 @@
               }
             ],
             "title": "Production Lead Time Days"
+          },
+          "promotion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProductPromotionRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "purchase_mode": {
             "anyOf": [
@@ -7600,11 +9588,14 @@
           "slug",
           "cover_image",
           "price",
+          "list_price",
+          "promotion",
           "category",
           "material",
           "colour",
           "is_available",
           "purchase_mode",
+          "accepted_payment_methods",
           "average_rating",
           "review_count",
           "is_featured",
@@ -7741,6 +9732,16 @@
       },
       "ProductListItem": {
         "properties": {
+          "accepted_payment_methods": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AcceptedPaymentMethods"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "average_rating": {
             "title": "Average Rating",
             "type": "number"
@@ -7781,6 +9782,10 @@
             "title": "Is Featured",
             "type": "boolean"
           },
+          "list_price": {
+            "$ref": "#/components/schemas/PriceRead",
+            "description": "The product's own price; above `price` only while `promotion` is set."
+          },
           "material": {
             "anyOf": [
               {
@@ -7796,7 +9801,18 @@
             "type": "string"
           },
           "price": {
-            "$ref": "#/components/schemas/PriceRead"
+            "$ref": "#/components/schemas/PriceRead",
+            "description": "What the shop charges now: the promotional price while a promotion applies, else the list price. The cart and checkout charge this same price."
+          },
+          "promotion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProductPromotionRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "purchase_mode": {
             "anyOf": [
@@ -7827,11 +9843,14 @@
           "slug",
           "cover_image",
           "price",
+          "list_price",
+          "promotion",
           "category",
           "material",
           "colour",
           "is_available",
           "purchase_mode",
+          "accepted_payment_methods",
           "average_rating",
           "review_count",
           "is_featured"
@@ -7867,6 +9886,54 @@
         "title": "ProductPage",
         "type": "object"
       },
+      "ProductPromotionRead": {
+        "description": "The one promotion behind `price` right now (never more than one: no stacking).",
+        "properties": {
+          "badge_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Badge Text"
+          },
+          "discount_type": {
+            "$ref": "#/components/schemas/DiscountType"
+          },
+          "discount_value": {
+            "description": "A whole percent for `percentage`; cents for `fixed`. Display only.",
+            "title": "Discount Value",
+            "type": "integer"
+          },
+          "ends_at": {
+            "format": "date-time",
+            "title": "Ends At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "badge_text",
+          "discount_type",
+          "discount_value",
+          "ends_at"
+        ],
+        "title": "ProductPromotionRead",
+        "type": "object"
+      },
       "ProductType": {
         "description": "Permanent classification of a product (glossary: Product Type).",
         "enum": [
@@ -7874,6 +9941,27 @@
           "stl"
         ],
         "title": "ProductType",
+        "type": "string"
+      },
+      "PromotionScope": {
+        "enum": [
+          "all",
+          "physical",
+          "stl",
+          "selected"
+        ],
+        "title": "PromotionScope",
+        "type": "string"
+      },
+      "PromotionStatus": {
+        "description": "Derived from `active` and the window, never stored.",
+        "enum": [
+          "scheduled",
+          "active",
+          "ended",
+          "inactive"
+        ],
+        "title": "PromotionStatus",
         "type": "string"
       },
       "PublicImage": {
@@ -7910,6 +9998,128 @@
           "is_cover"
         ],
         "title": "PublicImage",
+        "type": "object"
+      },
+      "PublicPromotionList": {
+        "properties": {
+          "items": {
+            "description": "Active now, soonest ending first.",
+            "items": {
+              "$ref": "#/components/schemas/PublicPromotionRead"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "PublicPromotionList",
+        "type": "object"
+      },
+      "PublicPromotionRead": {
+        "description": "An active promotion, for the storefront's campaign banner. No product list: the\nproducts are `GET /api/v1/products?promotion_id=`, priced by the server.",
+        "properties": {
+          "badge_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Badge Text"
+          },
+          "discount_type": {
+            "$ref": "#/components/schemas/DiscountType"
+          },
+          "discount_value": {
+            "description": "A whole percent from 1 to 100 for `percentage`; cents for `fixed`.",
+            "title": "Discount Value",
+            "type": "integer"
+          },
+          "ends_at": {
+            "format": "date-time",
+            "title": "Ends At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/PromotionScope"
+          },
+          "starts_at": {
+            "format": "date-time",
+            "title": "Starts At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "badge_text",
+          "discount_type",
+          "discount_value",
+          "scope",
+          "starts_at",
+          "ends_at"
+        ],
+        "title": "PublicPromotionRead",
+        "type": "object"
+      },
+      "PublicReviewRead": {
+        "properties": {
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "edited": {
+            "title": "Edited",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_verified_purchase": {
+            "title": "Is Verified Purchase",
+            "type": "boolean"
+          },
+          "rating": {
+            "title": "Rating",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "rating",
+          "body",
+          "is_verified_purchase",
+          "created_at",
+          "edited"
+        ],
+        "title": "PublicReviewRead",
         "type": "object"
       },
       "PublicSettingsRead": {
@@ -8015,6 +10225,93 @@
         "title": "ReadinessRead",
         "type": "object"
       },
+      "RecentPurchase": {
+        "properties": {
+          "gross": {
+            "$ref": "#/components/schemas/StreamCentsRead"
+          },
+          "net_cents": {
+            "title": "Net Cents",
+            "type": "integer"
+          },
+          "order_id": {
+            "format": "uuid",
+            "title": "Order Id",
+            "type": "string"
+          },
+          "order_number": {
+            "title": "Order Number",
+            "type": "string"
+          },
+          "paid_at": {
+            "format": "date-time",
+            "title": "Paid At",
+            "type": "string"
+          },
+          "paid_lines": {
+            "title": "Paid Lines",
+            "type": "integer"
+          },
+          "payment_method": {
+            "enum": [
+              "online",
+              "cash"
+            ],
+            "title": "Payment Method",
+            "type": "string"
+          },
+          "refunded_cents": {
+            "title": "Refunded Cents",
+            "type": "integer"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "order_id",
+          "order_number",
+          "user_id",
+          "paid_at",
+          "payment_method",
+          "gross",
+          "refunded_cents",
+          "net_cents",
+          "paid_lines"
+        ],
+        "title": "RecentPurchase",
+        "type": "object"
+      },
+      "RecentPurchasePage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RecentPurchase"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "RecentPurchasePage",
+        "type": "object"
+      },
       "ReconcileQueued": {
         "properties": {
           "payment": {
@@ -8079,10 +10376,18 @@
             "type": "string"
           },
           "dashboard_reference": {
-            "maxLength": 255,
-            "minLength": 1,
-            "title": "Dashboard Reference",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional for `manual` only (ADR-049).",
+            "title": "Dashboard Reference"
           },
           "reason": {
             "maxLength": 1000,
@@ -8094,7 +10399,6 @@
         "required": [
           "captured_amount_cents",
           "captured_currency",
-          "dashboard_reference",
           "reason"
         ],
         "title": "RecordCaptureRequest",
@@ -8677,6 +10981,17 @@
             "title": "Id",
             "type": "string"
           },
+          "next_step": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PaymentNextStep"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`redirect` to `redirect_url`, or `await_admin_contact` for `manual`."
+          },
           "provider": {
             "title": "Provider",
             "type": "string"
@@ -8704,9 +11019,221 @@
           "provider",
           "amount_cents",
           "currency",
-          "redirect_url"
+          "redirect_url",
+          "next_step"
         ],
         "title": "RetryPaymentRead",
+        "type": "object"
+      },
+      "RevenueAnalytics": {
+        "properties": {
+          "buckets": {
+            "items": {
+              "$ref": "#/components/schemas/RevenueBucket"
+            },
+            "title": "Buckets",
+            "type": "array"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "from": {
+            "format": "date",
+            "title": "From",
+            "type": "string"
+          },
+          "group_by": {
+            "$ref": "#/components/schemas/GroupBy"
+          },
+          "timezone": {
+            "title": "Timezone",
+            "type": "string"
+          },
+          "to": {
+            "format": "date",
+            "title": "To",
+            "type": "string"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/RevenueFigures"
+          },
+          "unattributed_chargeback_excess_cents": {
+            "title": "Unattributed Chargeback Excess Cents",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "timezone",
+          "currency",
+          "group_by",
+          "totals",
+          "buckets",
+          "unattributed_chargeback_excess_cents"
+        ],
+        "title": "RevenueAnalytics",
+        "type": "object"
+      },
+      "RevenueBucket": {
+        "properties": {
+          "net": {
+            "$ref": "#/components/schemas/StreamCentsRead"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "net"
+        ],
+        "title": "RevenueBucket",
+        "type": "object"
+      },
+      "RevenueFigures": {
+        "properties": {
+          "gross": {
+            "$ref": "#/components/schemas/StreamCentsRead"
+          },
+          "net": {
+            "$ref": "#/components/schemas/StreamCentsRead"
+          },
+          "paid_lines": {
+            "title": "Paid Lines",
+            "type": "integer"
+          },
+          "paid_orders": {
+            "title": "Paid Orders",
+            "type": "integer"
+          },
+          "refunded": {
+            "$ref": "#/components/schemas/StreamCentsRead"
+          }
+        },
+        "required": [
+          "gross",
+          "refunded",
+          "net",
+          "paid_lines",
+          "paid_orders"
+        ],
+        "title": "RevenueFigures",
+        "type": "object"
+      },
+      "ReviewCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "product_id": {
+            "format": "uuid",
+            "title": "Product Id",
+            "type": "string"
+          },
+          "rating": {
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Rating",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "product_id",
+          "rating"
+        ],
+        "title": "ReviewCreate",
+        "type": "object"
+      },
+      "ReviewModerationRequest": {
+        "additionalProperties": false,
+        "description": "The optional reason, kept only in the audit row (D6).",
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "title": "ReviewModerationRequest",
+        "type": "object"
+      },
+      "ReviewPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PublicReviewRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "ReviewPage",
+        "type": "object"
+      },
+      "ReviewUpdate": {
+        "additionalProperties": false,
+        "description": "At least one field; `body: null` clears the text.",
+        "properties": {
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "maximum": 5.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating"
+          }
+        },
+        "title": "ReviewUpdate",
         "type": "object"
       },
       "SearchSuggestionList": {
@@ -9097,6 +11624,188 @@
           "owned"
         ],
         "title": "StlOwnershipRead",
+        "type": "object"
+      },
+      "StlSalesAnalytics": {
+        "properties": {
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "from": {
+            "format": "date",
+            "title": "From",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/StlSalesItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "stl_lines_awaiting_delivery": {
+            "title": "Stl Lines Awaiting Delivery",
+            "type": "integer"
+          },
+          "timezone": {
+            "title": "Timezone",
+            "type": "string"
+          },
+          "to": {
+            "format": "date",
+            "title": "To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "timezone",
+          "currency",
+          "items",
+          "stl_lines_awaiting_delivery"
+        ],
+        "title": "StlSalesAnalytics",
+        "type": "object"
+      },
+      "StlSalesItem": {
+        "properties": {
+          "awaiting_delivery": {
+            "title": "Awaiting Delivery",
+            "type": "integer"
+          },
+          "lines": {
+            "title": "Lines",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "net_cents": {
+            "title": "Net Cents",
+            "type": "integer"
+          },
+          "product_id": {
+            "format": "uuid",
+            "title": "Product Id",
+            "type": "string"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slug"
+          },
+          "units": {
+            "title": "Units",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "product_id",
+          "name",
+          "slug",
+          "units",
+          "lines",
+          "net_cents",
+          "awaiting_delivery"
+        ],
+        "title": "StlSalesItem",
+        "type": "object"
+      },
+      "StreamCentsRead": {
+        "properties": {
+          "physical_cents": {
+            "title": "Physical Cents",
+            "type": "integer"
+          },
+          "stl_cents": {
+            "title": "Stl Cents",
+            "type": "integer"
+          },
+          "total_cents": {
+            "title": "Total Cents",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "physical_cents",
+          "stl_cents",
+          "total_cents"
+        ],
+        "title": "StreamCentsRead",
+        "type": "object"
+      },
+      "TopRatedProduct": {
+        "properties": {
+          "average_rating": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Average Rating",
+            "type": "string"
+          },
+          "is_visible": {
+            "title": "Is Visible",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "product_id": {
+            "format": "uuid",
+            "title": "Product Id",
+            "type": "string"
+          },
+          "review_count": {
+            "title": "Review Count",
+            "type": "integer"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "physical",
+              "stl"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_id",
+          "name",
+          "slug",
+          "type",
+          "average_rating",
+          "review_count",
+          "is_visible"
+        ],
+        "title": "TopRatedProduct",
+        "type": "object"
+      },
+      "TopRatedProductList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TopRatedProduct"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "TopRatedProductList",
         "type": "object"
       },
       "UserProfileRead": {
@@ -9517,9 +12226,809 @@
         ]
       }
     },
+    "/api/v1/admin/analytics/customers": {
+      "get": {
+        "operationId": "customers_api_v1_admin_analytics_customers_get",
+        "parameters": [
+          {
+            "description": "Inclusive Beirut date; default 29 days before `to`.",
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive Beirut date; default 29 days before `to`.",
+              "title": "From"
+            }
+          },
+          {
+            "description": "Inclusive Beirut date; default today in Beirut.",
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive Beirut date; default today in Beirut.",
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerAnalytics"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`INVALID_DATE_RANGE`: `to` before `from`, over 366 days, or a year outside 2020-2100."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No session, or MFA not completed."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Caller is not an administrator."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "A parameter that cannot be parsed, or out of its bounds."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The admin or the analytics rate limit."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "A query failed or timed out; never a body of zeros."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Customer statistics (27.1 item 8)",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/analytics/overview": {
+      "get": {
+        "operationId": "overview_api_v1_admin_analytics_overview_get",
+        "parameters": [
+          {
+            "description": "Inclusive Beirut date; default 29 days before `to`.",
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive Beirut date; default 29 days before `to`.",
+              "title": "From"
+            }
+          },
+          {
+            "description": "Inclusive Beirut date; default today in Beirut.",
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive Beirut date; default today in Beirut.",
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyticsOverview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`INVALID_DATE_RANGE`: `to` before `from`, over 366 days, or a year outside 2020-2100."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No session, or MFA not completed."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Caller is not an administrator."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "A parameter that cannot be parsed, or out of its bounds."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The admin or the analytics rate limit."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "A query failed or timed out; never a body of zeros."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Net revenue, orders and customers in the range; pending offers now",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/analytics/recent-purchases": {
+      "get": {
+        "operationId": "recent_purchases_api_v1_admin_analytics_recent_purchases_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecentPurchasePage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No session, or MFA not completed."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Caller is not an administrator."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "A parameter that cannot be parsed, or out of its bounds."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The admin or the analytics rate limit."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "A query failed or timed out; never a body of zeros."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Paid payments, newest verification first (27.1 item 6)",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/analytics/revenue": {
+      "get": {
+        "operationId": "revenue_api_v1_admin_analytics_revenue_get",
+        "parameters": [
+          {
+            "description": "Inclusive Beirut date; default 29 days before `to`.",
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive Beirut date; default 29 days before `to`.",
+              "title": "From"
+            }
+          },
+          {
+            "description": "Inclusive Beirut date; default today in Beirut.",
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive Beirut date; default today in Beirut.",
+              "title": "To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "group_by",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/GroupBy",
+              "default": "day"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevenueAnalytics"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`INVALID_DATE_RANGE`: `to` before `from`, over 366 days, or a year outside 2020-2100."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No session, or MFA not completed."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Caller is not an administrator."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "A parameter that cannot be parsed, or out of its bounds."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The admin or the analytics rate limit."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "A query failed or timed out; never a body of zeros."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Revenue by stream, attributed per line (27.1)",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/analytics/stl-sales": {
+      "get": {
+        "operationId": "stl_sales_api_v1_admin_analytics_stl_sales_get",
+        "parameters": [
+          {
+            "description": "Inclusive Beirut date; default 29 days before `to`.",
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive Beirut date; default 29 days before `to`.",
+              "title": "From"
+            }
+          },
+          {
+            "description": "Inclusive Beirut date; default today in Beirut.",
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive Beirut date; default today in Beirut.",
+              "title": "To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StlSalesAnalytics"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "`INVALID_DATE_RANGE`: `to` before `from`, over 366 days, or a year outside 2020-2100."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No session, or MFA not completed."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Caller is not an administrator."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "A parameter that cannot be parsed, or out of its bounds."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The admin or the analytics rate limit."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "A query failed or timed out; never a body of zeros."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Best-selling STLs from paid, unrefunded lines (27.1 item 7)",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/analytics/top-rated-products": {
+      "get": {
+        "operationId": "top_rated_products_api_v1_admin_analytics_top_rated_products_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_reviews",
+            "required": false,
+            "schema": {
+              "default": 3,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Min Reviews",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TopRatedProductList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No session, or MFA not completed."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Caller is not an administrator."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "A parameter that cannot be parsed, or out of its bounds."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The admin or the analytics rate limit."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "A query failed or timed out; never a body of zeros."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Top rated products by the maintained aggregates",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      }
+    },
     "/api/v1/admin/analytics/wishlist": {
       "get": {
-        "description": "Totals and most-wishlisted both include non-public products:\n`wishlist_count` tracks total interest, not current storefront\neligibility (plan §10 Q6).",
+        "description": "`total_active` counts every live wishlist row, hidden products included; the list has\nonly products the storefront shows, each wishlisted at least once.",
         "operationId": "wishlist_analytics_api_v1_admin_analytics_wishlist_get",
         "parameters": [
           {
@@ -10078,7 +13587,7 @@
     },
     "/api/v1/admin/cash-blocks/search": {
       "post": {
-        "description": "One `cash_block.searched` audit row per search: filters, count and ids only, never\nthe phone or its hash (VS-030 2.6, Q8).",
+        "description": "One `cash_payment_block.searched` audit row per search: filters, count and ids only,\nnever the phone or its hash (VS-030 2.6, Q8).",
         "operationId": "search_blocks_api_v1_admin_cash_blocks_search_post",
         "requestBody": {
           "content": {
@@ -10488,6 +13997,16 @@
             },
             "description": "Unknown id, or caller is not an administrator."
           },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SLUG_CONFLICT: a live category already has this slug."
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -10795,6 +14314,16 @@
               }
             },
             "description": "Unknown id, or caller is not an administrator."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SLUG_CONFLICT, or INVALID_STATE_TRANSITION (archived)."
           },
           "422": {
             "content": {
@@ -11118,6 +14647,16 @@
             },
             "description": "Unknown id, or caller is not an administrator."
           },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SLUG_CONFLICT: a live value already has this name, in any case."
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -11425,6 +14964,16 @@
               }
             },
             "description": "Unknown id, or caller is not an administrator."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SLUG_CONFLICT (the name is taken), or INVALID_STATE_TRANSITION (archived)."
           },
           "422": {
             "content": {
@@ -12668,6 +16217,16 @@
             },
             "description": "Unknown id, or caller is not an administrator."
           },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SLUG_CONFLICT: a live value already has this name, in any case."
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -12975,6 +16534,16 @@
               }
             },
             "description": "Unknown id, or caller is not an administrator."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SLUG_CONFLICT (the name is taken), or INVALID_STATE_TRANSITION (archived)."
           },
           "422": {
             "content": {
@@ -13373,7 +16942,7 @@
                 }
               }
             },
-            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED (accept)."
+            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED (counter, accept)."
           },
           "410": {
             "content": {
@@ -13513,7 +17082,7 @@
                 }
               }
             },
-            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED (accept)."
+            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED (counter, accept)."
           },
           "410": {
             "content": {
@@ -13660,7 +17229,7 @@
                 }
               }
             },
-            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED (accept)."
+            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED (counter, accept)."
           },
           "410": {
             "content": {
@@ -15229,6 +18798,16 @@
           },
           {
             "in": "query",
+            "name": "awaiting_confirmation",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Awaiting Confirmation",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
             "name": "initiated_after",
             "required": false,
             "schema": {
@@ -15378,7 +18957,7 @@
             "sessionCookie": []
           }
         ],
-        "summary": "List payments, oldest first (`late_captured=true`: the refunds to make)",
+        "summary": "List payments, oldest first (`late_captured=true`: the refunds to make; `awaiting_confirmation=true`: the `manual` payments to arrange and confirm)",
         "tags": [
           "admin",
           "admin"
@@ -15578,7 +19157,7 @@
                 }
               }
             },
-            "description": "MANUAL_CONFIRMATION_NOT_ALLOWED (the provider has a status API), PAYMENT_REFERENCE_MISMATCH, or INVALID_STATE_TRANSITION (`cash_payment`)."
+            "description": "MANUAL_CONFIRMATION_NOT_ALLOWED (the provider has a status API), PAYMENT_REFERENCE_MISMATCH, PAYMENT_ALREADY_PAID_OTHER_REFERENCE (already paid; the typed reference is not its stored one, likely a second transfer), or INVALID_STATE_TRANSITION (`cash_payment`)."
           },
           "422": {
             "content": {
@@ -15588,7 +19167,7 @@
                 }
               }
             },
-            "description": "PAYMENT_AMOUNT_MISMATCH (with `expected_amount_cents`, `currency`): nothing is written; or VALIDATION_ERROR."
+            "description": "PAYMENT_AMOUNT_MISMATCH (with `expected_amount_cents`, `currency`): nothing is written; PAYMENT_REFERENCE_REQUIRED (no reference, not `manual`); or VALIDATION_ERROR."
           },
           "429": {
             "content": {
@@ -15627,7 +19206,7 @@
             "sessionCookie": []
           }
         ],
-        "summary": "Confirm a payment by hand from the provider's dashboard",
+        "summary": "Confirm a payment by hand: from the provider's dashboard, or as arranged (`manual`)",
         "tags": [
           "admin",
           "admin"
@@ -15852,7 +19431,7 @@
                 }
               }
             },
-            "description": "MANUAL_CONFIRMATION_NOT_ALLOWED (the provider has a status API), INVALID_STATE_TRANSITION (`reason`: `cash_payment`, `already_paid`, `already_late_captured`, `use_confirm` for a matching amount), IDEMPOTENCY_KEY_CONFLICT or IDEMPOTENCY_REQUEST_IN_PROGRESS."
+            "description": "MANUAL_CONFIRMATION_NOT_ALLOWED (the provider has a status API), INVALID_STATE_TRANSITION (`reason`: `cash_payment`, `already_paid`, `already_late_captured`, `use_confirm` for a matching amount), PAYMENT_REFERENCE_MISMATCH (a `manual` reference another payment has), IDEMPOTENCY_KEY_CONFLICT or IDEMPOTENCY_REQUEST_IN_PROGRESS."
           },
           "422": {
             "content": {
@@ -15862,7 +19441,7 @@
                 }
               }
             },
-            "description": "VALIDATION_ERROR."
+            "description": "PAYMENT_REFERENCE_REQUIRED (no reference, not `manual`), or VALIDATION_ERROR."
           },
           "429": {
             "content": {
@@ -17220,6 +20799,396 @@
         ]
       }
     },
+    "/api/v1/admin/promotions": {
+      "get": {
+        "operationId": "admin_list_promotions_api_v1_admin_promotions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminPromotionList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No session, or MFA not completed."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unknown id, or caller is not an administrator."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "VALIDATION_ERROR: a field, or a control character in the path or query."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the database or Redis is unreachable; retry later."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "List promotions",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      },
+      "post": {
+        "operationId": "admin_create_promotion_api_v1_admin_promotions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPromotionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminPromotionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "MALFORMED_REQUEST: the body is not valid JSON."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No session, or MFA not completed."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "CSRF_INVALID."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unknown id, or caller is not an administrator."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "VALIDATION_ERROR: a broken promotion rule, named per field."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the database or Redis is unreachable; retry later."
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Create a promotion",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/promotions/{promotion_id}": {
+      "get": {
+        "operationId": "admin_read_promotion_api_v1_admin_promotions__promotion_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "promotion_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Promotion Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminPromotionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No session, or MFA not completed."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unknown id, or caller is not an administrator."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the database or Redis is unreachable; retry later."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Read one promotion",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      },
+      "patch": {
+        "operationId": "admin_update_promotion_api_v1_admin_promotions__promotion_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "promotion_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Promotion Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPromotionUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminPromotionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "MALFORMED_REQUEST: the body is not valid JSON."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No session, or MFA not completed."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "CSRF_INVALID."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unknown id, or caller is not an administrator."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "VALIDATION_ERROR: a broken promotion rule, named per field."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the database or Redis is unreachable; retry later."
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Update a promotion, or switch it on or off",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      }
+    },
     "/api/v1/admin/refunds": {
       "get": {
         "operationId": "list_refunds_api_v1_admin_refunds_get",
@@ -18101,6 +22070,605 @@
           }
         ],
         "summary": "Close a refund created by mistake, unpaid (never after settlement)",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/reviews": {
+      "get": {
+        "description": "Soft-deleted reviews never appear (D3); hidden and visible ones both do.",
+        "operationId": "list_reviews_api_v1_admin_reviews_get",
+        "parameters": [
+          {
+            "description": "Opaque cursor from a previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque cursor from a previous page.",
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "hidden",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Hidden"
+            }
+          },
+          {
+            "in": "query",
+            "name": "rating",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Rating"
+            }
+          },
+          {
+            "in": "query",
+            "name": "product_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Product Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "user_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "User Id"
+            }
+          },
+          {
+            "description": "Filters the stored evidence flag, not the masked badge.",
+            "in": "query",
+            "name": "verified_purchase",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filters the stored evidence flag, not the masked badge.",
+              "title": "Verified Purchase"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminReviewPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No session, or MFA not completed."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unknown or deleted review, or caller is not an administrator."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Invalid query or tampered cursor."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "RATE_LIMITED: the admin router's per-administrator limit."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the database or Redis is unreachable; retry later."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "List live reviews for moderation, newest first",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/reviews/{review_id}": {
+      "get": {
+        "operationId": "read_review_api_v1_admin_reviews__review_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "review_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Review Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminReviewDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No session, or MFA not completed."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unknown or deleted review, or caller is not an administrator."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "RATE_LIMITED: the admin router's per-administrator limit."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the database or Redis is unreachable; retry later."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Read one live review with its moderation state",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/reviews/{review_id}/hide": {
+      "post": {
+        "operationId": "hide_review_api_v1_admin_reviews__review_id__hide_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "review_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Review Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ReviewModerationRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminReviewDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "MALFORMED_REQUEST: the body is not valid JSON."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No session, or MFA not completed."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "CSRF token missing or invalid."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unknown or deleted review, or caller is not an administrator."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INVALID_STATE_TRANSITION: already in that state; carries is_hidden."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Malformed body, or a reason over 500 characters."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "RATE_LIMITED: the admin router's per-administrator limit."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the database or Redis is unreachable; retry later."
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Hide a review; recomputes the product's rating in the same transaction",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/reviews/{review_id}/restore": {
+      "post": {
+        "operationId": "restore_review_api_v1_admin_reviews__review_id__restore_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "review_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Review Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ReviewModerationRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminReviewDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "MALFORMED_REQUEST: the body is not valid JSON."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No session, or MFA not completed."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "CSRF token missing or invalid."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unknown or deleted review, or caller is not an administrator."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INVALID_STATE_TRANSITION: already in that state; carries is_hidden."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Malformed body, or a reason over 500 characters."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "RATE_LIMITED: the admin router's per-administrator limit."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the database or Redis is unreachable; retry later."
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Restore a hidden review; recomputes the product's rating in the same transaction",
         "tags": [
           "admin",
           "admin"
@@ -20699,7 +25267,7 @@
                 }
               }
             },
-            "description": "PRODUCT_NOT_PURCHASABLE or QUANTITY_EXCEEDS_LIMIT (with `lines`), INVALID_FULFILLMENT, PAYMENT_METHOD_NOT_ALLOWED or CASH_PAYMENT_LIMIT_REACHED (each with `reason`), CASH_NOT_AVAILABLE (no reason: a block or an open cash order on the account or the phone, never saying which), or VALIDATION_ERROR."
+            "description": "PRODUCT_NOT_PURCHASABLE or QUANTITY_EXCEEDS_LIMIT (with `lines`), NO_COMMON_PAYMENT_METHOD (with `lines` and each one's `accepted_payment_methods`), INVALID_FULFILLMENT, CONTACT_PHONE_REQUIRED (a `manual` STL-only order without `contact_phone`), MANUAL_ORDER_LIMIT_REACHED (with `max_open_orders`: unpaid `manual` orders already at `manual_max_open_orders`), PAYMENT_METHOD_NOT_ALLOWED (with `reason`; `cash_not_accepted` and `online_not_accepted` add `product_ids`) or CASH_PAYMENT_LIMIT_REACHED (with `reason`), CASH_NOT_AVAILABLE (no reason: a block or an open cash order on the account or the phone, never saying which), or VALIDATION_ERROR."
           },
           "429": {
             "content": {
@@ -20857,7 +25425,7 @@
                 }
               }
             },
-            "description": "AUTH_REQUIRED: no valid session."
+            "description": "AUTH_REQUIRED: the account was deleted during this request."
           },
           "403": {
             "content": {
@@ -20867,7 +25435,7 @@
                 }
               }
             },
-            "description": "CSRF_INVALID, or a role/verification requirement unmet."
+            "description": "CSRF_INVALID: signed in, without this session's CSRF header."
           },
           "422": {
             "content": {
@@ -20910,12 +25478,6 @@
             "description": "`SERVICE_UNAVAILABLE` - captcha could not be verified; nothing done."
           }
         },
-        "security": [
-          {
-            "csrfToken": [],
-            "sessionCookie": []
-          }
-        ],
         "summary": "Send a message to the business",
         "tags": [
           "contact"
@@ -21091,6 +25653,115 @@
       }
     },
     "/api/v1/me": {
+      "delete": {
+        "description": "All or nothing in the request's transaction (BR-125, BR-126, ADR-047); the cookies go.",
+        "operationId": "delete_my_account_api_v1_me_delete",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountDeletionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "MALFORMED_REQUEST: the body is not valid JSON."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "AUTH_REQUIRED, or INVALID_CREDENTIALS: wrong current password."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "CSRF_INVALID, or EMAIL_VERIFICATION_REQUIRED."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "ACCOUNT_DELETION_BLOCKED; `reason` is open_order, unsettled_refund or administrator."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "RATE_LIMITED: five attempts an hour per user."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the database or Redis is unreachable; retry later."
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Delete the caller's account by anonymising it",
+        "tags": [
+          "account"
+        ]
+      },
       "get": {
         "description": "Ownership needs no check here: the subject is taken from the signed\naccess token, so there is no identifier a caller could substitute for\nsomeone else's. V1 exposes no mutable profile field, so there is\ndeliberately no counterpart write endpoint (api-endpoints.md 9.1).",
         "operationId": "read_profile_api_v1_me_get",
@@ -21712,6 +26383,94 @@
         ]
       }
     },
+    "/api/v1/me/export": {
+      "get": {
+        "description": "The first page is read before the audit row is written, so a failed read is a 503\nwith no audit row, and nothing is sent unless the audit row commits.",
+        "operationId": "export_my_data_api_v1_me_export_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataExportRead"
+                }
+              }
+            },
+            "description": "Streamed; soft-deleted addresses and reviews carry `deleted: true`."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No valid session cookie was presented."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "CSRF_INVALID, or EMAIL_VERIFICATION_REQUIRED."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "VALIDATION_ERROR: a field, or a control character in the path or query."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "RATE_LIMITED: three exports a day per user."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the snapshot's first read timed out."
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Download all of the caller's own data as one JSON document",
+        "tags": [
+          "account"
+        ]
+      }
+    },
     "/api/v1/me/notifications": {
       "get": {
         "description": "Cursor-paginated, newest first, scoped to the caller.\n\n`current_user` rather than the narrower `current_claims`, and the difference\nis a security one rather than a convenience. `current_claims` re-reads\n`users.auth_epoch` per ADR-018, which catches a password reset - but nothing\nbumps the epoch when an account is merely *deactivated*, so a claims-only\ndependency would keep serving a disabled account its own notifications for\nthe remainder of the access token's fifteen minutes. `current_user` re-reads\nthe row and re-checks `can_authenticate` (`is_active`, `anonymized_at`,\n`deleted_at`).\n\nThat is the same reasoning VS-006 applied to `GET /me`, and notifications are\nthe same kind of data: personal, and sitting under the same `/me` prefix. The\ncost is the duplicate primary-key read already recorded as a performance\nfollow-up in CLAUDE.md, which is the right price for the two sibling\nendpoints agreeing about who is allowed to read.\n\nOne extra row is fetched beyond `limit` purely to answer \"is there another\npage?\" without a second COUNT query; it is dropped before serialising.",
@@ -22252,7 +27011,7 @@
                 }
               }
             },
-            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED (accept)."
+            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED (counter, accept)."
           },
           "410": {
             "content": {
@@ -22434,7 +27193,7 @@
                 }
               }
             },
-            "description": "PRODUCT_NOT_PURCHASABLE (with `lines`), PAYMENT_METHOD_NOT_ALLOWED (with `reason`), or VALIDATION_ERROR."
+            "description": "PRODUCT_NOT_PURCHASABLE (with `lines`), PAYMENT_METHOD_NOT_ALLOWED (with `reason`), CONTACT_PHONE_REQUIRED (`manual` without `contact_phone`), MANUAL_ORDER_LIMIT_REACHED (with `max_open_orders`), INVALID_FULFILLMENT (`contact_phone` for another provider), or VALIDATION_ERROR."
           },
           "429": {
             "content": {
@@ -22573,7 +27332,7 @@
                 }
               }
             },
-            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED (accept)."
+            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED (counter, accept)."
           },
           "410": {
             "content": {
@@ -22729,7 +27488,7 @@
                 }
               }
             },
-            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED (accept)."
+            "description": "OFFER_NOT_YOUR_TURN, INVALID_STATE_TRANSITION (with `offer_status`), OFFER_AMOUNT_CHANGED (accept, with `current_amount`), or PRODUCT_ALREADY_OWNED (counter, accept)."
           },
           "410": {
             "content": {
@@ -23592,6 +28351,105 @@
         ]
       }
     },
+    "/api/v1/me/reviews": {
+      "get": {
+        "description": "Live reviews, hidden ones included with `is_hidden`, newest first.",
+        "operationId": "list_my_reviews_api_v1_me_reviews_get",
+        "parameters": [
+          {
+            "description": "Opaque cursor from a previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque cursor from a previous page.",
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyReviewPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No valid session cookie was presented."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the database or Redis is unreachable; retry later."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "List the authenticated user's own reviews",
+        "tags": [
+          "reviews"
+        ]
+      }
+    },
     "/api/v1/me/stl-ownership": {
       "get": {
         "operationId": "get_stl_ownership_api_v1_me_stl_ownership_get",
@@ -24296,6 +29154,25 @@
               "title": "Limit",
               "type": "integer"
             }
+          },
+          {
+            "description": "Only the products an active promotion covers (the homepage campaign's link). An unknown, inactive, scheduled or ended promotion lists nothing. Price filters and the price sort use the list price.",
+            "in": "query",
+            "name": "promotion_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only the products an active promotion covers (the homepage campaign's link). An unknown, inactive, scheduled or ended promotion lists nothing. Price filters and the price sort use the list price.",
+              "title": "Promotion Id"
+            }
           }
         ],
         "responses": {
@@ -24435,6 +29312,585 @@
         "summary": "Read one visible product",
         "tags": [
           "catalogue"
+        ]
+      }
+    },
+    "/api/v1/products/{slug}/reviews": {
+      "get": {
+        "description": "Visible reviews, newest first. A WhatsApp-only product never shows the badge (D14),\nso `verified_purchase=true` is empty there and `false` returns every row.",
+        "operationId": "list_product_reviews_api_v1_products__slug__reviews_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Opaque cursor from a previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque cursor from a previous page.",
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "rating",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Rating"
+            }
+          },
+          {
+            "in": "query",
+            "name": "verified_purchase",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Verified Purchase"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unknown, deleted or non-public product."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "RATE_LIMITED."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the database or Redis is unreachable; retry later."
+          }
+        },
+        "summary": "List a visible product's reviews",
+        "tags": [
+          "reviews"
+        ]
+      }
+    },
+    "/api/v1/promotions": {
+      "get": {
+        "operationId": "list_active_promotions_api_v1_promotions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicPromotionList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "AUTH_REQUIRED: no valid session."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "VALIDATION_ERROR: a field, or a control character in the path or query."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "RATE_LIMITED."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the database or Redis is unreachable; retry later."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "The promotions active now",
+        "tags": [
+          "catalogue"
+        ]
+      }
+    },
+    "/api/v1/reviews": {
+      "post": {
+        "operationId": "post_review_api_v1_reviews_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyReviewRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "MALFORMED_REQUEST: the body is not valid JSON."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No valid session cookie was presented."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "CSRF token missing or invalid, or EMAIL_VERIFICATION_REQUIRED."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unknown, deleted or non-public product."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "REVIEW_ALREADY_EXISTS: a live review exists, hidden or not."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Validation failed, or REVIEW_CONTENT_REJECTED (with `reason`)."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "RATE_LIMITED: too many review changes this hour."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the database or Redis is unreachable; retry later."
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Review a product (one live review per product)",
+        "tags": [
+          "reviews"
+        ]
+      }
+    },
+    "/api/v1/reviews/{review_id}": {
+      "delete": {
+        "operationId": "remove_review_api_v1_reviews__review_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "review_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Review Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No valid session cookie was presented."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "CSRF token missing or invalid, or EMAIL_VERIFICATION_REQUIRED."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No live review of yours with this id."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Validation failed, or REVIEW_CONTENT_REJECTED (with `reason`)."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "RATE_LIMITED: too many review changes this hour."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the database or Redis is unreachable; retry later."
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Delete your own review (soft delete)",
+        "tags": [
+          "reviews"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_review_api_v1_reviews__review_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "review_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Review Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyReviewRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "MALFORMED_REQUEST: the body is not valid JSON."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No valid session cookie was presented."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "CSRF token missing or invalid, or EMAIL_VERIFICATION_REQUIRED."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No live review of yours with this id."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Validation failed, or REVIEW_CONTENT_REJECTED (with `reason`)."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "RATE_LIMITED: too many review changes this hour."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the database or Redis is unreachable; retry later."
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Edit your own review (a hidden review stays hidden)",
+        "tags": [
+          "reviews"
         ]
       }
     },
@@ -24639,7 +30095,7 @@
                 }
               }
             },
-            "description": "The provider is not configured here (never `cash`)."
+            "description": "The provider is not configured here or takes no webhooks (never `cash` or `manual`)."
           },
           "422": {
             "content": {

@@ -28,6 +28,7 @@ describe("parseShopUrlState", () => {
       colour: [],
       sort: null,
       q: "",
+      promotion: null,
       cursor: null,
     });
   });
@@ -116,6 +117,13 @@ describe("buildShopUrlParams", () => {
     expect(next.get("category")).toBe("printers");
   });
 
+  it("reads and writes ?promotion=, and clearing it also clears the cursor", () => {
+    expect(parseShopUrlState(new URLSearchParams("promotion=p-1")).promotion).toBe("p-1");
+    const next = buildShopUrlParams(new URLSearchParams("promotion=p-1&cursor=c-1"), { promotion: null });
+    expect(next.has("promotion")).toBe(false);
+    expect(next.has("cursor")).toBe(false);
+  });
+
   it("round-trips through parse after a build", () => {
     const next = buildShopUrlParams(new URLSearchParams(), { q: "stand", sort: "newest", category: ["printers"] });
     expect(parseShopUrlState(next)).toEqual({
@@ -124,6 +132,7 @@ describe("buildShopUrlParams", () => {
       colour: [],
       sort: "newest",
       q: "stand",
+      promotion: null,
       cursor: null,
     });
   });

@@ -4,6 +4,9 @@ export interface ShopUrlState {
   colour: readonly string[];
   sort: string | null;
   q: string;
+  // `?promotion=<id>`: the homepage campaign's "Shop promotion" link. The id is
+  // passed to the backend as `promotion_id`; it is never interpreted here.
+  promotion: string | null;
   cursor: string | null;
 }
 
@@ -49,6 +52,7 @@ export function parseShopUrlState(params: URLSearchParams): ShopUrlState {
     colour: readFacetValues("colour"),
     sort: readSingle("sort"),
     q: params.get("q") ?? "",
+    promotion: readSingle("promotion"),
     cursor: readSingle("cursor"),
   };
 }
@@ -90,7 +94,7 @@ export function buildShopUrlParams(current: URLSearchParams, updates: Partial<Sh
     shouldClearCursor = true;
   }
 
-  for (const key of ["sort", "q"] as const) {
+  for (const key of ["sort", "q", "promotion"] as const) {
     if (!(key in updates)) {
       continue;
     }

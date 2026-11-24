@@ -5,8 +5,8 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ApiError } from "@/lib/api/ApiError";
 import { offersAdminApi } from "@/lib/admin/offers/offersAdminApi";
-import { productsAdminApi } from "@/lib/admin/products/productsAdminApi";
-import type { RawAdminProductDetail } from "@/lib/admin/products/productAdminTypes";
+import { productsApi } from "@/lib/catalog/productsApi";
+import type { ProductDetail } from "@/lib/catalog/productTypes";
 import { buildLoginRedirectPath } from "@/lib/auth/returnTo";
 import type { CheckoutReadDTO } from "@/lib/checkout/checkoutTypes";
 import { adminOfferDetail, OFFER_ID, OFFER_PRODUCT_ID, offerDetail } from "@/lib/offers/offerFixtures";
@@ -295,13 +295,15 @@ describe("CustomerOfferView", () => {
 
 describe("AdminOfferView", () => {
   // Today's list price comes from the admin product read; only `price` is used.
-  function stubListPrice(amountCents = 2500) {
-    return vi
-      .spyOn(productsAdminApi, "getProduct")
-      .mockResolvedValue({
-        id: OFFER_PRODUCT_ID,
-        price: { amount_cents: amountCents, currency: "USD" },
-      } as RawAdminProductDetail);
+  // Today's price comes from the public product read (the offer ceiling);
+  // only `price`, `list_price` and `promotion` are used.
+  function stubListPrice(amountCents = 2500, promotion: ProductDetail["promotion"] = null, listCents = amountCents) {
+    return vi.spyOn(productsApi, "getProductBySlug").mockResolvedValue({
+      id: OFFER_PRODUCT_ID,
+      price: { amount_cents: amountCents, currency: "USD" },
+      list_price: { amount_cents: listCents, currency: "USD" },
+      promotion,
+    } as ProductDetail);
   }
 
   it("renders the server's admin moves and rejects through a destructive confirmation", async () => {
@@ -348,25 +350,51 @@ describe("AdminOfferView", () => {
     expect(screen.queryByRole("region", { name: "Your reply" })).toBeNull();
   });
 
-  it("shows whose amount is on the table and today's list price from the server", async () => {
+  it("shows whose amount is on the table and today's price from the server", async () => {
     stubListPrice(2500);
     vi.spyOn(offersAdminApi, "getOffer").mockResolvedValue(adminOfferDetail());
     renderWithQuery(<AdminOfferView offerId={OFFER_ID} />);
     const facts = await screen.findByRole("region", { name: "Offer details" });
-    expect(await within(facts).findByText("List price today")).toBeInTheDocument();
+    expect(await within(facts).findByText("Price today")).toBeInTheDocument();
     expect(within(facts).getByText("$25.00")).toBeInTheDocument();
     expect(within(facts).getByText("Customer's first offer")).toBeInTheDocument();
     expect(within(facts).getByText("Customer's offer")).toBeInTheDocument();
-    expect(productsAdminApi.getProduct).toHaveBeenCalledWith(OFFER_PRODUCT_ID);
+    expect(productsApi.getProductBySlug).toHaveBeenCalledWith("dragon-stl");
+  });
+
+  it("during a promotion, today's price (the offer ceiling) is the server's promotional price", async () => {
+    stubListPrice(
+      2000,
+      {
+        id: "p-1",
+        name: "Eid Sale",
+        badge_text: null,
+        discount_type: "percentage",
+        discount_value: 20,
+        ends_at: "2026-12-20T00:00:00Z",
+      },
+      2500
+    );
+    vi.spyOn(offersAdminApi, "getOffer").mockResolvedValue(adminOfferDetail());
+    renderWithQuery(<AdminOfferView offerId={OFFER_ID} />);
+    const facts = await screen.findByRole("region", { name: "Offer details" });
+    expect(await within(facts).findByText("Price today")).toBeInTheDocument();
+    expect(within(facts).getByText("$20.00")).toBeInTheDocument();
+    expect(within(facts).getByText(/Eid Sale; list price \$25\.00/)).toBeInTheDocument();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Counter-offer" }));
+    expect(within(screen.getByRole("dialog")).getByLabelText("Your counter-offer (USD)")).toHaveAccessibleDescription(
+      "Up to today's price, $20.00."
+    );
   });
 
   it("still works without a list price when the product read fails", async () => {
-    vi.spyOn(productsAdminApi, "getProduct").mockRejectedValue(http(404, "NOT_FOUND"));
+    vi.spyOn(productsApi, "getProductBySlug").mockRejectedValue(http(404, "NOT_FOUND"));
     vi.spyOn(offersAdminApi, "getOffer").mockResolvedValue(adminOfferDetail());
     renderWithQuery(<AdminOfferView offerId={OFFER_ID} />);
     expect(await screen.findByRole("button", { name: "Accept $15.00" })).toBeInTheDocument();
-    await waitFor(() => expect(productsAdminApi.getProduct).toHaveBeenCalled());
-    expect(screen.queryByText("List price today")).toBeNull();
+    await waitFor(() => expect(productsApi.getProductBySlug).toHaveBeenCalled());
+    expect(screen.queryByText("Price today")).toBeNull();
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
@@ -402,11 +430,11 @@ describe("AdminOfferView", () => {
       .mockImplementation(() => new Promise((r) => (resolve = r)));
     renderWithQuery(<AdminOfferView offerId={OFFER_ID} />);
     const user = userEvent.setup();
-    await screen.findByText("List price today");
+    await screen.findByText("Price today");
     await user.click(await screen.findByRole("button", { name: "Counter-offer" }));
     const dialog = screen.getByRole("dialog");
     const amount = within(dialog).getByLabelText("Your counter-offer (USD)");
-    expect(amount).toHaveAccessibleDescription("Up to today's list price, $25.00.");
+    expect(amount).toHaveAccessibleDescription("Up to today's price, $25.00.");
     await user.type(amount, "18.50");
     await user.type(within(dialog).getByLabelText("Message (optional)"), "Meet in the middle?");
     const send = within(dialog).getByRole("button", { name: "Send counter-offer" });

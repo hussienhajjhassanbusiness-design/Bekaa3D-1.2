@@ -1,5 +1,34 @@
 # Real Backend Acceptance
 
+## Seasonal promotions, 2026-11-24
+
+Admin-created store/product price campaigns (Eid, Ramadan, Christmas…), server-authoritative. Backend contract: `docs/promotions.md` in the backend repo (migration `b7c41e2a9d10`); frontend: Admin → Promotions, the homepage banner, ProductCard/ProductDetail pricing, `/shop?promotion=`.
+
+Real Edge, `npm run dev` (:3000) proxying to the Docker Compose backend (:8000), no route mocking. The admin signed in through the real login form with a live TOTP; a fresh customer registered and verified through the real outbox. Disposable data only: one new STL product (list price $25.00, hidden again afterwards) and a `selected`-scope 20% promotion covering only it (switched off at the end), so no other price changed.
+
+| Check | Result | Evidence |
+|---|---|---|
+| Admin nav | **PASS** | Promotions is its own nav item; Offers (customer negotiation) is separate |
+| CSRF on admin writes | **PASS** | `POST /admin/promotions` without `X-CSRF-Token` → `403` |
+| Backend validation | **PASS** | 101 % and an end before the start → `422 VALIDATION_ERROR` on `discount_value`, `ends_at` |
+| Admin creates + activates via the form | **PASS** | `POST` → `201`, status `active`, scope `selected` (1 product); list row "Active" |
+| Audit | **PASS** | `audit_logs`: `promotion.created` |
+| Public product price | **PASS** | `price` 2000, `list_price` 2500, `promotion` = the campaign at 20 % |
+| `GET /promotions` | **PASS** | lists the active one, without product ids |
+| Out-of-scope product | **PASS** | another STL's `price` = `list_price`, `promotion: null` |
+| Customer on admin API | **PASS** | `GET /admin/promotions` → `404` |
+| Homepage banner | **PASS** | "20% OFF / <campaign>", badge "Eid", real end date; no Stitch placeholder copy |
+| Banner responsive | **PASS** | no horizontal overflow at 320 / 390 / 768 / 1024 / 1440 |
+| "Shop promotion" CTA | **PASS** | `/shop?promotion=<id>` lists only the covered product; card "-20%", current $20.00, original $25.00 struck, both also in words |
+| Product detail | **PASS** | $20.00 with $25.00 struck, "20% OFF", campaign name and end date |
+| Offer ceiling | **PASS** | an offer of $21.00 (below the $25 list, above the $20 sale) → `422`; $20.00 → `201` (withdrawn) |
+| Cart | **PASS** | add-to-cart body `{product_id, quantity}` only; cart snapshot and current price 2000 |
+| Checkout + order snapshot | **PASS** | summary $20.00; `POST /checkout` `201` with no price in the body; order total 2000; `order_items.unit_price_cents` 2000 |
+| Switch off | **PASS** | edit form → "Promotion saved."; product back to 2500, `promotion: null`; banner gone; the placed order line still 2000 |
+| Page errors | **PASS** | none |
+
+Not covered here (unit/integration-tested instead): percentage-vs-fixed and the no-stacking choice across several promotions, scheduled/ended windows, physical/STL scopes, and a promotion starting after add-to-cart (a normal `CART_PRICE_CHANGED` confirmation at checkout).
+
 ## Phase 6F: Production / deployment readiness, 2026-11-12
 
 No deployment, hosting, DNS or push. The deliverable is [`docs/setup/production-readiness.md`](../setup/production-readiness.md) plus the code changes below.

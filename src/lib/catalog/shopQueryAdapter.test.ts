@@ -3,7 +3,7 @@ import { toProductsQueryParams } from "./shopQueryAdapter";
 import type { ShopUrlState } from "./shopUrlState";
 
 function urlState(overrides: Partial<ShopUrlState> = {}): ShopUrlState {
-  return { category: [], material: [], colour: [], sort: null, q: "", cursor: null, ...overrides };
+  return { category: [], material: [], colour: [], sort: null, q: "", promotion: null, cursor: null, ...overrides };
 }
 
 describe("toProductsQueryParams", () => {

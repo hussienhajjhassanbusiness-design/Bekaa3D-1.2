@@ -25,6 +25,7 @@ export function buildProductsSearchParams(params: ProductsQueryParams): URLSearc
   if (params.min_rating !== undefined) search.set("min_rating", String(params.min_rating));
   if (params.featured !== undefined) search.set("featured", String(params.featured));
   if (params.q) search.set("q", params.q);
+  if (params.promotion_id) search.set("promotion_id", params.promotion_id);
   if (params.sort) search.set("sort", params.sort);
   if (params.cursor) search.set("cursor", params.cursor);
   if (params.limit !== undefined) search.set("limit", String(params.limit));

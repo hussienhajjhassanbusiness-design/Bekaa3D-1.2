@@ -2,6 +2,7 @@ import type {
   Capabilities,
   CategorySummary,
   DimensionsRead,
+  DiscountType,
   FacetSummary,
   ProductDetail,
   ProductListItem,
@@ -27,13 +28,26 @@ export interface ProductCardImage {
   alt: string;
 }
 
+export interface ProductPromotionModel {
+  id: string;
+  name: string;
+  badgeText: string | null;
+  discountType: DiscountType;
+  discountValue: number;
+  endsAt: string;
+  // The server's own list price (`list_price`), shown struck through.
+  listPrice: { amountCents: number; currency: string };
+}
+
 export interface ProductCardModel {
   id: string;
   type: ProductType;
   name: string;
   slug: string;
   coverImage: ProductCardImage | null;
+  // The server's current price (the promotional one while `promotion` is set).
   price: { amountCents: number; currency: string };
+  promotion: ProductPromotionModel | null;
   category: CategorySummary;
   material: FacetSummary | null;
   colour: FacetSummary | null;
@@ -102,6 +116,19 @@ export function toProductCardModel(item: ProductListItem): ProductCardModel {
     slug: item.slug,
     coverImage: toCoverImage(item.cover_image, item.name),
     price: { amountCents: item.price.amount_cents, currency: item.price.currency },
+    // `list_price` is only read alongside a promotion (the server always sends
+    // both); nothing here derives one price from another.
+    promotion: item.promotion
+      ? {
+          id: item.promotion.id,
+          name: item.promotion.name,
+          badgeText: item.promotion.badge_text,
+          discountType: item.promotion.discount_type,
+          discountValue: item.promotion.discount_value,
+          endsAt: item.promotion.ends_at,
+          listPrice: { amountCents: item.list_price.amount_cents, currency: item.list_price.currency },
+        }
+      : null,
     category: item.category,
     material: item.material,
     colour: item.colour,

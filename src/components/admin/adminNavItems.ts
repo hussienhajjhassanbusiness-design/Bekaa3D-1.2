@@ -54,6 +54,9 @@ export const ADMIN_NAV_GROUPS: readonly AdminNavGroup[] = [
   {
     label: "Store",
     items: [
+      // Seasonal promotions (store-wide price campaigns) — deliberately NOT
+      // under Offers, which is customer negotiation.
+      { label: "Promotions", href: "/admin/promotions", icon: "percent" },
       { label: "Settings", href: "/admin/settings", icon: "settings" },
       { label: "Customers", href: "/admin/customers", icon: "group" },
     ],

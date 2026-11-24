@@ -21,6 +21,7 @@ const baseProduct: ProductCardModel = {
   slug: "dragon",
   coverImage: { src: "/media/products/dragon.png", alt: "Articulated Dragon, view 1" },
   price: { amountCents: 1800, currency: "USD" },
+  promotion: null,
   category: { id: "c1", name: "Toys and Figures", slug: "toys-figures" },
   material: { id: "m1", name: "PLA" },
   colour: { id: "co1", name: "Red" },
@@ -42,6 +43,39 @@ describe("ProductCard", () => {
   it("shows the price via PriceDisplay", () => {
     render(<ProductCard product={baseProduct} />);
     expect(screen.getByText("$18.00")).toBeInTheDocument();
+  });
+
+  it("with no promotion, shows one price and no discount badge", () => {
+    render(<ProductCard product={baseProduct} />);
+    expect(screen.queryByText(/^-\d/)).toBeNull();
+    expect(document.querySelector("s")).toBeNull();
+  });
+
+  it("with a server promotion, shows the badge, the current price and the original struck through, in words too", () => {
+    render(
+      <ProductCard
+        product={{
+          ...baseProduct,
+          price: { amountCents: 1440, currency: "USD" },
+          promotion: {
+            id: "promo-1",
+            name: "Eid Sale",
+            badgeText: null,
+            discountType: "percentage",
+            discountValue: 20,
+            endsAt: "2026-12-20T00:00:00Z",
+            listPrice: { amountCents: 1800, currency: "USD" },
+          },
+        }}
+      />
+    );
+    expect(screen.getByText("-20%")).toBeInTheDocument();
+    expect(screen.getByText("$14.40")).toBeInTheDocument();
+    expect(screen.getByText("$18.00").closest("s")).not.toBeNull();
+    const link = screen.getByRole("link");
+    expect(link).toHaveTextContent(/Current promotional price:\s*\$14\.40/);
+    expect(link).toHaveTextContent(/Original price:\s*\$18\.00/);
+    expect(link).toHaveTextContent(/Eid Sale/);
   });
 
   it("shows the product type badge", () => {

@@ -32,6 +32,7 @@ export function toProductsQueryParams(state: ShopUrlState): ProductsQueryParams 
   if (state.colour[0]) params.colour_id = state.colour[0];
   if (state.q) params.q = state.q;
   if (state.sort && isProductSort(state.sort)) params.sort = state.sort;
+  if (state.promotion) params.promotion_id = state.promotion;
   if (state.cursor) params.cursor = state.cursor;
 
   return params;

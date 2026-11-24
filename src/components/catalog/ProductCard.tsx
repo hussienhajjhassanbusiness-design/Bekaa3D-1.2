@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { PriceDisplay } from "./PriceDisplay";
+import { ProductPrice } from "./ProductPrice";
 import { ProductTypeBadge } from "./ProductTypeBadge";
 import { RatingSummary } from "./RatingSummary";
 import type { ProductCardModel } from "@/lib/catalog/productAdapters";
+import { discountBadge } from "@/lib/promotions/promotionFormat";
 import { Icon } from "@/components/ui/Icon";
 import { WishlistButton } from "@/components/wishlist/WishlistButton";
 
@@ -67,6 +68,18 @@ export function ProductCard({ product }: ProductCardProps) {
             <span className="max-w-full truncate rounded-full bg-primary px-3 py-1 font-label text-label-micro font-bold uppercase tracking-widest text-on-primary">
               {product.category.name}
             </span>
+            {product.promotion && (
+              // Stitch S1 card 2's "-30%" corner badge (tertiary), from the
+              // server's own promotion; the sr text names the campaign.
+              <span className="rounded-badge bg-tertiary px-2 py-1 font-label text-label-micro font-bold uppercase text-on-tertiary">
+                {discountBadge(
+                  product.promotion.discountType,
+                  product.promotion.discountValue,
+                  product.promotion.listPrice.currency
+                )}
+                <span className="sr-only"> {product.promotion.name}</span>
+              </span>
+            )}
             {product.isFeatured && (
               <span className="rounded-badge bg-on-surface-variant px-2 py-1 font-label text-label-micro font-bold uppercase text-on-primary">
                 Featured
@@ -84,7 +97,7 @@ export function ProductCard({ product }: ProductCardProps) {
             {product.name}
           </h3>
           <div className="mb-6 mt-2 flex flex-wrap items-center justify-between gap-2">
-            <PriceDisplay amountCents={product.price.amountCents} currency={product.price.currency} size="card" />
+            <ProductPrice price={product.price} promotion={product.promotion} size="card" />
             {!product.isAvailable && (
               <span className="rounded-full bg-warning-container px-3 py-1 font-label text-label-sm font-bold uppercase text-on-warning-container">
                 Unavailable

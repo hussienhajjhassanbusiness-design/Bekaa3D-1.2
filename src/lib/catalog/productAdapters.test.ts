@@ -21,6 +21,8 @@ const physicalListItem: ProductListItem = {
     is_cover: true,
   },
   price: { amount_cents: 1800, currency: "USD" },
+  list_price: { amount_cents: 1800, currency: "USD" },
+  promotion: null,
   category: { id: "b0440ac7-ff53-432b-84a5-4e31cbcb8cd3", name: "Toys and Figures", slug: "toys-figures" },
   material: { id: "86f2d315-41be-491d-8a3e-09a599237ffe", name: "PLA" },
   colour: { id: "7aeecf3f-50a6-488b-b0e1-3739df5b2ae3", name: "Red" },
@@ -43,6 +45,8 @@ const stlListItem: ProductListItem = {
     is_cover: true,
   },
   price: { amount_cents: 700, currency: "USD" },
+  list_price: { amount_cents: 700, currency: "USD" },
+  promotion: null,
   category: { id: "b0440ac7-ff53-432b-84a5-4e31cbcb8cd3", name: "Toys and Figures", slug: "toys-figures" },
   material: null,
   colour: null,
@@ -66,6 +70,7 @@ describe("toProductCardModel", () => {
         alt: "Articulated Dragon, view 1",
       },
       price: { amountCents: 1800, currency: "USD" },
+      promotion: null,
       category: { id: "b0440ac7-ff53-432b-84a5-4e31cbcb8cd3", name: "Toys and Figures", slug: "toys-figures" },
       material: { id: "86f2d315-41be-491d-8a3e-09a599237ffe", name: "PLA" },
       colour: { id: "7aeecf3f-50a6-488b-b0e1-3739df5b2ae3", name: "Red" },
@@ -75,6 +80,52 @@ describe("toProductCardModel", () => {
       reviewCount: 0,
       isFeatured: false,
     });
+  });
+
+  it("maps an active promotion with the server's own list price, never computing a price", () => {
+    const item: ProductListItem = {
+      ...physicalListItem,
+      price: { amount_cents: 1440, currency: "USD" },
+      list_price: { amount_cents: 1800, currency: "USD" },
+      promotion: {
+        id: "promo-1",
+        name: "Eid Sale",
+        badge_text: "Eid",
+        discount_type: "percentage",
+        discount_value: 20,
+        ends_at: "2026-12-20T00:00:00Z",
+      },
+    };
+    const model = toProductCardModel(item);
+    expect(model.price).toEqual({ amountCents: 1440, currency: "USD" });
+    expect(model.promotion).toEqual({
+      id: "promo-1",
+      name: "Eid Sale",
+      badgeText: "Eid",
+      discountType: "percentage",
+      discountValue: 20,
+      endsAt: "2026-12-20T00:00:00Z",
+      listPrice: { amountCents: 1800, currency: "USD" },
+    });
+  });
+
+  it("uses the server price as-is: a promotion's value is never applied to it", () => {
+    const item: ProductListItem = {
+      ...physicalListItem,
+      // Deliberately inconsistent: the card must show the server's price,
+      // not 1800 - 50%.
+      price: { amount_cents: 1700, currency: "USD" },
+      list_price: { amount_cents: 1800, currency: "USD" },
+      promotion: {
+        id: "promo-1",
+        name: "Odd",
+        badge_text: null,
+        discount_type: "percentage",
+        discount_value: 50,
+        ends_at: "2026-12-20T00:00:00Z",
+      },
+    };
+    expect(toProductCardModel(item).price.amountCents).toBe(1700);
   });
 
   it("falls back coverImage.alt to the product name when alt_text is null", () => {

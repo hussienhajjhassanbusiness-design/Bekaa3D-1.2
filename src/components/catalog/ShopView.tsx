@@ -14,6 +14,7 @@ import { Icon } from "@/components/ui/Icon";
 import { useSheetBehavior } from "@/components/ui/useSheetBehavior";
 import { parseShopUrlState, buildShopUrlParams, type ShopUrlState } from "@/lib/catalog/shopUrlState";
 import { toProductsQueryParams } from "@/lib/catalog/shopQueryAdapter";
+import { useActivePromotions } from "@/lib/promotions/promotionsApi";
 import { useProducts } from "@/lib/catalog/useProducts";
 import { useCategories, useMaterials, useColours } from "@/lib/catalog/useReferenceData";
 import { toProductCardModel } from "@/lib/catalog/productAdapters";
@@ -133,8 +134,15 @@ export function ShopView() {
   );
 
   function handleClearAll() {
-    updateUrl({ category: [], material: [], colour: [] });
+    updateUrl({ category: [], material: [], colour: [], promotion: null });
   }
+
+  // `?promotion=` lists what the server says an ACTIVE promotion covers; the
+  // name comes from the same public list the homepage banner uses.
+  const activePromotions = useActivePromotions();
+  const shownPromotion = urlState.promotion
+    ? activePromotions.data?.items.find((item) => item.id === urlState.promotion)
+    : undefined;
 
   const suggestions = useSearchSuggestions(searchInput);
   const suggestionItems = suggestions.isQueryLongEnough
@@ -209,6 +217,34 @@ export function ShopView() {
             />
           </div>
         </section>
+
+        {urlState.promotion && (
+          <p
+            role="status"
+            className="mt-6 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-card border border-tertiary/30 bg-tertiary-fixed px-4 py-3 font-body text-body-md text-on-surface"
+          >
+            <Icon name="percent" className="h-5 w-5 shrink-0 text-tertiary" />
+            <span className="min-w-0 flex-1">
+              {shownPromotion ? (
+                <>
+                  Showing products in the <strong>{shownPromotion.name}</strong> promotion. Prices shown already include
+                  the discount.
+                </>
+              ) : activePromotions.isLoading ? (
+                "Showing products in this promotion."
+              ) : (
+                "This promotion isn't running any more, so no products are listed for it."
+              )}
+            </span>
+            <button
+              type="button"
+              onClick={() => updateUrl({ promotion: null })}
+              className="font-semibold text-primary underline underline-offset-4 hover:text-primary-container"
+            >
+              Show all products
+            </button>
+          </p>
+        )}
 
         <div className="mt-10 flex flex-col gap-gutter desktop:mt-12 desktop:flex-row">
           {/* From 1024px the filters are a 256px aside; below that the same

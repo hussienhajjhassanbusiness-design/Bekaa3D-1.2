@@ -1,5 +1,6 @@
 import { HeroSection } from "@/components/home/HeroSection";
 import { FeaturedProductsSection } from "@/components/home/FeaturedProductsSection";
+import { HomePromotionBanner } from "@/components/home/HomePromotionBanner";
 import { CategoryShowcaseSection } from "@/components/home/CategoryShowcaseSection";
 import { WhyChooseSection } from "@/components/home/WhyChooseSection";
 import { CustomRequestCtaSection } from "@/components/home/CustomRequestCtaSection";
@@ -15,8 +16,10 @@ import { CustomRequestCtaSection } from "@/components/home/CustomRequestCtaSecti
 // Batch 3 — Stitch home (PAGE-SPECS S1) in its section order, full-width
 // bands with alternating surfaces and the 96px (64px mobile) rhythm:
 // split hero → category bento → featured products → feature tiles → CTA
-// panel. Stitch's promo banner, STL strip and testimonials have no real
-// data and are not built (redesign plan, Batch 3 deviations).
+// panel. Stitch's STL strip and testimonials have no real data and are not
+// built (redesign plan, Batch 3 deviations). The promo banner now sits after
+// the products, as in Stitch, but only while the backend reports an active
+// promotion — it is driven entirely by GET /api/v1/promotions.
 export default function Home() {
   return (
     <>
@@ -27,6 +30,7 @@ export default function Home() {
       />
       <CategoryShowcaseSection />
       <FeaturedProductsSection />
+      <HomePromotionBanner />
       <WhyChooseSection />
       <CustomRequestCtaSection />
     </>

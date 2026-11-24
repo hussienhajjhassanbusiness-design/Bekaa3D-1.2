@@ -112,6 +112,48 @@ describe("ProductDetailView", () => {
     expect(screen.queryByText(/currently unavailable/i)).not.toBeInTheDocument();
   });
 
+  it("shows the server's promotional price, the original, the campaign and its real end date", async () => {
+    vi.spyOn(apiClient, "get").mockImplementation(async (path: unknown) => {
+      if ((path as string).startsWith("/api/v1/settings/public")) {
+        return { accepting_orders: true, cash_payment_enabled: true, cash_max_order_total: { amount_cents: 10000, currency: "USD" }, pickup_address: null, pickup_hours: null, whatsapp_number: null };
+      }
+      return {
+        ...physicalDetail,
+        price: { amount_cents: 1440, currency: "USD" },
+        list_price: { amount_cents: 1800, currency: "USD" },
+        promotion: { id: "promo-1", name: "Ramadan Sale", badge_text: null, discount_type: "percentage", discount_value: 20, ends_at: "2026-12-20T12:00:00Z" },
+      };
+    });
+    mockedUseAuth.mockReturnValue(authState());
+
+    renderDetail("dragon");
+
+    expect(await screen.findByRole("heading", { name: "Articulated Dragon" })).toBeInTheDocument();
+    expect(screen.getByText("$14.40")).toBeInTheDocument();
+    expect(screen.getByText("$18.00").closest("s")).not.toBeNull();
+    expect(screen.getByText(/Current promotional price:/)).toBeInTheDocument();
+    expect(screen.getByText(/Original price:/)).toBeInTheDocument();
+    expect(screen.getByText("20% OFF")).toBeInTheDocument();
+    expect(screen.getByText(/Ramadan Sale/)).toBeInTheDocument();
+    expect(document.querySelector('time[datetime="2026-12-20T12:00:00Z"]')).not.toBeNull();
+  });
+
+  it("shows no promotion UI when the server reports none", async () => {
+    vi.spyOn(apiClient, "get").mockImplementation(async (path: unknown) => {
+      if ((path as string).startsWith("/api/v1/settings/public")) {
+        return { accepting_orders: true, cash_payment_enabled: true, cash_max_order_total: { amount_cents: 10000, currency: "USD" }, pickup_address: null, pickup_hours: null, whatsapp_number: null };
+      }
+      return { ...physicalDetail, list_price: physicalDetail.price, promotion: null };
+    });
+    mockedUseAuth.mockReturnValue(authState());
+
+    renderDetail("dragon");
+
+    expect(await screen.findByRole("heading", { name: "Articulated Dragon" })).toBeInTheDocument();
+    expect(screen.queryByText(/Original price:/)).toBeNull();
+    expect(screen.queryByText(/% OFF/)).toBeNull();
+  });
+
   it("renders an STL product's null physical-only fields as absent — no empty labels", async () => {
     vi.spyOn(apiClient, "get").mockImplementation(async (path: unknown) => {
       if ((path as string).startsWith("/api/v1/settings/public")) {

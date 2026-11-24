@@ -52,13 +52,33 @@ export interface Capabilities {
   whatsapp_available: boolean;
 }
 
+// Promotions (backend docs/promotions.md, schema ProductPromotionRead): the
+// one promotion behind `price` right now — never more than one (no
+// stacking). `discount_value` is a whole percent for `percentage` and cents
+// for `fixed`; display only, never used to compute a price.
+export type DiscountType = "percentage" | "fixed";
+
+export interface ProductPromotionRead {
+  id: string;
+  name: string;
+  badge_text: string | null;
+  discount_type: DiscountType;
+  discount_value: number;
+  ends_at: string;
+}
+
 export interface ProductListItem {
   id: string;
   type: ProductType;
   name: string;
   slug: string;
   cover_image: PublicImage | null;
+  // What the shop charges now — the promotional price while `promotion` is
+  // set. The cart and checkout charge this same, server-computed price.
   price: PriceRead;
+  // The product's own price; above `price` only while `promotion` is set.
+  list_price: PriceRead;
+  promotion: ProductPromotionRead | null;
   category: CategorySummary;
   material: FacetSummary | null;
   colour: FacetSummary | null;
@@ -102,6 +122,8 @@ export interface ProductsQueryParams {
   min_rating?: number;
   featured?: boolean;
   q?: string;
+  // Only the products an active promotion covers (unknown/inactive = none).
+  promotion_id?: string;
   sort?: ProductSort;
   cursor?: string;
   limit?: number;

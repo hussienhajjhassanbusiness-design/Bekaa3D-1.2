@@ -13,7 +13,8 @@ import { usePublicSettings } from "@/lib/settings/usePublicSettings";
 import { MakeOfferPanel } from "@/components/offers/MakeOfferPanel";
 import { WishlistButton } from "@/components/wishlist/WishlistButton";
 import { AddToCartButton } from "./AddToCartButton";
-import { PriceDisplay } from "./PriceDisplay";
+import { ProductPrice } from "./ProductPrice";
+import { discountHeadline, formatPromotionDate } from "@/lib/promotions/promotionFormat";
 import { ProductImageGallery } from "./ProductImageGallery";
 import { ProductTypeBadge } from "./ProductTypeBadge";
 import { RatingSummary } from "./RatingSummary";
@@ -128,7 +129,24 @@ export function ProductDetailView({ slug }: ProductDetailViewProps) {
               <RatingSummary averageRating={product.averageRating} reviewCount={product.reviewCount} size="md" />
             </div>
             <h1 className="break-words font-display text-display text-on-surface">{product.name}</h1>
-            <PriceDisplay amountCents={product.price.amountCents} currency={product.price.currency} size="detail" />
+            <ProductPrice price={product.price} promotion={product.promotion} size="detail" />
+            {product.promotion && (
+              // The server's own campaign facts: name and real end date (no
+              // countdown). The price above is the price the cart charges.
+              <p className="flex flex-wrap items-center gap-2 font-body text-body-md text-on-surface-variant">
+                <span className="rounded-badge bg-tertiary px-2 py-1 font-label text-label-sm font-bold uppercase text-on-tertiary">
+                  {discountHeadline(
+                    product.promotion.discountType,
+                    product.promotion.discountValue,
+                    product.promotion.listPrice.currency
+                  )}
+                </span>
+                <span>
+                  {product.promotion.name}
+                  {" · "}Ends <time dateTime={product.promotion.endsAt}>{formatPromotionDate(product.promotion.endsAt)}</time>
+                </span>
+              </p>
+            )}
           </div>
 
           {!product.isAvailable && <UnavailableNotice message="This product is currently unavailable." />}

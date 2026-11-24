@@ -15,6 +15,7 @@ const product: ProductCardModel = {
   slug: "dragon",
   coverImage: null,
   price: { amountCents: 1800, currency: "USD" },
+  promotion: null,
   category: { id: "c1", name: "Toys and Figures", slug: "toys-figures" },
   material: null,
   colour: null,

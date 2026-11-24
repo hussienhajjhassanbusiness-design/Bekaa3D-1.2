@@ -80,6 +80,7 @@ describe("AdminShell", () => {
       "Cash blocks",
       "Contact messages",
       "Bring Your Idea",
+      "Promotions",
       "Settings",
       "Customers",
       "Categories",
