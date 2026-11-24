@@ -156,6 +156,15 @@ describe("AdminSettingsPage — loading", () => {
     expect(within(other).getByRole("spinbutton", { name: /checkout hold period/i })).toHaveValue(1800);
   });
 
+  // Playwright's getByRole name match is a substring match: a second heading
+  // containing "Settings" (e.g. a hidden "Store settings" form heading) made
+  // the admin-routes E2E spec ambiguous.
+  it("has only one heading whose name contains Settings", () => {
+    renderWith(ALL_SETTINGS);
+    expect(screen.getAllByRole("heading", { name: /settings/i })).toHaveLength(1);
+    expect(screen.getByRole("heading", { level: 1, name: "Settings" })).toBeInTheDocument();
+  });
+
   it("renders exactly one Save changes button, no per-field Save", () => {
     renderWith(ALL_SETTINGS);
     expect(screen.getAllByRole("button", { name: /save/i })).toHaveLength(1);

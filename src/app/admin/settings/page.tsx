@@ -181,10 +181,7 @@ export default function AdminSettingsPage() {
     <>
       <PageHeader title="Settings" description="Edit any store settings below, then save them together." />
 
-      <form noValidate onSubmit={handleSubmit} aria-labelledby="settings-form-heading" className="max-w-form">
-        <h2 id="settings-form-heading" className="sr-only">
-          Store settings
-        </h2>
+      <form noValidate onSubmit={handleSubmit} aria-label="Store settings form" className="max-w-form">
         <fieldset disabled={isSaving} className="space-y-6">
           {sections.map((section) => (
             <section
@@ -192,12 +189,12 @@ export default function AdminSettingsPage() {
               aria-labelledby={`settings-section-${section.id}`}
               className="rounded-card border border-outline-variant/40 bg-surface-container-lowest px-5 shadow-sm tablet:px-6"
             >
-              <h3
+              <h2
                 id={`settings-section-${section.id}`}
                 className="border-b border-outline-variant/30 py-4 font-headline text-headline-md text-on-surface"
               >
                 {section.title}
-              </h3>
+              </h2>
               <div className="divide-y divide-outline-variant/30">
                 {section.settings.map((setting) => {
                   const fieldError = fieldErrors[setting.key];
