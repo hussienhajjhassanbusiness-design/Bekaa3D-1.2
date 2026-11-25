@@ -23,6 +23,7 @@ import {
   describeHeroImageError,
   useHeroImage,
   useReplaceHeroImage,
+  useRestoreDefaultHeroImage,
 } from "@/lib/home/heroImageApi";
 
 const LOAD_ERROR_MESSAGE = "Couldn't load settings. Please try again.";
@@ -79,7 +80,11 @@ export default function AdminSettingsPage() {
   const updateMutation = useAdminSettingUpdate();
   const heroImage = useHeroImage();
   const replaceHeroImage = useReplaceHeroImage();
+  const restoreDefaultHeroImage = useRestoreDefaultHeroImage();
+  // The pending hero edit: a chosen file to upload, or "restore default"
+  // (PATCH homepage_hero_image null). Never both; nothing is sent until Save.
   const [heroFile, setHeroFile] = useState<File | null>(null);
+  const [heroRestore, setHeroRestore] = useState(false);
   const [heroSelectError, setHeroSelectError] = useState<string | undefined>(undefined);
 
   // `baseline` = last server-confirmed value per key; `draft` = what the
@@ -122,7 +127,7 @@ export default function AdminSettingsPage() {
     .filter((key) => key in draft && !sameValue(draft[key], baseline[key]));
   // Shown only when the backend has the setting: the form never invents one.
   const hasHeroImage = settingsByKey.has(HERO_IMAGE_SETTING_KEY);
-  const isDirty = changedKeys.length > 0 || heroFile !== null;
+  const isDirty = changedKeys.length > 0 || heroFile !== null || heroRestore;
   const isSaving = saveState.status === "saving";
 
   const sections = [
@@ -159,7 +164,13 @@ export default function AdminSettingsPage() {
       return;
     }
     setHeroSelectError(undefined);
+    // A new choice replaces a pending "Restore default".
+    setHeroRestore(false);
     setHeroFile(file);
+    clearHeroFieldError();
+  }
+
+  function clearHeroFieldError() {
     setFieldErrors((current) => {
       if (!(HERO_IMAGE_SETTING_KEY in current)) return current;
       const rest = { ...current };
@@ -171,13 +182,23 @@ export default function AdminSettingsPage() {
     }
   }
 
+  function handleHeroRestoreDefault() {
+    setHeroFile(null);
+    setHeroSelectError(undefined);
+    // Only a saved custom image needs a change; without one, dropping the
+    // chosen file already leaves the default in place.
+    setHeroRestore(Boolean(heroImage.data?.url));
+    clearHeroFieldError();
+  }
+
   function handleHeroClear() {
     setHeroFile(null);
+    setHeroRestore(false);
     setHeroSelectError(undefined);
   }
 
   async function saveChanges(keys: string[]) {
-    if (savingRef.current || (keys.length === 0 && heroFile === null)) return;
+    if (savingRef.current || (keys.length === 0 && heroFile === null && !heroRestore)) return;
     savingRef.current = true;
     setSaveState({ status: "saving" });
     setFieldErrors({});
@@ -209,6 +230,15 @@ export default function AdminSettingsPage() {
       } catch (error) {
         errors[HERO_IMAGE_SETTING_KEY] = describeHeroImageError(error);
       }
+    } else if (heroRestore) {
+      try {
+        await restoreDefaultHeroImage.mutateAsync();
+        setHeroRestore(false);
+        savedCount += 1;
+      } catch (error) {
+        // The restore stays pending for a retry; the saved image is unchanged.
+        errors[HERO_IMAGE_SETTING_KEY] = describeHeroImageError(error);
+      }
     }
 
     savingRef.current = false;
@@ -229,6 +259,7 @@ export default function AdminSettingsPage() {
   function handleDiscard() {
     setDraft(baseline);
     setHeroFile(null);
+    setHeroRestore(false);
     setHeroSelectError(undefined);
     setFieldErrors({});
     setSaveState({ status: "idle" });
@@ -290,6 +321,8 @@ export default function AdminSettingsPage() {
                   currentUrl={heroImage.data?.url}
                   loadError={heroImage.isError}
                   pendingFile={heroFile}
+                  restorePending={heroRestore}
+                  onRestoreDefault={handleHeroRestoreDefault}
                   onSelect={handleHeroSelect}
                   onClearSelection={handleHeroClear}
                   error={fieldErrors[HERO_IMAGE_SETTING_KEY] ?? heroSelectError}

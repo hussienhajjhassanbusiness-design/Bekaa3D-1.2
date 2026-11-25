@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/apiClient";
-import { settingsKeys } from "@/lib/admin/settings/settingsApi";
+import { settingsApi, settingsKeys } from "@/lib/admin/settings/settingsApi";
 import type { UploadValidationConfig } from "@/components/forms/uploadTypes";
 import { describeAdminError } from "@/lib/admin/adminErrorMessages";
 
@@ -61,6 +61,20 @@ export function useReplaceHeroImage() {
       // The response is the stored image, so show it immediately. The
       // settings list holds the same value as a storage key, so refetch it too.
       queryClient.setQueryData<HeroImageRead>(heroImageKeys.root, saved);
+      void queryClient.invalidateQueries({ queryKey: heroImageKeys.root });
+      void queryClient.invalidateQueries({ queryKey: settingsKeys.list() });
+    },
+  });
+}
+
+// Restore the default brand visual: the existing settings PATCH with
+// `homepage_hero_image: null` (the only value that endpoint accepts for it).
+export function useRestoreDefaultHeroImage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => settingsApi.updateSetting(HERO_IMAGE_SETTING_KEY, null),
+    onSuccess: () => {
+      queryClient.setQueryData<HeroImageRead>(heroImageKeys.root, { url: null });
       void queryClient.invalidateQueries({ queryKey: heroImageKeys.root });
       void queryClient.invalidateQueries({ queryKey: settingsKeys.list() });
     },

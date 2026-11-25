@@ -1,12 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { act, renderHook } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 import { apiClient } from "@/lib/api/apiClient";
-import { describeHeroImageError, heroImageApi } from "./heroImageApi";
+import { describeHeroImageError, heroImageApi, heroImageKeys, useRestoreDefaultHeroImage } from "./heroImageApi";
 
-vi.mock("@/lib/api/apiClient", () => ({ apiClient: { get: vi.fn(), putForm: vi.fn() } }));
+vi.mock("@/lib/api/apiClient", () => ({ apiClient: { get: vi.fn(), putForm: vi.fn(), patch: vi.fn() } }));
 
 beforeEach(() => {
   vi.mocked(apiClient.get).mockReset();
   vi.mocked(apiClient.putForm).mockReset();
+  vi.mocked(apiClient.patch).mockReset();
 });
 
 describe("heroImageApi", () => {
@@ -44,5 +48,28 @@ describe("describeHeroImageError", () => {
   it("never echoes the server's detail text", () => {
     const message = describeHeroImageError({ kind: "http", code: "UPLOAD_REJECTED", detail: "<script>x</script>" });
     expect(message).not.toContain("script");
+  });
+});
+
+describe("useRestoreDefaultHeroImage", () => {
+  it("uses the existing settings PATCH with homepage_hero_image null, then shows the default", async () => {
+    vi.mocked(apiClient.patch).mockResolvedValue({ key: "homepage_hero_image", value: null });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(heroImageKeys.root, { url: "/media/home/hero/x.png" });
+    vi.mocked(apiClient.get).mockResolvedValue({ url: null });
+    const { result } = renderHook(() => useRestoreDefaultHeroImage(), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    });
+
+    await act(() => result.current.mutateAsync());
+
+    expect(apiClient.patch).toHaveBeenCalledWith(
+      "/api/v1/admin/settings/homepage_hero_image",
+      { value: null },
+      { csrf: true }
+    );
+    expect(client.getQueryData(heroImageKeys.root)).toEqual({ url: null });
   });
 });

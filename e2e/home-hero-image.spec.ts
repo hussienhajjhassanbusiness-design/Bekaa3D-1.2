@@ -32,6 +32,8 @@ interface Fake {
   heroKey: string | null;
   puts: { csrf: string | undefined; hasFile: boolean }[];
   rejectNext: boolean;
+  patches: { value: unknown; csrf: string | undefined }[];
+  failNextPatch: boolean;
 }
 
 function heroUrl(fake: Fake): string | null {
@@ -55,7 +57,7 @@ function settingRow(key: string, type: string, value: unknown) {
 }
 
 async function install(page: Page): Promise<Fake> {
-  const fake: Fake = { heroKey: null, puts: [], rejectNext: false };
+  const fake: Fake = { heroKey: null, puts: [], rejectNext: false, patches: [], failNextPatch: false };
   const json = (route: Route, body: unknown, status = 200) =>
     route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
 
@@ -88,6 +90,22 @@ async function install(page: Page): Promise<Fake> {
     })
   );
   await page.route(/\/api\/v1\/home\/hero-image$/, (r) => json(r, { url: heroUrl(fake) }));
+  // The existing settings PATCH: like the real backend, it accepts only null for this key.
+  await page.route(/\/api\/v1\/admin\/settings\/homepage_hero_image$/, (route) => {
+    const request = route.request();
+    expect(request.method()).toBe("PATCH");
+    const { value } = request.postDataJSON() as { value: unknown };
+    fake.patches.push({ value, csrf: request.headers()["x-csrf-token"] });
+    if (fake.failNextPatch) {
+      fake.failNextPatch = false;
+      return json(route, { type: "about:blank", title: "Unavailable", status: 503, code: "SERVICE_UNAVAILABLE" }, 503);
+    }
+    if (value !== null) {
+      return json(route, { type: "about:blank", title: "Invalid", status: 422, code: "SETTING_INVALID" }, 422);
+    }
+    fake.heroKey = null;
+    return json(route, settingRow("homepage_hero_image", "string", null));
+  });
   await page.route(/\/api\/v1\/admin\/home\/hero-image$/, async (route) => {
     const request = route.request();
     expect(request.method()).toBe("PUT");
@@ -186,6 +204,48 @@ test.describe("Homepage hero image", () => {
 
     await page.goto("/");
     await expect(heroVisual(page).locator("img")).toHaveAttribute("src", saved);
+  });
+
+  test("admin restores the default visual → the storefront homepage shows it again", async ({ page }) => {
+    const fake = await install(page);
+    fake.heroKey = `home/hero/${"d".repeat(32)}.png`;
+    const saved = heroUrl(fake)!;
+
+    await page.goto("/admin/settings");
+    const homepage = page.getByRole("region", { name: "Homepage" });
+    await expect(homepage.getByRole("img", { name: "Current hero image" })).toHaveAttribute("src", saved);
+
+    // Preview only: nothing is sent, and Discard brings the saved image back.
+    await homepage.getByRole("button", { name: "Restore default" }).click();
+    await expect(homepage.getByText("Default brand visual — not saved yet")).toBeVisible();
+    await expect(homepage.getByRole("img", { name: "Default brand visual" })).toBeVisible();
+    await page.getByRole("button", { name: "Discard changes" }).click();
+    await expect(homepage.getByRole("img", { name: "Current hero image" })).toHaveAttribute("src", saved);
+    expect(fake.patches).toHaveLength(0);
+
+    // A failed save keeps the pending restore; the retry applies it.
+    fake.failNextPatch = true;
+    await homepage.getByRole("button", { name: "Restore default" }).click();
+    await page.getByRole("button", { name: "Save changes" }).click();
+    await expect(homepage.getByRole("alert")).toContainText("Your current hero image is unchanged.");
+    await expect(homepage.getByText("Default brand visual — not saved yet")).toBeVisible();
+    await page.getByRole("button", { name: "Save changes" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Settings saved." })).toBeVisible();
+    expect(fake.patches).toEqual([
+      { value: null, csrf: CSRF },
+      { value: null, csrf: CSRF },
+    ]);
+    expect(fake.puts).toHaveLength(0);
+
+    await page.reload();
+    await expect(
+      page.getByRole("region", { name: "Homepage" }).getByText("Default brand visual (no image uploaded)")
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Restore default" })).toHaveCount(0);
+
+    await page.goto("/");
+    await expect(heroVisual(page)).toHaveAttribute("data-hero-visual", "default");
+    await expect(heroVisual(page).locator('img[src="/brand/bekaa3d-mark.png"]')).toBeVisible();
   });
 });
 

@@ -6,7 +6,7 @@ import { useAdminSettings } from "@/lib/admin/settings/useAdminSettings";
 import { useAdminSettingUpdate } from "@/lib/admin/settings/useAdminSettingUpdate";
 import type { RawSettingRead, RawSettingValue } from "@/lib/admin/settings/settingsAdapter";
 import type { EditableSetting } from "@/components/admin/settings/settingTypes";
-import { useHeroImage, useReplaceHeroImage } from "@/lib/home/heroImageApi";
+import { useHeroImage, useReplaceHeroImage, useRestoreDefaultHeroImage } from "@/lib/home/heroImageApi";
 
 vi.mock("@/lib/admin/settings/useAdminSettings", () => ({ useAdminSettings: vi.fn() }));
 vi.mock("@/lib/admin/settings/useAdminSettingUpdate", () => ({ useAdminSettingUpdate: vi.fn() }));
@@ -17,9 +17,11 @@ vi.mock("@/lib/home/heroImageApi", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/home/heroImageApi")>()),
   useHeroImage: vi.fn(),
   useReplaceHeroImage: vi.fn(),
+  useRestoreDefaultHeroImage: vi.fn(),
 }));
 const mockedUseHeroImage = vi.mocked(useHeroImage);
 const mockedUseReplaceHeroImage = vi.mocked(useReplaceHeroImage);
+const mockedUseRestoreDefaultHeroImage = vi.mocked(useRestoreDefaultHeroImage);
 
 const ACCEPTING_ORDERS: EditableSetting = {
   key: "accepting_orders",
@@ -122,6 +124,7 @@ beforeEach(() => {
   mockedUseAdminSettingUpdate.mockReturnValue({ mutateAsync: vi.fn() } as never);
   mockedUseHeroImage.mockReturnValue({ data: { url: null }, isError: false } as never);
   mockedUseReplaceHeroImage.mockReturnValue({ mutateAsync: vi.fn() } as never);
+  mockedUseRestoreDefaultHeroImage.mockReturnValue({ mutateAsync: vi.fn() } as never);
 });
 
 describe("AdminSettingsPage — loading", () => {
@@ -448,19 +451,22 @@ function renderHero({
   replace = vi.fn(() => Promise.resolve({ url: NEW_URL })),
   settings = [...ALL_SETTINGS, HERO_SETTING],
   mutateAsync = echoMutate(),
+  restore = vi.fn(() => Promise.resolve(savedRow("homepage_hero_image", null))),
 }: {
   url?: string | null;
   replace?: ReturnType<typeof vi.fn>;
   settings?: EditableSetting[];
   mutateAsync?: ReturnType<typeof vi.fn>;
+  restore?: ReturnType<typeof vi.fn>;
 } = {}) {
   mockedUseHeroImage.mockReturnValue({ data: { url }, isError: false } as never);
   mockedUseReplaceHeroImage.mockReturnValue({ mutateAsync: replace } as never);
+  mockedUseRestoreDefaultHeroImage.mockReturnValue({ mutateAsync: restore } as never);
   const view = renderWith(settings, mutateAsync);
   // Real browsers filter the picker by `accept`; a wrong file can still be
   // dropped or forced through, so this user doesn't apply it.
   const picker = userEvent.setup({ applyAccept: false });
-  return { ...view, picker, replace, homepage: () => screen.getByRole("region", { name: "Homepage" }) };
+  return { ...view, picker, replace, restore, homepage: () => screen.getByRole("region", { name: "Homepage" }) };
 }
 
 const heroInput = () => screen.getByLabelText("Hero image") as HTMLInputElement;
@@ -638,5 +644,155 @@ describe("AdminSettingsPage — homepage hero image", () => {
     expect(click).toHaveBeenCalled();
     expect(screen.getAllByRole("button", { name: /save/i })).toHaveLength(1);
     expect(screen.getAllByRole("heading", { name: /settings/i })).toHaveLength(1);
+  });
+});
+
+describe("AdminSettingsPage — restore the default hero visual", () => {
+  beforeEach(() => {
+    let n = 0;
+    URL.createObjectURL = vi.fn(() => `blob:preview-${++n}`);
+    URL.revokeObjectURL = vi.fn();
+  });
+
+  const restoreButton = () => screen.queryByRole("button", { name: "Restore default" });
+
+  it("is offered only when a custom image is saved or selected", async () => {
+    const { picker, homepage } = renderHero({ url: null });
+    expect(restoreButton()).not.toBeInTheDocument();
+
+    await picker.upload(heroInput(), pngFile());
+    expect(within(homepage()).getByRole("button", { name: "Restore default" })).toBeInTheDocument();
+  });
+
+  it("previews the default visual and marks the form dirty, without any request", async () => {
+    const { user, restore, replace, mutateAsync, homepage } = renderHero();
+
+    await user.click(within(homepage()).getByRole("button", { name: "Restore default" }));
+
+    expect(within(homepage()).getByRole("img", { name: "Default brand visual" })).toHaveAttribute(
+      "src",
+      "/brand/bekaa3d-mark.png"
+    );
+    expect(within(homepage()).queryByRole("img", { name: "Current hero image" })).not.toBeInTheDocument();
+    expect(within(homepage()).getByText("Default brand visual — not saved yet")).toBeInTheDocument();
+    expect(restoreButton()).not.toBeInTheDocument();
+    expect(within(homepage()).getByRole("button", { name: "Keep current image" })).toBeInTheDocument();
+    expect(saveButton()).toBeEnabled();
+    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+    expect(restore).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
+    expect(mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("Save sends the settings PATCH to null once, then shows Settings saved. and the default", async () => {
+    const { user, restore, replace, mutateAsync, homepage, rerender } = renderHero();
+    await user.click(within(homepage()).getByRole("button", { name: "Restore default" }));
+
+    await user.click(saveButton());
+
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Settings saved."));
+    expect(restore).toHaveBeenCalledTimes(1);
+    expect(replace).not.toHaveBeenCalled();
+    expect(mutateAsync).not.toHaveBeenCalled();
+    expect(saveButton()).toBeDisabled();
+
+    // The hook's cache now reads null: the default, and nothing to restore.
+    mockedUseHeroImage.mockReturnValue({ data: { url: null }, isError: false } as never);
+    rerender(<AdminSettingsPage />);
+    expect(within(homepage()).getByText("Default brand visual (no image uploaded)")).toBeInTheDocument();
+    expect(restoreButton()).not.toBeInTheDocument();
+  });
+
+  it("Discard changes and Keep current image bring the saved image back without a request", async () => {
+    const { user, restore, homepage } = renderHero();
+
+    await user.click(within(homepage()).getByRole("button", { name: "Restore default" }));
+    await user.click(discardButton());
+    expect(within(homepage()).getByRole("img", { name: "Current hero image" })).toHaveAttribute("src", CURRENT_URL);
+    expect(saveButton()).toBeDisabled();
+
+    await user.click(within(homepage()).getByRole("button", { name: "Restore default" }));
+    await user.click(within(homepage()).getByRole("button", { name: "Keep current image" }));
+    expect(within(homepage()).getByRole("img", { name: "Current hero image" })).toHaveAttribute("src", CURRENT_URL);
+    expect(saveButton()).toBeDisabled();
+    expect(restore).not.toHaveBeenCalled();
+  });
+
+  it("a failed restore keeps the saved image and the pending restore, and a retry succeeds", async () => {
+    const restore = vi
+      .fn()
+      .mockRejectedValueOnce({ kind: "network", message: "offline" })
+      .mockResolvedValueOnce(savedRow("homepage_hero_image", null));
+    const { user, homepage } = renderHero({ restore });
+    await user.click(within(homepage()).getByRole("button", { name: "Restore default" }));
+
+    await user.click(saveButton());
+
+    const alert = await within(homepage()).findByRole("alert");
+    expect(alert).toHaveTextContent("couldn't reach the server");
+    expect(alert).toHaveTextContent("Your current hero image is unchanged.");
+    expect(screen.getByRole("status")).not.toHaveTextContent("Settings saved.");
+    expect(within(homepage()).getByText("Default brand visual — not saved yet")).toBeInTheDocument();
+    expect(saveButton()).toBeEnabled();
+
+    await user.click(saveButton());
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Settings saved."));
+    expect(restore).toHaveBeenCalledTimes(2);
+  });
+
+  it("choosing another image after Restore default uploads that image instead", async () => {
+    const { user, picker, restore, replace, homepage } = renderHero();
+    await user.click(within(homepage()).getByRole("button", { name: "Restore default" }));
+
+    const file = pngFile("ramadan.png");
+    await picker.upload(heroInput(), file);
+    expect(within(homepage()).getByRole("img", { name: "Preview of the new hero image" })).toBeInTheDocument();
+    expect(within(homepage()).queryByText("Default brand visual — not saved yet")).not.toBeInTheDocument();
+
+    await user.click(saveButton());
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Settings saved."));
+    expect(replace).toHaveBeenCalledWith(file);
+    expect(restore).not.toHaveBeenCalled();
+  });
+
+  it("Restore default after choosing a file drops the file and restores instead", async () => {
+    const { user, picker, restore, replace, homepage } = renderHero();
+    await picker.upload(heroInput(), pngFile());
+
+    await user.click(within(homepage()).getByRole("button", { name: "Restore default" }));
+    expect(within(homepage()).getByText("Default brand visual — not saved yet")).toBeInTheDocument();
+    expect(within(homepage()).queryByText(/Selected:/)).not.toBeInTheDocument();
+
+    await user.click(saveButton());
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Settings saved."));
+    expect(restore).toHaveBeenCalledTimes(1);
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it("with no saved image, Restore default just drops the chosen file: nothing to save", async () => {
+    const { user, picker, restore, homepage } = renderHero({ url: null });
+    await picker.upload(heroInput(), pngFile());
+
+    await user.click(within(homepage()).getByRole("button", { name: "Restore default" }));
+
+    expect(within(homepage()).getByText("Default brand visual (no image uploaded)")).toBeInTheDocument();
+    expect(saveButton()).toBeDisabled();
+    expect(restore).not.toHaveBeenCalled();
+  });
+
+  it("partial failure: a typed setting saved but the restore refused is reported as partial", async () => {
+    const restore = vi.fn().mockRejectedValue({ kind: "http", status: 503, code: "SERVICE_UNAVAILABLE", message: "x" });
+    const { user, homepage } = renderHero({ restore });
+    await replaceText(user, "Pickup hours", "10-6");
+    await user.click(within(homepage()).getByRole("button", { name: "Restore default" }));
+
+    await user.click(saveButton());
+
+    expect(
+      await screen.findByText(
+        "Some changes were saved, but others couldn't be. Review the highlighted settings and try again."
+      )
+    ).toBeInTheDocument();
+    expect(within(homepage()).getByText("Default brand visual — not saved yet")).toBeInTheDocument();
   });
 });

@@ -13,7 +13,11 @@ export interface HeroImageSettingProps {
   loadError?: boolean;
   // Chosen but not saved yet: the page's single "Save changes" uploads it.
   pendingFile: File | null;
+  // "Restore default" chosen but not saved yet: Save clears the setting.
+  restorePending?: boolean;
   onSelect: (file: File) => void;
+  onRestoreDefault: () => void;
+  // Back to the saved image: drops a chosen file or a pending restore.
   onClearSelection: () => void;
   error?: string;
 }
@@ -25,7 +29,9 @@ export function HeroImageSetting({
   currentUrl,
   loadError = false,
   pendingFile,
+  restorePending = false,
   onSelect,
+  onRestoreDefault,
   onClearSelection,
   error,
 }: HeroImageSettingProps) {
@@ -47,16 +53,19 @@ export function HeroImageSetting({
     if (file) onSelect(file);
   }
 
-  const shownUrl = previewUrl ?? currentUrl ?? null;
-  const caption = previewUrl
-    ? "New image — not saved yet"
-    : currentUrl
-      ? "Current image"
-      : loadError
-        ? "Couldn't load the current image."
-        : currentUrl === null
-          ? "Default brand visual (no image uploaded)"
-          : "Loading current image…";
+  const showsDefault = restorePending || (!previewUrl && currentUrl === null && !loadError);
+  const shownUrl = restorePending ? null : (previewUrl ?? currentUrl ?? null);
+  const caption = restorePending
+    ? "Default brand visual — not saved yet"
+    : previewUrl
+      ? "New image — not saved yet"
+      : currentUrl
+        ? "Current image"
+        : loadError
+          ? "Couldn't load the current image."
+          : currentUrl === null
+            ? "Default brand visual (no image uploaded)"
+            : "Loading current image…";
 
   return (
     <div className="flex flex-col gap-5 tablet:flex-row tablet:items-start">
@@ -73,8 +82,7 @@ export function HeroImageSetting({
               className="absolute inset-0 h-full w-full object-cover"
             />
           ) : (
-            currentUrl === null &&
-            !loadError && (
+            showsDefault && (
               // eslint-disable-next-line @next/next/no-img-element -- static local brand asset
               <img
                 src="/brand/bekaa3d-mark.png"
@@ -112,7 +120,12 @@ export function HeroImageSetting({
           <Button variant="outline" onClick={() => inputRef.current?.click()} aria-describedby={hintId}>
             {currentUrl || pendingFile ? "Replace image" : "Choose image"}
           </Button>
-          {pendingFile && (
+          {!restorePending && (currentUrl || pendingFile) && (
+            <Button variant="ghost" onClick={onRestoreDefault}>
+              Restore default
+            </Button>
+          )}
+          {((pendingFile && currentUrl) || restorePending) && (
             <Button variant="ghost" onClick={onClearSelection}>
               Keep current image
             </Button>
@@ -121,6 +134,11 @@ export function HeroImageSetting({
         {pendingFile && (
           <p className="break-all text-body-md text-on-surface-variant">
             Selected: {pendingFile.name}. Save changes to publish it.
+          </p>
+        )}
+        {restorePending && (
+          <p className="text-body-md text-on-surface-variant">
+            The homepage will show the default Bekaa3D visual. Save changes to apply it.
           </p>
         )}
         {error && <Alert variant="error" message={error} />}
