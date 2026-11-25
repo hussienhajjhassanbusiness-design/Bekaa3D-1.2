@@ -21,11 +21,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
 from app.catalog.domain.enums import ProductType
+from app.catalog.domain.promotions import PromotionScope
 from app.catalog.domain.storefront import (
     MIN_FULL_TEXT_HITS,
     CategoryRef,
     CursorKey,
     FacetRef,
+    PromotionCoverage,
     SearchMode,
     SearchSuggestion,
     StorefrontFilter,
@@ -37,6 +39,7 @@ from app.catalog.infrastructure.models import (
     ColourModel,
     MaterialModel,
     ProductModel,
+    PromotionProductModel,
 )
 from app.catalog.infrastructure.product_repository import _to_domain
 from app.catalog.infrastructure.visibility import listed_predicate
@@ -114,9 +117,24 @@ def _conditions(filters: StorefrontFilter, mode: SearchMode) -> list[ColumnEleme
         where.append(ProductModel.price_cents <= filters.price_max_cents)
     if filters.min_rating is not None:
         where.append(ProductModel.average_rating >= filters.min_rating)
+    if (coverage := filters.promotion) is not None:
+        where.extend(_covered_by(coverage))
     if filters.q is not None:
         where.append(_matches(filters.q, mode))
     return where
+
+
+def _covered_by(coverage: PromotionCoverage) -> list[ColumnElement[bool]]:
+    if coverage.scope is PromotionScope.PHYSICAL:
+        return [ProductModel.type == ProductType.PHYSICAL]
+    if coverage.scope is PromotionScope.STL:
+        return [ProductModel.type == ProductType.STL]
+    if coverage.scope is PromotionScope.SELECTED:
+        chosen = select(PromotionProductModel.product_id).where(
+            PromotionProductModel.promotion_id == coverage.promotion_id
+        )
+        return [ProductModel.id.in_(chosen)]
+    return []
 
 
 def _to_storefront(

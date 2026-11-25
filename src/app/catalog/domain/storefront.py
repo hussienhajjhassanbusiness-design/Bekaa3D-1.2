@@ -12,6 +12,7 @@ from app.catalog.domain.enums import AcceptedPaymentMethods, ProductType, Purcha
 from app.catalog.domain.exceptions import ProductValidationError
 from app.catalog.domain.product import Product
 from app.catalog.domain.product_image import ProductImage
+from app.catalog.domain.promotions import PromotionScope
 from app.core.text import CONTROL_CHARACTER_MESSAGE, has_control_characters
 
 StorefrontSort = Literal["price", "-price", "-average_rating", "-created_at", "-relevance"]
@@ -89,6 +90,12 @@ _WHATSAPP_MODES = frozenset({PurchaseMode.WHATSAPP_ONLY, PurchaseMode.BOTH})
 
 
 @dataclass(frozen=True)
+class PromotionCoverage:
+    promotion_id: UUID
+    scope: PromotionScope
+
+
+@dataclass(frozen=True)
 class StorefrontFilter:
     """The api-endpoints.md 31 allowlist; `q` is already trimmed. Every facet ANDs."""
 
@@ -101,6 +108,10 @@ class StorefrontFilter:
     min_rating: Decimal | None = None
     featured: bool | None = None
     q: str | None = None
+    # `?promotion_id=` (the homepage campaign's "Shop promotion" link): the products an
+    # ACTIVE promotion covers. The API resolves the id; an inactive or unknown one lists
+    # nothing rather than every product.
+    promotion: PromotionCoverage | None = None
 
     def __post_init__(self) -> None:
         errors: dict[str, str] = {}
@@ -178,6 +189,11 @@ class CartProduct:
     production_lead_time_days: int | None = None
     batch_size: int | None = None
     accepted_payment_methods: AcceptedPaymentMethods | None = None  # None on STL (BR-019)
+    # Promotions: `price_cents` above is what the shop charges NOW (the promotional price
+    # while one applies); `list_price_cents` is the product's own price, and
+    # `promotion_id` the one promotion behind the difference (None when none applies).
+    list_price_cents: int | None = None
+    promotion_id: UUID | None = None
 
 
 def purchase_refusal(product: CartProduct) -> PurchaseRefusal | None:

@@ -24,6 +24,7 @@ from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.catalog.domain.enums import AcceptedPaymentMethods, ProductType, PurchaseMode
+from app.catalog.domain.promotions import DiscountType, PromotionScope
 from app.core.database import Base
 
 # No `onupdate` on `updated_at`: the application writes it, so a no-op PATCH
@@ -357,3 +358,80 @@ class ProductImageModel(Base):
             postgresql_where=LIVE,
         ),
     )
+
+
+# Seasonal promotions (app.catalog.domain.promotions). The rules are repeated as CHECKs
+# so a writer other than the API (SQL, a future importer) cannot store an unusable one.
+PROMOTION_PERCENTAGE_RANGE = "discount_type <> 'percentage' OR discount_value <= 100"
+
+
+class PromotionModel(Base):
+    __tablename__ = "promotions"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    badge_text: Mapped[str | None] = mapped_column(Text)
+    discount_type: Mapped[DiscountType] = mapped_column(
+        Enum(
+            DiscountType,
+            name="promotion_discount_type",
+            values_callable=lambda e: [m.value for m in e],
+        ),
+        nullable=False,
+    )
+    discount_value: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    scope: Mapped[PromotionScope] = mapped_column(
+        Enum(
+            PromotionScope,
+            name="promotion_scope",
+            values_callable=lambda e: [m.value for m in e],
+        ),
+        nullable=False,
+    )
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        CheckConstraint("btrim(name) <> ''", name="ck_promotions_name_not_blank"),
+        CheckConstraint(
+            "badge_text IS NULL OR btrim(badge_text) <> ''", name="ck_promotions_badge_not_blank"
+        ),
+        CheckConstraint("discount_value > 0", name="ck_promotions_discount_positive"),
+        CheckConstraint(PROMOTION_PERCENTAGE_RANGE, name="ck_promotions_percentage_range"),
+        CheckConstraint("starts_at < ends_at", name="ck_promotions_window_order"),
+        # The pricing read: active promotions whose window contains now.
+        Index(
+            "ix_promotions_active_window",
+            "starts_at",
+            "ends_at",
+            postgresql_where=text("is_active"),
+        ),
+    )
+
+
+class PromotionProductModel(Base):
+    """The products of a `selected`-scope promotion."""
+
+    __tablename__ = "promotion_products"
+
+    promotion_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("promotions.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    product_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("products.id", ondelete="RESTRICT"),
+        primary_key=True,
+    )
+
+    __table_args__ = (Index("ix_promotion_products_product", "product_id"),)

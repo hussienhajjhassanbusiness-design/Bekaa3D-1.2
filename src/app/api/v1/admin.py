@@ -35,6 +35,7 @@ from starlette.types import Receive, Scope, Send
 from app.catalog.api.product_images import admin_router as product_images_router
 from app.catalog.api.product_images import upload_router as product_image_upload_router
 from app.catalog.api.products import admin_router as products_router
+from app.catalog.api.promotions import admin_router as promotions_router
 from app.catalog.api.reference_data import admin_router as catalogue_router
 from app.core.rate_limit import enforce_rate_limit
 from app.engagement.api.admin_analytics import admin_router as engagement_analytics_router
@@ -102,6 +103,8 @@ router.include_router(settings_router)
 router.include_router(catalogue_router)
 # VS-013. Product CRUD with optimistic versioning.
 router.include_router(products_router)
+# Seasonal promotions: list, read, create, update / switch on or off.
+router.include_router(promotions_router)
 # VS-014. Product image upload, cover, order and soft delete.
 router.include_router(product_images_router)
 router.include_router(product_image_upload_router)

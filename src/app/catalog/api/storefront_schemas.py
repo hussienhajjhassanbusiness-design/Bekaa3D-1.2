@@ -1,15 +1,17 @@
 """Public product payloads (api-endpoints.md 30). Fields are an allowlist: nothing
 administrative (visibility, version, wishlist count, weight) is ever exposed."""
 
+from datetime import datetime
 from typing import Self
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.catalog.api.product_image_schemas import media_url
 from app.catalog.api.product_schemas import DimensionsRead, PriceRead
 from app.catalog.domain.enums import AcceptedPaymentMethods, ProductType, PurchaseMode
 from app.catalog.domain.product_image import ProductImage
+from app.catalog.domain.promotions import AppliedPromotion, DiscountType
 from app.catalog.domain.storefront import FacetRef, StorefrontProduct
 
 
@@ -44,13 +46,45 @@ def _facet(value: FacetRef | None) -> FacetSummary | None:
     return FacetSummary(id=value.id, name=value.name) if value else None
 
 
+class ProductPromotionRead(BaseModel):
+    """The one promotion behind `price` right now (never more than one: no stacking)."""
+
+    id: UUID
+    name: str
+    badge_text: str | None
+    discount_type: DiscountType
+    discount_value: int = Field(
+        description="A whole percent for `percentage`; cents for `fixed`. Display only."
+    )
+    ends_at: datetime
+
+    @classmethod
+    def of(cls, applied: AppliedPromotion) -> Self:
+        p = applied.promotion
+        return cls(
+            id=p.id,
+            name=p.fields.name,
+            badge_text=p.fields.badge_text,
+            discount_type=p.fields.discount_type,
+            discount_value=p.fields.discount_value,
+            ends_at=p.fields.ends_at,
+        )
+
+
 class ProductListItem(BaseModel):
     id: UUID
     type: ProductType
     name: str
     slug: str
     cover_image: PublicImage | None
-    price: PriceRead
+    price: PriceRead = Field(
+        description="What the shop charges now: the promotional price while a promotion "
+        "applies, else the list price. The cart and checkout charge this same price."
+    )
+    list_price: PriceRead = Field(
+        description="The product's own price; above `price` only while `promotion` is set."
+    )
+    promotion: ProductPromotionRead | None
     category: CategorySummary
     material: FacetSummary | None
     colour: FacetSummary | None
@@ -63,17 +97,24 @@ class ProductListItem(BaseModel):
 
     @classmethod
     def _fields(
-        cls, item: StorefrontProduct, images: list[ProductImage], media_base_url: str
+        cls,
+        item: StorefrontProduct,
+        images: list[ProductImage],
+        media_base_url: str,
+        applied: AppliedPromotion | None,
     ) -> dict[str, object]:
         p, a = item.product, item.product.attributes
         cover = next((i for i in images if i.is_cover), None)
+        price = applied.price_cents if applied else a.price_cents
         return {
             "id": p.id,
             "type": p.type,
             "name": a.name,
             "slug": a.slug,
             "cover_image": PublicImage.from_entity(cover, media_base_url) if cover else None,
-            "price": PriceRead(amount_cents=a.price_cents, currency=a.currency),
+            "price": PriceRead(amount_cents=price, currency=a.currency),
+            "list_price": PriceRead(amount_cents=a.price_cents, currency=a.currency),
+            "promotion": ProductPromotionRead.of(applied) if applied else None,
             "category": CategorySummary(
                 id=item.category.id, name=item.category.name, slug=item.category.slug
             ),
@@ -89,9 +130,13 @@ class ProductListItem(BaseModel):
 
     @classmethod
     def from_storefront(
-        cls, item: StorefrontProduct, images: list[ProductImage], media_base_url: str
+        cls,
+        item: StorefrontProduct,
+        images: list[ProductImage],
+        media_base_url: str,
+        applied: AppliedPromotion | None = None,
     ) -> Self:
-        return cls.model_validate(cls._fields(item, images, media_base_url))
+        return cls.model_validate(cls._fields(item, images, media_base_url, applied))
 
 
 class Capabilities(BaseModel):
@@ -116,11 +161,15 @@ class ProductDetail(ProductListItem):
 
     @classmethod
     def from_storefront(
-        cls, item: StorefrontProduct, images: list[ProductImage], media_base_url: str
+        cls,
+        item: StorefrontProduct,
+        images: list[ProductImage],
+        media_base_url: str,
+        applied: AppliedPromotion | None = None,
     ) -> Self:
         a, derived = item.product.attributes, item.capabilities
         return cls.model_validate(
-            cls._fields(item, images, media_base_url)
+            cls._fields(item, images, media_base_url, applied)
             | {
                 "description": a.description,
                 "images": [PublicImage.from_entity(i, media_base_url) for i in images],

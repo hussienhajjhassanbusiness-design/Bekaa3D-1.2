@@ -1,12 +1,15 @@
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.catalog.domain.promotions import apply_best
 from app.catalog.domain.storefront import CartProduct
 from app.catalog.infrastructure.models import CategoryModel, ProductImageModel, ProductModel
 from app.catalog.infrastructure.product_image_repository import _to_domain as _image
+from app.catalog.infrastructure.promotion_repository import SqlPromotions
 from app.catalog.infrastructure.visibility import listed_predicate
 
 _P = ProductModel
@@ -51,13 +54,31 @@ class SqlCartProductReader:
             .where(_P.id.in_(ids))
         )
         rows = (await self._session.execute(stmt)).all()
+        # The one place cart, checkout, order lines and offers get a price: a promotion
+        # active now lowers it here, so none of them computes a discount itself.
+        now = datetime.now(UTC)
+        promotions = await SqlPromotions(self._session).active_at(now) if rows else []
+        prices: dict[UUID, tuple[int, UUID | None]] = {}
+        for row in rows:
+            applied = apply_best(
+                product_id=row.id,
+                product_type=row.type,
+                list_price_cents=row.price_cents,
+                promotions=promotions,
+                now=now,
+            )
+            prices[row.id] = (
+                (applied.price_cents, applied.promotion.id) if applied else (row.price_cents, None)
+            )
         return {
             row.id: CartProduct(
                 id=row.id,
                 type=row.type,
                 name=row.name,
                 slug=row.slug,
-                price_cents=row.price_cents,
+                price_cents=prices[row.id][0],
+                list_price_cents=row.price_cents,
+                promotion_id=prices[row.id][1],
                 currency=row.currency,
                 purchase_mode=row.purchase_mode,
                 is_available=row.is_available,

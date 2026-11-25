@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.api.v1.admin import router as admin_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.me import router as me_router
+from app.catalog.api.promotions import public_router as public_promotions_router
 from app.catalog.api.reference_data import public_router as public_catalogue_router
 from app.catalog.api.search import public_router as search_router
 from app.catalog.api.storefront import public_router as storefront_router
@@ -28,6 +29,8 @@ router.include_router(public_settings_router)
 router.include_router(public_catalogue_router)
 # VS-015. The public catalogue: GET /api/v1/products and /products/{slug}.
 router.include_router(storefront_router)
+# Seasonal promotions: GET /api/v1/promotions, the ones active now.
+router.include_router(public_promotions_router)
 # VS-016. Autocomplete: GET /api/v1/search/suggestions (search itself is `q` above).
 router.include_router(search_router)
 # VS-033. Contact form: captcha + rate limits, optional session (api-endpoints.md 7.2).

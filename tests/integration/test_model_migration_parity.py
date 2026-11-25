@@ -31,6 +31,8 @@ VS023_TABLES = {
     "reviews",
     "offers",
     "offer_rounds",
+    "promotions",
+    "promotion_products",
 }
 
 
