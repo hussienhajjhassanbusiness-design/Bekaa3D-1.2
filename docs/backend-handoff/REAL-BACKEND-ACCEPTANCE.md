@@ -1,5 +1,36 @@
 # Real Backend Acceptance
 
+## Homepage hero image, 2026-11-26
+
+The large image on the homepage hero is chosen by an administrator. Backend contract: `docs/homepage-hero-image.md` in the backend repo (migration `c8e2f4a6b1d3`, setting `homepage_hero_image`, `PUT /api/v1/admin/home/hero-image`, `GET /api/v1/home/hero-image`). Frontend: Store Settings → Homepage → Hero image, uploaded by the page's single "Save changes"; the homepage's `HeroVisual` falls back to the brand logo visual.
+
+Setup:
+
+- Real Edge, `npm run dev` (:3000) proxying `/api` to the Docker Compose backend (:8000), with no route mocking.
+- `/media` went to a temporary static server over the backend's `storage/media_public` on :8001 (`MEDIA_PROXY_TARGET`), stopped afterwards.
+- The admin signed in through the real login form with a live TOTP.
+- The setting started at `null` and was restored to `null` at the end. The two uploaded files are now unreferenced, so `reap_orphan_files` removes them after the 24 h grace period.
+
+| Check | Result | Evidence |
+|---|---|---|
+| Default with no setting | **PASS** | homepage `data-hero-visual=default`, logo mark shown |
+| Store Settings → Homepage | **PASS** | its own section with "Hero image"; the setting has no generic text control |
+| Local preview | **PASS** | `blob:` preview of the chosen 1200×900 JPEG; DB value unchanged before Save |
+| Save uploads and stores | **PASS** | setting = `home/hero/<32 hex>.jpg`, the file exists in `media_public`, its bytes differ from the upload (re-encoded) |
+| Audit | **PASS** | one `setting.updated` row with the new key |
+| Refresh | **PASS** | after a reload the admin shows "Current hero image" = `/media/home/hero/….jpg` |
+| Storefront, other browser context | **PASS** | homepage `<img>` = the saved URL, decoded 1200×900, `object-fit: cover`; panel 624×624 at 1440; floating cards unchanged |
+| Responsive | **PASS** | 820 shows the image; at 390 the panel stays hidden as before, with 0 px horizontal overflow |
+| Too-small image (200×200) | **PASS** | backend `422 UPLOAD_REJECTED`; "…at least 400 × 400 px. Your current hero image is unchanged."; no "Settings saved."; setting unchanged |
+| SVG named `fake.png` | **PASS** | refused by content; setting unchanged |
+| Generic `PATCH` with a key | **PASS** | `422 SETTING_INVALID` (only `null` is accepted, which restores the default) |
+| Anonymous upload | **PASS** | `PUT` → `401` |
+| Homepage after refusals | **PASS** | still the saved image |
+| Restore | **PASS** | `PATCH null` → `200`; homepage back to the default visual |
+| Page errors | **PASS** | none |
+
+Not covered here, and unit/integration-tested instead: malware detection and an unavailable scanner (`422 MALWARE_DETECTED`, `503`), an oversized or unsized body refused before it is read, the customer `404`, CSRF, a broken stored value reading as the default, and reaping a replaced file.
+
 ## Seasonal promotions, 2026-11-24
 
 Admin-created store/product price campaigns (Eid, Ramadan, Christmas…), server-authoritative. Backend contract: `docs/promotions.md` in the backend repo (migration `b7c41e2a9d10`); frontend: Admin → Promotions, the homepage banner, ProductCard/ProductDetail pricing, `/shop?promotion=`.

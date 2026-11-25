@@ -88,6 +88,7 @@ export default defineConfig({
         "admin-shell-responsive.spec.ts",
         "admin-detail-responsive.spec.ts",
         "promotions.spec.ts",
+        "home-hero-image.spec.ts",
       ],
       // Uses the system-installed Microsoft Edge (Chromium-based) via
       // Playwright's "channel" option instead of Playwright's own bundled

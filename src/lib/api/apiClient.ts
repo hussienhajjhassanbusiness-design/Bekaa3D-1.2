@@ -182,11 +182,7 @@ async function get<T = unknown>(path: string, options: ApiClientRequestOptions =
 // credentials-mode change, no interceptor system — transport only. Callers
 // pass a full /api/... path; this task does not call any auth endpoint
 // itself (that remains contract-gated, FVS-002-IMPLEMENTATION-PLAN.md §1).
-async function post<T = unknown>(
-  path: string,
-  body?: unknown,
-  options: ApiClientPostOptions = {}
-): Promise<T> {
+async function post<T = unknown>(path: string, body?: unknown, options: ApiClientPostOptions = {}): Promise<T> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
   const headers: Record<string, string> = { ...options.headers };
@@ -217,11 +213,7 @@ async function post<T = unknown>(
 // `PATCH /api/v1/me/notifications/{id}` is the first endpoint needing PATCH.
 // Shares every rule post() already enforces (path assertion, timeout,
 // Problem parsing, explicit-opt-in CSRF) — differs only in HTTP method.
-async function patch<T = unknown>(
-  path: string,
-  body?: unknown,
-  options: ApiClientRequestOptions = {}
-): Promise<T> {
+async function patch<T = unknown>(path: string, body?: unknown, options: ApiClientRequestOptions = {}): Promise<T> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
   const headers: Record<string, string> = {};
@@ -299,10 +291,11 @@ async function del<T = unknown>(path: string, options: ApiClientDeleteOptions = 
 // sends it as-is and deliberately never sets Content-Type itself — the
 // browser must supply its own multipart boundary, which it can only do
 // when Content-Type is left unset.
-async function postForm<T = unknown>(
+function sendForm<T>(
+  method: "POST" | "PUT",
   path: string,
   formData: FormData,
-  options: ApiClientRequestOptions = {}
+  options: ApiClientRequestOptions
 ): Promise<T> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
@@ -316,8 +309,26 @@ async function postForm<T = unknown>(
   }
 
   const hasHeaders = Object.keys(headers).length > 0;
-  const init: RequestInit = { method: "POST", ...(hasHeaders ? { headers } : {}), body: formData };
+  const init: RequestInit = { method, ...(hasHeaders ? { headers } : {}), body: formData };
   return request<T>(path, init, timeoutMs);
+}
+
+async function postForm<T = unknown>(
+  path: string,
+  formData: FormData,
+  options: ApiClientRequestOptions = {}
+): Promise<T> {
+  return sendForm<T>("POST", path, formData, options);
+}
+
+// The homepage hero image replaces one resource (PUT /api/v1/admin/home/
+// hero-image, multipart): the same rules as postForm, method PUT.
+async function putForm<T = unknown>(
+  path: string,
+  formData: FormData,
+  options: ApiClientRequestOptions = {}
+): Promise<T> {
+  return sendForm<T>("PUT", path, formData, options);
 }
 
 // Phase 6B — a binary GET (an admin's private Bring Your Idea image). Same
@@ -356,7 +367,10 @@ async function getBlob(path: string, options: ApiClientRequestOptions = {}): Pro
       throw controller.signal.aborted ? timeoutError() : networkError();
     }
     if (response.ok) {
-      return { blob: await response.blob(), filename: filenameFromDisposition(response.headers.get("Content-Disposition")) };
+      return {
+        blob: await response.blob(),
+        filename: filenameFromDisposition(response.headers.get("Content-Disposition")),
+      };
     }
     const parsed = parseProblemBody(await response.text());
     const apiError: ApiError = { ...parsed, message: fallbackHttpMessage(response.status) };
@@ -369,4 +383,4 @@ async function getBlob(path: string, options: ApiClientRequestOptions = {}): Pro
   }
 }
 
-export const apiClient = { get, post, patch, put, del, postForm, getBlob };
+export const apiClient = { get, post, patch, put, del, postForm, putForm, getBlob };

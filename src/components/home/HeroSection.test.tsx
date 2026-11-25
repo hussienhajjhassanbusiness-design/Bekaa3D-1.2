@@ -1,6 +1,24 @@
-import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render as rtlRender, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactElement } from "react";
+import { apiClient } from "@/lib/api/apiClient";
 import { HeroSection } from "./HeroSection";
+
+// The large visual reads the admin's hero image (HeroVisual.test.tsx covers
+// it); here no image is set, so it shows the default brand visual.
+function render(ui: ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return rtlRender(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
+
+beforeEach(() => {
+  vi.spyOn(apiClient, "get").mockResolvedValue({ url: null });
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 // FVS-022-IMPLEMENTATION-PLAN.md T03 — brand-focused, reusable. The
 // default heading is the one approved copy fragment anywhere in the
@@ -74,8 +92,9 @@ describe("HeroSection", () => {
     expect(heading.querySelector(".text-gradient-primary")).toHaveTextContent("Engineered Grade 3D Solutions");
   });
 
-  it("Batch 3: the brand panel is decorative — hidden from assistive tech, with an empty-alt logo", () => {
+  it("Batch 3: the brand panel is decorative — hidden from assistive tech, with an empty-alt logo", async () => {
     const { container } = render(<HeroSection />);
+    await waitFor(() => expect(container.querySelector('img[src="/brand/bekaa3d-mark.png"]')).not.toBeNull());
     const logo = container.querySelector('img[src="/brand/bekaa3d-mark.png"]');
     expect(logo).toHaveAttribute("alt", "");
     expect(logo!.closest('[aria-hidden="true"]')).not.toBeNull();

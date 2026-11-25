@@ -2,6 +2,7 @@ import Link from "next/link";
 import { buttonLinkClassName } from "@/components/forms/Button";
 import { Container } from "@/components/ui/Container";
 import { Icon, type IconName } from "@/components/ui/Icon";
+import { HeroVisual } from "@/components/home/HeroVisual";
 
 export interface HeroCta {
   label: string;
@@ -28,7 +29,12 @@ const HEADING_SEPARATOR = " — ";
 // in the same words as the approved Why Choose / About copy. No invented
 // statistics or machine status (Stitch's "2,500+ models", "PRINTING 68%").
 const PANEL_CHIPS: readonly { icon: IconName; label: string; value: string; position: string }[] = [
-  { icon: "deployed-code", label: "Physical prints", value: "Made to order", position: "-right-4 top-8 desktop:-right-6" },
+  {
+    icon: "deployed-code",
+    label: "Physical prints",
+    value: "Made to order",
+    position: "-right-4 top-8 desktop:-right-6",
+  },
   { icon: "download", label: "STL files", value: "Print it yourself", position: "-left-4 bottom-10 desktop:-left-8" },
 ];
 
@@ -41,9 +47,10 @@ const PANEL_CHIPS: readonly { icon: IconName; label: string; value: string; posi
 // Batch 3 — Stitch split hero (COMPONENT-SPECS §9, PAGE-SPECS S1): mono
 // eyebrow, display H1 whose second half carries the text gradient, lead,
 // CTA row (primary + outline), and on the right a decorative brand panel.
-// No photograph exists for this slot, so the panel is the real logo mark
-// on the blueprint grid with two glass chips — never a Stitch placeholder
-// image. The whole visual side and the blurred orbs are aria-hidden.
+// The panel shows the image an administrator uploads in Store Settings
+// (HeroVisual); without one it is the real logo mark on the blueprint grid —
+// never a Stitch placeholder image. The two glass chips stay either way. The
+// whole visual side and the blurred orbs are aria-hidden.
 export function HeroSection({ heading = DEFAULT_HEADING, supportingCopy, primaryCta, secondaryCta }: HeroSectionProps) {
   const separatorIndex = heading.indexOf(HEADING_SEPARATOR);
   const lead = separatorIndex >= 0 ? heading.slice(0, separatorIndex + HEADING_SEPARATOR.length) : null;
@@ -65,7 +72,9 @@ export function HeroSection({ heading = DEFAULT_HEADING, supportingCopy, primary
             {lead}
             <span className={lead ? "text-gradient-primary" : undefined}>{accent}</span>
           </h1>
-          {supportingCopy && <p className="mb-8 max-w-lg font-body text-body-lg text-on-surface-variant">{supportingCopy}</p>}
+          {supportingCopy && (
+            <p className="mb-8 max-w-lg font-body text-body-lg text-on-surface-variant">{supportingCopy}</p>
+          )}
           {(primaryCta || secondaryCta) && (
             <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap">
               {primaryCta && (
@@ -84,11 +93,7 @@ export function HeroSection({ heading = DEFAULT_HEADING, supportingCopy, primary
         </div>
 
         <div aria-hidden="true" className="relative mx-auto hidden w-full max-w-md tablet:block desktop:max-w-none">
-          <div className="bg-blueprint relative flex aspect-square items-center justify-center overflow-hidden rounded-panel border border-outline-variant/30 shadow-2xl">
-            <div className="absolute inset-12 rounded-full bg-primary/5 blur-2xl" />
-            {/* eslint-disable-next-line @next/next/no-img-element -- static local brand asset */}
-            <img src="/brand/bekaa3d-mark.png" alt="" width={129} height={144} className="relative w-2/5 drop-shadow-xl" />
-          </div>
+          <HeroVisual />
           {PANEL_CHIPS.map((chip) => (
             <div
               key={chip.label}

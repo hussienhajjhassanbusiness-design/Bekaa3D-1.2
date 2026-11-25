@@ -244,7 +244,11 @@ describe("apiClient.get", () => {
     it("exposes retryAfterSeconds: 120 for Retry-After: 120", async () => {
       vi.stubGlobal(
         "fetch",
-        vi.fn().mockResolvedValue(jsonResponseWithHeaders(429, { type: "about:blank", status: 429 }, { "Retry-After": "120" }))
+        vi
+          .fn()
+          .mockResolvedValue(
+            jsonResponseWithHeaders(429, { type: "about:blank", status: 429 }, { "Retry-After": "120" })
+          )
       );
 
       await expect(apiClient.get("/api/health/ready")).rejects.toMatchObject({ retryAfterSeconds: 120 });
@@ -253,7 +257,11 @@ describe("apiClient.get", () => {
     it("exposes retryAfterSeconds: 3599 for Retry-After: 3599", async () => {
       vi.stubGlobal(
         "fetch",
-        vi.fn().mockResolvedValue(jsonResponseWithHeaders(429, { type: "about:blank", status: 429 }, { "Retry-After": "3599" }))
+        vi
+          .fn()
+          .mockResolvedValue(
+            jsonResponseWithHeaders(429, { type: "about:blank", status: 429 }, { "Retry-After": "3599" })
+          )
       );
 
       await expect(apiClient.get("/api/health/ready")).rejects.toMatchObject({ retryAfterSeconds: 3599 });
@@ -295,7 +303,11 @@ describe("apiClient.get", () => {
     it("leaves retryAfterSeconds undefined for a negative header value", async () => {
       vi.stubGlobal(
         "fetch",
-        vi.fn().mockResolvedValue(jsonResponseWithHeaders(429, { type: "about:blank", status: 429 }, { "Retry-After": "-5" }))
+        vi
+          .fn()
+          .mockResolvedValue(
+            jsonResponseWithHeaders(429, { type: "about:blank", status: 429 }, { "Retry-After": "-5" })
+          )
       );
 
       let caught: unknown;
@@ -311,7 +323,11 @@ describe("apiClient.get", () => {
     it("leaves retryAfterSeconds undefined for a fractional-seconds header value", async () => {
       vi.stubGlobal(
         "fetch",
-        vi.fn().mockResolvedValue(jsonResponseWithHeaders(429, { type: "about:blank", status: 429 }, { "Retry-After": "1.5" }))
+        vi
+          .fn()
+          .mockResolvedValue(
+            jsonResponseWithHeaders(429, { type: "about:blank", status: 429 }, { "Retry-After": "1.5" })
+          )
       );
 
       let caught: unknown;
@@ -327,10 +343,16 @@ describe("apiClient.get", () => {
     it("also exposes retryAfterSeconds on apiClient.post's thrown ApiError", async () => {
       vi.stubGlobal(
         "fetch",
-        vi.fn().mockResolvedValue(jsonResponseWithHeaders(429, { type: "about:blank", status: 429 }, { "Retry-After": "60" }))
+        vi
+          .fn()
+          .mockResolvedValue(
+            jsonResponseWithHeaders(429, { type: "about:blank", status: 429 }, { "Retry-After": "60" })
+          )
       );
 
-      await expect(apiClient.post("/api/v1/auth/resend-verification", { email: "a@example.com" })).rejects.toMatchObject({
+      await expect(
+        apiClient.post("/api/v1/auth/resend-verification", { email: "a@example.com" })
+      ).rejects.toMatchObject({
         retryAfterSeconds: 60,
       });
     });
@@ -568,9 +590,9 @@ describe("apiClient.patch", () => {
     const fetchStub = vi.fn();
     vi.stubGlobal("fetch", fetchStub);
 
-    await expect(apiClient.patch("/api/v1/me/notifications/n1", { read: true }, { csrf: true })).rejects.toMatchObject(
-      { kind: "csrf" }
-    );
+    await expect(apiClient.patch("/api/v1/me/notifications/n1", { read: true }, { csrf: true })).rejects.toMatchObject({
+      kind: "csrf",
+    });
     expect(fetchStub).not.toHaveBeenCalled();
   });
 
@@ -590,9 +612,11 @@ describe("apiClient.patch", () => {
     const problemBody = { type: "about:blank", title: "Forbidden", status: 403, code: "CSRF_INVALID" };
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(403, problemBody)));
 
-    await expect(apiClient.patch("/api/v1/me/notifications/n1", { read: true }, { csrf: true })).rejects.toMatchObject(
-      { kind: "http", status: 403, code: "CSRF_INVALID" }
-    );
+    await expect(apiClient.patch("/api/v1/me/notifications/n1", { read: true }, { csrf: true })).rejects.toMatchObject({
+      kind: "http",
+      status: 403,
+      code: "CSRF_INVALID",
+    });
   });
 
   it("resolves to undefined on a 2xx response with an empty body", async () => {
@@ -789,5 +813,40 @@ describe("apiClient.post extra headers (Phase 5D)", () => {
     vi.stubGlobal("fetch", fetchMock);
     await apiClient.post("/api/v1/thing");
     expect((fetchMock.mock.calls[0]![1] as RequestInit).headers).toBeUndefined();
+  });
+});
+
+// The homepage hero image is a multipart PUT (PUT /api/v1/admin/home/hero-image).
+describe("apiClient.putForm", () => {
+  afterEach(() => {
+    document.cookie = "csrf_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/";
+  });
+
+  it("sends the FormData as-is with method PUT, the CSRF header and no Content-Type", async () => {
+    document.cookie = "csrf_token=abc123";
+    const fetchStub = vi.fn().mockResolvedValue(jsonResponse(200, { url: "/media/home/hero/x.png" }));
+    vi.stubGlobal("fetch", fetchStub);
+    const formData = new FormData();
+    formData.append("file", new Blob(["x"]), "hero.png");
+
+    const result = await apiClient.putForm("/api/v1/admin/home/hero-image", formData, { csrf: true });
+
+    expect(result).toEqual({ url: "/media/home/hero/x.png" });
+    const [calledPath, calledInit] = fetchStub.mock.calls[0] as [string, RequestInit];
+    expect(calledPath).toBe("/api/v1/admin/home/hero-image");
+    expect(calledInit.method).toBe("PUT");
+    expect(calledInit.body).toBe(formData);
+    expect(new Headers(calledInit.headers).has("Content-Type")).toBe(false);
+    expect(new Headers(calledInit.headers).get("X-CSRF-Token")).toBe("abc123");
+  });
+
+  it("rejects locally with kind: 'csrf' when the cookie is missing, never sending the request", async () => {
+    const fetchStub = vi.fn();
+    vi.stubGlobal("fetch", fetchStub);
+
+    await expect(
+      apiClient.putForm("/api/v1/admin/home/hero-image", new FormData(), { csrf: true })
+    ).rejects.toMatchObject({ kind: "csrf" });
+    expect(fetchStub).not.toHaveBeenCalled();
   });
 });

@@ -14,6 +14,16 @@ import { useAdminSettings } from "@/lib/admin/settings/useAdminSettings";
 import { useAdminSettingUpdate } from "@/lib/admin/settings/useAdminSettingUpdate";
 import { toEditableSetting, toPatchValue } from "@/lib/admin/settings/settingsAdapter";
 import { describeAdminError } from "@/lib/admin/adminErrorMessages";
+import { HeroImageSetting } from "@/components/admin/settings/HeroImageSetting";
+import { precheckFiles } from "@/components/forms/uploadTypes";
+import {
+  HERO_IMAGE_REQUIREMENTS,
+  HERO_IMAGE_SETTING_KEY,
+  HERO_IMAGE_UPLOAD_CONFIG,
+  describeHeroImageError,
+  useHeroImage,
+  useReplaceHeroImage,
+} from "@/lib/home/heroImageApi";
 
 const LOAD_ERROR_MESSAGE = "Couldn't load settings. Please try again.";
 const SAVED_MESSAGE = "Settings saved.";
@@ -38,7 +48,10 @@ const SECTIONS: { id: string; title: string; keys: string[] }[] = [
   { id: "pickup", title: "Pickup", keys: ["pickup_address", "pickup_hours"] },
   { id: "contact", title: "Contact", keys: ["whatsapp_number"] },
 ];
-const SECTIONED_KEYS = new Set(SECTIONS.flatMap((section) => section.keys));
+// The homepage hero image is a setting too, but it is set by uploading a
+// file (PUT /api/v1/admin/home/hero-image), never typed: it gets its own
+// Homepage section below instead of a generic control.
+const SECTIONED_KEYS = new Set([...SECTIONS.flatMap((section) => section.keys), HERO_IMAGE_SETTING_KEY]);
 
 type SettingValues = Record<string, EditableSettingValue>;
 
@@ -58,10 +71,16 @@ function valuesOf(settings: EditableSetting[]): SettingValues {
 // The settings PATCH is per key (`PATCH /api/v1/admin/settings/{key}`,
 // body `{ value }` only — no bulk endpoint), so one "Save changes" sends
 // one request per CHANGED key, sequentially, and tracks each outcome:
-// a key's saved snapshot only moves once the server confirmed it.
+// a key's saved snapshot only moves once the server confirmed it. A chosen
+// hero image is part of the same Save: it is uploaded after the setting
+// PATCHes, and it stays pending (with its own error) if the upload fails.
 export default function AdminSettingsPage() {
   const { data: settings, isLoading, isError } = useAdminSettings();
   const updateMutation = useAdminSettingUpdate();
+  const heroImage = useHeroImage();
+  const replaceHeroImage = useReplaceHeroImage();
+  const [heroFile, setHeroFile] = useState<File | null>(null);
+  const [heroSelectError, setHeroSelectError] = useState<string | undefined>(undefined);
 
   // `baseline` = last server-confirmed value per key; `draft` = what the
   // form shows. A key is dirty when the two differ.
@@ -99,8 +118,11 @@ export default function AdminSettingsPage() {
   const settingsByKey = new Map(settings.map((setting) => [setting.key, setting]));
   const changedKeys = settings
     .map((setting) => setting.key)
+    .filter((key) => key !== HERO_IMAGE_SETTING_KEY)
     .filter((key) => key in draft && !sameValue(draft[key], baseline[key]));
-  const isDirty = changedKeys.length > 0;
+  // Shown only when the backend has the setting: the form never invents one.
+  const hasHeroImage = settingsByKey.has(HERO_IMAGE_SETTING_KEY);
+  const isDirty = changedKeys.length > 0 || heroFile !== null;
   const isSaving = saveState.status === "saving";
 
   const sections = [
@@ -129,8 +151,33 @@ export default function AdminSettingsPage() {
     }
   }
 
+  function handleHeroSelect(file: File) {
+    const [rejection] = precheckFiles([file], HERO_IMAGE_UPLOAD_CONFIG, 0).rejected;
+    if (rejection) {
+      // Nothing is sent; any earlier selection and the saved image stay.
+      setHeroSelectError(`${rejection.reason} ${HERO_IMAGE_REQUIREMENTS}`);
+      return;
+    }
+    setHeroSelectError(undefined);
+    setHeroFile(file);
+    setFieldErrors((current) => {
+      if (!(HERO_IMAGE_SETTING_KEY in current)) return current;
+      const rest = { ...current };
+      delete rest[HERO_IMAGE_SETTING_KEY];
+      return rest;
+    });
+    if (saveState.status === "saved") {
+      setSaveState({ status: "idle" });
+    }
+  }
+
+  function handleHeroClear() {
+    setHeroFile(null);
+    setHeroSelectError(undefined);
+  }
+
   async function saveChanges(keys: string[]) {
-    if (savingRef.current || keys.length === 0) return;
+    if (savingRef.current || (keys.length === 0 && heroFile === null)) return;
     savingRef.current = true;
     setSaveState({ status: "saving" });
     setFieldErrors({});
@@ -153,6 +200,17 @@ export default function AdminSettingsPage() {
       }
     }
 
+    if (heroFile !== null) {
+      try {
+        // Success only once the backend stored it and moved the setting.
+        await replaceHeroImage.mutateAsync(heroFile);
+        setHeroFile(null);
+        savedCount += 1;
+      } catch (error) {
+        errors[HERO_IMAGE_SETTING_KEY] = describeHeroImageError(error);
+      }
+    }
+
     savingRef.current = false;
     setFieldErrors(errors);
     setSaveState(Object.keys(errors).length === 0 ? { status: "saved" } : { status: "error", partial: savedCount > 0 });
@@ -170,6 +228,8 @@ export default function AdminSettingsPage() {
 
   function handleDiscard() {
     setDraft(baseline);
+    setHeroFile(null);
+    setHeroSelectError(undefined);
     setFieldErrors({});
     setSaveState({ status: "idle" });
   }
@@ -183,35 +243,91 @@ export default function AdminSettingsPage() {
 
       <form noValidate onSubmit={handleSubmit} aria-label="Store settings form" className="max-w-form">
         <fieldset disabled={isSaving} className="space-y-6">
-          {sections.map((section) => (
+          {sections
+            .filter((section) => section.id !== "other")
+            .map((section) => (
+              <section
+                key={section.id}
+                aria-labelledby={`settings-section-${section.id}`}
+                className="rounded-card border border-outline-variant/40 bg-surface-container-lowest px-5 shadow-sm tablet:px-6"
+              >
+                <h2
+                  id={`settings-section-${section.id}`}
+                  className="border-b border-outline-variant/30 py-4 font-headline text-headline-md text-on-surface"
+                >
+                  {section.title}
+                </h2>
+                <div className="divide-y divide-outline-variant/30">
+                  {section.settings.map((setting) => {
+                    const fieldError = fieldErrors[setting.key];
+                    const value = setting.key in draft ? draft[setting.key] : setting.value;
+                    return (
+                      <div key={setting.key} data-testid="setting-row" className="flex flex-col gap-3 py-5">
+                        <SettingControl
+                          setting={{ ...setting, value } as EditableSetting}
+                          onChange={(next) => handleChange(setting.key, next)}
+                        />
+                        {fieldError && <Alert variant="error" message={fieldError} />}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+          {hasHeroImage && (
             <section
-              key={section.id}
-              aria-labelledby={`settings-section-${section.id}`}
+              aria-labelledby="settings-section-homepage"
               className="rounded-card border border-outline-variant/40 bg-surface-container-lowest px-5 shadow-sm tablet:px-6"
             >
               <h2
-                id={`settings-section-${section.id}`}
+                id="settings-section-homepage"
                 className="border-b border-outline-variant/30 py-4 font-headline text-headline-md text-on-surface"
               >
-                {section.title}
+                Homepage
               </h2>
-              <div className="divide-y divide-outline-variant/30">
-                {section.settings.map((setting) => {
-                  const fieldError = fieldErrors[setting.key];
-                  const value = setting.key in draft ? draft[setting.key] : setting.value;
-                  return (
-                    <div key={setting.key} data-testid="setting-row" className="flex flex-col gap-3 py-5">
-                      <SettingControl
-                        setting={{ ...setting, value } as EditableSetting}
-                        onChange={(next) => handleChange(setting.key, next)}
-                      />
-                      {fieldError && <Alert variant="error" message={fieldError} />}
-                    </div>
-                  );
-                })}
+              <div data-testid="setting-row" className="py-5">
+                <HeroImageSetting
+                  currentUrl={heroImage.data?.url}
+                  loadError={heroImage.isError}
+                  pendingFile={heroFile}
+                  onSelect={handleHeroSelect}
+                  onClearSelection={handleHeroClear}
+                  error={fieldErrors[HERO_IMAGE_SETTING_KEY] ?? heroSelectError}
+                />
               </div>
             </section>
-          ))}
+          )}
+          {sections
+            .filter((section) => section.id === "other")
+            .map((section) => (
+              <section
+                key={section.id}
+                aria-labelledby={`settings-section-${section.id}`}
+                className="rounded-card border border-outline-variant/40 bg-surface-container-lowest px-5 shadow-sm tablet:px-6"
+              >
+                <h2
+                  id={`settings-section-${section.id}`}
+                  className="border-b border-outline-variant/30 py-4 font-headline text-headline-md text-on-surface"
+                >
+                  {section.title}
+                </h2>
+                <div className="divide-y divide-outline-variant/30">
+                  {section.settings.map((setting) => {
+                    const fieldError = fieldErrors[setting.key];
+                    const value = setting.key in draft ? draft[setting.key] : setting.value;
+                    return (
+                      <div key={setting.key} data-testid="setting-row" className="flex flex-col gap-3 py-5">
+                        <SettingControl
+                          setting={{ ...setting, value } as EditableSetting}
+                          onChange={(next) => handleChange(setting.key, next)}
+                        />
+                        {fieldError && <Alert variant="error" message={fieldError} />}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
         </fieldset>
 
         {saveState.status === "error" && (

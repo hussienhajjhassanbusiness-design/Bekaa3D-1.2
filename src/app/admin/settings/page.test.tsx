@@ -6,11 +6,20 @@ import { useAdminSettings } from "@/lib/admin/settings/useAdminSettings";
 import { useAdminSettingUpdate } from "@/lib/admin/settings/useAdminSettingUpdate";
 import type { RawSettingRead, RawSettingValue } from "@/lib/admin/settings/settingsAdapter";
 import type { EditableSetting } from "@/components/admin/settings/settingTypes";
+import { useHeroImage, useReplaceHeroImage } from "@/lib/home/heroImageApi";
 
 vi.mock("@/lib/admin/settings/useAdminSettings", () => ({ useAdminSettings: vi.fn() }));
 vi.mock("@/lib/admin/settings/useAdminSettingUpdate", () => ({ useAdminSettingUpdate: vi.fn() }));
 const mockedUseAdminSettings = vi.mocked(useAdminSettings);
 const mockedUseAdminSettingUpdate = vi.mocked(useAdminSettingUpdate);
+// The hero image hooks are mocked; the real constants and error copy are kept.
+vi.mock("@/lib/home/heroImageApi", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/home/heroImageApi")>()),
+  useHeroImage: vi.fn(),
+  useReplaceHeroImage: vi.fn(),
+}));
+const mockedUseHeroImage = vi.mocked(useHeroImage);
+const mockedUseReplaceHeroImage = vi.mocked(useReplaceHeroImage);
 
 const ACCEPTING_ORDERS: EditableSetting = {
   key: "accepting_orders",
@@ -111,6 +120,8 @@ beforeEach(() => {
   mockedUseAdminSettings.mockReset();
   mockedUseAdminSettingUpdate.mockReset();
   mockedUseAdminSettingUpdate.mockReturnValue({ mutateAsync: vi.fn() } as never);
+  mockedUseHeroImage.mockReturnValue({ data: { url: null }, isError: false } as never);
+  mockedUseReplaceHeroImage.mockReturnValue({ mutateAsync: vi.fn() } as never);
 });
 
 describe("AdminSettingsPage — loading", () => {
@@ -410,5 +421,222 @@ describe("AdminSettingsPage — security", () => {
       "href",
       "/admin/mfa/recovery-codes"
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Homepage → Hero image (backend docs/homepage-hero-image.md)
+// ---------------------------------------------------------------------------
+
+const CURRENT_URL = "/media/home/hero/0123456789abcdef0123456789abcdef.webp";
+const NEW_URL = "/media/home/hero/fedcba9876543210fedcba9876543210.png";
+const HERO_SETTING: EditableSetting = {
+  key: "homepage_hero_image",
+  type: "string",
+  label: "Homepage hero image",
+  value: "home/hero/0123456789abcdef0123456789abcdef.webp",
+  nullable: true,
+};
+const UPLOAD_REJECTED = { kind: "http", status: 422, code: "UPLOAD_REJECTED", message: "x" };
+
+function pngFile(name = "eid-hero.png") {
+  return new File(["png-bytes"], name, { type: "image/png" });
+}
+
+function renderHero({
+  url = CURRENT_URL as string | null,
+  replace = vi.fn(() => Promise.resolve({ url: NEW_URL })),
+  settings = [...ALL_SETTINGS, HERO_SETTING],
+  mutateAsync = echoMutate(),
+}: {
+  url?: string | null;
+  replace?: ReturnType<typeof vi.fn>;
+  settings?: EditableSetting[];
+  mutateAsync?: ReturnType<typeof vi.fn>;
+} = {}) {
+  mockedUseHeroImage.mockReturnValue({ data: { url }, isError: false } as never);
+  mockedUseReplaceHeroImage.mockReturnValue({ mutateAsync: replace } as never);
+  const view = renderWith(settings, mutateAsync);
+  // Real browsers filter the picker by `accept`; a wrong file can still be
+  // dropped or forced through, so this user doesn't apply it.
+  const picker = userEvent.setup({ applyAccept: false });
+  return { ...view, picker, replace, homepage: () => screen.getByRole("region", { name: "Homepage" }) };
+}
+
+const heroInput = () => screen.getByLabelText("Hero image") as HTMLInputElement;
+
+describe("AdminSettingsPage — homepage hero image", () => {
+  beforeEach(() => {
+    let n = 0;
+    URL.createObjectURL = vi.fn(() => `blob:preview-${++n}`);
+    URL.revokeObjectURL = vi.fn();
+  });
+
+  it("shows the current saved image under Homepage, never as a typed setting", () => {
+    const { homepage } = renderHero();
+
+    const current = within(homepage()).getByRole("img", { name: "Current hero image" });
+    expect(current).toHaveAttribute("src", CURRENT_URL);
+    expect(current).toHaveClass("object-cover");
+    expect(within(homepage()).getByText("Current image")).toBeInTheDocument();
+    expect(within(homepage()).getByRole("button", { name: "Replace image" })).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: /hero/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Other settings" })).not.toBeInTheDocument();
+  });
+
+  it("shows the default brand visual and Choose image when none is uploaded", () => {
+    const { homepage } = renderHero({ url: null });
+    expect(within(homepage()).getByRole("img", { name: "Default brand visual" })).toBeInTheDocument();
+    expect(within(homepage()).getByText("Default brand visual (no image uploaded)")).toBeInTheDocument();
+    expect(within(homepage()).getByRole("button", { name: "Choose image" })).toBeInTheDocument();
+  });
+
+  it("has no Homepage section when the backend has no hero image setting", () => {
+    renderHero({ settings: ALL_SETTINGS });
+    expect(screen.queryByRole("region", { name: "Homepage" })).not.toBeInTheDocument();
+  });
+
+  it("previews a chosen replacement locally and marks the form dirty, without uploading", async () => {
+    const { picker, replace, homepage } = renderHero();
+    expect(saveButton()).toBeDisabled();
+
+    await picker.upload(heroInput(), pngFile());
+
+    const preview = within(homepage()).getByRole("img", { name: "Preview of the new hero image" });
+    expect(preview).toHaveAttribute("src", "blob:preview-1");
+    expect(preview).toHaveClass("object-cover");
+    expect(within(homepage()).queryByRole("img", { name: "Current hero image" })).not.toBeInTheDocument();
+    expect(within(homepage()).getByText("New image — not saved yet")).toBeInTheDocument();
+    expect(within(homepage()).getByText(/Selected: eid-hero\.png/)).toBeInTheDocument();
+    expect(saveButton()).toBeEnabled();
+    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it("uploads the chosen image on Save, then shows Settings saved. and the stored image", async () => {
+    const { user, picker, replace, mutateAsync, rerender } = renderHero();
+    const file = pngFile();
+    await picker.upload(heroInput(), file);
+
+    await user.click(saveButton());
+
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Settings saved."));
+    expect(replace).toHaveBeenCalledTimes(1);
+    expect(replace).toHaveBeenCalledWith(file);
+    expect(mutateAsync).not.toHaveBeenCalled();
+    expect(saveButton()).toBeDisabled();
+    expect(screen.queryByText("New image — not saved yet")).not.toBeInTheDocument();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:preview-1");
+
+    // A refresh (the hook refetching) shows the newly stored image.
+    mockedUseHeroImage.mockReturnValue({ data: { url: NEW_URL }, isError: false } as never);
+    rerender(<AdminSettingsPage />);
+    expect(screen.getByRole("img", { name: "Current hero image" })).toHaveAttribute("src", NEW_URL);
+  });
+
+  it("saves typed settings and the hero image together in one Save", async () => {
+    const { user, picker, replace, mutateAsync } = renderHero();
+    await replaceText(user, "Pickup hours", "10-6");
+    await picker.upload(heroInput(), pngFile());
+
+    await user.click(saveButton());
+
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Settings saved."));
+    expect(mutateAsync).toHaveBeenCalledWith({ key: "pickup_hours", value: "10-6" });
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+    expect(replace).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    [
+      "an unsupported type",
+      () => new File(["GIF89a"], "anim.gif", { type: "image/gif" }),
+      "isn't a supported file type",
+    ],
+    [
+      "a file over 10 MB",
+      () => Object.defineProperty(pngFile("huge.png"), "size", { value: 10 * 1024 * 1024 + 1 }),
+      "is too large",
+    ],
+  ])("rejects %s locally: an inline error, nothing selected, nothing sent", async (_label, makeFile, reason) => {
+    const { picker, replace, homepage } = renderHero();
+
+    await picker.upload(heroInput(), makeFile());
+
+    const alert = within(homepage()).getByRole("alert");
+    expect(alert).toHaveTextContent(reason);
+    expect(alert).toHaveTextContent("JPEG, PNG or WebP, up to 10 MB, at least 400 × 400 px.");
+    expect(within(homepage()).getByRole("img", { name: "Current hero image" })).toHaveAttribute("src", CURRENT_URL);
+    expect(saveButton()).toBeDisabled();
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it("a refused upload keeps the saved image, never claims success, and keeps the choice for a retry", async () => {
+    const replace = vi.fn().mockRejectedValueOnce(UPLOAD_REJECTED).mockResolvedValueOnce({ url: NEW_URL });
+    const { user, picker, homepage } = renderHero({ replace });
+    await picker.upload(heroInput(), pngFile());
+
+    await user.click(saveButton());
+
+    const error = await within(homepage()).findByRole("alert");
+    expect(error).toHaveTextContent("This image couldn't be used.");
+    expect(error).toHaveTextContent("Your current hero image is unchanged.");
+    expect(screen.getByRole("status")).not.toHaveTextContent("Settings saved.");
+    expect(
+      screen.getByText("Your changes couldn't be saved. Review the highlighted settings and try again.")
+    ).toBeInTheDocument();
+    expect(within(homepage()).getByText("New image — not saved yet")).toBeInTheDocument();
+    expect(saveButton()).toBeEnabled();
+
+    await user.click(saveButton());
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Settings saved."));
+    expect(replace).toHaveBeenCalledTimes(2);
+  });
+
+  it("partial failure: a typed setting saved but the image refused is reported as partial", async () => {
+    const replace = vi.fn().mockRejectedValue({ kind: "http", status: 503, code: "SERVICE_UNAVAILABLE", message: "x" });
+    const { user, picker } = renderHero({ replace });
+    await replaceText(user, "Pickup hours", "10-6");
+    await picker.upload(heroInput(), pngFile());
+
+    await user.click(saveButton());
+
+    expect(
+      await screen.findByText(
+        "Some changes were saved, but others couldn't be. Review the highlighted settings and try again."
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByText(/temporarily unavailable.*Your current hero image is unchanged\./)).toBeInTheDocument();
+  });
+
+  it("Keep current image and Discard changes drop the selection without a request", async () => {
+    const { user, picker, replace, homepage } = renderHero();
+
+    await picker.upload(heroInput(), pngFile());
+    await user.click(within(homepage()).getByRole("button", { name: "Keep current image" }));
+    expect(within(homepage()).getByRole("img", { name: "Current hero image" })).toBeInTheDocument();
+    expect(saveButton()).toBeDisabled();
+
+    await picker.upload(heroInput(), pngFile("second.png"));
+    expect(saveButton()).toBeEnabled();
+    await user.click(discardButton());
+    expect(within(homepage()).getByRole("img", { name: "Current hero image" })).toBeInTheDocument();
+    expect(saveButton()).toBeDisabled();
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it("is accessible: a labelled picker, a keyboard-reachable button, and still one Save", async () => {
+    const { user, homepage } = renderHero();
+
+    expect(heroInput()).toHaveAttribute("type", "file");
+    expect(heroInput()).toHaveAttribute("accept", "image/jpeg,image/png,image/webp");
+    expect(heroInput()).toHaveAccessibleDescription(/JPEG, PNG or WebP/);
+    expect(within(homepage()).getByRole("heading", { level: 3, name: "Hero image" })).toBeInTheDocument();
+    const click = vi.spyOn(heroInput(), "click");
+    within(homepage()).getByRole("button", { name: "Replace image" }).focus();
+    await user.keyboard("{Enter}");
+    expect(click).toHaveBeenCalled();
+    expect(screen.getAllByRole("button", { name: /save/i })).toHaveLength(1);
+    expect(screen.getAllByRole("heading", { name: /settings/i })).toHaveLength(1);
   });
 });
