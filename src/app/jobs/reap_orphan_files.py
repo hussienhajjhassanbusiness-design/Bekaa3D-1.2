@@ -11,6 +11,8 @@ from app.core.config import get_settings
 from app.engagement.public import referenced_attachment_keys
 from app.integrations.storage.factory import private_upload_storage, public_media_storage
 from app.integrations.storage.ports import StoragePort
+from app.platform.domain.settings_registry import HERO_IMAGE_PREFIX, HOMEPAGE_HERO_IMAGE_KEY
+from app.platform.infrastructure.repositories import SettingRepository
 
 logger = structlog.get_logger()
 
@@ -36,6 +38,17 @@ PRODUCT_IMAGES = ReapTarget(PREFIX, _product_images)
 CUSTOM_REQUEST_ATTACHMENTS = ReapTarget("custom-requests/", referenced_attachment_keys)
 
 
+async def _hero_image(session: AsyncSession, keys: list[str]) -> set[str]:
+    """The one hero file the `homepage_hero_image` setting names; every replaced one is
+    unreferenced (docs/homepage-hero-image.md)."""
+    setting = await SettingRepository(session).get_by_key(HOMEPAGE_HERO_IMAGE_KEY)
+    current = None if setting is None else setting.value
+    return {current} & set(keys) if isinstance(current, str) else set()
+
+
+HERO_IMAGES = ReapTarget(HERO_IMAGE_PREFIX, _hero_image)
+
+
 async def reap(
     storage: StoragePort,
     session_factory: Any,
@@ -58,11 +71,13 @@ async def reap(
 
 
 async def reap_orphan_files(ctx: dict[str, Any]) -> int:
-    """arq job, daily: public product media and private Bring Your Idea attachments.
+    """arq job, daily: public product media, replaced homepage hero images and private
+    Bring Your Idea attachments.
     Each target runs even if the other fails; the first failure is re-raised afterwards."""
     settings, now = get_settings(), datetime.now(UTC)
     targets = (
         (public_media_storage(settings), PRODUCT_IMAGES),
+        (public_media_storage(settings), HERO_IMAGES),
         (private_upload_storage(settings), CUSTOM_REQUEST_ATTACHMENTS),
     )
     reaped: list[str] = []

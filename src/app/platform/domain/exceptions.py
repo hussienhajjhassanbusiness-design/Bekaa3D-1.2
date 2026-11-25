@@ -54,3 +54,15 @@ class SettingTypeMismatchError(PlatformDomainError):
         self.key = key
         self.stored = stored
         self.expected = expected
+
+
+class HeroImageRejectedError(PlatformDomainError):
+    """The upload is not an accepted homepage hero image (by content, size or dimensions)."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
+
+
+class HeroImageMalwareError(PlatformDomainError):
+    """The upload failed the malware scan and was not stored."""

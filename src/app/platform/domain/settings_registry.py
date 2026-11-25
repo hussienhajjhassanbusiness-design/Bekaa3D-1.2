@@ -43,6 +43,13 @@ _E164 = re.compile(r"^\+[1-9][0-9]{0,14}$")
 
 _FORMAT_FREE: Final = "free"
 _FORMAT_E164: Final = "e164"
+_FORMAT_HERO_IMAGE_KEY: Final = "hero_image_key"
+
+# The homepage hero image (docs/homepage-hero-image.md): a storage key the upload endpoint
+# generates under this prefix, never a URL or a path an administrator types.
+HOMEPAGE_HERO_IMAGE_KEY: Final = "homepage_hero_image"
+HERO_IMAGE_PREFIX: Final = "home/hero/"
+_HERO_IMAGE_KEY_SHAPE = re.compile(r"^home/hero/[0-9a-f]{32}\.(jpg|png|webp)$")
 
 # V1 currency, fixed by ADR-008. Money settings carry it explicitly anyway so
 # the stored value is self-describing rather than relying on a global constant.
@@ -68,6 +75,9 @@ class SettingDefinition:
     nullable: bool = False
     max_length: int | None = None
     text_format: str = _FORMAT_FREE
+    # Set only by its own upload endpoint, which stores the file first: the generic PATCH
+    # may clear it (null) but not name a file, so the value never points at nothing.
+    upload_only: bool = False
 
 
 _DEFINITIONS: Final[tuple[SettingDefinition, ...]] = (
@@ -283,6 +293,21 @@ _DEFINITIONS: Final[tuple[SettingDefinition, ...]] = (
         minimum=86_400,  # 1 day
         maximum=31_536_000,  # 365 days
     ),
+    SettingDefinition(
+        key=HOMEPAGE_HERO_IMAGE_KEY,
+        type=SettingType.STRING,
+        description=(
+            "The homepage hero's large image, uploaded through PUT /api/v1/admin/home/"
+            "hero-image. Null shows the default brand visual."
+        ),
+        # Not public as a setting: the storefront reads the image's URL from
+        # GET /api/v1/home/hero-image, never the storage key.
+        default=None,
+        nullable=True,
+        max_length=64,
+        text_format=_FORMAT_HERO_IMAGE_KEY,
+        upload_only=True,
+    ),
 )
 
 REGISTRY: Final[dict[str, SettingDefinition]] = {d.key: d for d in _DEFINITIONS}
@@ -376,6 +401,10 @@ def _validate_string(
             "value must be a canonical E.164 number: a leading '+', then up to 15 digits, "
             "with no spaces or separators"
         )
+    if definition.text_format == _FORMAT_HERO_IMAGE_KEY and not _HERO_IMAGE_KEY_SHAPE.match(
+        trimmed
+    ):
+        reasons.append("value must be a hero image storage key")
     return trimmed
 
 

@@ -59,6 +59,7 @@ from app.payments.api.admin_chargebacks import admin_router as admin_chargebacks
 from app.payments.api.admin_payments import admin_router as admin_payments_router
 from app.payments.api.admin_refunds import admin_router as admin_refunds_router
 from app.platform.api.audit_logs import admin_router as audit_logs_router
+from app.platform.api.home_hero import upload_router as home_hero_upload_router
 from app.platform.api.settings import admin_router as settings_router
 from app.reporting.api.admin_analytics import admin_router as business_analytics_router
 
@@ -99,6 +100,8 @@ router = APIRouter(
 # VS-007. Mounted here rather than carrying its own guard, so the settings
 # editor inherits the one boundary instead of re-deriving it.
 router.include_router(settings_router)
+# The homepage hero image upload (docs/homepage-hero-image.md).
+router.include_router(home_hero_upload_router)
 # VS-010. Category/material/colour CRUD, inheriting the same boundary.
 router.include_router(catalogue_router)
 # VS-013. Product CRUD with optimistic versioning.
