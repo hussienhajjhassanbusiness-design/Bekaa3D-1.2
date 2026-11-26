@@ -1,23 +1,27 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Button } from "@/components/forms/Button";
 import { Icon } from "@/components/ui/Icon";
 import { StatusBadge } from "./StatusBadge";
 import { TextField } from "@/components/forms/TextField";
 import { ConfirmDialog } from "@/components/feedback/ConfirmDialog";
-import type {
-  ReferenceDataDraft,
-  ReferenceDataEntityConfig,
-  ReferenceDataEntry,
-  ReferenceDataFieldErrors,
+import {
+  lifecycleTabOf,
+  type ReferenceDataDraft,
+  type ReferenceDataEntityConfig,
+  type ReferenceDataEntry,
+  type ReferenceDataFieldErrors,
+  type ReferenceDataLifecycleTab,
 } from "./referenceDataTypes";
 
 export interface ReferenceDataManagerProps {
   config: ReferenceDataEntityConfig;
   entries: readonly ReferenceDataEntry[];
   onSave: (draft: ReferenceDataDraft, editingId: string | null) => void;
-  onArchive: (id: string) => void;
+  // May return a promise: the confirmation closes once it settles (success
+  // or a refusal the caller reports), never while the request is in flight.
+  onArchive: (id: string) => void | Promise<unknown>;
   // Reversible enable/disable (AGENTS.md: "PATCH is used for reversible
   // enable/disable", distinct from the permanent DELETE/archive below).
   // Optional: a caller with no such concept simply omits it, and this
@@ -31,6 +35,12 @@ export interface ReferenceDataManagerProps {
 }
 
 type FormMode = { kind: "closed" } | { kind: "create" } | { kind: "edit"; entryId: string };
+
+const LIFECYCLE_TABS: readonly { id: ReferenceDataLifecycleTab; label: string }[] = [
+  { id: "active", label: "Active" },
+  { id: "disabled", label: "Disabled" },
+  { id: "archived", label: "Archived" },
+];
 
 // #FVS010-REFERENCE-DATA
 //
@@ -76,6 +86,41 @@ export function ReferenceDataManager({
   const [draftName, setDraftName] = useState("");
   const [draftSwatchValue, setDraftSwatchValue] = useState("");
   const [archiveTargetId, setArchiveTargetId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<ReferenceDataLifecycleTab>("active");
+  const tabIdBase = useId();
+  const tabRefs = useRef<Record<ReferenceDataLifecycleTab, HTMLButtonElement | null>>({
+    active: null,
+    disabled: null,
+    archived: null,
+  });
+  const lifecycle = config.lifecycle;
+  const counts: Record<ReferenceDataLifecycleTab, number> = { active: 0, disabled: 0, archived: 0 };
+  for (const entry of entries) counts[lifecycleTabOf(entry)] += 1;
+  const visibleEntries = lifecycle ? entries.filter((entry) => lifecycleTabOf(entry) === activeTab) : entries;
+  const archiveTarget = entries.find((entry) => entry.id === archiveTargetId);
+
+  // WAI-ARIA tabs: arrow keys, Home and End move between tabs (and select).
+  function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+    const index = LIFECYCLE_TABS.findIndex((tab) => tab.id === activeTab);
+    const count = LIFECYCLE_TABS.length;
+    const keys: Record<string, number> = {
+      ArrowRight: (index + 1) % count,
+      ArrowLeft: (index - 1 + count) % count,
+      Home: 0,
+      End: count - 1,
+    };
+    const next = keys[event.key];
+    if (next === undefined) return;
+    event.preventDefault();
+    const tab = LIFECYCLE_TABS[next]!.id;
+    setActiveTab(tab);
+    tabRefs.current[tab]?.focus();
+  }
+
+  function confirmArchive() {
+    if (!archiveTargetId) return;
+    void Promise.resolve(onArchive(archiveTargetId)).finally(() => setArchiveTargetId(null));
+  }
 
   function openCreate() {
     setDraftName("");
@@ -144,77 +189,151 @@ export function ReferenceDataManager({
         </form>
       )}
 
-      {isLoading ? (
-        <div role="status" className="flex flex-col gap-3 p-4 tablet:p-6">
-          <span className="sr-only">Loading…</span>
-          {[0, 1, 2].map((index) => (
-            <div
-              key={index}
-              aria-hidden="true"
-              className="h-10 animate-pulse rounded-control bg-surface-container-low motion-reduce:animate-none"
-            />
-          ))}
+      {lifecycle && (
+        <div
+          role="tablist"
+          aria-label={`${config.entityLabelPlural} by status`}
+          className="flex gap-6 overflow-x-auto border-b border-outline-variant/30 px-4 tablet:gap-8 tablet:px-6"
+        >
+          {LIFECYCLE_TABS.map((tab) => {
+            const selected = tab.id === activeTab;
+            const count = counts[tab.id];
+            const noun = count === 1 ? config.entityLabelSingular : config.entityLabelPlural;
+            return (
+              <button
+                key={tab.id}
+                ref={(node) => {
+                  tabRefs.current[tab.id] = node;
+                }}
+                type="button"
+                role="tab"
+                id={`${tabIdBase}-tab-${tab.id}`}
+                aria-selected={selected}
+                aria-controls={`${tabIdBase}-panel`}
+                tabIndex={selected ? 0 : -1}
+                onClick={() => setActiveTab(tab.id)}
+                onKeyDown={handleTabKeyDown}
+                aria-label={isLoading ? `${tab.label}, loading` : `${tab.label}, ${count} ${noun.toLowerCase()}`}
+                className={`-mb-px min-h-11 shrink-0 whitespace-nowrap border-b-2 pb-3 pt-4 font-label text-label-caps uppercase transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 ${
+                  selected
+                    ? "border-primary text-primary"
+                    : "border-transparent text-on-surface-variant hover:text-on-surface"
+                }`}
+              >
+                {tab.label} ({isLoading ? "–" : count})
+              </button>
+            );
+          })}
         </div>
-      ) : entries.length === 0 ? (
-        <p className="px-6 py-12 text-center font-body text-body-md text-on-surface-variant">
-          {config.emptyStateMessage}
-        </p>
-      ) : (
-        <ul className="divide-y divide-outline-variant/30">
-          {entries.map((entry) => (
-            <li
-              key={entry.id}
-              className="flex flex-col gap-3 px-4 py-4 tablet:flex-row tablet:items-center tablet:justify-between tablet:px-6"
-            >
-              <div className="flex min-w-0 flex-wrap items-center gap-3">
-                {config.renderSwatch && entry.swatchValue && config.renderSwatch(entry.swatchValue)}
-                <span className="break-words font-body text-body-md font-semibold text-on-surface">{entry.name}</span>
-                {entry.isArchived && <StatusBadge label="Archived" tone="neutral" />}
-                {!entry.isArchived && entry.isActive === false && <StatusBadge label="Disabled" tone="warning" />}
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button type="button" variant="outline" size="sm" className="min-h-11" onClick={() => openEdit(entry)}>
-                  Edit
-                </Button>
-                {onToggleActive && !entry.isArchived && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="min-h-11"
-                    disabled={isTogglingActive}
-                    onClick={() => onToggleActive(entry.id, entry.isActive === false)}
-                  >
-                    {entry.isActive === false ? "Enable" : "Disable"}
-                  </Button>
-                )}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="min-h-11 text-error"
-                  onClick={() => setArchiveTargetId(entry.id)}
-                  disabled={entry.isArchived}
-                >
-                  Archive
-                </Button>
-              </div>
-            </li>
-          ))}
-        </ul>
       )}
+
+      <div
+        {...(lifecycle
+          ? { role: "tabpanel", id: `${tabIdBase}-panel`, "aria-labelledby": `${tabIdBase}-tab-${activeTab}` }
+          : {})}
+      >
+        {lifecycle && activeTab === "archived" && !isLoading && (
+          <p className="border-b border-outline-variant/30 bg-surface-container-low px-4 py-3 font-body text-body-md text-on-surface-variant tablet:px-6">
+            {lifecycle.archivedNote}
+          </p>
+        )}
+        {isLoading ? (
+          <div role="status" className="flex flex-col gap-3 p-4 tablet:p-6">
+            <span className="sr-only">Loading…</span>
+            {[0, 1, 2].map((index) => (
+              <div
+                key={index}
+                aria-hidden="true"
+                className="h-10 animate-pulse rounded-control bg-surface-container-low motion-reduce:animate-none"
+              />
+            ))}
+          </div>
+        ) : visibleEntries.length === 0 ? (
+          <p className="px-6 py-12 text-center font-body text-body-md text-on-surface-variant">
+            {lifecycle && entries.length > 0 ? lifecycle.emptyMessages[activeTab] : config.emptyStateMessage}
+          </p>
+        ) : (
+          <ul className="divide-y divide-outline-variant/30">
+            {visibleEntries.map((entry) => (
+              <li
+                key={entry.id}
+                className="flex flex-col gap-3 px-4 py-4 tablet:flex-row tablet:items-center tablet:justify-between tablet:px-6"
+              >
+                <div className="flex min-w-0 flex-wrap items-center gap-3">
+                  {config.renderSwatch && entry.swatchValue && config.renderSwatch(entry.swatchValue)}
+                  <span className="break-words font-body text-body-md font-semibold text-on-surface">{entry.name}</span>
+                  {entry.isArchived && <StatusBadge label="Archived" tone="neutral" />}
+                  {!entry.isArchived && entry.isActive === false && <StatusBadge label="Disabled" tone="warning" />}
+                </div>
+                {lifecycle && entry.isArchived ? null : (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="min-h-11"
+                      onClick={() => openEdit(entry)}
+                      aria-label={lifecycle ? `Edit ${entry.name}` : undefined}
+                    >
+                      Edit
+                    </Button>
+                    {onToggleActive && !entry.isArchived && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="min-h-11"
+                        disabled={isTogglingActive}
+                        onClick={() => onToggleActive(entry.id, entry.isActive === false)}
+                        aria-label={
+                          lifecycle ? `${entry.isActive === false ? "Enable" : "Disable"} ${entry.name}` : undefined
+                        }
+                      >
+                        {entry.isActive === false ? "Enable" : "Disable"}
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="min-h-11 text-error"
+                      onClick={() => setArchiveTargetId(entry.id)}
+                      disabled={entry.isArchived}
+                      aria-label={lifecycle ? `Archive ${entry.name}` : undefined}
+                    >
+                      Archive
+                    </Button>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       <ConfirmDialog
         open={archiveTargetId !== null}
-        title={`Archive ${config.entityLabelSingular}`}
-        description={`This ${config.entityLabelSingular.toLowerCase()} will be archived. It stays visible here but is excluded from public use.`}
+        title={
+          lifecycle && archiveTarget ? `Archive “${archiveTarget.name}”?` : `Archive ${config.entityLabelSingular}`
+        }
+        description={
+          lifecycle
+            ? "Archiving is permanent in this version of the admin."
+            : `This ${config.entityLabelSingular.toLowerCase()} will be archived. It stays visible here but is excluded from public use.`
+        }
+        details={
+          lifecycle ? (
+            <ul className="list-disc space-y-1 pl-5">
+              {lifecycle.archiveConsequences.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          ) : undefined
+        }
         confirmLabel="Archive"
         isConfirming={isArchiving}
-        onConfirm={() => {
-          if (archiveTargetId) {
-            onArchive(archiveTargetId);
-          }
-        }}
+        isDestructive={Boolean(lifecycle)}
+        onConfirm={confirmArchive}
         onCancel={() => setArchiveTargetId(null)}
       />
     </section>

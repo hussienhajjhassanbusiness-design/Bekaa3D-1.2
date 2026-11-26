@@ -44,4 +44,23 @@ export interface ReferenceDataEntityConfig {
   hasSwatchField?: boolean;
   swatchFieldLabel?: string;
   renderSwatch?: (value: string) => ReactNode;
+  // Opt-in lifecycle view (categories): Active / Disabled / Archived tabs
+  // with counts, per-state actions and success feedback. Without it the
+  // manager keeps its single list (materials, colours).
+  lifecycle?: ReferenceDataLifecycleConfig;
+}
+
+export interface ReferenceDataLifecycleConfig {
+  // Consequences shown in the archive confirmation, one sentence each.
+  archiveConsequences: readonly string[];
+  // Shown in the Archived tab: what an administrator can (not) do there.
+  archivedNote: string;
+  emptyMessages: Record<ReferenceDataLifecycleTab, string>;
+}
+
+export type ReferenceDataLifecycleTab = "active" | "disabled" | "archived";
+
+export function lifecycleTabOf(entry: ReferenceDataEntry): ReferenceDataLifecycleTab {
+  if (entry.isArchived) return "archived";
+  return entry.isActive === false ? "disabled" : "active";
 }

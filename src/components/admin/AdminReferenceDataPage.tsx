@@ -22,8 +22,8 @@ export interface AdminReferenceDataPageProps {
 // real admin CRUD contract (P1-5) — the one place categories/materials/
 // colours pages differ is which `resource`/`config` they pass in here.
 export function AdminReferenceDataPage({ resource, config }: AdminReferenceDataPageProps) {
-  // Archived rows stay visible with a badge rather than disappearing
-  // (AGENTS.md) — always fetched, never a filter toggle.
+  // Archived rows are always fetched: the lifecycle view shows them in their
+  // own tab, the plain view keeps them in the list with a badge (AGENTS.md).
   const { data: entries, isLoading, isError } = useReferenceDataList(resource, true);
   const createMutation = useReferenceDataCreate(resource);
   const updateMutation = useReferenceDataUpdate(resource);
@@ -31,10 +31,25 @@ export function AdminReferenceDataPage({ resource, config }: AdminReferenceDataP
 
   const [fieldErrors, setFieldErrors] = useState<ReferenceDataFieldErrors | undefined>(undefined);
   const [bannerMessage, setBannerMessage] = useState<string | null>(null);
+  // Success feedback is part of the lifecycle view only (categories).
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  function nameOf(id: string): string {
+    return entries?.find((entry) => entry.id === id)?.name ?? config.entityLabelSingular;
+  }
+
+  function announce(message: string) {
+    if (config.lifecycle) setSuccessMessage(message);
+  }
+
+  function resetFeedback() {
+    setBannerMessage(null);
+    setSuccessMessage(null);
+  }
 
   async function handleSave(draft: ReferenceDataDraft, editingId: string | null) {
     setFieldErrors(undefined);
-    setBannerMessage(null);
+    resetFeedback();
     try {
       if (editingId) {
         await updateMutation.mutateAsync({
@@ -55,18 +70,26 @@ export function AdminReferenceDataPage({ resource, config }: AdminReferenceDataP
   }
 
   async function handleArchive(id: string) {
-    setBannerMessage(null);
+    const name = nameOf(id);
+    resetFeedback();
     try {
       await archiveMutation.mutateAsync(id);
+      announce(`“${name}” was archived. It's now in the Archived tab.`);
     } catch (error) {
       setBannerMessage(describeReferenceDataError(resource, error).bannerMessage ?? null);
     }
   }
 
   async function handleToggleActive(id: string, nextIsActive: boolean) {
-    setBannerMessage(null);
+    const name = nameOf(id);
+    resetFeedback();
     try {
       await updateMutation.mutateAsync({ id, input: { isActive: nextIsActive } });
+      announce(
+        nextIsActive
+          ? `“${name}” was enabled. It's visible on the storefront again.`
+          : `“${name}” was disabled. It's hidden from the storefront and now in the Disabled tab.`
+      );
     } catch (error) {
       setBannerMessage(describeReferenceDataError(resource, error).bannerMessage ?? null);
     }
@@ -85,6 +108,11 @@ export function AdminReferenceDataPage({ resource, config }: AdminReferenceDataP
           <Alert variant="error" message={bannerMessage} />
         </div>
       )}
+      {successMessage && (
+        <div className="mb-4">
+          <Alert variant="success" message={successMessage} />
+        </div>
+      )}
       <ReferenceDataManager
         config={config}
         entries={entries ?? []}
@@ -94,7 +122,7 @@ export function AdminReferenceDataPage({ resource, config }: AdminReferenceDataP
         isTogglingActive={updateMutation.isPending}
         fieldErrors={fieldErrors}
         onSave={(draft, editingId) => void handleSave(draft, editingId)}
-        onArchive={(id) => void handleArchive(id)}
+        onArchive={(id) => handleArchive(id)}
         onToggleActive={(id, nextIsActive) => void handleToggleActive(id, nextIsActive)}
       />
     </>
