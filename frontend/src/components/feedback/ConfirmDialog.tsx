@@ -1,6 +1,6 @@
 "use client";
 
-import { useId } from "react";
+import { useId, type ReactNode } from "react";
 import { Button } from "@/components/forms/Button";
 import { DialogShell } from "./DialogShell";
 
@@ -8,6 +8,9 @@ export interface ConfirmDialogProps {
   open: boolean;
   title: string;
   description: string;
+  // Optional extra content under the description (for example a list of
+  // consequences). It is part of the dialog's accessible description.
+  details?: ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
   isConfirming?: boolean;
@@ -41,6 +44,7 @@ export function ConfirmDialog({
   open,
   title,
   description,
+  details,
   confirmLabel = "Confirm",
   cancelLabel = "Cancel",
   isConfirming = false,
@@ -50,9 +54,16 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   const titleId = useId();
   const descriptionId = useId();
+  const detailsId = useId();
 
   return (
-    <DialogShell open={open} onClose={onCancel} isBusy={isConfirming} labelledBy={titleId} describedBy={descriptionId}>
+    <DialogShell
+      open={open}
+      onClose={onCancel}
+      isBusy={isConfirming}
+      labelledBy={titleId}
+      describedBy={details ? `${descriptionId} ${detailsId}` : descriptionId}
+    >
       {/* Stitch modal content (COMPONENT-SPECS §48 + §8): headline-md title,
           body-md description, actions right-aligned with the single
           primary/destructive action rightmost and Cancel as the neutral
@@ -63,11 +74,21 @@ export function ConfirmDialog({
       <p id={descriptionId} className="mt-2 text-body-md text-on-surface-variant">
         {description}
       </p>
+      {details && (
+        <div id={detailsId} className="mt-3 text-body-md text-on-surface-variant">
+          {details}
+        </div>
+      )}
       <div className="mt-6 flex flex-wrap justify-end gap-3">
         <Button type="button" variant="outline" onClick={onCancel} disabled={isConfirming}>
           {cancelLabel}
         </Button>
-        <Button type="button" variant={isDestructive ? "destructive" : "primary"} onClick={onConfirm} isLoading={isConfirming}>
+        <Button
+          type="button"
+          variant={isDestructive ? "destructive" : "primary"}
+          onClick={onConfirm}
+          isLoading={isConfirming}
+        >
           {confirmLabel}
         </Button>
       </div>

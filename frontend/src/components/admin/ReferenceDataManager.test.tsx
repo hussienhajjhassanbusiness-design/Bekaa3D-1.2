@@ -56,21 +56,36 @@ describe.each(CONFIGS)("ReferenceDataManager ($entityLabelPlural)", (config) => 
 
   it("shows archived state as visible text, not color alone", () => {
     render(
-      <ReferenceDataManager config={config} entries={[makeEntry({ isArchived: true })]} onSave={vi.fn()} onArchive={vi.fn()} />
+      <ReferenceDataManager
+        config={config}
+        entries={[makeEntry({ isArchived: true })]}
+        onSave={vi.fn()}
+        onArchive={vi.fn()}
+      />
     );
     expect(screen.getByText(/archived/i)).toBeInTheDocument();
   });
 
   it("keeps an archived entry in the list instead of removing it", () => {
     render(
-      <ReferenceDataManager config={config} entries={[makeEntry({ isArchived: true })]} onSave={vi.fn()} onArchive={vi.fn()} />
+      <ReferenceDataManager
+        config={config}
+        entries={[makeEntry({ isArchived: true })]}
+        onSave={vi.fn()}
+        onArchive={vi.fn()}
+      />
     );
     expect(screen.getByText("Alpha")).toBeInTheDocument();
   });
 
   it("disables further archiving for an already-archived entry", () => {
     render(
-      <ReferenceDataManager config={config} entries={[makeEntry({ isArchived: true })]} onSave={vi.fn()} onArchive={vi.fn()} />
+      <ReferenceDataManager
+        config={config}
+        entries={[makeEntry({ isArchived: true })]}
+        onSave={vi.fn()}
+        onArchive={vi.fn()}
+      />
     );
     expect(screen.getByRole("button", { name: /archive/i })).toBeDisabled();
   });
@@ -121,7 +136,9 @@ describe.each(CONFIGS)("ReferenceDataManager ($entityLabelPlural)", (config) => 
   it("Save calls onSave with the editing entry's id when editing", async () => {
     const onSave = vi.fn();
     const user = userEvent.setup();
-    render(<ReferenceDataManager config={config} entries={[makeEntry({ id: "e-9" })]} onSave={onSave} onArchive={vi.fn()} />);
+    render(
+      <ReferenceDataManager config={config} entries={[makeEntry({ id: "e-9" })]} onSave={onSave} onArchive={vi.fn()} />
+    );
 
     await user.click(screen.getByRole("button", { name: /edit/i }));
     await user.clear(screen.getByLabelText("Name"));
@@ -192,7 +209,14 @@ describe.each(CONFIGS)("ReferenceDataManager ($entityLabelPlural)", (config) => 
   it("Confirm in the archive dialog calls onArchive with the entry id", async () => {
     const onArchive = vi.fn();
     const user = userEvent.setup();
-    render(<ReferenceDataManager config={config} entries={[makeEntry({ id: "e-7" })]} onSave={vi.fn()} onArchive={onArchive} />);
+    render(
+      <ReferenceDataManager
+        config={config}
+        entries={[makeEntry({ id: "e-7" })]}
+        onSave={vi.fn()}
+        onArchive={onArchive}
+      />
+    );
 
     await user.click(screen.getByRole("button", { name: /archive/i }));
     const dialog = screen.getByRole("dialog");
@@ -211,7 +235,9 @@ describe.each(CONFIGS)("ReferenceDataManager ($entityLabelPlural)", (config) => 
 
 describe("ReferenceDataManager (reversible enable/disable)", () => {
   it("does not render a toggle action when onToggleActive is not provided", () => {
-    render(<ReferenceDataManager config={CATEGORY_CONFIG} entries={[makeEntry()]} onSave={vi.fn()} onArchive={vi.fn()} />);
+    render(
+      <ReferenceDataManager config={CATEGORY_CONFIG} entries={[makeEntry()]} onSave={vi.fn()} onArchive={vi.fn()} />
+    );
     expect(screen.queryByRole("button", { name: /disable|enable/i })).not.toBeInTheDocument();
   });
 
@@ -272,14 +298,18 @@ describe("ReferenceDataManager (reversible enable/disable)", () => {
 describe("ReferenceDataManager (safety)", () => {
   it("never makes a network/fetch call", () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
-    render(<ReferenceDataManager config={CATEGORY_CONFIG} entries={[makeEntry()]} onSave={vi.fn()} onArchive={vi.fn()} />);
+    render(
+      <ReferenceDataManager config={CATEGORY_CONFIG} entries={[makeEntry()]} onSave={vi.fn()} onArchive={vi.fn()} />
+    );
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
   });
 
   it("never writes to localStorage or sessionStorage", () => {
     const spy = vi.spyOn(Storage.prototype, "setItem");
-    render(<ReferenceDataManager config={CATEGORY_CONFIG} entries={[makeEntry()]} onSave={vi.fn()} onArchive={vi.fn()} />);
+    render(
+      <ReferenceDataManager config={CATEGORY_CONFIG} entries={[makeEntry()]} onSave={vi.fn()} onArchive={vi.fn()} />
+    );
     expect(spy).not.toHaveBeenCalled();
   });
 });
@@ -307,3 +337,39 @@ describe("ReferenceDataManager (colour supplemental swatch)", () => {
     expect(screen.getByLabelText("Hex value")).toBeInTheDocument();
   });
 });
+
+describe.each([MATERIAL_CONFIG, COLOUR_CONFIG])(
+  "ReferenceDataManager without a lifecycle config ($entityLabelPlural)",
+  (config) => {
+    it("keeps the single list: no tabs, archived rows stay in place with their badge", () => {
+      render(
+        <ReferenceDataManager
+          config={config}
+          entries={[makeEntry(), makeEntry({ id: "e-2", name: "Beta", isArchived: true })]}
+          onSave={vi.fn()}
+          onArchive={vi.fn()}
+        />
+      );
+      expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
+      expect(screen.queryByRole("tabpanel")).not.toBeInTheDocument();
+      expect(screen.getByText("Alpha")).toBeInTheDocument();
+      expect(screen.getByText("Beta")).toBeInTheDocument();
+    });
+
+    it("closes the archive confirmation once the archive request settles", async () => {
+      const user = userEvent.setup();
+      let finish: () => void = () => {};
+      const onArchive = vi.fn(() => new Promise<void>((resolve) => (finish = resolve)));
+      render(<ReferenceDataManager config={config} entries={[makeEntry()]} onSave={vi.fn()} onArchive={onArchive} />);
+
+      await user.click(screen.getByRole("button", { name: /archive/i }));
+      await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: /^archive$/i }));
+      expect(onArchive).toHaveBeenCalledWith("e-1");
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+      finish();
+      await screen.findByRole("button", { name: /archive/i });
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+  }
+);
