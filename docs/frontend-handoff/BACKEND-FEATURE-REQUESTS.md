@@ -4,7 +4,7 @@
 
 Date 2026-11-26. IDs follow [API-CONTRACT-AUDIT.md](API-CONTRACT-AUDIT.md).
 
-**No required endpoint is missing.** Every operation the frontend needs exists. This file holds
+**No required endpoint is missing.** Every operation the frontend needs exists. One endpoint is **proposed** (NEW-01, restore an archived category); it needs a product decision first. This file holds
 the two contract changes the frontend needs, the frontend integration work for features the
 backend has already built, and the optional ideas. In each table, "Existing" names an endpoint
 that exists today, and "Proposed" is a suggestion only.
@@ -80,6 +80,29 @@ that exists today, and "Proposed" is a suggestion only.
 
 These need no backend change. Field lists are in `openapi.json`. Every write needs CSRF and
 every admin route needs MFA, as elsewhere.
+
+## Proposed endpoints
+
+### NEW-01
+
+| Field | Value |
+|---|---|
+| Title | Restore an archived category (and, for consistency, material and colour) |
+| Classification | MISSING BACKEND ENDPOINT, **proposed**, needs a product decision: V1 makes archiving terminal on purpose (`docs/reference-data.md`, "There is no restore endpoint in V1") |
+| Priority | P3 |
+| Affected page | Admin → Categories → Archived tab (frontend: lifecycle tabs, 2026-11-26) |
+| Existing endpoints | `DELETE /api/v1/admin/categories/{id}` archives (sets `deleted_at`, clears `is_active`, releases the slug; `409 CATEGORY_IN_USE` while a live product uses it). `PATCH` on an archived row answers `409 INVALID_STATE_TRANSITION`. There is no way back |
+| Expected (manual testing) | An administrator who archived a category by mistake can bring it back |
+| Actual | Impossible in the admin. The frontend shows archived categories read-only and offers no Restore, rather than faking one |
+| Proposed contract (**does not exist**) | `POST /api/v1/admin/categories/{id}/restore`, no body (or an optional `{"slug": "..."}`, see below). Restores to **disabled** (`deleted_at = NULL`, `is_active = false`), so the admin enables it explicitly with the existing `PATCH {is_active: true}`. `200` returns `CategoryDetail` |
+| Errors | `404` unknown id; `409 INVALID_STATE_TRANSITION` if the category is not archived; `409 SLUG_CONFLICT` if a live category took the slug after archiving (archiving releases it). The optional `slug` field lets the admin restore under a new slug |
+| Auth / CSRF | administrator + MFA (admin router); CSRF required |
+| Validation | slug rules as on create (`^[a-z0-9]+(?:-[a-z0-9]+)*$`, ≤ 200, live-unique) |
+| Audit | `category.restored`, with before and after like the other reference-data writes |
+| Migration | **no**: the columns exist, and `ck_categories_archived_not_active` allows a disabled live row |
+| Backward compatibility | Additive. Materials and colours would get the same `/restore` (name uniqueness instead of slug) |
+| Acceptance | Restore puts the row in Disabled; restore when the slug is taken answers `409 SLUG_CONFLICT`, then succeeds with a new slug; restoring a live row is `409`; products are untouched (an archived category never had live products) |
+| Responsible | Product owner (decision), then backend; frontend adds Restore with confirmation to the Archived tab |
 
 ## Optional features
 

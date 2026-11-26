@@ -81,6 +81,7 @@ IDs are stable; detail lives in the linked file.
 | OPT-03 | Promotions / orders | OPTIONAL FEATURE | P3 | Record the applied `promotion_id` on order lines (reporting) | same |
 | OPT-04 | Offers | OPTIONAL FEATURE | P3 | Admin-initiated offers (offers are customer-submitted by design, `docs/offers.md`) | same |
 | OPT-05 | Payments | OPTIONAL FEATURE (deferred with VS-032) | P3 | Customer payment-status route and return-URL contract; only relevant to a redirecting provider | same |
+| NEW-01 | Categories | MISSING BACKEND ENDPOINT (proposed; product decision needed) | P3 | No way to restore an archived category: V1 archiving is terminal by design. Proposed `POST /admin/categories/{id}/restore`, restoring to disabled | [BACKEND-FEATURE-REQUESTS.md](BACKEND-FEATURE-REQUESTS.md#new-01) |
 
 ## 4. Already implemented (verified this audit)
 
@@ -97,6 +98,7 @@ IDs are stable; detail lives in the linked file.
 | Manual provider (admin side) | `POST /admin/payments/{id}/confirm`, `awaiting_confirmation` filter, `available_actions` | `AdminPaymentView.tsx` |
 | Notifications | `GET /me/notifications`, `PATCH /me/notifications/{id}` | used |
 | Search suggestions | `GET /search/suggestions` | `searchSuggestionsApi.ts` |
+| Category lifecycle (active, disabled, archived) | `GET /admin/categories?include_deleted=true`, `PATCH` (`is_active`), `DELETE` (archive) | Admin → Categories: Active / Disabled / Archived tabs with counts, archive confirmation, read-only Archived tab (2026-11-26) |
 
 ## 5. Intentionally unsupported
 

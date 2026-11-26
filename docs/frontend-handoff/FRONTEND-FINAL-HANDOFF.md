@@ -40,7 +40,7 @@ promotional price while a promotion applies. That's intended: the list price mov
 | Classification | Count | IDs |
 |---|---|---|
 | CONFIRMED BACKEND BUG | 1 | BUG-01 (P2) |
-| MISSING BACKEND ENDPOINT | 0 | none |
+| MISSING BACKEND ENDPOINT | 0 required, 1 proposed | NEW-01 (P3, restore archived category; product decision needed) |
 | BACKEND CONTRACT CHANGE REQUIRED | 2 | CC-01 (P2), CC-02 (P3) |
 | FRONTEND INTEGRATION REQUIRED | 8 | FE-01 (P1), FE-02 – FE-04 (P1), FE-05 – FE-06 (P2), FE-07 – FE-08 (P3) |
 | CONFIGURATION REQUIRED | 6 | CFG-01 – CFG-06 (production) |
@@ -73,6 +73,7 @@ promotional price while a promotion applies. That's intended: the list price mov
 | Notifications | Implemented | — |
 | Production configuration | Email adapter missing; media, payments, captcha, secrets, ops | CFG-01 – CFG-06 |
 | Refund void after reissue | Decision needed | NV-01 |
+| Category archiving | Frontend tabs done; restore not supported (V1 terminal by design) | NEW-01 |
 
 ## 5. Recommended implementation order
 
