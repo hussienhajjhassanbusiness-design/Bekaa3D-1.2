@@ -74,6 +74,27 @@ services:
       redis:
         condition: service_healthy
 
+  # Local development only: serves storage/media_public (product images, the
+  # homepage hero image) read-only at http://localhost:8001, which is where the
+  # frontend's dev `/media/*` rewrite points (MEDIA_PROXY_TARGET). The API does
+  # not serve /media itself; in production the web server serves the same
+  # root-relative /media/... URLs. It runs the api service's image (built by
+  # `docker compose up`), so nothing extra is built or pulled.
+  media:
+    image: bekaa3d-backend-api
+    pull_policy: never
+    depends_on:
+      - api
+    restart: unless-stopped
+    command: ["python", "-m", "http.server", "8001", "--bind", "0.0.0.0", "--directory", "/data/media_public"]
+    # The image's HEALTHCHECK probes the API on :8000, which this container does not run.
+    healthcheck:
+      disable: true
+    ports:
+      - "127.0.0.1:8001:8001"
+    volumes:
+      - ./storage/media_public:/data/media_public:ro
+
   worker:
     build: .
     restart: unless-stopped

@@ -12,7 +12,10 @@ one is uploaded, the storefront shows its default brand visual.
   `PATCH /api/v1/admin/settings/homepage_hero_image` accepts only `null`. `null` clears
   it and restores the default visual.
 - The file is stored in public media (`MEDIA_PUBLIC_DIR`) and served at
-  `MEDIA_PUBLIC_URL/home/hero/...`, like product images.
+  `MEDIA_PUBLIC_URL/home/hero/...`, like product images. In local development the API
+  does not serve `/media`: the Compose `media` service serves `storage/media_public`
+  read-only on `http://localhost:8001`, the frontend's dev `/media` proxy target. Without
+  it, the image URL fails and the homepage falls back to its default visual.
 - Seeded by migration `c8e2f4a6b1d3` as JSON `null`.
 
 ## Endpoints
