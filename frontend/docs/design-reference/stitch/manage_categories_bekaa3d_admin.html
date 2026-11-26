@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Bekaa3D Admin | Categories Management</title>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@600;700;800&amp;family=Inter:wght@400;500&amp;family=JetBrains+Mono:wght@600&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Design System Configuration -->
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                "primary-container": "#2e7d32",
+                "outline-variant": "#bfcaba",
+                "on-secondary-fixed-variant": "#2e4f00",
+                "surface-bright": "#f9f9ff",
+                "on-surface": "#141b2b",
+                "surface-container-low": "#f1f3ff",
+                "on-error": "#ffffff",
+                "error-container": "#ffdad6",
+                "error": "#ba1a1a",
+                "on-primary-fixed": "#002204",
+                "background": "#f9f9ff",
+                "secondary-fixed": "#b9f474",
+                "tertiary-fixed": "#ffd9e2",
+                "primary-fixed": "#a3f69c",
+                "on-surface-variant": "#40493d",
+                "secondary": "#3e6a00",
+                "surface-container-highest": "#dce2f7",
+                "tertiary": "#923357",
+                "on-primary": "#ffffff",
+                "on-error-container": "#93000a",
+                "surface": "#f9f9ff",
+                "on-primary-container": "#cbffc2",
+                "surface-variant": "#dce2f7",
+                "on-tertiary-fixed-variant": "#7f2448",
+                "on-secondary-fixed": "#0f2000",
+                "on-primary-fixed-variant": "#005312",
+                "surface-container-lowest": "#ffffff",
+                "surface-tint": "#1b6d24",
+                "secondary-container": "#b9f474",
+                "on-tertiary-container": "#ffedf0",
+                "surface-container-high": "#e1e8fd",
+                "on-secondary": "#ffffff",
+                "tertiary-fixed-dim": "#ffb1c7",
+                "inverse-on-surface": "#edf0ff",
+                "primary": "#0d631b",
+                "on-tertiary-fixed": "#3f001c",
+                "surface-dim": "#d3daef",
+                "primary-fixed-dim": "#88d982",
+                "surface-container": "#e9edff",
+                "outline": "#707a6c",
+                "on-tertiary": "#ffffff",
+                "on-background": "#141b2b",
+                "inverse-surface": "#293040",
+                "on-secondary-container": "#437000",
+                "tertiary-container": "#b14b6f",
+                "secondary-fixed-dim": "#9ed75b",
+                "inverse-primary": "#88d982"
+            },
+            "borderRadius": {
+                "DEFAULT": "0.25rem",
+                "lg": "0.5rem",
+                "xl": "0.75rem",
+                "full": "9999px"
+            },
+            "spacing": {
+                "margin-desktop": "64px",
+                "gutter": "24px",
+                "max-width": "1440px",
+                "unit": "4px",
+                "margin-mobile": "16px"
+            },
+            "fontFamily": {
+                "display": ["Hanken Grotesk"],
+                "headline-md": ["Hanken Grotesk"],
+                "headline-lg": ["Hanken Grotesk"],
+                "label-caps": ["JetBrains Mono"],
+                "body-md": ["Inter"],
+                "body-lg": ["Inter"]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        body {
+            background-color: #f9f9ff;
+            background-image: 
+                radial-gradient(circle at 2px 2px, #bfcaba 1px, transparent 0);
+            background-size: 40px 40px;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(20px);
+            border: 1px solid #bfcaba;
+        }
+        .custom-shadow {
+            box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+        }
+        .drag-handle:hover {
+            cursor: grab;
+        }
+        .drag-handle:active {
+            cursor: grabbing;
+        }
+    </style>
+</head>
+<body class="font-body-md text-on-surface antialiased overflow-x-hidden">
+<!-- Persistent Sidebar Navigation -->
+<aside class="h-screen w-64 fixed left-0 top-0 flex flex-col h-full py-8 px-6 bg-surface border-r border-outline-variant z-50">
+<div class="mb-12">
+<h1 class="font-display text-headline-md font-extrabold text-primary">Bekaa3D</h1>
+<p class="font-label-caps text-[10px] tracking-widest text-outline uppercase mt-1">Engineering Precision</p>
+</div>
+<nav class="flex-1 space-y-2">
+<!-- Navigation Items map to JSON -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">account_circle</span>
+<span class="font-body-md">Profile</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">shopping_bag</span>
+<span class="font-body-md">Orders</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-primary font-bold border-r-4 border-primary bg-surface-container-low" href="#">
+<span class="material-symbols-outlined">deployed_code</span>
+<span class="font-body-md">STL Downloads</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">favorite</span>
+<span class="font-body-md">Wishlist</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">rate_review</span>
+<span class="font-body-md">Reviews</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">local_offer</span>
+<span class="font-body-md">Offers</span>
+</a>
+<div class="pt-8 mt-8 border-t border-outline-variant space-y-2">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-body-md">Account Settings</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">logout</span>
+<span class="font-body-md">Logout</span>
+</a>
+</div>
+</nav>
+<div class="mt-auto flex items-center gap-3 p-4 bg-surface-container-low rounded-xl border border-outline-variant">
+<img class="w-10 h-10 rounded-full object-cover" data-alt="Close-up professional portrait of an engineer in a high-tech lab setting, wearing a sleek headset, focused and serious expression, high-key studio lighting, modern industrial aesthetic with soft blue and green highlights." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCc5ZcDuMvLTUOyRCop92EJB9apmTGGgUuFq7YljdVEl6-M7nvCL_1VFh2xj4qthtSGcCsBM2KekplD1MwvhxCKeUBkC4HoAJwzZ9K6Y68x_qX1rdRe7FJbIlpL9lnGVTt1sGMfwGB5WuYV3zXnmrzYPmPabEb7V6I22_eRGrg4Mtz8yKh47rRTlNPpolRkjohBSozbtIDy03O4cvH8c2YBnUdlT20vwlxKCarmhtKytdyPWFib0t1w1Q"/>
+<div>
+<p class="text-sm font-bold">Admin User</p>
+<p class="text-[10px] text-outline">System Lead</p>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="ml-64 min-h-screen">
+<!-- Top App Bar -->
+<header class="flex justify-between items-center w-full px-12 py-6 sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-outline-variant">
+<div class="flex items-center gap-4">
+<h2 class="font-headline-lg text-headline-lg text-primary">Categories</h2>
+<div class="h-6 w-[1px] bg-outline-variant mx-2"></div>
+<span class="text-on-surface-variant font-body-md">Management Portal</span>
+</div>
+<div class="flex items-center gap-6">
+<div class="relative group">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">search</span>
+<input class="pl-10 pr-4 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary-container focus:border-primary-container outline-none transition-all w-64 font-body-md" placeholder="Find categories..." type="text"/>
+</div>
+<button class="bg-primary-container text-white px-6 py-2.5 rounded-lg flex items-center gap-2 font-label-caps text-label-caps uppercase hover:brightness-110 active:scale-95 transition-all shadow-lg shadow-primary-container/20">
+<span class="material-symbols-outlined text-[18px]">add</span>
+                    Add Category
+                </button>
+<div class="flex gap-2">
+<button class="p-2 text-on-surface-variant hover:bg-surface-container-high rounded-full transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:bg-surface-container-high rounded-full transition-colors">
+<span class="material-symbols-outlined">help</span>
+</button>
+</div>
+</div>
+</header>
+<!-- Category Controls -->
+<div class="px-12 py-8 flex flex-wrap justify-between items-center gap-4">
+<div class="flex gap-3">
+<button class="flex items-center gap-2 px-4 py-2 border border-outline-variant bg-white rounded-lg hover:bg-surface-container-low transition-colors font-body-md text-sm">
+<span class="material-symbols-outlined text-[20px]">layers</span>
+                    Bulk Actions
+                    <span class="material-symbols-outlined text-[16px]">expand_more</span>
+</button>
+<button class="flex items-center gap-2 px-4 py-2 border border-outline-variant bg-white rounded-lg hover:bg-surface-container-low transition-colors font-body-md text-sm">
+<span class="material-symbols-outlined text-[20px]">sort</span>
+                    Sort by: Date Modified
+                    <span class="material-symbols-outlined text-[16px]">expand_more</span>
+</button>
+</div>
+<p class="text-on-surface-variant font-body-md text-sm italic">Showing 8 categories of precision manufacturing hardware and software.</p>
+</div>
+<!-- Categories Grid -->
+<div class="px-12 pb-20 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+<!-- Category Card 1 -->
+<div class="bg-white rounded-xl border border-outline-variant overflow-hidden flex flex-col custom-shadow group hover:border-primary transition-all duration-300">
+<div class="relative h-48 overflow-hidden">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A professional product shot of high-grade industrial 3D printer mechanical parts like gears and bearings. The lighting is clean and cinematic with a bright white background, emphasizing the metallic textures and precision engineering. Part of a cohesive modern industrial design system with emerald green accents." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBj5ICNQDkFyVcqkZMkv9XMc4PcfULh24fulfVAm8zFwuiQWayF85MnXBMgT5ugvjJ30BqVvK_V2EXdQNnzZQowjHGS4HjHgb4HxWVHeFpMgZJ1vUW_JEVbSVe-ohEo4GR1HQHwg6ZRtI6AB8EaXroZ3XN-qLaAozK_WITJbz8VxSHBJ3-dKy1H3_Z8i_x2WDsrr_Lhs0hOzxGJ8--cJn4lMsbHPdYj7HbBCELs4VBCA9oZg_nat6RLTw"/>
+<div class="absolute top-4 left-4">
+<span class="bg-primary-container text-white text-[10px] font-label-caps px-3 py-1 rounded-full uppercase tracking-tighter shadow-md">12 Products</span>
+</div>
+<div class="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+<div class="p-1.5 bg-white/90 backdrop-blur rounded-lg drag-handle shadow-sm">
+<span class="material-symbols-outlined text-on-surface-variant">drag_indicator</span>
+</div>
+</div>
+</div>
+<div class="p-5 flex flex-col flex-1">
+<h3 class="font-headline-md text-primary mb-1">Mechanical Parts</h3>
+<p class="text-sm text-on-surface-variant mb-6 flex-1">Precision-machined extruders, stepper motors, and linear rails for high-fidelity printing.</p>
+<div class="flex items-center justify-between pt-4 border-t border-outline-variant/30">
+<button class="flex items-center gap-1.5 text-sm font-semibold text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-[18px]">edit</span>
+                            Edit
+                        </button>
+<button class="flex items-center gap-1.5 text-sm font-semibold text-error hover:opacity-70 transition-opacity">
+<span class="material-symbols-outlined text-[18px]">delete</span>
+                            Delete
+                        </button>
+</div>
+</div>
+</div>
+<!-- Category Card 2 -->
+<div class="bg-white rounded-xl border border-outline-variant overflow-hidden flex flex-col custom-shadow group hover:border-primary transition-all duration-300">
+<div class="relative h-48 overflow-hidden">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A collection of colorful high-quality 3D printing filament spools arranged in a minimalist aesthetic. The lighting is bright and airy, reflecting off the glossy surfaces of the plastic. The scene is shot in a professional studio setting with a clean white backdrop, following the functional luxury style of the Bekaa3D brand." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCP8fw_I_Fz9ibv2guZhic-6hJAjZDMEqBm5A3QRwY8DWYaJkaGSUWw4DAKdOwnVMd2oNXnHcWDvdLenIB3hDNoGcFblsnrdq5ZDJXD2vXsYXLCoz-u6-0y7Uk76FTsmCbBnyvGGT8bn17IAeRhg5NQoB9jPYZrTCa1QYTMsnCDWxJZKuJu9S9EWgxuT5d4haAIznI54vSIZf4wTWwBN3knGTbQVXfrh2DqnHLf5J39SlrcIWB_B2cQFg"/>
+<div class="absolute top-4 left-4">
+<span class="bg-primary-container text-white text-[10px] font-label-caps px-3 py-1 rounded-full uppercase tracking-tighter shadow-md">48 Products</span>
+</div>
+<div class="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+<div class="p-1.5 bg-white/90 backdrop-blur rounded-lg drag-handle shadow-sm">
+<span class="material-symbols-outlined text-on-surface-variant">drag_indicator</span>
+</div>
+</div>
+</div>
+<div class="p-5 flex flex-col flex-1">
+<h3 class="font-headline-md text-primary mb-1">Filaments &amp; Resins</h3>
+<p class="text-sm text-on-surface-variant mb-6 flex-1">Industrial-grade PLA, ABS, and UV-reactive resins for structural and aesthetic applications.</p>
+<div class="flex items-center justify-between pt-4 border-t border-outline-variant/30">
+<button class="flex items-center gap-1.5 text-sm font-semibold text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-[18px]">edit</span>
+                            Edit
+                        </button>
+<button class="flex items-center gap-1.5 text-sm font-semibold text-error hover:opacity-70 transition-opacity">
+<span class="material-symbols-outlined text-[18px]">delete</span>
+                            Delete
+                        </button>
+</div>
+</div>
+</div>
+<!-- Category Card 3 -->
+<div class="bg-white rounded-xl border border-outline-variant overflow-hidden flex flex-col custom-shadow group hover:border-primary transition-all duration-300">
+<div class="relative h-48 overflow-hidden">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="High-detail 3D printed aerospace components like turbine blades and rocket engine nozzles displayed on a light-colored granite surface. The lighting uses soft shadows to emphasize the intricate lattice structures. The overall mood is technologically advanced and precise, perfectly aligned with the Bekaa3D engineering identity." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCkS8zmkjjMzffwOpKQlXVttQxJFPl0jzhO_8RxSbTbZRSFC6keryota-3PBeIaFdfRB9sYPgqj6IiBQMQwQzS2C_VtakHd39-rq9xg2px9BtQafHUOyrTZe6UXsFUmQ1nYO06QKVPz4dP930wMm5fp9KmYHG-G961s3xzaPbwcQqsN11OlaiVWM47E1tnOR0oa51IdzxXL7hznAOrDSisI9-gd1bnnG9MaZaSzbkyzaT9AiOEZn1O0yQ"/>
+<div class="absolute top-4 left-4">
+<span class="bg-primary-container text-white text-[10px] font-label-caps px-3 py-1 rounded-full uppercase tracking-tighter shadow-md">08 Products</span>
+</div>
+<div class="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+<div class="p-1.5 bg-white/90 backdrop-blur rounded-lg drag-handle shadow-sm">
+<span class="material-symbols-outlined text-on-surface-variant">drag_indicator</span>
+</div>
+</div>
+</div>
+<div class="p-5 flex flex-col flex-1">
+<h3 class="font-headline-md text-primary mb-1">Aerospace Models</h3>
+<p class="text-sm text-on-surface-variant mb-6 flex-1">Flight-ready designs and prototypes verified for aerodynamic stability and weight optimization.</p>
+<div class="flex items-center justify-between pt-4 border-t border-outline-variant/30">
+<button class="flex items-center gap-1.5 text-sm font-semibold text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-[18px]">edit</span>
+                            Edit
+                        </button>
+<button class="flex items-center gap-1.5 text-sm font-semibold text-error hover:opacity-70 transition-opacity">
+<span class="material-symbols-outlined text-[18px]">delete</span>
+                            Delete
+                        </button>
+</div>
+</div>
+</div>
+<!-- Category Card 4 -->
+<div class="bg-white rounded-xl border border-outline-variant overflow-hidden flex flex-col custom-shadow group hover:border-primary transition-all duration-300">
+<div class="relative h-48 overflow-hidden">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A clean top-down view of high-performance electronics components such as PCB boards, sensors, and cables on a minimalist workbench. The workspace is neatly organized with a professional laboratory feel. Cool white lighting and subtle green accents in the circuitry echo the precision-driven Bekaa3D visual design system." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB8phacGNdwWSPx3cSbNa_SqKzo27icGYuw1-noYo9F-xnlqd2uaNOWuFGL80jxb9REAvRu1IXCz-DDRtb8M6JJJJi3PPWdhiuDrA-8H3xkd-XcKgZQ4YNsfK-DR1Ohrm1vdFYoeOiBLJG9_zGZz5sLRrwgsavqYdC9Zfqp4eFOVj-jxHr6k4nkguhEsmPViA4_u1uat2-JI901kT3elP72N20nnfeEKCYx6_D8fDBfPrQ0M7EBEIEkGA"/>
+<div class="absolute top-4 left-4">
+<span class="bg-primary-container text-white text-[10px] font-label-caps px-3 py-1 rounded-full uppercase tracking-tighter shadow-md">24 Products</span>
+</div>
+<div class="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+<div class="p-1.5 bg-white/90 backdrop-blur rounded-lg drag-handle shadow-sm">
+<span class="material-symbols-outlined text-on-surface-variant">drag_indicator</span>
+</div>
+</div>
+</div>
+<div class="p-5 flex flex-col flex-1">
+<h3 class="font-headline-md text-primary mb-1">Control Electronics</h3>
+<p class="text-sm text-on-surface-variant mb-6 flex-1">Mainboards, driver chips, and connectivity modules for advanced automation and remote control.</p>
+<div class="flex items-center justify-between pt-4 border-t border-outline-variant/30">
+<button class="flex items-center gap-1.5 text-sm font-semibold text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-[18px]">edit</span>
+                            Edit
+                        </button>
+<button class="flex items-center gap-1.5 text-sm font-semibold text-error hover:opacity-70 transition-opacity">
+<span class="material-symbols-outlined text-[18px]">delete</span>
+                            Delete
+                        </button>
+</div>
+</div>
+</div>
+<!-- Placeholder for Empty State/Add -->
+<div class="border-2 border-dashed border-outline-variant rounded-xl flex flex-col items-center justify-center p-8 bg-surface-container-low hover:bg-surface-container hover:border-primary transition-all duration-300 cursor-pointer h-[420px]">
+<div class="w-16 h-16 rounded-full bg-primary-container/10 flex items-center justify-center mb-4">
+<span class="material-symbols-outlined text-primary-container text-3xl">add_circle</span>
+</div>
+<p class="font-bold text-on-surface">Create New Category</p>
+<p class="text-xs text-outline text-center mt-2 px-6">Define a new product group with unique thumbnails and custom attributes.</p>
+</div>
+</div>
+</main>
+<!-- Micro-interaction Scripts -->
+<script>
+        // Simple drag feedback simulation
+        const dragHandles = document.querySelectorAll('.drag-handle');
+        dragHandles.forEach(handle => {
+            handle.addEventListener('mousedown', () => {
+                handle.closest('.bg-white').style.cursor = 'grabbing';
+                handle.closest('.bg-white').style.transform = 'scale(1.02)';
+                handle.closest('.bg-white').style.zIndex = '50';
+            });
+            handle.addEventListener('mouseup', () => {
+                handle.closest('.bg-white').style.cursor = 'default';
+                handle.closest('.bg-white').style.transform = 'scale(1)';
+                handle.closest('.bg-white').style.zIndex = '1';
+            });
+        });
+
+        // Search Bar Focus Effect
+        const searchInput = document.querySelector('input[type="text"]');
+        searchInput.addEventListener('focus', () => {
+            searchInput.parentElement.classList.add('scale-105');
+        });
+        searchInput.addEventListener('blur', () => {
+            searchInput.parentElement.classList.remove('scale-105');
+        });
+    </script>
+</body></html>

@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Bekaa3D - Admin STL Management</title>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700;800&amp;family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@600&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "primary-fixed": "#a3f69c",
+                    "on-primary": "#ffffff",
+                    "on-tertiary": "#ffffff",
+                    "surface-container-low": "#f1f3ff",
+                    "error": "#ba1a1a",
+                    "primary-container": "#2e7d32",
+                    "on-error": "#ffffff",
+                    "error-container": "#ffdad6",
+                    "on-surface-variant": "#40493d",
+                    "surface-container-lowest": "#ffffff",
+                    "secondary": "#3e6a00",
+                    "secondary-fixed": "#b9f474",
+                    "on-secondary": "#ffffff",
+                    "tertiary": "#923357",
+                    "surface-container": "#e9edff",
+                    "inverse-surface": "#293040",
+                    "inverse-primary": "#88d982",
+                    "tertiary-fixed": "#ffd9e2",
+                    "on-secondary-fixed-variant": "#2e4f00",
+                    "surface-bright": "#f9f9ff",
+                    "surface": "#f9f9ff",
+                    "on-primary-fixed-variant": "#005312",
+                    "on-primary-fixed": "#002204",
+                    "primary-fixed-dim": "#88d982",
+                    "primary": "#0d631b",
+                    "on-tertiary-container": "#ffedf0",
+                    "on-tertiary-fixed": "#3f001c",
+                    "on-surface": "#141b2b",
+                    "on-error-container": "#93000a",
+                    "surface-variant": "#dce2f7",
+                    "background": "#f9f9ff",
+                    "on-tertiary-fixed-variant": "#7f2448",
+                    "tertiary-container": "#b14b6f",
+                    "outline": "#707a6c",
+                    "tertiary-fixed-dim": "#ffb1c7",
+                    "on-secondary-fixed": "#0f2000",
+                    "outline-variant": "#bfcaba",
+                    "on-background": "#141b2b",
+                    "surface-dim": "#d3daef",
+                    "surface-tint": "#1b6d24",
+                    "surface-container-highest": "#dce2f7",
+                    "surface-container-high": "#e1e8fd",
+                    "on-secondary-container": "#437000",
+                    "secondary-fixed-dim": "#9ed75b",
+                    "inverse-on-surface": "#edf0ff",
+                    "secondary-container": "#b9f474",
+                    "on-primary-container": "#cbffc2"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "margin-desktop": "64px",
+                    "gutter": "24px",
+                    "unit": "4px",
+                    "max-width": "1440px",
+                    "margin-mobile": "16px"
+            },
+            "fontFamily": {
+                    "headline-lg-mobile": ["Hanken Grotesk"],
+                    "body-lg": ["Inter"],
+                    "headline-lg": ["Hanken Grotesk"],
+                    "body-md": ["Inter"],
+                    "label-caps": ["JetBrains Mono"],
+                    "headline-md": ["Hanken Grotesk"],
+                    "display": ["Hanken Grotesk"]
+            },
+            "fontSize": {
+                    "headline-lg-mobile": ["24px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                    "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                    "headline-lg": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                    "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                    "label-caps": ["12px", {"lineHeight": "1.0", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                    "headline-md": ["20px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                    "display": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "800"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .blueprint-bg {
+            background-color: #f9f9ff;
+            background-image: 
+                linear-gradient(#e5e7eb 1px, transparent 1px),
+                linear-gradient(90deg, #e5e7eb 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .active-tab {
+            font-variation-settings: 'FILL' 1;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md blueprint-bg min-h-screen">
+<!-- SideNavBar Anchor -->
+<aside class="h-screen w-64 fixed left-0 top-0 flex flex-col py-8 px-6 bg-surface border-r border-outline-variant z-40">
+<div class="mb-10 px-2">
+<h1 class="font-display text-headline-md text-primary font-extrabold tracking-tight">Bekaa3D</h1>
+<p class="text-on-surface-variant font-label-caps text-[10px] uppercase tracking-widest mt-1">Engineering Precision</p>
+</div>
+<nav class="flex-1 space-y-1">
+<!-- STL Downloads maps to STL Models active state -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">account_circle</span>
+<span class="font-body-md">Profile</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">shopping_bag</span>
+<span class="font-body-md">Orders</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-primary font-bold border-r-4 border-primary bg-surface-container-low" href="#">
+<span class="material-symbols-outlined active-tab" style="font-variation-settings: 'FILL' 1;">deployed_code</span>
+<span class="font-body-md">STL Downloads</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">favorite</span>
+<span class="font-body-md">Wishlist</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">rate_review</span>
+<span class="font-body-md">Reviews</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">local_offer</span>
+<span class="font-body-md">Offers</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-body-md">Account Settings</span>
+</a>
+</nav>
+<div class="mt-auto border-t border-outline-variant pt-6">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-error hover:bg-error-container transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">logout</span>
+<span class="font-body-md">Logout</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="ml-64 p-margin-desktop min-h-screen">
+<!-- Header -->
+<header class="flex justify-between items-end mb-10">
+<div>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">Manage STL Files</h2>
+<p class="text-on-surface-variant mt-1">Configure and monitor your digital asset inventory.</p>
+</div>
+<button class="bg-primary-container text-on-primary font-label-caps py-4 px-8 rounded-lg flex items-center gap-2 hover:opacity-90 active:scale-[0.98] transition-all shadow-lg shadow-primary-container/20">
+<span class="material-symbols-outlined">add</span>
+                ADD NEW STL
+            </button>
+</header>
+<!-- Stats Row -->
+<section class="grid grid-cols-1 md:grid-cols-4 gap-gutter mb-10">
+<div class="bg-white p-6 rounded-xl shadow-sm border border-outline-variant hover:border-primary transition-colors cursor-default group">
+<div class="flex justify-between items-start mb-4">
+<span class="material-symbols-outlined text-primary bg-primary-fixed p-2 rounded-lg">inventory_2</span>
+</div>
+<h3 class="text-on-surface-variant font-label-caps text-[12px]">Total STL Files</h3>
+<p class="font-headline-lg text-headline-lg text-on-surface mt-1">1,284</p>
+</div>
+<div class="bg-white p-6 rounded-xl shadow-sm border border-outline-variant hover:border-primary transition-colors cursor-default group">
+<div class="flex justify-between items-start mb-4">
+<span class="material-symbols-outlined text-secondary bg-secondary-fixed p-2 rounded-lg">download</span>
+<span class="text-secondary font-bold text-xs">+12% ↑</span>
+</div>
+<h3 class="text-on-surface-variant font-label-caps text-[12px]">Total Downloads</h3>
+<p class="font-headline-lg text-headline-lg text-on-surface mt-1">45.2k</p>
+</div>
+<div class="bg-white p-6 rounded-xl shadow-sm border border-outline-variant hover:border-primary transition-colors cursor-default group">
+<div class="flex justify-between items-start mb-4">
+<span class="material-symbols-outlined text-tertiary bg-tertiary-fixed p-2 rounded-lg">local_offer</span>
+</div>
+<h3 class="text-on-surface-variant font-label-caps text-[12px]">Active Offers</h3>
+<p class="font-headline-lg text-headline-lg text-on-surface mt-1">18</p>
+</div>
+<div class="bg-white p-6 rounded-xl shadow-sm border border-outline-variant hover:border-primary transition-colors cursor-default group">
+<div class="flex justify-between items-start mb-4">
+<span class="material-symbols-outlined text-on-surface bg-surface-container p-2 rounded-lg">star</span>
+</div>
+<h3 class="text-on-surface-variant font-label-caps text-[12px]">Avg. Rating</h3>
+<p class="font-headline-lg text-headline-lg text-on-surface mt-1">4.92</p>
+</div>
+</section>
+<!-- Filter/Search Bar -->
+<section class="bg-white p-4 rounded-xl border border-outline-variant shadow-sm mb-6 flex flex-wrap items-center gap-4">
+<div class="flex-1 min-w-[300px] relative">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
+<input class="w-full pl-12 pr-4 py-3 rounded-lg border border-outline-variant focus:ring-2 focus:ring-primary focus:border-primary font-body-md transition-all" placeholder="Search STL library..." type="text"/>
+</div>
+<select class="py-3 px-4 rounded-lg border border-outline-variant focus:ring-2 focus:ring-primary font-body-md bg-white">
+<option>All Categories</option>
+<option>Miniatures</option>
+<option>Functional</option>
+<option>Prop Replis</option>
+</select>
+<select class="py-3 px-4 rounded-lg border border-outline-variant focus:ring-2 focus:ring-primary font-body-md bg-white">
+<option>License Type</option>
+<option>Commercial</option>
+<option>Personal</option>
+</select>
+<button class="bg-white border border-outline-variant text-on-surface font-label-caps py-3 px-6 rounded-lg flex items-center gap-2 hover:bg-surface-container transition-all">
+<span class="material-symbols-outlined">ios_share</span>
+                EXPORT
+            </button>
+</section>
+<!-- Data Table Container -->
+<div class="bg-white rounded-xl border border-outline-variant shadow-sm overflow-hidden mb-8">
+<table class="w-full text-left border-collapse">
+<thead class="bg-surface-container-low border-b border-outline-variant">
+<tr class="font-label-caps text-on-surface-variant text-[11px] uppercase tracking-wider">
+<th class="py-4 px-6 w-12"><input class="rounded border-outline-variant text-primary focus:ring-primary" type="checkbox"/></th>
+<th class="py-4 px-4">Preview</th>
+<th class="py-4 px-4">Title &amp; SKU</th>
+<th class="py-4 px-4">Price</th>
+<th class="py-4 px-4">License</th>
+<th class="py-4 px-4">Downloads</th>
+<th class="py-4 px-4">Rating</th>
+<th class="py-4 px-4">Offer</th>
+<th class="py-4 px-4">Live</th>
+<th class="py-4 px-6 text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-container-lowest transition-colors group">
+<td class="py-4 px-6"><input class="rounded border-outline-variant text-primary focus:ring-primary" type="checkbox"/></td>
+<td class="py-4 px-4">
+<div class="w-16 h-16 rounded-lg bg-surface-container overflow-hidden border border-outline-variant">
+<div class="w-full h-full bg-cover bg-center" data-alt="A hyper-realistic 3D render of a complex mechanical industrial part with clean topology, illuminated by cinematic blue and white studio lighting against a soft gray backdrop. The style is sleek and technical, reflecting high-end precision engineering software aesthetics." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBkG5zp-2gswQPZoJ0PG4EB6bwCDrs1LQ9QzBzcvEYnrvoV01EorJB9m5Lvxz0tSCmpUvSfTbOV9WO8xxEvWFZdTtBx27R2Cffi4oSPWBCAAsARqHIFz7dz1KVycb6Fq-CEHhRZ-0C2T9uM8ISFU6f5X67r2V8S_XzZtjau_eTHyuR790r2GHupMXsD35MMz4QtD-0EiMp6ed3ZEvuISvbTHu7cjwoFhOFOzmRpTc9dLlWWMQYpnTSOhg')"></div>
+</div>
+</td>
+<td class="py-4 px-4">
+<p class="font-headline-md text-on-surface">Industrial Gear Housing</p>
+<p class="font-label-caps text-[10px] text-on-surface-variant mt-0.5">SKU: BK-3294-HD</p>
+</td>
+<td class="py-4 px-4 font-label-caps">$24.99</td>
+<td class="py-4 px-4">
+<span class="px-2 py-1 rounded bg-secondary-container text-on-secondary-fixed-variant font-label-caps text-[10px]">Commercial</span>
+</td>
+<td class="py-4 px-4">
+<div class="flex items-center gap-1">
+<span class="font-body-md">1,402</span>
+<span class="material-symbols-outlined text-[16px] text-primary">trending_up</span>
+</div>
+</td>
+<td class="py-4 px-4">
+<div class="flex items-center gap-1 text-primary">
+<span class="material-symbols-outlined text-[18px] fill-[1]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-bold">4.9</span>
+</div>
+</td>
+<td class="py-4 px-4">
+<span class="px-2 py-1 rounded-full bg-tertiary-fixed text-on-tertiary-fixed-variant font-label-caps text-[10px]">Open Offers</span>
+</td>
+<td class="py-4 px-4">
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox" value=""/>
+<div class="w-11 h-6 bg-surface-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</td>
+<td class="py-4 px-6 text-right">
+<div class="flex justify-end gap-2 text-on-surface-variant">
+<button class="hover:text-primary transition-colors"><span class="material-symbols-outlined">visibility</span></button>
+<button class="hover:text-primary transition-colors"><span class="material-symbols-outlined">edit</span></button>
+<button class="hover:text-primary transition-colors"><span class="material-symbols-outlined">content_copy</span></button>
+<button class="hover:text-error transition-colors"><span class="material-symbols-outlined">delete</span></button>
+</div>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-surface-container-lowest transition-colors group">
+<td class="py-4 px-6"><input class="rounded border-outline-variant text-primary focus:ring-primary" type="checkbox"/></td>
+<td class="py-4 px-4">
+<div class="w-16 h-16 rounded-lg bg-surface-container overflow-hidden border border-outline-variant">
+<div class="w-full h-full bg-cover bg-center" data-alt="A sharp 3D model render of a highly detailed fantasy tabletop miniature representing an armored warrior. The lighting is dramatic and warm, highlighting the intricate textures of the cape and armor plates. The aesthetic is professional digital asset marketplace style with soft ambient shadows." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBD4gOaP0099Ffw3pP7Vr00KO4Px26H6b5W3gPb5WZJMbBx8PDHDhBk3-PxPh7AtdMkOAk57VRGbvF-n5f5M0LbDgFtKz8-w7yp-umnxj5jAMSRzpukVPxLB5_EetbCLxcGbPVLNB7Y3-1MmDRq5vypj1ZY8_KaAESLYasctQtI0h1B85Fuh1xViluailKqeFeqVugM9P2Gq2xfb15EJIyBAlKqZJ0j_1aVBrleOftvBgcS5ABNLeKMew')"></div>
+</div>
+</td>
+<td class="py-4 px-4">
+<p class="font-headline-md text-on-surface">Vanguard Commander</p>
+<p class="font-label-caps text-[10px] text-on-surface-variant mt-0.5">SKU: BK-MIN-012</p>
+</td>
+<td class="py-4 px-4 font-label-caps">$12.50</td>
+<td class="py-4 px-4">
+<span class="px-2 py-1 rounded bg-surface-container text-on-surface-variant font-label-caps text-[10px]">Personal</span>
+</td>
+<td class="py-4 px-4">
+<div class="flex items-center gap-1">
+<span class="font-body-md">842</span>
+<span class="material-symbols-outlined text-[16px] text-secondary">trending_flat</span>
+</div>
+</td>
+<td class="py-4 px-4">
+<div class="flex items-center gap-1 text-primary">
+<span class="material-symbols-outlined text-[18px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-bold">4.7</span>
+</div>
+</td>
+<td class="py-4 px-4">
+<span class="px-2 py-1 rounded-full bg-surface-container text-on-surface-variant font-label-caps text-[10px]">No Offers</span>
+</td>
+<td class="py-4 px-4">
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox" value=""/>
+<div class="w-11 h-6 bg-surface-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</td>
+<td class="py-4 px-6 text-right">
+<div class="flex justify-end gap-2 text-on-surface-variant">
+<button class="hover:text-primary transition-colors"><span class="material-symbols-outlined">visibility</span></button>
+<button class="hover:text-primary transition-colors"><span class="material-symbols-outlined">edit</span></button>
+<button class="hover:text-primary transition-colors"><span class="material-symbols-outlined">content_copy</span></button>
+<button class="hover:text-error transition-colors"><span class="material-symbols-outlined">delete</span></button>
+</div>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-container-lowest transition-colors group">
+<td class="py-4 px-6"><input class="rounded border-outline-variant text-primary focus:ring-primary" type="checkbox"/></td>
+<td class="py-4 px-4">
+<div class="w-16 h-16 rounded-lg bg-surface-container overflow-hidden border border-outline-variant">
+<div class="w-full h-full bg-cover bg-center" data-alt="A crisp, high-definition 3D render of a futuristic ergonomic camera handle attachment. The design features complex internal lattice structures for weight reduction. Soft, multi-directional studio lighting captures the matte finish of the 3D-printed material. Industrial technology aesthetic." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuALxVFmfcTJ59nysuUSI3QqIGV7Iuupt9Ppxo-_MXDRjmUC0_bg2Pb-ZtF8ncAxzWw_JrW1c7mbsY_RjbNcQJpJgTtgOSQmMqlrSn9Rpx_QH7EPiDteWnBjNl37FMA_TV5emyDkuZQDgwAwiootOFuy2NyVhmTGekciQtkcFnovEAycEmbLMIPvx86jp33awVXJiW81uouJFk5CCWjkEaoSqQS9NU1M5PCkAKDTFsVjxqwT9K4tSnovwQ')"></div>
+</div>
+</td>
+<td class="py-4 px-4">
+<p class="font-headline-md text-on-surface">Ergo-Handle v2.1</p>
+<p class="font-label-caps text-[10px] text-on-surface-variant mt-0.5">SKU: BK-ERG-881</p>
+</td>
+<td class="py-4 px-4 font-label-caps">$45.00</td>
+<td class="py-4 px-4">
+<span class="px-2 py-1 rounded bg-secondary-container text-on-secondary-fixed-variant font-label-caps text-[10px]">Commercial</span>
+</td>
+<td class="py-4 px-4">
+<div class="flex items-center gap-1">
+<span class="font-body-md">2,119</span>
+<span class="material-symbols-outlined text-[16px] text-primary">trending_up</span>
+</div>
+</td>
+<td class="py-4 px-4">
+<div class="flex items-center gap-1 text-primary">
+<span class="material-symbols-outlined text-[18px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-bold">5.0</span>
+</div>
+</td>
+<td class="py-4 px-4">
+<span class="px-2 py-1 rounded-full bg-surface-container text-on-surface-variant font-label-caps text-[10px]">No Offers</span>
+</td>
+<td class="py-4 px-4">
+<label class="relative inline-flex items-center cursor-pointer">
+<input class="sr-only peer" type="checkbox" value=""/>
+<div class="w-11 h-6 bg-surface-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</td>
+<td class="py-4 px-6 text-right">
+<div class="flex justify-end gap-2 text-on-surface-variant">
+<button class="hover:text-primary transition-colors"><span class="material-symbols-outlined">visibility</span></button>
+<button class="hover:text-primary transition-colors"><span class="material-symbols-outlined">edit</span></button>
+<button class="hover:text-primary transition-colors"><span class="material-symbols-outlined">content_copy</span></button>
+<button class="hover:text-error transition-colors"><span class="material-symbols-outlined">delete</span></button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Footer Actions -->
+<footer class="flex justify-between items-center bg-white p-4 rounded-xl border border-outline-variant shadow-sm">
+<div class="flex items-center gap-4">
+<select class="py-2 px-4 rounded-lg border border-outline-variant font-label-caps text-[12px] bg-white text-on-surface-variant">
+<option>Bulk Actions</option>
+<option>Delete Selected</option>
+<option>Update License</option>
+<option>Change Category</option>
+</select>
+<button class="bg-primary text-on-primary font-label-caps text-[11px] py-2 px-4 rounded-lg hover:bg-primary-container transition-all">APPLY</button>
+</div>
+<nav class="flex items-center gap-1">
+<button class="w-10 h-10 flex items-center justify-center rounded-lg border border-outline-variant hover:bg-surface-container transition-all">
+<span class="material-symbols-outlined text-[20px]">chevron_left</span>
+</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-lg bg-primary text-on-primary font-bold">1</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-lg border border-outline-variant hover:bg-surface-container transition-all">2</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-lg border border-outline-variant hover:bg-surface-container transition-all">3</button>
+<span class="px-2 text-on-surface-variant">...</span>
+<button class="w-10 h-10 flex items-center justify-center rounded-lg border border-outline-variant hover:bg-surface-container transition-all">5</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-lg border border-outline-variant hover:bg-surface-container transition-all">
+<span class="material-symbols-outlined text-[20px]">chevron_right</span>
+</button>
+</nav>
+<div class="text-on-surface-variant font-label-caps text-[12px]">
+                Showing 1-10 of 1,284 assets
+            </div>
+</footer>
+</main>
+<script>
+        // Micro-interactions
+        document.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('mousedown', () => {
+                btn.style.transform = 'scale(0.97)';
+            });
+            btn.addEventListener('mouseup', () => {
+                btn.style.transform = '';
+            });
+            btn.addEventListener('mouseleave', () => {
+                btn.style.transform = '';
+            });
+        });
+
+        // Toggle handling
+        document.querySelectorAll('input[type="checkbox"]').forEach(toggle => {
+            toggle.addEventListener('change', (e) => {
+                // Potential for toast notifications here
+                console.log('Status updated for item');
+            });
+        });
+    </script>
+</body></html>

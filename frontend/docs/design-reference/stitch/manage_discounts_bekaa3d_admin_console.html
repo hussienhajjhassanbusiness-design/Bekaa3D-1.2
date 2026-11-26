@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Bekaa3D Admin | Discount Management</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@100..900&family=Inter:wght@100..900&family=JetBrains+Mono:wght@100..900&display=swap" rel="stylesheet"/>
+<style>
+        .blueprint-grid {
+            background-image: 
+                linear-gradient(to right, rgba(13, 99, 27, 0.05) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(13, 99, 27, 0.05) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(229, 231, 235, 1);
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "surface-container-low": "#f1f3ff",
+                      "surface-container": "#e9edff",
+                      "on-secondary-container": "#437000",
+                      "on-secondary-fixed": "#0f2000",
+                      "tertiary-container": "#b14b6f",
+                      "on-tertiary-fixed": "#3f001c",
+                      "error-container": "#ffdad6",
+                      "surface-variant": "#dce2f7",
+                      "on-background": "#141b2b",
+                      "primary-fixed-dim": "#88d982",
+                      "surface-container-high": "#e1e8fd",
+                      "on-error-container": "#93000a",
+                      "tertiary-fixed-dim": "#ffb1c7",
+                      "on-tertiary-container": "#ffedf0",
+                      "surface": "#f9f9ff",
+                      "secondary-container": "#b9f474",
+                      "surface-container-highest": "#dce2f7",
+                      "secondary": "#3e6a00",
+                      "outline-variant": "#bfcaba",
+                      "outline": "#707a6c",
+                      "surface-bright": "#f9f9ff",
+                      "primary": "#0d631b",
+                      "surface-container-lowest": "#ffffff",
+                      "on-secondary-fixed-variant": "#2e4f00",
+                      "inverse-primary": "#88d982",
+                      "on-surface": "#141b2b",
+                      "on-primary-container": "#cbffc2",
+                      "on-surface-variant": "#40493d",
+                      "primary-container": "#2e7d32",
+                      "on-error": "#ffffff",
+                      "surface-dim": "#d3daef",
+                      "on-tertiary-fixed-variant": "#7f2448",
+                      "on-tertiary": "#ffffff",
+                      "secondary-fixed-dim": "#9ed75b",
+                      "inverse-on-surface": "#edf0ff",
+                      "primary-fixed": "#a3f69c",
+                      "on-primary": "#ffffff",
+                      "background": "#f9f9ff",
+                      "secondary-fixed": "#b9f474",
+                      "surface-tint": "#1b6d24",
+                      "tertiary": "#923357",
+                      "tertiary-fixed": "#ffd9e2",
+                      "error": "#ba1a1a",
+                      "on-primary-fixed-variant": "#005312",
+                      "inverse-surface": "#293040",
+                      "on-secondary": "#ffffff",
+                      "on-primary-fixed": "#002204"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "max-width": "1440px",
+                      "gutter": "24px",
+                      "unit": "4px",
+                      "margin-mobile": "16px",
+                      "margin-desktop": "64px"
+              },
+              "fontFamily": {
+                      "headline-lg": ["Hanken Grotesk"],
+                      "body-md": ["Inter"],
+                      "headline-md": ["Hanken Grotesk"],
+                      "label-caps": ["JetBrains Mono"],
+                      "headline-lg-mobile": ["Hanken Grotesk"],
+                      "body-lg": ["Inter"],
+                      "display": ["Hanken Grotesk"]
+              },
+              "fontSize": {
+                      "headline-lg": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                      "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                      "headline-md": ["20px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                      "label-caps": ["12px", {"lineHeight": "1.0", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                      "headline-lg-mobile": ["24px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                      "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                      "display": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "800"}]
+              }
+            },
+          },
+        }
+      </script>
+</head>
+<body class="bg-surface font-body-md text-on-surface blueprint-grid min-h-screen">
+<!-- Side Navigation -->
+<aside class="flex flex-col h-screen fixed left-0 top-0 bg-surface-container-lowest dark:bg-inverse-surface border-r border-outline-variant dark:border-outline w-64 z-50">
+<div class="p-6">
+<h1 class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed mb-1">Bekaa3D Admin</h1>
+<p class="font-label-caps text-label-caps opacity-70">Precision Control</p>
+</div>
+<nav class="flex-1 px-4 space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-surface-variant dark:hover:bg-surface-container-highest transition-colors text-on-surface-variant dark:text-surface-variant" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-body-md">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-surface-variant dark:hover:bg-surface-container-highest transition-colors text-on-surface-variant dark:text-surface-variant" href="#">
+<span class="material-symbols-outlined">package_2</span>
+<span class="font-body-md">Orders</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-surface-variant dark:hover:bg-surface-container-highest transition-colors text-on-surface-variant dark:text-surface-variant" href="#">
+<span class="material-symbols-outlined">precision_manufacturing</span>
+<span class="font-body-md">Inventory</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-primary dark:text-primary-fixed font-bold border-r-4 border-primary" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">analytics</span>
+<span class="font-body-md">Marketing</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-surface-variant dark:hover:bg-surface-container-highest transition-colors text-on-surface-variant dark:text-surface-variant" href="#">
+<span class="material-symbols-outlined">group</span>
+<span class="font-body-md">Customers</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-surface-variant dark:hover:bg-surface-container-highest transition-colors text-on-surface-variant dark:text-surface-variant" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-body-md">Settings</span>
+</a>
+</nav>
+<div class="p-4 mt-auto border-t border-outline-variant">
+<div class="flex items-center gap-3 p-3 bg-surface-container-low rounded-xl mb-4">
+<img class="w-10 h-10 rounded-full bg-surface-variant object-cover" data-alt="A professional headshot of a senior manufacturing engineer in a clean, high-tech lab environment. He wears a subtle gray polo with a small tech logo. Soft, diffused lighting highlights the technical precision of the workspace behind him, including 3D printing equipment and architectural blueprints." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAPcPP8IU2LRE_JuwcVHaIhxRgyip6w32mlcP9hRZwHVvk90vcKIdR-u2f-ByvHTJh5q5LtuuO_2gdsg-bgwZNB_pUKIJm9jrPzjIqdibJns28q4ELFxgpIAGP5IovhMS8g43ovpQLk-SEXWIRufSS0g3NbmW8U2LQvVEAZbvKqG4Zu0dDCQAnMHzZIonrWG_ySw-rIE0AhEhDuvp2bM_tGey0QxOhRwOgPrgH-y-jmDqmkm-DgL0yaCA"/>
+<div>
+<p class="font-headline-md text-[14px]">Admin User</p>
+<p class="font-label-caps text-[10px] opacity-60">System Operator</p>
+</div>
+</div>
+<button class="w-full py-2 flex items-center justify-center gap-2 font-label-caps text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-sm">logout</span> Logout
+            </button>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="ml-64 p-margin-desktop">
+<!-- Top Nav Header -->
+<header class="flex justify-between items-center mb-8">
+<div>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">Discount Management</h2>
+<p class="font-body-md text-on-surface-variant">Configure promotional incentives and seasonal pricing models.</p>
+</div>
+<button class="flex items-center gap-2 bg-primary text-on-primary px-6 py-3 rounded-lg font-label-caps hover:bg-primary-container hover:text-on-primary-container transition-all active:scale-95 shadow-lg shadow-primary/20">
+<span class="material-symbols-outlined">add</span>
+                CREATE NEW DISCOUNT
+            </button>
+</header>
+<!-- Stats Bar -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-gutter mb-10">
+<div class="glass-panel p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow">
+<div class="flex items-center justify-between mb-4">
+<span class="material-symbols-outlined text-primary p-2 bg-primary/10 rounded-lg">local_offer</span>
+<span class="text-secondary font-label-caps text-[10px] bg-secondary-container px-2 py-0.5 rounded-full">+12% vs LY</span>
+</div>
+<h3 class="font-label-caps text-on-surface-variant mb-1">ACTIVE DISCOUNTS</h3>
+<p class="font-display text-[32px] text-primary">24</p>
+</div>
+<div class="glass-panel p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow">
+<div class="flex items-center justify-between mb-4">
+<span class="material-symbols-outlined text-tertiary p-2 bg-tertiary-container/10 rounded-lg">savings</span>
+<span class="text-tertiary font-label-caps text-[10px] bg-tertiary-container/20 px-2 py-0.5 rounded-full">YTD REVENUE</span>
+</div>
+<h3 class="font-label-caps text-on-surface-variant mb-1">TOTAL SAVED BY CUSTOMERS</h3>
+<p class="font-display text-[32px] text-on-surface">$14,802.50</p>
+</div>
+<div class="glass-panel p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow">
+<div class="flex items-center justify-between mb-4">
+<span class="material-symbols-outlined text-error p-2 bg-error-container/20 rounded-lg">event_busy</span>
+<span class="text-error font-label-caps text-[10px] bg-error-container px-2 py-0.5 rounded-full">7 DAYS REMAINING</span>
+</div>
+<h3 class="font-label-caps text-on-surface-variant mb-1">UPCOMING EXPIRATIONS</h3>
+<p class="font-display text-[32px] text-error">03</p>
+</div>
+</div>
+<!-- Filter and Search Bar -->
+<div class="flex flex-col md:flex-row gap-4 mb-6 items-center">
+<div class="relative flex-1 group">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-primary transition-colors">search</span>
+<input class="w-full pl-12 pr-4 py-3 bg-white border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all font-body-md" placeholder="Search discount title or code..." type="text"/>
+</div>
+<div class="flex gap-3">
+<select class="bg-white border border-outline-variant px-4 py-3 rounded-lg font-label-caps text-on-surface-variant focus:ring-primary outline-none">
+<option>STATUS: ALL</option>
+<option>ACTIVE</option>
+<option>INACTIVE</option>
+<option>SCHEDULED</option>
+</select>
+<select class="bg-white border border-outline-variant px-4 py-3 rounded-lg font-label-caps text-on-surface-variant focus:ring-primary outline-none">
+<option>CATEGORY: ALL</option>
+<option>STL MODELS</option>
+<option>FILAMENT</option>
+<option>HARDWARE</option>
+</select>
+</div>
+</div>
+<!-- Discounts Table -->
+<div class="glass-panel rounded-xl overflow-hidden">
+<table class="w-full text-left border-collapse">
+<thead class="bg-surface-container-low border-b border-outline-variant">
+<tr>
+<th class="p-4 font-label-caps text-on-surface-variant">DISCOUNT TITLE</th>
+<th class="p-4 font-label-caps text-on-surface-variant">VALUE</th>
+<th class="p-4 font-label-caps text-on-surface-variant">APPLICABILITY</th>
+<th class="p-4 font-label-caps text-on-surface-variant">SCHEDULE</th>
+<th class="p-4 font-label-caps text-on-surface-variant">STATUS</th>
+<th class="p-4 font-label-caps text-on-surface-variant text-center">BANNER</th>
+<th class="p-4 font-label-caps text-on-surface-variant text-right">ACTIONS</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/30">
+<!-- Row 1 -->
+<tr class="hover:bg-primary/5 transition-colors group">
+<td class="p-4">
+<div class="font-headline-md text-on-surface">Holiday Sale 2024</div>
+<div class="font-label-caps text-[10px] text-primary">CODE: HOLIDAY3D</div>
+</td>
+<td class="p-4 font-label-caps font-bold text-on-secondary-container">25% OFF</td>
+<td class="p-4">
+<span class="px-2 py-1 bg-surface-variant rounded font-label-caps text-[10px]">ALL CATEGORIES</span>
+</td>
+<td class="p-4">
+<div class="font-body-md text-sm">Dec 15 - Jan 05</div>
+<div class="font-label-caps text-[10px] text-on-surface-variant">ENDS IN 12 DAYS</div>
+</td>
+<td class="p-4">
+<button class="w-12 h-6 bg-primary rounded-full p-1 flex items-center transition-all duration-300" onclick="this.classList.toggle('bg-primary'); this.classList.toggle('justify-end');">
+<div class="w-4 h-4 bg-white rounded-full shadow-sm"></div>
+</button>
+</td>
+<td class="p-4 text-center">
+<span class="material-symbols-outlined text-primary cursor-pointer" style="font-variation-settings: 'FILL' 1;">star</span>
+</td>
+<td class="p-4 text-right">
+<div class="flex justify-end gap-2">
+<button class="p-2 hover:bg-surface-container rounded-lg transition-colors"><span class="material-symbols-outlined text-on-surface-variant">edit</span></button>
+<button class="p-2 hover:bg-error-container hover:text-error rounded-lg transition-colors"><span class="material-symbols-outlined text-on-surface-variant group-hover:text-error">delete</span></button>
+</div>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-primary/5 transition-colors group">
+<td class="p-4">
+<div class="font-headline-md text-on-surface">First Order STL</div>
+<div class="font-label-caps text-[10px] text-primary">CODE: PRINTIT10</div>
+</td>
+<td class="p-4 font-label-caps font-bold text-on-secondary-container">$10.00 FLAT</td>
+<td class="p-4">
+<span class="px-2 py-1 bg-surface-variant rounded font-label-caps text-[10px]">STL MODELS ONLY</span>
+</td>
+<td class="p-4">
+<div class="font-body-md text-sm">No Expiry</div>
+<div class="font-label-caps text-[10px] text-on-surface-variant">ONGOING CAMPAIGN</div>
+</td>
+<td class="p-4">
+<button class="w-12 h-6 bg-primary rounded-full p-1 flex items-center transition-all duration-300" onclick="this.classList.toggle('bg-primary'); this.classList.toggle('justify-end');">
+<div class="w-4 h-4 bg-white rounded-full shadow-sm"></div>
+</button>
+</td>
+<td class="p-4 text-center">
+<span class="material-symbols-outlined text-outline cursor-pointer hover:text-primary transition-colors">star</span>
+</td>
+<td class="p-4 text-right">
+<div class="flex justify-end gap-2">
+<button class="p-2 hover:bg-surface-container rounded-lg transition-colors"><span class="material-symbols-outlined text-on-surface-variant">edit</span></button>
+<button class="p-2 hover:bg-error-container hover:text-error rounded-lg transition-colors"><span class="material-symbols-outlined text-on-surface-variant group-hover:text-error">delete</span></button>
+</div>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-primary/5 transition-colors group opacity-75 grayscale">
+<td class="p-4">
+<div class="font-headline-md text-on-surface">Summer Filament Flash</div>
+<div class="font-label-caps text-[10px] text-primary">CODE: HOTABS30</div>
+</td>
+<td class="p-4 font-label-caps font-bold text-on-secondary-container">30% OFF</td>
+<td class="p-4">
+<span class="px-2 py-1 bg-surface-variant rounded font-label-caps text-[10px]">FILAMENT</span>
+</td>
+<td class="p-4">
+<div class="font-body-md text-sm">Expired Aug 20</div>
+<div class="font-label-caps text-[10px] text-error">EXPIRED</div>
+</td>
+<td class="p-4">
+<button class="w-12 h-6 bg-outline rounded-full p-1 flex items-center justify-start transition-all duration-300">
+<div class="w-4 h-4 bg-white rounded-full shadow-sm"></div>
+</button>
+</td>
+<td class="p-4 text-center">
+<span class="material-symbols-outlined text-outline opacity-30">star</span>
+</td>
+<td class="p-4 text-right">
+<div class="flex justify-end gap-2">
+<button class="p-2 hover:bg-surface-container rounded-lg transition-colors"><span class="material-symbols-outlined text-on-surface-variant">edit</span></button>
+<button class="p-2 hover:bg-error-container hover:text-error rounded-lg transition-colors"><span class="material-symbols-outlined text-on-surface-variant group-hover:text-error">delete</span></button>
+</div>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="hover:bg-primary/5 transition-colors group">
+<td class="p-4">
+<div class="font-headline-md text-on-surface">Precision Pro Upgrade</div>
+<div class="font-label-caps text-[10px] text-primary">CODE: PROUPGRADE</div>
+</td>
+<td class="p-4 font-label-caps font-bold text-on-secondary-container">$50.00 FLAT</td>
+<td class="p-4">
+<span class="px-2 py-1 bg-surface-variant rounded font-label-caps text-[10px]">HARDWARE</span>
+</td>
+<td class="p-4">
+<div class="font-body-md text-sm">Jan 01 - Jan 31</div>
+<div class="font-label-caps text-[10px] text-primary">STARTS IN 19 DAYS</div>
+</td>
+<td class="p-4">
+<button class="w-12 h-6 bg-primary rounded-full p-1 flex items-center justify-end transition-all duration-300" onclick="this.classList.toggle('bg-primary'); this.classList.toggle('justify-end');">
+<div class="w-4 h-4 bg-white rounded-full shadow-sm"></div>
+</button>
+</td>
+<td class="p-4 text-center">
+<span class="material-symbols-outlined text-outline cursor-pointer hover:text-primary transition-colors">star</span>
+</td>
+<td class="p-4 text-right">
+<div class="flex justify-end gap-2">
+<button class="p-2 hover:bg-surface-container rounded-lg transition-colors"><span class="material-symbols-outlined text-on-surface-variant">edit</span></button>
+<button class="p-2 hover:bg-error-container hover:text-error rounded-lg transition-colors"><span class="material-symbols-outlined text-on-surface-variant group-hover:text-error">delete</span></button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+<!-- Pagination -->
+<div class="p-4 bg-surface-container-lowest flex justify-between items-center border-t border-outline-variant">
+<p class="font-label-caps text-[10px] text-on-surface-variant">SHOWING 1-4 OF 24 DISCOUNTS</p>
+<div class="flex gap-2">
+<button class="p-2 border border-outline-variant rounded hover:bg-surface-variant transition-colors"><span class="material-symbols-outlined text-sm">chevron_left</span></button>
+<button class="px-3 py-1 bg-primary text-on-primary rounded font-label-caps text-sm">1</button>
+<button class="px-3 py-1 hover:bg-surface-variant rounded font-label-caps text-sm">2</button>
+<button class="px-3 py-1 hover:bg-surface-variant rounded font-label-caps text-sm">3</button>
+<button class="p-2 border border-outline-variant rounded hover:bg-surface-variant transition-colors"><span class="material-symbols-outlined text-sm">chevron_right</span></button>
+</div>
+</div>
+</div>
+<!-- Featured Banner Preview Section -->
+<div class="mt-12">
+<h3 class="font-label-caps text-on-surface-variant mb-4">ACTIVE HOMEPAGE BANNER PREVIEW</h3>
+<div class="relative w-full h-48 rounded-2xl overflow-hidden group shadow-xl">
+<div class="absolute inset-0 bg-cover bg-center" data-alt="A cinematic, low-angle shot of a high-precision 3D printer working on a complex emerald-green geometric structure in a dimly lit, futuristic workshop. Sparks of light reflect off polished chrome surfaces. The atmosphere is professional and sophisticated, with a soft green glow illuminating the technological details of the extruder." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuANtLJ0Z_zDZWfB58D2QlRrd5Aa8V4H47dxDazYaHCXbsMmV2TuxQWHNUJ2o0qoH6xr66s4Y9WwzNHh-guMP5M2An5rWc1zBHgzBKa9HerDxJo-7F1tkuT6PThB9Yd-9WP1N3Y4e_o8wDP5c4ffyAwvvV_tecAMgl0dqyf-6oMXRGDoL5JxeKG4KpvuZ543eMhprD_1E3OyQFurtwEYTek97qVCrE45y9Kxc5xNL20vN2rAu2xGgmv7Ng')"></div>
+<div class="absolute inset-0 bg-gradient-to-r from-primary/90 to-transparent flex items-center px-12">
+<div class="max-w-md">
+<span class="bg-secondary-container text-on-secondary-container font-label-caps text-[10px] px-3 py-1 rounded-full mb-3 inline-block">LIVE NOW</span>
+<h4 class="font-display text-headline-lg text-white mb-2">HOLIDAY SALE 2024</h4>
+<p class="font-body-md text-white/80 mb-4">Unlock 25% across the entire STL library and filaments. Ends Jan 05.</p>
+<div class="font-label-caps text-white font-bold tracking-widest text-lg">CODE: HOLIDAY3D</div>
+</div>
+</div>
+<div class="absolute top-4 right-4 flex gap-2">
+<button class="bg-white/20 backdrop-blur-md text-white p-2 rounded-lg hover:bg-white/40 transition-all"><span class="material-symbols-outlined">visibility</span></button>
+<button class="bg-white/20 backdrop-blur-md text-white p-2 rounded-lg hover:bg-white/40 transition-all"><span class="material-symbols-outlined">edit</span></button>
+</div>
+</div>
+</div>
+</main>
+<script>
+        // Simple micro-interaction for toggle animations logic is handled via inline onclick
+        // Additional UI logic can go here
+        console.log("Bekaa3D Admin Discount Management Module Loaded");
+    </script>
+</body></html>

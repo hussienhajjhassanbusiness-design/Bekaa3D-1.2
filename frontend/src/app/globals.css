@@ -1,0 +1,317 @@
+@import "tailwindcss";
+
+/*
+ * Bekaa3D design tokens — Stitch "Precision Engineering System".
+ *
+ * Visual authority: docs/design-handoff/ (DESIGN-TOKENS.md, design-tokens.json,
+ * DESIGN-SYSTEM.md §12 recommendations). Every Stitch value below is a direct
+ * transcription of that handoff; .claude/skills/bekaa3d-brand-ui/tokens.md is
+ * the implementation guide aligned with it. Do not add a hex value here that
+ * the handoff does not define — add the token to the handoff docs first.
+ *
+ * Tailwind v4 CSS-first config: every custom property under a recognised
+ * namespace (--color-*, --text-*, --font-*, --radius-*, --shadow-*,
+ * --spacing-*, --container-*, --ease-*, --breakpoint-*) generates the matching
+ * utility (e.g. --color-primary -> bg-primary / text-primary / border-primary).
+ *
+ * Only Stitch tokens under their Stitch/MD3 names live here. The pre-Stitch
+ * compatibility aliases (brand-dark-green, text-text-primary, danger, text-h1,
+ * text-body, text-caption, rounded-md, shadow-elevation-*…) were removed in
+ * redesign Batch 11 after every call site moved to these names
+ * (BEKAA3D-TOKEN-MIGRATION.md §0). Secondary body and captions use
+ * Tailwind's own text-sm (14/20) and text-xs (12/16), exactly the values the
+ * aliases had and the classes Stitch itself uses. Do not reintroduce them.
+ */
+@theme {
+  /* ================================================================
+   * STITCH TOKENS
+   * ================================================================ */
+
+  /* ---- Colour: brand roles (DESIGN-TOKENS §1.1) ---- */
+  --color-primary: #0d631b;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #2e7d32; /* primary hover (DESIGN-SYSTEM §9.1) */
+  --color-on-primary-container: #cbffc2;
+  --color-primary-fixed: #a3f69c;
+  --color-primary-fixed-dim: #88d982;
+  --color-on-primary-fixed: #002204;
+  --color-on-primary-fixed-variant: #005312;
+  --color-inverse-primary: #88d982;
+  --color-surface-tint: #1b6d24;
+
+  --color-secondary: #3e6a00;
+  --color-on-secondary: #ffffff;
+  --color-secondary-container: #b9f474; /* lime accent — chip backgrounds only, never lime text on light */
+  --color-on-secondary-container: #437000;
+  --color-secondary-fixed: #b9f474;
+  --color-secondary-fixed-dim: #9ed75b;
+  --color-on-secondary-fixed: #0f2000;
+  --color-on-secondary-fixed-variant: #2e4f00;
+
+  --color-tertiary: #923357; /* raspberry */
+  --color-on-tertiary: #ffffff;
+  --color-tertiary-container: #b14b6f;
+  --color-on-tertiary-container: #ffedf0;
+  --color-tertiary-fixed: #ffd9e2;
+  --color-tertiary-fixed-dim: #ffb1c7;
+  --color-on-tertiary-fixed: #3f001c;
+  --color-on-tertiary-fixed-variant: #7f2448;
+
+  /* ---- Colour: surfaces & neutrals (DESIGN-TOKENS §1.2) ---- */
+  --color-background: #f9f9ff;
+  --color-on-background: #141b2b;
+  --color-surface: #f9f9ff;
+  --color-surface-bright: #f9f9ff;
+  --color-surface-dim: #d3daef;
+  --color-surface-container-lowest: #ffffff; /* cards */
+  --color-surface-container-low: #f1f3ff; /* lavender range start */
+  --color-surface-container: #e9edff;
+  --color-surface-container-high: #e1e8fd; /* dominant hover background */
+  --color-surface-container-highest: #dce2f7; /* lavender range end */
+  --color-surface-variant: #dce2f7;
+  --color-inverse-surface: #293040;
+  --color-inverse-on-surface: #edf0ff;
+  --color-on-surface: #141b2b; /* headings / primary text */
+  --color-on-surface-variant: #40493d; /* body text */
+  --color-outline: #707a6c; /* muted text; resting input border (>=3:1) */
+  --color-outline-variant: #bfcaba; /* default border & divider */
+
+  /* ---- Colour: semantic (DESIGN-TOKENS §1.3) ---- */
+  --color-error: #ba1a1a;
+  --color-on-error: #ffffff;
+  --color-error-container: #ffdad6;
+  --color-on-error-container: #93000a;
+  /* Stitch uses Tailwind amber/blue for warning/info ("off-palette");
+     named here as tokens with the exact handoff values
+     (design-tokens.json "recommended-semantic"). */
+  --color-warning: #d97706; /* amber-600: icons, borders, dots — not small text */
+  --color-warning-container: #fef3c7; /* amber-100 */
+  --color-warning-outline: #fde68a; /* amber-200 */
+  --color-on-warning-container: #92400e; /* amber-800 */
+  --color-info: #2563eb; /* blue-600 */
+  --color-info-container: #dbeafe; /* blue-100 */
+  --color-info-outline: #bfdbfe; /* blue-200 */
+  --color-on-info-container: #1e40af; /* blue-800 */
+  --color-whatsapp: #25d366; /* brand-external; white text on it fails contrast */
+  /* Batch 3: WhatsApp's own darker palette greens (Teal Green / Dark Teal), used
+     where a white glyph sits on the fill — white on #128c7e is 4.1:1 (passes the
+     3:1 non-text minimum), on #075e54 7.6:1. */
+  --color-whatsapp-strong: #128c7e;
+  --color-whatsapp-deep: #075e54;
+
+  /* ---- Typography: families (DESIGN-TOKENS §2.1) ----
+     The --font-*-face variables are set on <html> by next/font/local
+     (src/app/fonts.ts, self-hosted woff2, no runtime Google request); the
+     named stacks after them are the documented fallbacks. */
+  --font-sans: var(--font-inter-face), "Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
+    "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-body: var(--font-inter-face), "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-headline: var(--font-hanken-grotesk-face), "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-hanken-grotesk-face), "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-label: var(--font-jetbrains-mono-face), "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* ---- Typography: scale (DESIGN-TOKENS §2.2 / §2.5) ----
+     display and headline-lg step down below 768px (RESPONSIVE-SPECS §1) —
+     see the @media block in the base layer. */
+  --text-display: 48px; /* page title / hero */
+  --text-display--line-height: 1.1;
+  --text-display--letter-spacing: -0.02em;
+  --text-display--font-weight: 800;
+  --text-headline-lg: 32px; /* section heading / app page title */
+  --text-headline-lg--line-height: 1.2;
+  --text-headline-lg--letter-spacing: -0.01em;
+  --text-headline-lg--font-weight: 700;
+  --text-headline-md: 20px; /* card heading */
+  --text-headline-md--line-height: 1.3;
+  --text-headline-md--font-weight: 600;
+  --text-title-sm: 16px; /* compact card / row title (DESIGN-SYSTEM §12.3) */
+  --text-title-sm--line-height: 1.5;
+  --text-title-sm--font-weight: 600;
+  --text-body-lg: 18px; /* intro / lead paragraph */
+  --text-body-lg--line-height: 1.6;
+  --text-body-md: 16px; /* body */
+  --text-body-md--line-height: 1.5;
+  --text-label-caps: 12px; /* labels, buttons, table headers (pair with font-label + uppercase) */
+  --text-label-caps--line-height: 1;
+  --text-label-caps--letter-spacing: 0.05em;
+  --text-label-caps--font-weight: 600;
+  --text-label-sm: 11px; /* chips, status badges */
+  --text-label-sm--line-height: 1;
+  --text-label-sm--letter-spacing: 0.05em;
+  --text-label-sm--font-weight: 600;
+  --text-label-micro: 10px; /* micro labels — never in outline colour */
+  --text-label-micro--line-height: 1;
+  --text-label-micro--letter-spacing: 0.05em;
+  --text-label-micro--font-weight: 600;
+
+  /* ---- Spacing & layout (DESIGN-TOKENS §3–§4) ----
+     Base unit stays Tailwind's 4px (--spacing: 0.25rem, not overridden). */
+  --spacing-gutter: 24px; /* common grid gap */
+  --spacing-margin-mobile: 16px; /* page gutter < 768px */
+  --spacing-margin-desktop: 64px; /* storefront page gutter >= 1024px */
+  --spacing-section: 96px; /* storefront section rhythm */
+  --spacing-section-mobile: 64px;
+  --spacing-sidebar: 256px; /* app sidebar width (w-sidebar) */
+  --spacing-topbar: 64px; /* app top bar height (h-topbar) */
+  --container-content: 1440px; /* main content cap (max-w-content) */
+  --container-form: 1200px; /* admin long-form cap (max-w-form) */
+  --container-auth: 440px; /* auth card (COMPONENT-SPECS §38 login; forgot 448 unified to 440) */
+  --container-auth-wide: 640px; /* registration / MFA enrolment auth card (§38 register) */
+
+  /* ---- Shape (DESIGN-TOKENS §6, DESIGN-SYSTEM §12.10) ----
+     Semantic radii — prefer these in components. Tailwind defaults keep
+     rounded (4) / rounded-xl (12) / rounded-2xl (16) / rounded-3xl (24). */
+  --radius-badge: 4px;
+  --radius-control: 8px; /* buttons, inputs, selects */
+  --radius-card: 12px; /* standard card, dialog, toast, alert */
+  --radius-panel: 16px; /* large / summary panel */
+  --radius-banner: 24px; /* promo / CTA banner */
+  --radius-lg: 8px; /* Stitch rounded-lg = 8px (was 12px; its 3 uses moved to rounded-xl first) */
+
+  /* ---- Elevation (DESIGN-TOKENS §7) ---- */
+  --shadow-ambient: 0 4px 20px -2px rgb(20 27 43 / 0.04); /* e2 */
+  --shadow-focus-ring: 0 0 0 2px var(--color-white), 0 0 0 4px var(--color-primary);
+
+  /* ---- Motion (DESIGN-TOKENS §8) ---- */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --default-transition-duration: 200ms; /* Stitch standard colour transition */
+  --default-transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ---- Breakpoints — unchanged; equal Stitch md (768) / lg (1024).
+     Translate Stitch md: -> tablet:, lg: -> desktop:. ---- */
+  --breakpoint-tablet: 768px;
+  --breakpoint-desktop: 1024px;
+}
+
+/* ---- Non-utility design variables ---- */
+:root {
+  /* Gradients (DESIGN-TOKENS §1.6). Use ONLY where the Stitch design
+     specifies a gradient; solid primary is the default CTA (§12.9). */
+  --gradient-primary: linear-gradient(135deg, #2e7d32 0%, #1b6d24 100%);
+  --gradient-signature: linear-gradient(135deg, #0d631b 0%, #3e6a00 100%);
+  --gradient-text-primary: linear-gradient(to right, #0d631b, #3e6a00);
+
+  /* Motion durations (DESIGN-TOKENS §8) */
+  --duration-colors: 200ms;
+  --duration-card: 300ms;
+  --duration-image: 500ms;
+  --press-scale: 0.95;
+}
+
+@layer base {
+  /* Mobile type step-down (RESPONSIVE-SPECS §1): display 48 -> 36,
+     headline-lg 32 -> 24. */
+  @media (width < 768px) {
+    :root {
+      --text-display: 36px;
+      --text-headline-lg: 24px;
+    }
+  }
+
+  /* Batch 2: the storefront header is sticky (64px, h-topbar). Keyboard
+     focus and in-page anchors scroll clear of it (WCAG 2.4.11). */
+  html {
+    scroll-padding-top: calc(var(--spacing-topbar) + 8px);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-on-surface);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Hanken Grotesk for every heading; size/weight/colour stay with the
+     call site's utilities. */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-headline);
+  }
+
+  ::selection {
+    background-color: var(--color-primary-fixed);
+    color: var(--color-on-primary-fixed);
+  }
+
+  /* Native checkboxes/radios take the brand colour (COMPONENT-SPECS §28);
+     size and layout stay with each call site. */
+  input[type="checkbox"],
+  input[type="radio"] {
+    accent-color: var(--color-primary);
+  }
+
+  /* Stitch does not handle reduced motion; the app does (DESIGN-SYSTEM §11). */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* ---- Documented Stitch effects (use only where the design specifies) ---- */
+
+/* Glass (DESIGN-SYSTEM §12.19): white 80% + 20px blur, opaque fallback. */
+@utility glass-panel {
+  background-color: rgb(255 255 255 / 0.8);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  @supports not (backdrop-filter: blur(1px)) {
+    background-color: var(--color-surface-container-lowest);
+  }
+}
+
+/* Blueprint grid (DESIGN-SYSTEM §12.20): auth / account / admin shells only. */
+@utility bg-blueprint {
+  background-color: var(--color-background);
+  background-image:
+    linear-gradient(to right, rgb(13 99 27 / 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(13 99 27 / 0.05) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Home H1 accent only (DESIGN-TOKENS §1.6). */
+@utility text-gradient-primary {
+  background-image: var(--gradient-text-primary);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/*
+ * ---- Global focus-visible treatment ----
+ * A double box-shadow ring — 2px white inner separation, 4px primary
+ * (#0d631b) outer. #0d631b measures 7.45:1 on white and 7.11:1 on the
+ * #f9f9ff canvas, so the ring stays well above the 3:1 non-text target.
+ * Kept as box-shadow (not outline): e2e/account-profile.spec.ts and
+ * e2e/login-session.spec.ts assert a non-"none" box-shadow on focus.
+ * Stitch's own inputs use a faint ring-primary/20; that is too weak to be
+ * the only indicator, so this stronger ring wins (it is unlayered, so it
+ * overrides utility shadows while an element is focused). `outline: none`
+ * is always paired with the ring — never a bare removal (WCAG 2.4.7).
+ */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus-ring);
+}
+
+/*
+ * Batch 11 (keyboard audit): Chromium stops matching :focus-visible on a
+ * date/time input once Tab moves into its day/year segments, so the ring
+ * above vanished mid-field (only a 1px border change remained). These
+ * inputs are only ever focused into a segment, so show the same ring on
+ * plain :focus.
+ */
+input:is([type="date"], [type="time"], [type="datetime-local"], [type="month"], [type="week"]):focus {
+  outline: none;
+  box-shadow: var(--shadow-focus-ring);
+}

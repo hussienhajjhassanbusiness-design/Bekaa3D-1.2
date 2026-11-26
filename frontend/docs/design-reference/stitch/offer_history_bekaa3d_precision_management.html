@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Offer History | Bekaa3D Precision Engineering</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700;800&family=Inter:wght@400;500&family=JetBrains+Mono:wght@600&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@100..900&family=Inter:wght@100..900&family=JetBrains+Mono:wght@100..900&display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "outline-variant": "#bfcaba",
+                    "on-tertiary": "#ffffff",
+                    "on-secondary-fixed": "#0f2000",
+                    "on-tertiary-fixed": "#3f001c",
+                    "inverse-on-surface": "#edf0ff",
+                    "outline": "#707a6c",
+                    "on-tertiary-container": "#ffedf0",
+                    "on-error": "#ffffff",
+                    "on-surface-variant": "#40493d",
+                    "on-tertiary-fixed-variant": "#7f2448",
+                    "on-error-container": "#93000a",
+                    "secondary": "#3e6a00",
+                    "primary-fixed": "#a3f69c",
+                    "surface-dim": "#d3daef",
+                    "primary": "#0d631b",
+                    "tertiary": "#923357",
+                    "secondary-fixed-dim": "#9ed75b",
+                    "on-surface": "#141b2b",
+                    "tertiary-fixed-dim": "#ffb1c7",
+                    "surface-container": "#e9edff",
+                    "on-background": "#141b2b",
+                    "tertiary-container": "#b14b6f",
+                    "surface-tint": "#1b6d24",
+                    "surface-variant": "#dce2f7",
+                    "error-container": "#ffdad6",
+                    "primary-fixed-dim": "#88d982",
+                    "on-secondary-fixed-variant": "#2e4f00",
+                    "surface-bright": "#f9f9ff",
+                    "secondary-container": "#b9f474",
+                    "inverse-surface": "#293040",
+                    "tertiary-fixed": "#ffd9e2",
+                    "on-primary-fixed": "#002204",
+                    "on-primary-fixed-variant": "#005312",
+                    "inverse-primary": "#88d982",
+                    "primary-container": "#2e7d32",
+                    "on-secondary": "#ffffff",
+                    "on-secondary-container": "#437000",
+                    "on-primary-container": "#cbffc2",
+                    "on-primary": "#ffffff",
+                    "surface-container-highest": "#dce2f7",
+                    "surface-container-lowest": "#ffffff",
+                    "background": "#f9f9ff",
+                    "error": "#ba1a1a",
+                    "surface-container-low": "#f1f3ff",
+                    "surface-container-high": "#e1e8fd",
+                    "surface": "#f9f9ff",
+                    "secondary-fixed": "#b9f474"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "margin-mobile": "16px",
+                    "gutter": "24px",
+                    "max-width": "1440px",
+                    "unit": "4px",
+                    "margin-desktop": "64px"
+            },
+            "fontFamily": {
+                    "headline-lg": ["Hanken Grotesk"],
+                    "body-md": ["Inter"],
+                    "display": ["Hanken Grotesk"],
+                    "label-caps": ["JetBrains Mono"],
+                    "body-lg": ["Inter"],
+                    "headline-md": ["Hanken Grotesk"],
+                    "headline-lg-mobile": ["Hanken Grotesk"]
+            },
+            "fontSize": {
+                    "headline-lg": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                    "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                    "display": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                    "label-caps": ["12px", {"lineHeight": "1.0", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                    "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                    "headline-md": ["20px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "1.2", "fontWeight": "700"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        .status-badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #bfcaba;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="bg-background font-body-md text-on-surface">
+<!-- Sidebar Navigation Shell -->
+<aside class="h-screen w-64 fixed left-0 top-0 bg-surface dark:bg-surface-container-lowest border-r border-outline-variant dark:border-outline flex flex-col py-8 px-6 z-50">
+<div class="mb-10">
+<h1 class="font-display text-headline-md text-primary dark:text-primary-fixed">Bekaa3D</h1>
+<p class="font-body-md text-sm text-on-surface-variant opacity-70">Engineering Precision</p>
+</div>
+<nav class="flex-grow space-y-1">
+<!-- Profile -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200 group active:scale-[0.99] transition-transform duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="account_circle">account_circle</span>
+<span class="font-body-md">Profile</span>
+</a>
+<!-- Orders -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200 group active:scale-[0.99] transition-transform duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="shopping_bag">shopping_bag</span>
+<span class="font-body-md">Orders</span>
+</a>
+<!-- STL Downloads -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200 group active:scale-[0.99] transition-transform duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="deployed_code">deployed_code</span>
+<span class="font-body-md">STL Downloads</span>
+</a>
+<!-- Wishlist -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200 group active:scale-[0.99] transition-transform duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="favorite">favorite</span>
+<span class="font-body-md">Wishlist</span>
+</a>
+<!-- Offers (ACTIVE) -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-primary dark:text-primary-fixed font-bold border-r-4 border-primary dark:border-primary-fixed bg-surface-container-low dark:bg-surface-container-high transition-transform duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="local_offer">local_offer</span>
+<span class="font-body-md">Offers</span>
+</a>
+<!-- Reviews -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200 group active:scale-[0.99] transition-transform duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="rate_review">rate_review</span>
+<span class="font-body-md">Reviews</span>
+</a>
+<!-- Account Settings -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200 group active:scale-[0.99] transition-transform duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-body-md">Account Settings</span>
+</a>
+</nav>
+<div class="mt-auto border-t border-outline-variant pt-6">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-error hover:bg-error-container/10 transition-colors duration-200 active:scale-[0.99]" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+<span class="font-body-md">Logout</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="ml-64 min-h-screen p-12 max-w-[1440px] mx-auto">
+<!-- Header & Description -->
+<header class="mb-10">
+<h2 class="font-headline-lg text-headline-lg text-on-surface mb-2">Offer History</h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl">
+                Track and manage your price negotiations for precision STL blueprints. View current status, counter-offers, and finalized agreements.
+            </p>
+</header>
+<!-- Quick Summary Cards (Bento-lite) -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+<!-- Active Offers -->
+<div class="bg-white rounded-xl p-6 shadow-[0px_4px_24px_rgba(0,0,0,0.04)] border border-outline-variant/30 flex items-center justify-between group hover:border-primary/50 transition-all cursor-default">
+<div>
+<p class="font-label-caps text-label-caps text-on-surface-variant mb-1 uppercase">Active Offers</p>
+<p class="font-display text-4xl font-bold text-primary">04</p>
+</div>
+<div class="w-12 h-12 rounded-full bg-primary/5 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" data-icon="bolt">bolt</span>
+</div>
+</div>
+<!-- Accepted Offers -->
+<div class="bg-white rounded-xl p-6 shadow-[0px_4px_24px_rgba(0,0,0,0.04)] border border-outline-variant/30 flex items-center justify-between group hover:border-secondary/50 transition-all cursor-default">
+<div>
+<p class="font-label-caps text-label-caps text-on-surface-variant mb-1 uppercase">Accepted Offers</p>
+<p class="font-display text-4xl font-bold text-secondary">12</p>
+</div>
+<div class="w-12 h-12 rounded-full bg-secondary/5 flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined" data-icon="check_circle">check_circle</span>
+</div>
+</div>
+<!-- Total Savings -->
+<div class="bg-white rounded-xl p-6 shadow-[0px_4px_24px_rgba(0,0,0,0.04)] border border-outline-variant/30 flex items-center justify-between group hover:border-tertiary/50 transition-all cursor-default">
+<div>
+<p class="font-label-caps text-label-caps text-on-surface-variant mb-1 uppercase">Total Savings</p>
+<p class="font-display text-4xl font-bold text-tertiary">$184.50</p>
+</div>
+<div class="w-12 h-12 rounded-full bg-tertiary/5 flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+</div>
+</div>
+</div>
+<!-- Offers Table Section -->
+<section class="bg-white rounded-xl shadow-[0px_4px_32px_rgba(0,0,0,0.02)] border border-outline-variant/30 overflow-hidden">
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low border-b border-outline-variant/50">
+<th class="px-6 py-5 font-label-caps text-label-caps text-on-surface-variant">STL Asset</th>
+<th class="px-6 py-5 font-label-caps text-label-caps text-on-surface-variant">Original</th>
+<th class="px-6 py-5 font-label-caps text-label-caps text-on-surface-variant">Your Offer</th>
+<th class="px-6 py-5 font-label-caps text-label-caps text-on-surface-variant">Status</th>
+<th class="px-6 py-5 font-label-caps text-label-caps text-on-surface-variant">Seller Response</th>
+<th class="px-6 py-5 font-label-caps text-label-caps text-on-surface-variant">Date</th>
+<th class="px-6 py-5 font-label-caps text-label-caps text-on-surface-variant text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/20">
+<!-- Row 1: Counter Offer -->
+<tr class="hover:bg-surface-container-lowest/50 transition-colors">
+<td class="px-6 py-5">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-surface-container overflow-hidden border border-outline-variant/30">
+<img class="w-full h-full object-cover" data-alt="A macro shot of a complex 3D printed planetary gear system made from translucent resin. The lighting is studio-quality with soft green highlights against a clean white background, emphasizing mechanical precision and industrial design aesthetics for a technical engineering platform." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDn4gzDH4CU127rsSh6NUDvHl0mvg2jq3TAa8bcGM-elWNscnWgh-_RgIQYXt5bh77viTGx6eisjQIqPx2bkcZBsYX8CB_FiIchNqRMU3gi8emCiMrPqbFd2IcM5EIPpTmD8_1QyThTK2d_kpkaD4pK4FMJ6LcxN-OmEFGe5JzshG5Mi5AWenL4HPLKv9bM7Wg55cnGn1RINAgxQXRsiDCeEUKIVaEtPBLHV-iSk5OZer6FDI-V3hS61g"/>
+</div>
+<span class="font-headline-md text-sm font-semibold text-on-surface">Planetary Gear System V4</span>
+</div>
+</td>
+<td class="px-6 py-5 text-sm font-mono text-on-surface-variant">$45.00</td>
+<td class="px-6 py-5 text-sm font-bold text-primary">$35.00</td>
+<td class="px-6 py-5">
+<span class="status-badge px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-[10px]">Counter Offer</span>
+</td>
+<td class="px-6 py-5 text-sm text-on-surface-variant italic">"I can do $38.00 given the complexity."</td>
+<td class="px-6 py-5 text-sm text-on-surface-variant">Oct 28, 2024</td>
+<td class="px-6 py-5 text-right space-x-2">
+<button class="px-4 py-2 bg-primary text-white font-label-caps text-[11px] rounded-lg hover:bg-primary-container transition-colors shadow-sm">Accept Counter</button>
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-[20px]">more_vert</span>
+</button>
+</td>
+</tr>
+<!-- Row 2: Accepted -->
+<tr class="hover:bg-surface-container-lowest/50 transition-colors">
+<td class="px-6 py-5">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-surface-container overflow-hidden border border-outline-variant/30">
+<img class="w-full h-full object-cover" data-alt="A professional visualization of a high-precision industrial nozzle STL blueprint. The object is rendered with a metallic finish, showcasing intricate internal channels and smooth surfaces. The aesthetic is ultra-modern, clean, and corporate, emphasizing high-fidelity manufacturing capabilities." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB89LKY2iGmEdYPElffoJ3xjdWSFZ_IbOq0MbRRyBIvqf201Liqj54rq4-sTK-TfENq8nZiHqbOkCq_plw23Frb74SeXJXWJOQeILp28371BQ2o3GDC4FLek1ToTvzymyRmZ5x_lDiwCmGkn-cnaXxcTSLgSdIISnGJRohsov24TJ1z_V0caQ1fqRZrVYbiSiSEiy6W6fT8SmiJZP4B_UT3w2LwGI0xv4lfZR0z7z9PNRdTxEzonntynA"/>
+</div>
+<span class="font-headline-md text-sm font-semibold text-on-surface">Precision Nozzle Assembly</span>
+</div>
+</td>
+<td class="px-6 py-5 text-sm font-mono text-on-surface-variant">$120.00</td>
+<td class="px-6 py-5 text-sm font-bold text-primary">$95.00</td>
+<td class="px-6 py-5">
+<span class="status-badge px-3 py-1 rounded-full bg-green-100 text-green-700 text-[10px]">Accepted</span>
+</td>
+<td class="px-6 py-5 text-sm text-on-surface-variant italic">"Offer accepted. High volume pricing applied."</td>
+<td class="px-6 py-5 text-sm text-on-surface-variant">Oct 25, 2024</td>
+<td class="px-6 py-5 text-right">
+<button class="px-4 py-2 border border-outline-variant text-on-surface font-label-caps text-[11px] rounded-lg hover:bg-surface-container transition-colors">View Receipt</button>
+</td>
+</tr>
+<!-- Row 3: Pending -->
+<tr class="hover:bg-surface-container-lowest/50 transition-colors">
+<td class="px-6 py-5">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-surface-container overflow-hidden border border-outline-variant/30">
+<img class="w-full h-full object-cover" data-alt="An artistic 3D model of a parametric geometric vase with a complex lattice structure. The render uses a soft-touch material effect in a muted engineering green tone. The image is crisp with deep depth of field, reflecting high-end industrial design and premium digital assets." src="https://lh3.googleusercontent.com/aida-public/AB6AXuABNQOSBXfmw1rkr9i1D-kifETha8pXQBV2qTBTy2WXUKpctJ7F7zdfzL4M3N7CUBQCNdqI36dnmO8hWHdo-J7QRh-xxp9d-Pa0Q1iEeqrdlaDLYTEWkSQDR4VjWKg-GSgiC0Sd_Zkn0lABLohUGmRbgZYXYrGDsgMCj94P1KxqnG5Sakt2Hwsqy_zD6TutljfI4vQLf4DKxUofmJBnGMvVfgTbJcMXMn5xb3QWGr0PHl7JKQnSIbkRIg"/>
+</div>
+<span class="font-headline-md text-sm font-semibold text-on-surface">Parametric Lattice Housing</span>
+</div>
+</td>
+<td class="px-6 py-5 text-sm font-mono text-on-surface-variant">$65.00</td>
+<td class="px-6 py-5 text-sm font-bold text-primary">$50.00</td>
+<td class="px-6 py-5">
+<span class="status-badge px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-[10px]">Pending</span>
+</td>
+<td class="px-6 py-5 text-sm text-on-surface-variant/50 italic">Waiting for response...</td>
+<td class="px-6 py-5 text-sm text-on-surface-variant">Oct 29, 2024</td>
+<td class="px-6 py-5 text-right">
+<button class="px-4 py-2 text-error font-label-caps text-[11px] rounded-lg hover:bg-error/5 transition-colors border border-transparent hover:border-error/20">Withdraw</button>
+</td>
+</tr>
+<!-- Row 4: Rejected -->
+<tr class="hover:bg-surface-container-lowest/50 transition-colors">
+<td class="px-6 py-5">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-surface-container overflow-hidden border border-outline-variant/30">
+<img class="w-full h-full object-cover" data-alt="A technical blueprint render of a customized drone frame component. The image highlights precise drill holes and structural reinforcement ribs. The style is a clean CAD-to-realism transformation with a minimalist white and light gray palette, emphasizing high-performance hardware engineering." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA9QUETgEY6ocegz-aIotcu8ooAG06atvhioMasnQZfBsXUSurqtmD_Zw3Cdqr4rC8emDB3crGqkdjdFQ5ZY_PrDgBoai1fMJLpmAyk3JgoheX1bYeDyy_30iIatuOPbPh3U1lTICqMTGiPN1cNJDwfA-jVKibVLKhVP6u6HW_l-PiHKsVTEY_vRhEGdb7JlMHvkIw5yfDVnNQ9OnC_f6efhiH2NeNVn69EsuqshjIoY_wEw78oxFB7yw"/>
+</div>
+<span class="font-headline-md text-sm font-semibold text-on-surface">Ultra-Light Drone Frame</span>
+</div>
+</td>
+<td class="px-6 py-5 text-sm font-mono text-on-surface-variant">$35.00</td>
+<td class="px-6 py-5 text-sm font-bold text-primary">$20.00</td>
+<td class="px-6 py-5">
+<span class="status-badge px-3 py-1 rounded-full bg-red-100 text-red-700 text-[10px]">Rejected</span>
+</td>
+<td class="px-6 py-5 text-sm text-on-surface-variant italic">"This is already at my minimum threshold."</td>
+<td class="px-6 py-5 text-sm text-on-surface-variant">Oct 20, 2024</td>
+<td class="px-6 py-5 text-right">
+<button class="px-4 py-2 bg-surface text-on-surface-variant font-label-caps text-[11px] rounded-lg border border-outline-variant cursor-not-allowed opacity-50">Locked</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pagination -->
+<div class="px-6 py-5 flex items-center justify-between border-t border-outline-variant/30 bg-surface-container-lowest">
+<span class="text-xs text-on-surface-variant">Showing 1 to 4 of 28 offers</span>
+<div class="flex gap-2">
+<button class="w-8 h-8 flex items-center justify-center rounded border border-outline-variant hover:bg-surface-container transition-colors disabled:opacity-30" disabled="">
+<span class="material-symbols-outlined text-[18px]">chevron_left</span>
+</button>
+<button class="w-8 h-8 flex items-center justify-center rounded bg-primary text-white text-[12px] font-bold">1</button>
+<button class="w-8 h-8 flex items-center justify-center rounded border border-outline-variant hover:bg-surface-container transition-colors text-[12px]">2</button>
+<button class="w-8 h-8 flex items-center justify-center rounded border border-outline-variant hover:bg-surface-container transition-colors text-[12px]">3</button>
+<button class="w-8 h-8 flex items-center justify-center rounded border border-outline-variant hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined text-[18px]">chevron_right</span>
+</button>
+</div>
+</div>
+</section>
+<!-- Help Section -->
+<footer class="mt-12 flex items-center justify-between p-8 bg-surface-container rounded-xl border border-outline-variant/30">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">help</span>
+</div>
+<div>
+<h4 class="font-headline-md text-sm font-bold">Need help with negotiations?</h4>
+<p class="text-xs text-on-surface-variant">Review our Fair Price Guidelines for STL designers and buyers.</p>
+</div>
+</div>
+<button class="px-5 py-2.5 bg-white border border-outline text-on-surface font-label-caps text-[11px] rounded-lg hover:shadow-md transition-all">Read Guidelines</button>
+</footer>
+</main>
+<script>
+        // Micro-interactions for table rows
+        document.querySelectorAll('tr').forEach(row => {
+            row.addEventListener('mouseenter', () => {
+                row.style.transform = 'translateX(4px)';
+                row.style.transition = 'transform 0.2s ease-out';
+            });
+            row.addEventListener('mouseleave', () => {
+                row.style.transform = 'translateX(0px)';
+            });
+        });
+
+        // Add subtle parallax to summary cards on mouse move
+        const cards = document.querySelectorAll('.group');
+        cards.forEach(card => {
+            card.addEventListener('mousemove', (e) => {
+                const rect = card.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                card.style.setProperty('--mouse-x', `${x}px`);
+                card.style.setProperty('--mouse-y', `${y}px`);
+            });
+        });
+    </script>
+</body></html>

@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Bekaa3D | Customer Dashboard</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@600&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@100..900&family=Inter:wght@100..900&family=JetBrains+Mono:wght@100..900&display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-container-high": "#e1e8fd",
+                    "surface-container-low": "#f1f3ff",
+                    "secondary-fixed": "#b9f474",
+                    "surface": "#f9f9ff",
+                    "on-primary": "#ffffff",
+                    "error": "#ba1a1a",
+                    "surface-container-lowest": "#ffffff",
+                    "background": "#f9f9ff",
+                    "surface-container-highest": "#dce2f7",
+                    "on-secondary": "#ffffff",
+                    "primary-container": "#2e7d32",
+                    "on-primary-fixed-variant": "#005312",
+                    "inverse-primary": "#88d982",
+                    "on-primary-container": "#cbffc2",
+                    "on-secondary-container": "#437000",
+                    "surface-bright": "#f9f9ff",
+                    "primary-fixed-dim": "#88d982",
+                    "on-secondary-fixed-variant": "#2e4f00",
+                    "tertiary-fixed": "#ffd9e2",
+                    "on-primary-fixed": "#002204",
+                    "secondary-container": "#b9f474",
+                    "inverse-surface": "#293040",
+                    "tertiary-container": "#b14b6f",
+                    "tertiary-fixed-dim": "#ffb1c7",
+                    "surface-container": "#e9edff",
+                    "on-background": "#141b2b",
+                    "surface-variant": "#dce2f7",
+                    "error-container": "#ffdad6",
+                    "surface-tint": "#1b6d24",
+                    "tertiary": "#923357",
+                    "secondary-fixed-dim": "#9ed75b",
+                    "primary": "#0d631b",
+                    "surface-dim": "#d3daef",
+                    "on-surface": "#141b2b",
+                    "on-surface-variant": "#40493d",
+                    "outline": "#707a6c",
+                    "on-tertiary-container": "#ffedf0",
+                    "on-error": "#ffffff",
+                    "inverse-on-surface": "#edf0ff",
+                    "secondary": "#3e6a00",
+                    "primary-fixed": "#a3f69c",
+                    "on-tertiary-fixed-variant": "#7f2448",
+                    "on-error-container": "#93000a",
+                    "outline-variant": "#bfcaba",
+                    "on-tertiary-fixed": "#3f001c",
+                    "on-secondary-fixed": "#0f2000",
+                    "on-tertiary": "#ffffff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "margin-mobile": "16px",
+                    "gutter": "24px",
+                    "max-width": "1440px",
+                    "unit": "4px",
+                    "margin-desktop": "64px"
+            },
+            "fontFamily": {
+                    "headline-lg": ["Hanken Grotesk"],
+                    "body-md": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "headline-md": ["Hanken Grotesk"],
+                    "headline-lg-mobile": ["Hanken Grotesk"],
+                    "display": ["Hanken Grotesk"],
+                    "label-caps": ["JetBrains Mono"]
+            },
+            "fontSize": {
+                    "headline-lg": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                    "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                    "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                    "headline-md": ["20px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                    "display": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                    "label-caps": ["12px", {"lineHeight": "1.0", "letterSpacing": "0.05em", "fontWeight": "600"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #f9f9ff;
+            color: #141b2b;
+            font-family: 'Inter', sans-serif;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-header {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(20px);
+        }
+        .sidebar-active {
+            background: linear-gradient(135deg, #0d631b 0%, #1b6d24 100%);
+            color: #ffffff !important;
+        }
+        .card-shadow {
+            box-shadow: 0 4px 20px -2px rgba(20, 27, 43, 0.04);
+        }
+    </style>
+</head>
+<body class="flex min-h-screen">
+<!-- Sidebar Navigation -->
+<aside class="w-64 fixed inset-y-0 left-0 bg-surface-container-lowest border-r border-outline-variant/30 hidden md:flex flex-col z-50">
+<div class="p-8">
+<span class="font-display text-headline-md font-extrabold text-primary">Bekaa3D</span>
+</div>
+<nav class="flex-1 px-4 space-y-2">
+<!-- Navigation Items Mapping -->
+<a class="sidebar-active flex items-center gap-3 px-4 py-3 rounded-xl transition-all" href="#">
+<span class="material-symbols-outlined text-[20px]">dashboard</span>
+<span class="font-body-md text-body-md">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-low rounded-xl transition-all" href="#">
+<span class="material-symbols-outlined text-[20px]">package_2</span>
+<span class="font-body-md text-body-md">Orders</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-low rounded-xl transition-all" href="#">
+<span class="material-symbols-outlined text-[20px]">download</span>
+<span class="font-body-md text-body-md">Downloads</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-low rounded-xl transition-all" href="#">
+<span class="material-symbols-outlined text-[20px]">favorite</span>
+<span class="font-body-md text-body-md">Wishlist</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-low rounded-xl transition-all" href="#">
+<span class="material-symbols-outlined text-[20px]">rate_review</span>
+<span class="font-body-md text-body-md">Reviews</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-low rounded-xl transition-all" href="#">
+<span class="material-symbols-outlined text-[20px]">person</span>
+<span class="font-body-md text-body-md">Profile</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-low rounded-xl transition-all" href="#">
+<span class="material-symbols-outlined text-[20px]">notifications</span>
+<span class="font-body-md text-body-md">Notifications</span>
+</a>
+</nav>
+<div class="p-6 border-t border-outline-variant/20">
+<div class="flex items-center gap-3 p-3 bg-surface-container-low rounded-xl">
+<div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white font-bold">EV</div>
+<div class="overflow-hidden">
+<p class="font-body-md text-[14px] font-semibold truncate">Dr. Elena Vance</p>
+<p class="font-label-caps text-[10px] text-primary">INDUSTRIAL TIER</p>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="flex-1 md:ml-64 min-h-screen flex flex-col">
+<!-- Header -->
+<header class="glass-header sticky top-0 z-40 h-20 flex items-center justify-between px-8 border-b border-outline-variant/30">
+<div>
+<h1 class="font-headline-md text-headline-md text-on-surface">Welcome back, Dr. Elena Vance</h1>
+<p class="text-on-surface-variant font-body-md text-[14px]">Your precision manufacturing hub is updated.</p>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 hover:bg-surface-container-low rounded-full transition-all text-on-surface-variant">
+<span class="material-symbols-outlined">search</span>
+</button>
+<button class="p-2 hover:bg-surface-container-low rounded-full transition-all text-on-surface-variant relative">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-error rounded-full border-2 border-surface"></span>
+</button>
+<button class="flex items-center gap-2 bg-primary text-white px-5 py-2.5 rounded-full font-label-caps hover:brightness-110 transition-all">
+<span class="material-symbols-outlined text-[18px]">add</span>
+                    NEW PROJECT
+                </button>
+</div>
+</header>
+<!-- Content Area -->
+<div class="p-8 max-w-[1440px] mx-auto w-full space-y-8">
+<!-- Row 1: Overview Stats -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+<div class="bg-surface-container-lowest p-6 rounded-2xl border border-outline-variant/30 card-shadow">
+<p class="font-label-caps text-on-surface-variant mb-1">TOTAL ORDERS</p>
+<div class="flex items-baseline gap-2">
+<span class="font-display text-headline-lg">124</span>
+<span class="text-primary font-body-md text-sm">+3 this month</span>
+</div>
+</div>
+<div class="bg-surface-container-lowest p-6 rounded-2xl border border-outline-variant/30 card-shadow">
+<p class="font-label-caps text-on-surface-variant mb-1">ACTIVE DOWNLOADS</p>
+<div class="flex items-baseline gap-2">
+<span class="font-display text-headline-lg">18</span>
+<span class="text-on-surface-variant font-body-md text-sm">files ready</span>
+</div>
+</div>
+<div class="bg-surface-container-lowest p-6 rounded-2xl border border-outline-variant/30 card-shadow">
+<p class="font-label-caps text-on-surface-variant mb-1">REWARD POINTS</p>
+<div class="flex items-baseline gap-2">
+<span class="font-display text-headline-lg">4,250</span>
+<span class="text-secondary font-body-md text-sm">Platinum status</span>
+</div>
+</div>
+<div class="bg-primary text-on-primary p-6 rounded-2xl shadow-xl shadow-primary/20 relative overflow-hidden">
+<div class="relative z-10">
+<p class="font-label-caps opacity-80 mb-1">ACCOUNT TIER</p>
+<span class="font-display text-headline-lg">Industrial</span>
+<div class="mt-2 flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px]">verified</span>
+<span class="font-body-md text-sm">Priority Manufacturing</span>
+</div>
+</div>
+<span class="material-symbols-outlined absolute -bottom-4 -right-4 text-[120px] opacity-10">precision_manufacturing</span>
+</div>
+</div>
+<!-- Row 2: Recent Orders -->
+<section>
+<div class="flex items-center justify-between mb-4">
+<h2 class="font-headline-md text-headline-md">Recent Physical Orders</h2>
+<a class="text-primary font-body-md text-sm hover:underline" href="#">View All Orders</a>
+</div>
+<div class="bg-surface-container-lowest border border-outline-variant/30 rounded-2xl overflow-hidden card-shadow">
+<table class="w-full text-left border-collapse">
+<thead class="bg-surface-container-low border-b border-outline-variant/30">
+<tr>
+<th class="px-6 py-4 font-label-caps text-on-surface-variant text-[11px]">ORDER ID</th>
+<th class="px-6 py-4 font-label-caps text-on-surface-variant text-[11px]">ITEM DETAILS</th>
+<th class="px-6 py-4 font-label-caps text-on-surface-variant text-[11px]">DATE</th>
+<th class="px-6 py-4 font-label-caps text-on-surface-variant text-[11px]">STATUS</th>
+<th class="px-6 py-4 font-label-caps text-on-surface-variant text-[11px]">ACTION</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/20">
+<tr class="hover:bg-surface-container-low/30 transition-all">
+<td class="px-6 py-4 font-body-md font-medium">#BK-90422</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded bg-surface-container-highest flex items-center justify-center">
+<span class="material-symbols-outlined text-primary">view_in_ar</span>
+</div>
+<div>
+<p class="font-body-md text-sm font-semibold">Turbine Blade Prototypes (V4)</p>
+<p class="text-[12px] text-on-surface-variant">PA12 Nylon, Bead Blasted</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-4 text-on-surface-variant text-sm">Oct 24, 2024</td>
+<td class="px-6 py-4">
+<span class="px-3 py-1 rounded-full bg-primary-container/10 text-primary-container text-[11px] font-bold border border-primary-container/20">IN PRODUCTION</span>
+</td>
+<td class="px-6 py-4">
+<button class="text-primary hover:text-primary-container font-medium text-sm">Track</button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low/30 transition-all">
+<td class="px-6 py-4 font-body-md font-medium">#BK-89912</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded bg-surface-container-highest flex items-center justify-center">
+<span class="material-symbols-outlined text-primary">settings_suggest</span>
+</div>
+<div>
+<p class="font-body-md text-sm font-semibold">Custom Bracket Assembly</p>
+<p class="text-[12px] text-on-surface-variant">Stainless Steel 316L</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-4 text-on-surface-variant text-sm">Oct 18, 2024</td>
+<td class="px-6 py-4">
+<span class="px-3 py-1 rounded-full bg-secondary-container/10 text-secondary text-[11px] font-bold border border-secondary-container/20">SHIPPED</span>
+</td>
+<td class="px-6 py-4">
+<button class="text-primary hover:text-primary-container font-medium text-sm">Track</button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low/30 transition-all">
+<td class="px-6 py-4 font-body-md font-medium">#BK-88741</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded bg-surface-container-highest flex items-center justify-center">
+<span class="material-symbols-outlined text-primary">category</span>
+</div>
+<div>
+<p class="font-body-md text-sm font-semibold">Enclosure Shell v2.1</p>
+<p class="text-[12px] text-on-surface-variant">ABS-M30, Matte Black</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-4 text-on-surface-variant text-sm">Oct 12, 2024</td>
+<td class="px-6 py-4">
+<span class="px-3 py-1 rounded-full bg-surface-variant/30 text-on-surface-variant text-[11px] font-bold border border-outline-variant/30">DELIVERED</span>
+</td>
+<td class="px-6 py-4">
+<button class="text-primary hover:text-primary-container font-medium text-sm">Invoices</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<!-- Row 3: Purchased STL Files -->
+<section>
+<div class="flex items-center justify-between mb-4">
+<h2 class="font-headline-md text-headline-md">Digital Assets Library</h2>
+<button class="flex items-center gap-1 text-primary font-body-md text-sm font-medium">
+<span class="material-symbols-outlined text-[18px]">grid_view</span>
+                        Manage All
+                    </button>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+<!-- Asset Card 1 -->
+<div class="bg-surface-container-lowest border border-outline-variant/30 rounded-2xl overflow-hidden card-shadow hover:translate-y-[-4px] transition-all">
+<div class="h-40 bg-surface-container-low relative flex items-center justify-center">
+<div class="w-full h-full bg-cover bg-center" data-alt="A clean, cinematic rendering of a complex 3D technical model, a high-precision mechanical gear assembly, showcased against a neutral studio background with soft ambient occlusion shadows. The lighting is crisp and professional, highlighting the intricate digital mesh and metallic textures in a light-mode aesthetic. The composition is centered, reflecting modern industrial design and digital engineering excellence." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDaeQqRGmgT8qB4e9IEqQwU0NuH-VurMSDH2--IGqUm4Do-kPo49T_c_-CKi22oHVIgdbQrGroZRD0xn5oYCev9BHuezH0z832TVcHBNepJRU5ZRIactaTmWkd8uag1hmVZy2ZaiZ9eJP-nWr0hWGtoGN175DMfy2At_yvv-UJqjBVN5nFZOpkpau4QbjNV1ElyLu1CBOpVqDIYnGCvnQPYH_XPKDLYWa_5TTisO5psHD8u6Adckzh_Rg')"></div>
+<span class="absolute top-3 right-3 bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded backdrop-blur-md">STL</span>
+</div>
+<div class="p-4">
+<h3 class="font-body-md font-bold text-sm mb-1">AeroVent Cooling System</h3>
+<p class="text-[12px] text-on-surface-variant mb-4">Version 2.4 • 42.1 MB</p>
+<div class="flex gap-2">
+<button class="flex-1 bg-primary text-white py-2 rounded-lg text-[12px] font-label-caps hover:brightness-110">DOWNLOAD</button>
+<button class="w-10 flex items-center justify-center border border-outline-variant text-on-surface-variant rounded-lg hover:bg-surface-container-low transition-all">
+<span class="material-symbols-outlined text-[18px]">info</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Asset Card 2 -->
+<div class="bg-surface-container-lowest border border-outline-variant/30 rounded-2xl overflow-hidden card-shadow hover:translate-y-[-4px] transition-all">
+<div class="h-40 bg-surface-container-low relative flex items-center justify-center">
+<div class="w-full h-full bg-cover bg-center" data-alt="A professional high-fidelity 3D visualization of an industrial robot arm joint component. The model features smooth surfaces and realistic shadow patterns, set in a minimalist white-lit environment. The aesthetic is clean and corporate, emphasizing technical precision and mechanical accuracy. Soft highlights on the edges define the shape against the pale background." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAj55Pml1E7DbTcgeXcM3NjUee7oXkTMo_FFvKZwAq7HO3SEOtnUHUmXXqvA5jheEY_P9uzTBzB8mRk432u1Ikxz5fCjtE-iCFcJxVumghgLHYU9qIvSBIl9qOIR8ZsbxKMR6_zWbw48epTkzv_uUk4ftpgPfrwjfqBGQQWAkG34LKeoIjvVxprx-B6uUpxYoeqdt7BBJeB-SMRIMprLj9Mhp1CVrClPb8sx4-oIs3W3vnm7793kcYAgw')"></div>
+<span class="absolute top-3 right-3 bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded backdrop-blur-md">OBJ</span>
+</div>
+<div class="p-4">
+<h3 class="font-body-md font-bold text-sm mb-1">Industrial Joint Assembly</h3>
+<p class="text-[12px] text-on-surface-variant mb-4">Version 1.0 • 128 MB</p>
+<div class="flex gap-2">
+<button class="flex-1 bg-primary text-white py-2 rounded-lg text-[12px] font-label-caps hover:brightness-110">DOWNLOAD</button>
+<button class="w-10 flex items-center justify-center border border-outline-variant text-on-surface-variant rounded-lg hover:bg-surface-container-low transition-all">
+<span class="material-symbols-outlined text-[18px]">info</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Asset Card 3 -->
+<div class="bg-surface-container-lowest border border-outline-variant/30 rounded-2xl overflow-hidden card-shadow hover:translate-y-[-4px] transition-all">
+<div class="h-40 bg-surface-container-low relative flex items-center justify-center">
+<div class="w-full h-full bg-cover bg-center" data-alt="A detailed 3D CAD rendering of a lightweight drone frame, showcasing the structural lattice design optimized for weight reduction. The model is presented in a bright, modern studio setting with soft lighting and a focus on clean geometry. The style is reminiscent of high-end manufacturing interfaces, using a palette of white and light gray tones." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBE6pRVbrFNotf4NfYidcZSPurfBIqj9QgIcLVUSK9zfZ55RDt2XvJEa9WCAOYhPTLEGYRTF4kgHJgUGwAbIKe1vi4p3xYwGUI8ow24sbZ9Fzs3DS0yp3x7-2voxprJB4aOV6x0YNxmZsjHtNDWh_62tjEZjL_4-qbZyC6BVrdaqyC2z2WbFDcYM4s_7ye4NINBzlUgk3vuGOCYcCDHvhYH6CJzSbO4xjHbhjy2AGP7wfa-dxCG7rXkrQ')"></div>
+<span class="absolute top-3 right-3 bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded backdrop-blur-md">STEP</span>
+</div>
+<div class="p-4">
+<h3 class="font-body-md font-bold text-sm mb-1">Drone Frame Lattice</h3>
+<p class="text-[12px] text-on-surface-variant mb-4">Version 3.2 • 15.4 MB</p>
+<div class="flex gap-2">
+<button class="flex-1 bg-primary text-white py-2 rounded-lg text-[12px] font-label-caps hover:brightness-110">DOWNLOAD</button>
+<button class="w-10 flex items-center justify-center border border-outline-variant text-on-surface-variant rounded-lg hover:bg-surface-container-low transition-all">
+<span class="material-symbols-outlined text-[18px]">info</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Asset Card 4 -->
+<div class="bg-surface-container-lowest border border-outline-variant/30 rounded-2xl overflow-hidden card-shadow hover:translate-y-[-4px] transition-all">
+<div class="h-40 bg-surface-container-low relative flex items-center justify-center">
+<div class="w-full h-full bg-cover bg-center" data-alt="A professional digital model of a dental implant abutment, visualized with medical-grade precision. The rendering is bright and airy, with soft white lighting that emphasizes the smooth finish and clean lines of the design. The environment is minimalist and clinical, reflecting the pharmaceutical and healthcare industry standards." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuC_tD5Arel95c6Ws7GnDvv6ef7sKw0DHOKfKV7oNGAutPrZLjFJy-xbUUiNAZ812wlL1ANXysDLjvqglSx3czAJjbZVPbDHR6ZuwxGvAauFQd86gKCtQ2O121LeyWl0dEjao8v7Zv9DOx-uWQ3d9vZG2t1JOlG1y6BoF89ld6BtkuzcjnRf6sQFa_U4CGmwjwzGyWv47AUQVrFf4OXHzztjLbjHPaaR6Tcf_Lu3NlJEbhFaTfk_PzIxLQ')"></div>
+<span class="absolute top-3 right-3 bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded backdrop-blur-md">STL</span>
+</div>
+<div class="p-4">
+<h3 class="font-body-md font-bold text-sm mb-1">Medical Abutment V9</h3>
+<p class="text-[12px] text-on-surface-variant mb-4">Version 1.2 • 8.9 MB</p>
+<div class="flex gap-2">
+<button class="flex-1 bg-primary text-white py-2 rounded-lg text-[12px] font-label-caps hover:brightness-110">DOWNLOAD</button>
+<button class="w-10 flex items-center justify-center border border-outline-variant text-on-surface-variant rounded-lg hover:bg-surface-container-low transition-all">
+<span class="material-symbols-outlined text-[18px]">info</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Row 4: Dual Column (Download History & Pending Offers) -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+<!-- Download History -->
+<div class="bg-surface-container-lowest p-6 rounded-2xl border border-outline-variant/30 card-shadow">
+<h2 class="font-headline-md text-headline-md mb-6">Recent File Access</h2>
+<div class="space-y-4">
+<div class="flex items-center gap-4 p-3 rounded-xl hover:bg-surface-container-low transition-all">
+<div class="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center">
+<span class="material-symbols-outlined text-primary">history</span>
+</div>
+<div class="flex-1">
+<p class="font-body-md text-sm font-semibold">AeroVent_V2.4_final.stl</p>
+<p class="text-[12px] text-on-surface-variant">Downloaded 2 hours ago • IP: 192.168.1.1</p>
+</div>
+</div>
+<div class="flex items-center gap-4 p-3 rounded-xl hover:bg-surface-container-low transition-all">
+<div class="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center">
+<span class="material-symbols-outlined text-primary">history</span>
+</div>
+<div class="flex-1">
+<p class="font-body-md text-sm font-semibold">Project_Solaris_Report.pdf</p>
+<p class="text-[12px] text-on-surface-variant">Accessed 1 day ago • Managed Access</p>
+</div>
+</div>
+<div class="flex items-center gap-4 p-3 rounded-xl hover:bg-surface-container-low transition-all">
+<div class="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center">
+<span class="material-symbols-outlined text-primary">history</span>
+</div>
+<div class="flex-1">
+<p class="font-body-md text-sm font-semibold">Custom_Bracket_Draft.step</p>
+<p class="text-[12px] text-on-surface-variant">Downloaded 3 days ago • Revision 2</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Pending Offers / Licensing -->
+<div class="bg-surface-container-lowest p-6 rounded-2xl border border-outline-variant/30 card-shadow">
+<h2 class="font-headline-md text-headline-md mb-6">B2B Licensing Negotiations</h2>
+<div class="space-y-4">
+<div class="p-4 bg-primary/5 rounded-xl border border-primary/20 flex items-center justify-between">
+<div>
+<p class="font-body-md text-sm font-bold text-on-surface">Global Enterprise License</p>
+<p class="text-[12px] text-primary">Under Review by Legal</p>
+</div>
+<span class="font-label-caps text-[11px] text-primary bg-white px-2 py-1 rounded">70% READY</span>
+</div>
+<div class="p-4 border border-outline-variant/30 rounded-xl flex items-center justify-between">
+<div>
+<p class="font-body-md text-sm font-bold text-on-surface">Precision Tech Resell Offer</p>
+<p class="text-[12px] text-on-surface-variant">Awaiting your response</p>
+</div>
+<button class="bg-surface-container-high px-3 py-1.5 rounded-lg text-[11px] font-label-caps hover:bg-surface-container-highest">VIEW OFFER</button>
+</div>
+<div class="p-4 border border-outline-variant/30 rounded-xl flex items-center justify-between opacity-60">
+<div>
+<p class="font-body-md text-sm font-bold text-on-surface">Sub-Arctic Distribution Rights</p>
+<p class="text-[12px] text-on-surface-variant">Expired on Oct 01</p>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant">lock</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Row 5: Account Information summary -->
+<section class="bg-surface-container-low p-8 rounded-3xl border border-outline-variant/20">
+<div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+<div>
+<p class="font-label-caps text-on-surface-variant mb-4">PROFILE DETAILS</p>
+<div class="space-y-2">
+<p class="font-body-md font-bold">Dr. Elena Vance</p>
+<p class="text-on-surface-variant text-sm">e.vance@blackmesa-engineering.com</p>
+<p class="text-on-surface-variant text-sm">+1 (555) 012-3456</p>
+</div>
+</div>
+<div>
+<p class="font-label-caps text-on-surface-variant mb-4">DEFAULT SHIPPING</p>
+<div class="space-y-2">
+<p class="font-body-md font-bold">Research Dept. 04</p>
+<p class="text-on-surface-variant text-sm">124 Industrial Way, Ste 200</p>
+<p class="text-on-surface-variant text-sm">New Mexico, 87102, USA</p>
+</div>
+</div>
+<div>
+<p class="font-label-caps text-on-surface-variant mb-4">BILLING & CURRENCY</p>
+<div class="flex items-center gap-4 mb-4">
+<span class="material-symbols-outlined text-primary">credit_card</span>
+<span class="font-body-md font-bold">Visa ending in •••• 9012</span>
+</div>
+<button class="text-primary font-label-caps text-[11px] border border-primary/20 px-4 py-2 rounded-full hover:bg-primary/5 transition-all">EDIT ACCOUNT SETTINGS</button>
+</div>
+</div>
+</section>
+</div>
+<!-- Footer -->
+<footer class="mt-auto w-full py-16 bg-surface-container-lowest border-t border-outline-variant/30">
+<div class="max-w-[1440px] mx-auto px-margin-desktop grid grid-cols-1 md:grid-cols-4 gap-gutter">
+<div class="col-span-1 md:col-span-1">
+<span class="font-display text-headline-md font-bold text-on-surface">Bekaa3D</span>
+<p class="mt-4 text-on-surface-variant font-body-md text-sm leading-relaxed">© 2024 Bekaa3D. Precision in every layer. High-performance manufacturing and digital precision for the modern age.</p>
+</div>
+<div class="flex flex-col gap-4">
+<h4 class="font-label-caps text-on-surface text-[12px]">QUICK LINKS</h4>
+<a class="text-on-surface-variant hover:text-primary transition-all text-sm" href="#">About Us</a>
+<a class="text-on-surface-variant hover:text-primary transition-all text-sm" href="#">Contact</a>
+<a class="text-on-surface-variant hover:text-primary transition-all text-sm" href="#">Shipping Info</a>
+</div>
+<div class="flex flex-col gap-4">
+<h4 class="font-label-caps text-on-surface text-[12px]">SUPPORT</h4>
+<a class="text-on-surface-variant hover:text-primary transition-all text-sm" href="#">Help Center</a>
+<a class="text-on-surface-variant hover:text-primary transition-all text-sm" href="#">Privacy Policy</a>
+<a class="text-on-surface-variant hover:text-primary transition-all text-sm" href="#">Terms of Service</a>
+</div>
+<div class="flex flex-col gap-4">
+<h4 class="font-label-caps text-on-surface text-[12px]">NEWSLETTER</h4>
+<p class="text-on-surface-variant text-sm">Stay updated with precision tech.</p>
+<div class="flex mt-2">
+<input class="bg-surface-container-low border-none rounded-l-lg px-4 py-2 text-sm w-full focus:ring-1 focus:ring-primary" placeholder="Email address" type="email"/>
+<button class="bg-primary text-white px-4 py-2 rounded-r-lg font-label-caps text-[10px]">SUB</button>
+</div>
+</div>
+</div>
+</footer>
+</main>
+<!-- Mobile Bottom Navigation -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full bg-surface-container-lowest border-t border-outline-variant/30 flex justify-around py-3 px-2 z-50">
+<a class="flex flex-col items-center gap-1 text-primary" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+<span class="text-[10px] font-label-caps">Home</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-on-surface-variant" href="#">
+<span class="material-symbols-outlined">package_2</span>
+<span class="text-[10px] font-label-caps">Orders</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-on-surface-variant" href="#">
+<span class="material-symbols-outlined">download</span>
+<span class="text-[10px] font-label-caps">Files</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-on-surface-variant" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="text-[10px] font-label-caps">Profile</span>
+</a>
+</nav>
+<script>
+        // Micro-interaction for dashboard hover effects
+        document.querySelectorAll('.card-shadow').forEach(card => {
+            card.addEventListener('mouseenter', () => {
+                card.style.transform = 'translateY(-2px)';
+                card.style.transition = 'transform 0.3s ease-out';
+            });
+            card.addEventListener('mouseleave', () => {
+                card.style.transform = 'translateY(0)';
+            });
+        });
+    </script>
+</body></html>
