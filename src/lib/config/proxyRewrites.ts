@@ -8,8 +8,8 @@
 //   health rule comes first.
 // - MEDIA_PROXY_TARGET (server-only, development only): the backend API does
 //   not serve /media/* locally (BACKEND-RESPONSE.md B4; backend VS-020).
-//   Point this at a static server over the backend's storage/media_public
-//   folder (e.g. `npx serve storage/media_public -l 8001`). Never registered
+//   Point this at the backend Compose stack's `media` service, which serves
+//   storage/media_public read-only on http://localhost:8001. Never registered
 //   in a production build: there nginx serves the same root-relative
 //   /media/... paths, so production URL semantics are unchanged.
 export interface ProxyRewrite {
