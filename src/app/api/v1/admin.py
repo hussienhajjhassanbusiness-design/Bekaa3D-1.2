@@ -35,6 +35,7 @@ from starlette.types import Receive, Scope, Send
 from app.catalog.api.product_images import admin_router as product_images_router
 from app.catalog.api.product_images import upload_router as product_image_upload_router
 from app.catalog.api.products import admin_router as products_router
+from app.catalog.api.promotions import admin_router as promotions_router
 from app.catalog.api.reference_data import admin_router as catalogue_router
 from app.core.rate_limit import enforce_rate_limit
 from app.engagement.api.admin_analytics import admin_router as engagement_analytics_router
@@ -58,6 +59,7 @@ from app.payments.api.admin_chargebacks import admin_router as admin_chargebacks
 from app.payments.api.admin_payments import admin_router as admin_payments_router
 from app.payments.api.admin_refunds import admin_router as admin_refunds_router
 from app.platform.api.audit_logs import admin_router as audit_logs_router
+from app.platform.api.home_hero import upload_router as home_hero_upload_router
 from app.platform.api.settings import admin_router as settings_router
 from app.reporting.api.admin_analytics import admin_router as business_analytics_router
 
@@ -98,10 +100,14 @@ router = APIRouter(
 # VS-007. Mounted here rather than carrying its own guard, so the settings
 # editor inherits the one boundary instead of re-deriving it.
 router.include_router(settings_router)
+# The homepage hero image upload (docs/homepage-hero-image.md).
+router.include_router(home_hero_upload_router)
 # VS-010. Category/material/colour CRUD, inheriting the same boundary.
 router.include_router(catalogue_router)
 # VS-013. Product CRUD with optimistic versioning.
 router.include_router(products_router)
+# Seasonal promotions: list, read, create, update / switch on or off.
+router.include_router(promotions_router)
 # VS-014. Product image upload, cover, order and soft delete.
 router.include_router(product_images_router)
 router.include_router(product_image_upload_router)

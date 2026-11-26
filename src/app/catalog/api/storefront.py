@@ -2,6 +2,7 @@
 (docs/storefront-catalogue.md). Public and rate limited; every read is visibility-filtered."""
 
 from collections.abc import Callable
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -22,12 +23,15 @@ from app.catalog.api.reference_data import PUBLIC_RATE_LIMIT, PUBLIC_RATE_WINDOW
 from app.catalog.api.storefront_schemas import ProductDetail, ProductListItem, ProductPage
 from app.catalog.domain.enums import ProductType
 from app.catalog.domain.exceptions import ProductValidationError
+from app.catalog.domain.promotions import AppliedPromotion, Promotion, apply_best
 from app.catalog.domain.slug import is_canonical_slug
 from app.catalog.domain.storefront import (
     MAX_RATING,
     MIN_FULL_TEXT_HITS,
+    PromotionCoverage,
     SearchMode,
     StorefrontFilter,
+    StorefrontProduct,
     StorefrontSort,
     fuzzy_eligible,
     has_trigram_word,
@@ -36,6 +40,7 @@ from app.catalog.domain.storefront import (
     search_term,
 )
 from app.catalog.infrastructure.product_image_repository import ProductImageRepository
+from app.catalog.infrastructure.promotion_repository import SqlPromotions
 from app.catalog.infrastructure.storefront_query import StorefrontProductQuery
 from app.core.config import get_settings
 from app.core.rate_limit import rate_limiter
@@ -79,6 +84,20 @@ def _validated[T](build: Callable[..., T], *args: Any, **values: Any) -> T:
         raise RequestValidationError(errors) from exc
 
 
+def _applied(
+    item: StorefrontProduct, promotions: list[Promotion], now: datetime
+) -> AppliedPromotion | None:
+    """Same rule as the cart's price (`SqlCartProductReader`), so the price shown is the
+    price charged."""
+    return apply_best(
+        product_id=item.product.id,
+        product_type=item.product.type,
+        list_price_cents=item.product.attributes.price_cents,
+        promotions=promotions,
+        now=now,
+    )
+
+
 async def _eligible(query: StorefrontProductQuery, term: str) -> bool:
     if not has_trigram_word(term):  # Free to check, so most short searches skip the round trip.
         return False
@@ -117,8 +136,22 @@ async def list_products(
     ),
     cursor: str | None = Query(default=None, description="Opaque cursor from a previous page."),
     limit: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    promotion_id: UUID | None = Query(
+        default=None,
+        description="Only the products an active promotion covers (the homepage campaign's "
+        "link). An unknown, inactive, scheduled or ended promotion lists nothing. Price "
+        "filters and the price sort use the list price.",
+    ),
     session: AsyncSession = Depends(get_session),
 ) -> ProductPage:
+    now = datetime.now(UTC)
+    promotions = await SqlPromotions(session).active_at(now)
+    coverage = None
+    if promotion_id is not None:
+        chosen = next((p for p in promotions if p.id == promotion_id), None)
+        if chosen is None:
+            return ProductPage(items=[], next_cursor=None)
+        coverage = PromotionCoverage(promotion_id=chosen.id, scope=chosen.fields.scope)
     term = search_term(q)
     filters = _validated(
         StorefrontFilter,
@@ -131,6 +164,7 @@ async def list_products(
         min_rating=min_rating,
         featured=featured,
         q=term,
+        promotion=coverage,
     )
     order = _validated(resolve_sort, sort, term)
     query = StorefrontProductQuery(session)
@@ -160,7 +194,12 @@ async def list_products(
         last, key = rows[limit - 1]
         next_cursor = encode_cursor(order, key, last.product.id, mode)
     return ProductPage(
-        items=[ProductListItem.from_storefront(r, images[r.product.id], media) for r in page],
+        items=[
+            ProductListItem.from_storefront(
+                r, images[r.product.id], media, _applied(r, promotions, now)
+            )
+            for r in page
+        ],
         next_cursor=next_cursor,
     )
 
@@ -179,4 +218,8 @@ async def read_product(slug: str, session: AsyncSession = Depends(get_session)) 
     if found is None:
         raise not_found_error()
     images = await ProductImageRepository(session).live_for_product(found.product.id)
-    return ProductDetail.from_storefront(found, images, get_settings().media_public_url)
+    now = datetime.now(UTC)
+    promotions = await SqlPromotions(session).active_at(now)
+    return ProductDetail.from_storefront(
+        found, images, get_settings().media_public_url, _applied(found, promotions, now)
+    )

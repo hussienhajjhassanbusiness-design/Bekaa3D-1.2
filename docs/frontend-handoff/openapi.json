@@ -2775,6 +2775,299 @@
         "title": "AdminProductUpdate",
         "type": "object"
       },
+      "AdminPromotionCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "active": {
+            "default": true,
+            "title": "Active",
+            "type": "boolean"
+          },
+          "badge_text": {
+            "anyOf": [
+              {
+                "maxLength": 24,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Badge Text"
+          },
+          "discount_type": {
+            "$ref": "#/components/schemas/DiscountType"
+          },
+          "discount_value": {
+            "description": "A whole percent from 1 to 100 for `percentage`; cents for `fixed`.",
+            "minimum": 1.0,
+            "title": "Discount Value",
+            "type": "integer"
+          },
+          "ends_at": {
+            "description": "Exclusive.",
+            "format": "date-time",
+            "title": "Ends At",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "product_ids": {
+            "description": "The products of a `selected` scope; empty for any other scope.",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 200,
+            "title": "Product Ids",
+            "type": "array"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/PromotionScope"
+          },
+          "starts_at": {
+            "format": "date-time",
+            "title": "Starts At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "discount_type",
+          "discount_value",
+          "scope",
+          "starts_at",
+          "ends_at"
+        ],
+        "title": "AdminPromotionCreate",
+        "type": "object"
+      },
+      "AdminPromotionList": {
+        "properties": {
+          "items": {
+            "description": "Newest first, at most 200.",
+            "items": {
+              "$ref": "#/components/schemas/AdminPromotionRead"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "AdminPromotionList",
+        "type": "object"
+      },
+      "AdminPromotionRead": {
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "badge_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Badge Text"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "discount_type": {
+            "$ref": "#/components/schemas/DiscountType"
+          },
+          "discount_value": {
+            "description": "A whole percent from 1 to 100 for `percentage`; cents for `fixed`.",
+            "title": "Discount Value",
+            "type": "integer"
+          },
+          "ends_at": {
+            "format": "date-time",
+            "title": "Ends At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "product_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Product Ids",
+            "type": "array"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/PromotionScope"
+          },
+          "starts_at": {
+            "format": "date-time",
+            "title": "Starts At",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PromotionStatus",
+            "description": "Derived now: scheduled, active, ended, inactive."
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "badge_text",
+          "discount_type",
+          "discount_value",
+          "scope",
+          "product_ids",
+          "starts_at",
+          "ends_at",
+          "active",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "AdminPromotionRead",
+        "type": "object"
+      },
+      "AdminPromotionUpdate": {
+        "additionalProperties": false,
+        "description": "Only the fields sent change; the merged promotion is validated as a whole.\n`active: false` switches a promotion off at once; `true` switches it back on.",
+        "properties": {
+          "active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active"
+          },
+          "badge_text": {
+            "anyOf": [
+              {
+                "maxLength": 24,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Badge Text"
+          },
+          "discount_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiscountType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "discount_value": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A whole percent from 1 to 100 for `percentage`; cents for `fixed`.",
+            "title": "Discount Value"
+          },
+          "ends_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ends At"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "product_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "maxItems": 200,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Ids"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PromotionScope"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "starts_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starts At"
+          }
+        },
+        "title": "AdminPromotionUpdate",
+        "type": "object"
+      },
       "AdminRefundBalanceRead": {
         "description": "What can still be refunded, per line and on the paid payment (VS-030 L2, L3).",
         "properties": {
@@ -3319,6 +3612,21 @@
           "cancel_reasons"
         ],
         "title": "AvailableActionRead",
+        "type": "object"
+      },
+      "Body_admin_replace_hero_image_api_v1_admin_home_hero_image_put": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "description": "JPEG, PNG or WebP, at most 10 MB and at least 400 px on each side; type read from content.",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_admin_replace_hero_image_api_v1_admin_home_hero_image_put",
         "type": "object"
       },
       "Body_admin_upload_product_image_api_v1_admin_products__product_id__images_post": {
@@ -5834,6 +6142,14 @@
         "title": "DimensionsRead",
         "type": "object"
       },
+      "DiscountType": {
+        "enum": [
+          "percentage",
+          "fixed"
+        ],
+        "title": "DiscountType",
+        "type": "string"
+      },
       "DroppedLineRead": {
         "properties": {
           "product_id": {
@@ -6869,6 +7185,27 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HeroImageRead": {
+        "properties": {
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The uploaded hero image, or null while the default brand visual shows.",
+            "title": "Url"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "HeroImageRead",
         "type": "object"
       },
       "LivenessRead": {
@@ -9171,6 +9508,10 @@
             "title": "Is Featured",
             "type": "boolean"
           },
+          "list_price": {
+            "$ref": "#/components/schemas/PriceRead",
+            "description": "The product's own price; above `price` only while `promotion` is set."
+          },
           "material": {
             "anyOf": [
               {
@@ -9208,7 +9549,8 @@
             "title": "Og Image Url"
           },
           "price": {
-            "$ref": "#/components/schemas/PriceRead"
+            "$ref": "#/components/schemas/PriceRead",
+            "description": "What the shop charges now: the promotional price while a promotion applies, else the list price. The cart and checkout charge this same price."
           },
           "production_lead_time_days": {
             "anyOf": [
@@ -9220,6 +9562,16 @@
               }
             ],
             "title": "Production Lead Time Days"
+          },
+          "promotion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProductPromotionRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "purchase_mode": {
             "anyOf": [
@@ -9272,6 +9624,8 @@
           "slug",
           "cover_image",
           "price",
+          "list_price",
+          "promotion",
           "category",
           "material",
           "colour",
@@ -9464,6 +9818,10 @@
             "title": "Is Featured",
             "type": "boolean"
           },
+          "list_price": {
+            "$ref": "#/components/schemas/PriceRead",
+            "description": "The product's own price; above `price` only while `promotion` is set."
+          },
           "material": {
             "anyOf": [
               {
@@ -9479,7 +9837,18 @@
             "type": "string"
           },
           "price": {
-            "$ref": "#/components/schemas/PriceRead"
+            "$ref": "#/components/schemas/PriceRead",
+            "description": "What the shop charges now: the promotional price while a promotion applies, else the list price. The cart and checkout charge this same price."
+          },
+          "promotion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProductPromotionRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "purchase_mode": {
             "anyOf": [
@@ -9510,6 +9879,8 @@
           "slug",
           "cover_image",
           "price",
+          "list_price",
+          "promotion",
           "category",
           "material",
           "colour",
@@ -9551,6 +9922,54 @@
         "title": "ProductPage",
         "type": "object"
       },
+      "ProductPromotionRead": {
+        "description": "The one promotion behind `price` right now (never more than one: no stacking).",
+        "properties": {
+          "badge_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Badge Text"
+          },
+          "discount_type": {
+            "$ref": "#/components/schemas/DiscountType"
+          },
+          "discount_value": {
+            "description": "A whole percent for `percentage`; cents for `fixed`. Display only.",
+            "title": "Discount Value",
+            "type": "integer"
+          },
+          "ends_at": {
+            "format": "date-time",
+            "title": "Ends At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "badge_text",
+          "discount_type",
+          "discount_value",
+          "ends_at"
+        ],
+        "title": "ProductPromotionRead",
+        "type": "object"
+      },
       "ProductType": {
         "description": "Permanent classification of a product (glossary: Product Type).",
         "enum": [
@@ -9558,6 +9977,27 @@
           "stl"
         ],
         "title": "ProductType",
+        "type": "string"
+      },
+      "PromotionScope": {
+        "enum": [
+          "all",
+          "physical",
+          "stl",
+          "selected"
+        ],
+        "title": "PromotionScope",
+        "type": "string"
+      },
+      "PromotionStatus": {
+        "description": "Derived from `active` and the window, never stored.",
+        "enum": [
+          "scheduled",
+          "active",
+          "ended",
+          "inactive"
+        ],
+        "title": "PromotionStatus",
         "type": "string"
       },
       "PublicImage": {
@@ -9594,6 +10034,81 @@
           "is_cover"
         ],
         "title": "PublicImage",
+        "type": "object"
+      },
+      "PublicPromotionList": {
+        "properties": {
+          "items": {
+            "description": "Active now, soonest ending first.",
+            "items": {
+              "$ref": "#/components/schemas/PublicPromotionRead"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "PublicPromotionList",
+        "type": "object"
+      },
+      "PublicPromotionRead": {
+        "description": "An active promotion, for the storefront's campaign banner. No product list: the\nproducts are `GET /api/v1/products?promotion_id=`, priced by the server.",
+        "properties": {
+          "badge_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Badge Text"
+          },
+          "discount_type": {
+            "$ref": "#/components/schemas/DiscountType"
+          },
+          "discount_value": {
+            "description": "A whole percent from 1 to 100 for `percentage`; cents for `fixed`.",
+            "title": "Discount Value",
+            "type": "integer"
+          },
+          "ends_at": {
+            "format": "date-time",
+            "title": "Ends At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/PromotionScope"
+          },
+          "starts_at": {
+            "format": "date-time",
+            "title": "Starts At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "badge_text",
+          "discount_type",
+          "discount_value",
+          "scope",
+          "starts_at",
+          "ends_at"
+        ],
+        "title": "PublicPromotionRead",
         "type": "object"
       },
       "PublicReviewRead": {
@@ -15559,6 +16074,114 @@
         ]
       }
     },
+    "/api/v1/admin/home/hero-image": {
+      "put": {
+        "operationId": "admin_replace_hero_image_api_v1_admin_home_hero_image_put",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_admin_replace_hero_image_api_v1_admin_home_hero_image_put"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HeroImageRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "MALFORMED_REQUEST: the body is not valid JSON."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No session, or MFA not completed."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "CSRF_INVALID."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Caller is not an administrator."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "UPLOAD_REJECTED or MALWARE_DETECTED; the current image stays."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the malware scanner is down (fail closed)."
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Replace the homepage hero image",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      }
+    },
     "/api/v1/admin/materials": {
       "get": {
         "operationId": "admin_list_materials_api_v1_admin_materials_get",
@@ -20320,6 +20943,396 @@
         ]
       }
     },
+    "/api/v1/admin/promotions": {
+      "get": {
+        "operationId": "admin_list_promotions_api_v1_admin_promotions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminPromotionList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No session, or MFA not completed."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unknown id, or caller is not an administrator."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "VALIDATION_ERROR: a field, or a control character in the path or query."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the database or Redis is unreachable; retry later."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "List promotions",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      },
+      "post": {
+        "operationId": "admin_create_promotion_api_v1_admin_promotions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPromotionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminPromotionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "MALFORMED_REQUEST: the body is not valid JSON."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No session, or MFA not completed."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "CSRF_INVALID."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unknown id, or caller is not an administrator."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "VALIDATION_ERROR: a broken promotion rule, named per field."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the database or Redis is unreachable; retry later."
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Create a promotion",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/promotions/{promotion_id}": {
+      "get": {
+        "operationId": "admin_read_promotion_api_v1_admin_promotions__promotion_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "promotion_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Promotion Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminPromotionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No session, or MFA not completed."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unknown id, or caller is not an administrator."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the database or Redis is unreachable; retry later."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Read one promotion",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      },
+      "patch": {
+        "operationId": "admin_update_promotion_api_v1_admin_promotions__promotion_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "promotion_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Promotion Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPromotionUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminPromotionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "MALFORMED_REQUEST: the body is not valid JSON."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No session, or MFA not completed."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "CSRF_INVALID."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unknown id, or caller is not an administrator."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "VALIDATION_ERROR: a broken promotion rule, named per field."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the database or Redis is unreachable; retry later."
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Update a promotion, or switch it on or off",
+        "tags": [
+          "admin",
+          "admin"
+        ]
+      }
+    },
     "/api/v1/admin/refunds": {
       "get": {
         "operationId": "list_refunds_api_v1_admin_refunds_get",
@@ -24722,6 +25735,83 @@
         ]
       }
     },
+    "/api/v1/home/hero-image": {
+      "get": {
+        "description": "A missing or unusable row reads as the default visual: the hero is decoration, and a\nbroken value must never take the homepage down with it.",
+        "operationId": "read_hero_image_api_v1_home_hero_image_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HeroImageRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "AUTH_REQUIRED: no valid session."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "VALIDATION_ERROR: a field, or a control character in the path or query."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "RATE_LIMITED."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the database or Redis is unreachable; retry later."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "The homepage hero image",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
     "/api/v1/materials": {
       "get": {
         "operationId": "list_public_materials_api_v1_materials_get",
@@ -28285,6 +29375,25 @@
               "title": "Limit",
               "type": "integer"
             }
+          },
+          {
+            "description": "Only the products an active promotion covers (the homepage campaign's link). An unknown, inactive, scheduled or ended promotion lists nothing. Price filters and the price sort use the list price.",
+            "in": "query",
+            "name": "promotion_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only the products an active promotion covers (the homepage campaign's link). An unknown, inactive, scheduled or ended promotion lists nothing. Price filters and the price sort use the list price.",
+              "title": "Promotion Id"
+            }
           }
         ],
         "responses": {
@@ -28571,6 +29680,82 @@
         "summary": "List a visible product's reviews",
         "tags": [
           "reviews"
+        ]
+      }
+    },
+    "/api/v1/promotions": {
+      "get": {
+        "operationId": "list_active_promotions_api_v1_promotions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicPromotionList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "AUTH_REQUIRED: no valid session."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "VALIDATION_ERROR: a field, or a control character in the path or query."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "RATE_LIMITED."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR: unexpected fault; details are logged, never returned."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE: the database or Redis is unreachable; retry later."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "The promotions active now",
+        "tags": [
+          "catalogue"
         ]
       }
     },

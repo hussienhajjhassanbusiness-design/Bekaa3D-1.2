@@ -1,4 +1,5 @@
-"""`SqlCartProductReader` (VS-022 plan §3.1): one query per batch, and the same
+"""`SqlCartProductReader` (VS-022 plan §3.1): one product query per batch (plus one for
+the active promotions, docs/promotions.md), and the same
 visibility rule as the storefront, through the one shared `listed_predicate()`."""
 
 import ast
@@ -104,7 +105,12 @@ async def test_one_query_for_a_batch_with_covers_and_unknown_ids(
     finally:
         event.remove(db_engine.sync_engine, "before_cursor_execute", _count)
 
-    assert len([s for s in statements if s.lstrip().upper().startswith("SELECT")]) == 1
+    selects = [s for s in statements if s.lstrip().upper().startswith("SELECT")]
+    # One query for the products, one for the promotions active now (their product sets
+    # are read only when one is active): constant per batch, whatever its size.
+    assert len(selects) == 2
+    assert "FROM products" in selects[0]
+    assert "FROM promotions" in selects[1]
     assert set(found) == {physical.id, stl.id}
     assert found[physical.id].price_cents == 2500
     assert found[physical.id].max_quantity_per_line == 5

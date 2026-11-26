@@ -236,6 +236,12 @@ async def update_setting(
     )
     ip = client_ip(request)
     try:
+        if definition_for(key).upload_only and body.value is not None:
+            # Only its upload endpoint names a file, after storing it; null (restore the
+            # default) is the one value a client may send here.
+            raise InvalidSettingValueError(
+                key, ["value is set by uploading a file; send null to clear it"]
+            )
         result = await use_case.execute(
             key=key,
             value=body.value,

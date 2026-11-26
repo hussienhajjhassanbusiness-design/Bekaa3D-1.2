@@ -19,7 +19,8 @@ from app.platform.domain.settings_registry import (
     validate_value,
 )
 
-# SRS 15.4's keys plus VS-028, VS-034, VS-046, VS-050 and its audit's, written out rather
+# SRS 15.4's keys plus VS-028, VS-034, VS-046, VS-050 and its audit's, and the homepage hero
+# image (docs/homepage-hero-image.md), written out rather
 # than derived from the registry: an expectation built from the thing under test would pass
 # just as happily if a key were deleted.
 REQUIRED_KEYS = (
@@ -41,6 +42,7 @@ REQUIRED_KEYS = (
     "security_token_retention_period",
     "session_retention_period",
     "custom_request_attachment_retention",
+    "homepage_hero_image",
 )
 
 
@@ -87,6 +89,8 @@ def test_no_internal_setting_is_marked_public() -> None:
         "security_token_retention_period",
         "session_retention_period",
         "custom_request_attachment_retention",
+        # Its URL is public through GET /api/v1/home/hero-image; the setting is not.
+        "homepage_hero_image",
     }
     for key in internal:
         assert REGISTRY[key].is_public is False, f"{key} must not be public"
@@ -351,6 +355,7 @@ def test_each_setting_declares_the_type_its_consumers_expect() -> None:
         "security_token_retention_period": SettingType.DURATION,
         "session_retention_period": SettingType.DURATION,
         "custom_request_attachment_retention": SettingType.DURATION,
+        "homepage_hero_image": SettingType.STRING,
     }
     assert {key: definition.type for key, definition in REGISTRY.items()} == expected
 
@@ -431,3 +436,42 @@ def test_the_cash_switch_is_a_strict_boolean() -> None:
     for refused in (0, 1, "true", None):
         with pytest.raises(InvalidSettingValueError):
             validate_value("cash_payment_enabled", refused)
+
+
+# --------------------------------------------------------------------------
+# The homepage hero image (docs/homepage-hero-image.md)
+# --------------------------------------------------------------------------
+
+
+def test_the_hero_image_is_an_unset_upload_only_internal_string() -> None:
+    definition = REGISTRY["homepage_hero_image"]
+    assert definition.type is SettingType.STRING
+    assert (definition.default, definition.nullable) == (None, True)
+    assert definition.upload_only is True
+    assert definition.is_public is False
+    assert [d.key for d in REGISTRY.values() if d.upload_only] == ["homepage_hero_image"]
+
+
+@pytest.mark.parametrize("extension", ["jpg", "png", "webp"])
+def test_the_hero_image_accepts_a_generated_storage_key(extension: str) -> None:
+    key = f"home/hero/{'a1' * 16}.{extension}"
+    assert validate_value("homepage_hero_image", key) == key
+    assert validate_value("homepage_hero_image", None) is None
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "https://evil.example/x.png",
+        "/media/home/hero/" + "a1" * 16 + ".png",
+        "home/hero/../../etc/passwd",
+        "products/" + "a1" * 16 + ".png",
+        "home/hero/" + "a1" * 16 + ".gif",
+        "home/hero/" + "A1" * 16 + ".png",
+        "home/hero/short.png",
+        "<img src=x onerror=alert(1)>",
+    ],
+)
+def test_the_hero_image_refuses_anything_but_a_storage_key(value: str) -> None:
+    with pytest.raises(InvalidSettingValueError):
+        validate_value("homepage_hero_image", value)

@@ -337,7 +337,7 @@ def test_a_postgres_outage_is_a_structured_503(monkeypatch: pytest.MonkeyPatch, 
 LIST_KEYS = {
     "id", "type", "name", "slug", "cover_image", "price", "category", "material", "colour",
     "is_available", "purchase_mode", "accepted_payment_methods", "average_rating",
-    "review_count", "is_featured",
+    "review_count", "is_featured", "list_price", "promotion",
 }  # fmt: skip
 DETAIL_KEYS = LIST_KEYS | {
     "description", "images", "seo_title", "seo_description", "og_image_url", "dimensions",
