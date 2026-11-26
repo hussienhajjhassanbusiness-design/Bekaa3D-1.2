@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>My Wishlist | Bekaa3D Precision Engineering</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700;800&amp;family=Inter:wght@400;500&amp;family=JetBrains+Mono:wght@600&amp;display=swap" rel="stylesheet"/>
+<!-- Icons -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                "on-error-container": "#93000a",
+                "tertiary-container": "#b14b6f",
+                "on-tertiary-fixed": "#3f001c",
+                "surface-dim": "#d3daef",
+                "secondary-container": "#b9f474",
+                "on-secondary-fixed-variant": "#2e4f00",
+                "on-primary-fixed": "#002204",
+                "on-tertiary-container": "#ffedf0",
+                "on-secondary-fixed": "#0f2000",
+                "error-container": "#ffdad6",
+                "on-tertiary": "#ffffff",
+                "on-secondary": "#ffffff",
+                "secondary-fixed": "#b9f474",
+                "outline": "#707a6c",
+                "primary-fixed-dim": "#88d982",
+                "on-surface-variant": "#40493d",
+                "surface-container": "#e9edff",
+                "surface": "#f9f9ff",
+                "on-secondary-container": "#437000",
+                "on-primary-container": "#cbffc2",
+                "surface-variant": "#dce2f7",
+                "surface-bright": "#f9f9ff",
+                "error": "#ba1a1a",
+                "inverse-on-surface": "#edf0ff",
+                "primary-fixed": "#a3f69c",
+                "on-primary-fixed-variant": "#005312",
+                "tertiary-fixed": "#ffd9e2",
+                "inverse-surface": "#293040",
+                "primary": "#0d631b",
+                "tertiary-fixed-dim": "#ffb1c7",
+                "on-surface": "#141b2b",
+                "surface-container-low": "#f1f3ff",
+                "on-primary": "#ffffff",
+                "surface-container-highest": "#dce2f7",
+                "outline-variant": "#bfcaba",
+                "secondary-fixed-dim": "#9ed75b",
+                "primary-container": "#2e7d32",
+                "tertiary": "#923357",
+                "surface-container-lowest": "#ffffff",
+                "secondary": "#3e6a00",
+                "surface-container-high": "#e1e8fd",
+                "inverse-primary": "#88d982",
+                "on-tertiary-fixed-variant": "#7f2448",
+                "surface-tint": "#1b6d24",
+                "on-background": "#141b2b",
+                "on-error": "#ffffff",
+                "background": "#f9f9ff"
+              },
+              "borderRadius": {
+                "DEFAULT": "4px",
+                "lg": "8px",
+                "xl": "12px",
+                "full": "9999px"
+              },
+              "spacing": {
+                "unit": "4px",
+                "margin-desktop": "64px",
+                "gutter": "24px",
+                "max-width": "1440px",
+                "margin-mobile": "16px"
+              },
+              "fontFamily": {
+                "headline-lg-mobile": ["Hanken Grotesk"],
+                "label-caps": ["JetBrains Mono"],
+                "body-md": ["Inter"],
+                "body-lg": ["Inter"],
+                "headline-md": ["Hanken Grotesk"],
+                "headline-lg": ["Hanken Grotesk"],
+                "display": ["Hanken Grotesk"]
+              },
+              "fontSize": {
+                "headline-lg-mobile": ["24px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                "label-caps": ["12px", {"lineHeight": "1.0", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                "headline-md": ["20px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                "headline-lg": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                "display": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "800"}]
+              }
+            },
+          },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .grid-pattern {
+            background-image: linear-gradient(to right, rgba(13, 99, 27, 0.05) 1px, transparent 1px),
+                              linear-gradient(to bottom, rgba(13, 99, 27, 0.05) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+        .glass-panel {
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            background: rgba(255, 255, 255, 0.8);
+        }
+        .card-hover:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 10px 10px -5px rgba(0, 0, 0, 0.02);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen overflow-x-hidden">
+<!-- Sidebar Navigation Shell -->
+<aside class="h-screen w-64 fixed left-0 top-0 bg-surface dark:bg-surface-container-lowest border-r border-outline-variant dark:border-outline flex flex-col py-8 px-6 z-40 hidden md:flex">
+<div class="mb-12">
+<h1 class="font-display text-headline-md text-primary dark:text-primary-fixed font-extrabold tracking-tight">Bekaa3D</h1>
+<p class="font-body-md text-sm text-on-surface-variant opacity-70">Engineering Precision</p>
+</div>
+<nav class="flex-1 space-y-2">
+<!-- Exact labels from JSON mapping -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant dark:text-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-dim transition-colors duration-200 group" href="#">
+<span class="material-symbols-outlined text-primary">account_circle</span>
+<span class="font-body-md">Profile</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant dark:text-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-dim transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">shopping_bag</span>
+<span class="font-body-md">Orders</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant dark:text-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-dim transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">deployed_code</span>
+<span class="font-body-md">STL Downloads</span>
+</a>
+<!-- Active State: Wishlist -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-primary dark:text-primary-fixed font-bold border-r-4 border-primary dark:border-primary-fixed bg-surface-container-low dark:bg-surface-container-high" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">favorite</span>
+<span class="font-body-md">Wishlist</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant dark:text-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-dim transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">rate_review</span>
+<span class="font-body-md">Reviews</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant dark:text-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-dim transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">local_offer</span>
+<span class="font-body-md">Offers</span>
+</a>
+</nav>
+<div class="mt-auto pt-8 border-t border-outline-variant space-y-2">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant dark:text-surface-variant hover:bg-surface-container-high" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-body-md">Account Settings</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-error hover:bg-error-container/10 transition-colors" href="#">
+<span class="material-symbols-outlined">logout</span>
+<span class="font-body-md">Logout</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="md:ml-64 relative min-h-screen">
+<!-- Subtle Grid Background -->
+<div class="absolute inset-0 grid-pattern pointer-events-none opacity-50"></div>
+<!-- Top Header Navigation -->
+<header class="sticky top-0 z-30 flex justify-between items-center w-full px-8 py-4 bg-white/80 dark:bg-surface/80 backdrop-blur-xl border-b border-outline-variant dark:border-outline">
+<div class="flex items-center gap-4">
+<button class="md:hidden p-2 rounded-full hover:bg-surface-container-high">
+<span class="material-symbols-outlined">menu</span>
+</button>
+<div class="hidden md:block">
+<span class="font-label-caps text-primary uppercase tracking-widest text-[10px]">Portal / Wishlist</span>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<div class="relative hidden sm:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
+<input class="pl-10 pr-4 py-2 bg-surface-container-low border border-outline-variant rounded-full text-sm focus:ring-2 focus:ring-primary/20 outline-none w-64 transition-all focus:w-80" placeholder="Search saved items..." type="text"/>
+</div>
+<div class="flex items-center gap-3 border-l border-outline-variant pl-6">
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<div class="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container font-bold text-xs">
+                        BK
+                    </div>
+</div>
+</div>
+</header>
+<!-- Page Header -->
+<section class="px-8 pt-12 pb-6">
+<div class="max-w-max-width mx-auto">
+<h2 class="font-display font-bold text-headline-lg text-on-surface mb-2">My Wishlist</h2>
+<p class="font-body-md text-on-surface-variant max-w-2xl">Manage your curated selection of high-precision components and industrial 3D hardware. Ready for the next build?</p>
+</div>
+</section>
+<!-- Filter & Sort Bar -->
+<section class="px-8 pb-8">
+<div class="max-w-max-width mx-auto flex flex-col sm:flex-row justify-between items-center gap-4 py-4 border-y border-outline-variant">
+<div class="flex items-center gap-4">
+<span class="font-label-caps text-on-surface-variant">Showing 6 items</span>
+<div class="h-4 w-px bg-outline-variant"></div>
+<button class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-outline-variant hover:bg-surface-container-high transition-colors text-sm">
+<span class="material-symbols-outlined text-[18px]">filter_list</span>
+<span>Filter</span>
+</button>
+</div>
+<div class="flex items-center gap-3">
+<label class="font-label-caps text-on-surface-variant whitespace-nowrap">Sort by:</label>
+<select class="bg-transparent border-none font-body-md text-sm focus:ring-0 cursor-pointer text-primary font-semibold">
+<option>Recently Added</option>
+<option>Price: Low to High</option>
+<option>Price: High to Low</option>
+<option>Rating</option>
+</select>
+</div>
+</div>
+</section>
+<!-- Product Grid -->
+<section class="px-8 pb-20">
+<div class="max-w-max-width mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-gutter">
+<!-- Card 1 -->
+<div class="group relative bg-surface-container-lowest rounded-xl overflow-hidden border border-outline-variant card-hover transition-all duration-300 flex flex-col">
+<div class="relative aspect-square bg-surface-container-low overflow-hidden">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A professional high-resolution studio photograph of a precision-engineered 3D printer extruder nozzle. The lighting is cold and clinical, emphasizing the metallic textures of brass and hardened steel against a neutral, minimal light-mode background. The focus is sharp, capturing the micro-machined details of the output orifice. The overall aesthetic is high-end industrial design, reflecting Bekaa3D's corporate technology brand." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCZfxtkf164aiBLfTGi4sLenTy_a9qP_LZqMpHG0mC-WP6ofQi1_nig1YAWmYoULtfxY6ywYWuvZpgYH-RQvI6uqkbe9zbzsaGboI_RUMnYOw6NkisZZasJ8DwKew9sCAXfVwD5wyMOA0QDpAWQ4RBYHdnVXnSrSDkDV3hLf_Ha7pBNRRhhu5G5xkBCyH1wtdOf7DiA_GcV8y_zgoXlXpN7e4ANE7S74LluXCAdWU2cHWeUUs5aUM7g1Q"/>
+<!-- Action Overlay -->
+<div class="absolute top-4 right-4 flex flex-col gap-2">
+<button class="w-10 h-10 rounded-full glass-panel flex items-center justify-center text-error hover:bg-error hover:text-white transition-all shadow-sm">
+<span class="material-symbols-outlined text-[20px]">delete</span>
+</button>
+<button class="w-10 h-10 rounded-full glass-panel flex items-center justify-center text-on-surface hover:bg-primary hover:text-white transition-all shadow-sm">
+<span class="material-symbols-outlined text-[20px]">visibility</span>
+</button>
+</div>
+<div class="absolute bottom-4 left-4">
+<span class="bg-secondary-container text-on-secondary-container text-[10px] font-label-caps px-2 py-1 rounded">In Stock</span>
+</div>
+</div>
+<div class="p-6 flex-1 flex flex-col">
+<div class="flex justify-between items-start mb-2">
+<h3 class="font-headline-md text-lg leading-tight group-hover:text-primary transition-colors">Titanium X-Gen Nozzle Kit</h3>
+<span class="font-headline-md text-primary">$124.00</span>
+</div>
+<div class="flex items-center gap-1 mb-6">
+<span class="material-symbols-outlined text-amber-400 text-[16px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-amber-400 text-[16px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-amber-400 text-[16px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-amber-400 text-[16px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-amber-400 text-[16px]" style="font-variation-settings: 'FILL' 1;">star_half</span>
+<span class="text-xs text-on-surface-variant ml-2">(48 Reviews)</span>
+</div>
+<button class="mt-auto w-full bg-primary-container text-white py-3 rounded-lg font-label-caps text-sm hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[18px]">shopping_cart</span>
+                            ADD TO CART
+                        </button>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="group relative bg-surface-container-lowest rounded-xl overflow-hidden border border-outline-variant card-hover transition-all duration-300 flex flex-col">
+<div class="relative aspect-square bg-surface-container-low overflow-hidden">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A macro photography shot of industrial-grade carbon fiber 3D printing filament spool. The spool is sleek black with reflective metallic labeling, set against a pristine, well-lit engineering laboratory environment. The lighting creates a high-contrast look that highlights the matte texture of the filament. Modern, minimalist, and luxury manufacturing aesthetic in a light-mode palette of whites and grays." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCTAcCCoby-zODxbEjq7wZjWEj5QUNZmhaE3c536DaQ0z4f2vLsfoLc_5ptarswK5N4Vtp0EzGmdz3WOr0sfgBl9Da4_UwGHkUjteCGGhoRPtEXaeyL8wD95RtXWArQn5PvnSckPEee7LYiWbqCe29Vp-f1ESdZsicLPjm_7ZiTOLlP20O2z9XuRJLYL-tcX9COGkdpeIHOI4wO8niEfAKgiJ-oP_GpmUP2jpOz3Nzg84F_nV37oQUDqQ"/>
+<div class="absolute top-4 right-4 flex flex-col gap-2">
+<button class="w-10 h-10 rounded-full glass-panel flex items-center justify-center text-error hover:bg-error hover:text-white transition-all shadow-sm">
+<span class="material-symbols-outlined text-[20px]">delete</span>
+</button>
+<button class="w-10 h-10 rounded-full glass-panel flex items-center justify-center text-on-surface hover:bg-primary hover:text-white transition-all shadow-sm">
+<span class="material-symbols-outlined text-[20px]">visibility</span>
+</button>
+</div>
+</div>
+<div class="p-6 flex-1 flex flex-col">
+<div class="flex justify-between items-start mb-2">
+<h3 class="font-headline-md text-lg leading-tight group-hover:text-primary transition-colors">CarbonFiber Pro 1.75mm</h3>
+<span class="font-headline-md text-primary">$89.50</span>
+</div>
+<div class="flex items-center gap-1 mb-6">
+<span class="material-symbols-outlined text-amber-400 text-[16px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-amber-400 text-[16px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-amber-400 text-[16px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-amber-400 text-[16px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-amber-400 text-[16px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="text-xs text-on-surface-variant ml-2">(124 Reviews)</span>
+</div>
+<button class="mt-auto w-full bg-primary-container text-white py-3 rounded-lg font-label-caps text-sm hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[18px]">shopping_cart</span>
+                            ADD TO CART
+                        </button>
+</div>
+</div>
+<!-- Card 3 -->
+<div class="group relative bg-surface-container-lowest rounded-xl overflow-hidden border border-outline-variant card-hover transition-all duration-300 flex flex-col">
+<div class="relative aspect-square bg-surface-container-low overflow-hidden">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A professional product rendering of a sleek, high-precision linear rail system for 3D printers. The rails are made of polished stainless steel and black anodized aluminum, reflecting a clean, bright industrial workspace. The composition is dynamic and architectural, focusing on the engineering precision of the motion components. Part of a premium, modern design system for advanced hardware." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAsbPRAHHse2m8lgo1p6Rxt5vjiXwH3HB3XYNCF0cyq8Yu6SDrR4Vcldk5mKz5pmNARcpgDq1YFxJhmZgYjl2V40SKe3IWhp3y4nGkhGSfwg7w5D_VSJRgY6_8T3CjxRm7NascBhyMEJ0-vVmnp_BXg9vS3doQ5n-Q6v3ek-VexOhaxCAP7GbDifg4VKEnaot3HIsGeKaJPvCDjm2jRfchxXGMP5vG-iJM4NlbJLa9N1KnORz4vEdIexA"/>
+<div class="absolute top-4 right-4 flex flex-col gap-2">
+<button class="w-10 h-10 rounded-full glass-panel flex items-center justify-center text-error hover:bg-error hover:text-white transition-all shadow-sm">
+<span class="material-symbols-outlined text-[20px]">delete</span>
+</button>
+<button class="w-10 h-10 rounded-full glass-panel flex items-center justify-center text-on-surface hover:bg-primary hover:text-white transition-all shadow-sm">
+<span class="material-symbols-outlined text-[20px]">visibility</span>
+</button>
+</div>
+</div>
+<div class="p-6 flex-1 flex flex-col">
+<div class="flex justify-between items-start mb-2">
+<h3 class="font-headline-md text-lg leading-tight group-hover:text-primary transition-colors">Ultra-Glide Linear Rail V3</h3>
+<span class="font-headline-md text-primary">$210.00</span>
+</div>
+<div class="flex items-center gap-1 mb-6">
+<span class="material-symbols-outlined text-amber-400 text-[16px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-amber-400 text-[16px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-amber-400 text-[16px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-amber-400 text-[16px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-on-surface-variant opacity-30 text-[16px]">star</span>
+<span class="text-xs text-on-surface-variant ml-2">(12 Reviews)</span>
+</div>
+<button class="mt-auto w-full bg-primary-container text-white py-3 rounded-lg font-label-caps text-sm hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[18px]">shopping_cart</span>
+                            ADD TO CART
+                        </button>
+</div>
+</div>
+<!-- Card 4 -->
+<div class="group relative bg-surface-container-lowest rounded-xl overflow-hidden border border-outline-variant card-hover transition-all duration-300 flex flex-col">
+<div class="relative aspect-square bg-surface-container-low overflow-hidden">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A high-tech digital control board for a 3D printer, showing complex circuitry, green PCB components, and golden contact points. The board is presented on a white surface with soft, diffuse lighting that creates an expensive, corporate tech feel. Minimal shadows and crisp edges highlight the engineering complexity. Soft emerald accents consistent with the brand's primary color." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDz6mQAEpOm3CejtHPw8byUc4TArD0PtiOZimnq_aSVoheDEyJ7peInvWEdKpaehO6U_JuUs3Bt-hC9JlGNejtPdmt35oXXrCFpd5Ok6Bpy3nKbPy6D0BPqrg_XvJNuRKL35_yl4gLmuASUZNjdEWWAg3EXU7eoPXlf6XXMn5BKB5CUh2LnxIK6uCAl59dFKZa7wtdtyocSTPN57HxAVm5B05QPFs4fVhNxqzEHw0LDnfrENGomLXxFjQ"/>
+<div class="absolute top-4 right-4 flex flex-col gap-2">
+<button class="w-10 h-10 rounded-full glass-panel flex items-center justify-center text-error hover:bg-error hover:text-white transition-all shadow-sm">
+<span class="material-symbols-outlined text-[20px]">delete</span>
+</button>
+<button class="w-10 h-10 rounded-full glass-panel flex items-center justify-center text-on-surface hover:bg-primary hover:text-white transition-all shadow-sm">
+<span class="material-symbols-outlined text-[20px]">visibility</span>
+</button>
+</div>
+</div>
+<div class="p-6 flex-1 flex flex-col">
+<div class="flex justify-between items-start mb-2">
+<h3 class="font-headline-md text-lg leading-tight group-hover:text-primary transition-colors">Quantum Logic Mainboard</h3>
+<span class="font-headline-md text-primary">$345.00</span>
+</div>
+<div class="flex items-center gap-1 mb-6">
+<span class="material-symbols-outlined text-amber-400 text-[16px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-amber-400 text-[16px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-amber-400 text-[16px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-amber-400 text-[16px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-amber-400 text-[16px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="text-xs text-on-surface-variant ml-2">(31 Reviews)</span>
+</div>
+<button class="mt-auto w-full bg-primary-container text-white py-3 rounded-lg font-label-caps text-sm hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[18px]">shopping_cart</span>
+                            ADD TO CART
+                        </button>
+</div>
+</div>
+<!-- Card 5 -->
+<div class="group relative bg-surface-container-lowest rounded-xl overflow-hidden border border-outline-variant card-hover transition-all duration-300 flex flex-col">
+<div class="relative aspect-square bg-surface-container-low overflow-hidden">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A studio photograph of a premium magnetic PEI spring steel build plate. The plate has a distinct golden-textured surface reflecting high-quality manufacturing. The image is set in a bright, modern 3D printing studio with professional lighting that emphasizes the material's durability and precision. The background is a clean, neutral white with a subtle hint of a tech-focused workspace." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCggy8ThqEoVNjUGnOtSDIIfQggblLR4FessyL3nUJRvjp89jDkhNO8U3oMZ0tOd-kQRp5KHAWgjTdwmUngJIMHLRRy-OGG8MsZDuNEKj333QtGP-yPaGoX9lnRvFpYxWdjTluqA1_jJtWYg0n1mCm0dW2-l8LT-ApjLLFQ4JAftgcIdAALLh2bDirdF3gnGTu74J4FMJRAlHBjBN0M7j7AEZSSHE-gqx5kmCWETxv-rdmqB9IuAtFSpg"/>
+<div class="absolute top-4 right-4 flex flex-col gap-2">
+<button class="w-10 h-10 rounded-full glass-panel flex items-center justify-center text-error hover:bg-error hover:text-white transition-all shadow-sm">
+<span class="material-symbols-outlined text-[20px]">delete</span>
+</button>
+<button class="w-10 h-10 rounded-full glass-panel flex items-center justify-center text-on-surface hover:bg-primary hover:text-white transition-all shadow-sm">
+<span class="material-symbols-outlined text-[20px]">visibility</span>
+</button>
+</div>
+<div class="absolute bottom-4 left-4">
+<span class="bg-primary-container text-white text-[10px] font-label-caps px-2 py-1 rounded">20% OFF</span>
+</div>
+</div>
+<div class="p-6 flex-1 flex flex-col">
+<div class="flex justify-between items-start mb-2">
+<h3 class="font-headline-md text-lg leading-tight group-hover:text-primary transition-colors">Textured PEI Build Plate</h3>
+<div class="text-right">
+<span class="font-headline-md text-primary block">$45.00</span>
+<span class="text-xs line-through text-on-surface-variant opacity-50">$56.00</span>
+</div>
+</div>
+<div class="flex items-center gap-1 mb-6">
+<span class="material-symbols-outlined text-amber-400 text-[16px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-amber-400 text-[16px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-amber-400 text-[16px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-amber-400 text-[16px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-amber-400 text-[16px]" style="font-variation-settings: 'FILL' 1;">star_half</span>
+<span class="text-xs text-on-surface-variant ml-2">(89 Reviews)</span>
+</div>
+<button class="mt-auto w-full bg-primary-container text-white py-3 rounded-lg font-label-caps text-sm hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[18px]">shopping_cart</span>
+                            ADD TO CART
+                        </button>
+</div>
+</div>
+<!-- Card 6 -->
+<div class="group relative bg-surface-container-lowest rounded-xl overflow-hidden border border-outline-variant card-hover transition-all duration-300 flex flex-col">
+<div class="relative aspect-square bg-surface-container-low overflow-hidden">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A detailed professional shot of an industrial stepper motor for a 3D printer. The motor is clean, metallic, with visible wiring and a precision shaft. It sits on a white clinical background that emphasizes the corporate engineering brand identity of Bekaa3D. High-key lighting, minimalist composition, and a focus on mechanical reliability." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDEdFfmvhcavJaM--azwMMq4pAwhKM57FgH4xhIPoDfW30jW9IN3-HS_SSFwAtOEwFD_9Vw_QSm8IhoXF5VVslmfOox1RgEBzaLYXE2yVjMVByfzk7ZLVjUpfz_x_mmjd0NDmL90p2AMZYFj69l4ggfG_s9VU02Q1Iib2G9ow90IBx0VLQ1O3yOLxoMhpcyfE6zhYStXKWmgm8BEsXqR4SRVxeVt9LJwC80WgqzkZgPJugDDjM3eQFgyQ"/>
+<div class="absolute top-4 right-4 flex flex-col gap-2">
+<button class="w-10 h-10 rounded-full glass-panel flex items-center justify-center text-error hover:bg-error hover:text-white transition-all shadow-sm">
+<span class="material-symbols-outlined text-[20px]">delete</span>
+</button>
+<button class="w-10 h-10 rounded-full glass-panel flex items-center justify-center text-on-surface hover:bg-primary hover:text-white transition-all shadow-sm">
+<span class="material-symbols-outlined text-[20px]">visibility</span>
+</button>
+</div>
+</div>
+<div class="p-6 flex-1 flex flex-col">
+<div class="flex justify-between items-start mb-2">
+<h3 class="font-headline-md text-lg leading-tight group-hover:text-primary transition-colors">High-Torque Stepper Motor</h3>
+<span class="font-headline-md text-primary">$32.90</span>
+</div>
+<div class="flex items-center gap-1 mb-6">
+<span class="material-symbols-outlined text-amber-400 text-[16px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-amber-400 text-[16px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-amber-400 text-[16px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-amber-400 text-[16px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-on-surface-variant opacity-30 text-[16px]">star</span>
+<span class="text-xs text-on-surface-variant ml-2">(215 Reviews)</span>
+</div>
+<button class="mt-auto w-full bg-primary-container text-white py-3 rounded-lg font-label-caps text-sm hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[18px]">shopping_cart</span>
+                            ADD TO CART
+                        </button>
+</div>
+</div>
+</div>
+<!-- Empty State Suggestion (Hidden by default) -->
+<div class="hidden flex-col items-center justify-center py-32 text-center" id="empty-state">
+<div class="w-24 h-24 rounded-full bg-surface-container flex items-center justify-center mb-6">
+<span class="material-symbols-outlined text-primary text-[48px]">favorite</span>
+</div>
+<h3 class="font-display text-headline-md text-on-surface mb-2">Your wishlist is empty</h3>
+<p class="text-on-surface-variant mb-8 max-w-sm">Save your favorite precision parts to keep track of your next engineering project.</p>
+<a class="px-8 py-4 bg-primary text-white rounded-lg font-label-caps text-sm" href="#">Explore Catalog</a>
+</div>
+</section>
+<!-- Footer Pagination or Actions -->
+<footer class="px-8 py-12 border-t border-outline-variant bg-surface-container-low/50">
+<div class="max-w-max-width mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
+<div>
+<h4 class="font-label-caps text-primary mb-2">Need help?</h4>
+<p class="text-sm text-on-surface-variant">Our engineering support team is available 24/7 for technical inquiries.</p>
+</div>
+<div class="flex gap-4">
+<button class="px-6 py-2 border border-outline-variant rounded-lg hover:bg-surface-container-high transition-all text-sm font-label-caps">Share Wishlist</button>
+<button class="px-6 py-2 bg-on-background text-white rounded-lg hover:opacity-90 transition-all text-sm font-label-caps">Add All to Cart</button>
+</div>
+</div>
+</footer>
+</main>
+<!-- Mobile Navigation Shell (Bottom Bar) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full bg-white/90 backdrop-blur-lg border-t border-outline-variant px-6 py-3 flex justify-between items-center z-50">
+<a class="flex flex-col items-center text-on-surface-variant" href="#">
+<span class="material-symbols-outlined">home</span>
+<span class="text-[10px] font-label-caps">Home</span>
+</a>
+<a class="flex flex-col items-center text-on-surface-variant" href="#">
+<span class="material-symbols-outlined">search</span>
+<span class="text-[10px] font-label-caps">Search</span>
+</a>
+<a class="flex flex-col items-center text-primary font-bold" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">favorite</span>
+<span class="text-[10px] font-label-caps">Wishlist</span>
+</a>
+<a class="flex flex-col items-center text-on-surface-variant" href="#">
+<span class="material-symbols-outlined">shopping_cart</span>
+<span class="text-[10px] font-label-caps">Cart</span>
+</a>
+<a class="flex flex-col items-center text-on-surface-variant" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="text-[10px] font-label-caps">Account</span>
+</a>
+</nav>
+<script>
+        // Micro-interactions for Remove buttons
+        document.querySelectorAll('.text-error').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const card = e.target.closest('.group');
+                card.style.opacity = '0';
+                card.style.transform = 'scale(0.95)';
+                setTimeout(() => {
+                    card.remove();
+                    // Check if grid is empty
+                    const remaining = document.querySelectorAll('.grid > div');
+                    if(remaining.length === 0) {
+                        document.querySelector('.grid').classList.add('hidden');
+                        document.getElementById('empty-state').classList.remove('hidden');
+                    }
+                }, 300);
+            });
+        });
+
+        // Search bar interaction
+        const searchInput = document.querySelector('input[type="text"]');
+        searchInput.addEventListener('focus', () => {
+            searchInput.closest('.relative').classList.add('ring-primary/20');
+        });
+        searchInput.addEventListener('blur', () => {
+            searchInput.closest('.relative').classList.remove('ring-primary/20');
+        });
+    </script>
+</body></html>

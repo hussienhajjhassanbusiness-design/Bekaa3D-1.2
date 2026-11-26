@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Upload STL File | Bekaa3D Admin</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@600&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@100..900&family=Inter:wght@100..900&family=JetBrains+Mono:wght@100..900&display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .blueprint-bg {
+            background-color: #f9f9ff;
+            background-image: 
+                linear-gradient(#e9edff 1px, transparent 1px),
+                linear-gradient(90deg, #e9edff 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #bfcaba;
+            border-radius: 10px;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-dim": "#d3daef",
+                        "surface-container": "#e9edff",
+                        "on-tertiary-fixed": "#3f001c",
+                        "surface-container-high": "#e1e8fd",
+                        "primary-container": "#2e7d32",
+                        "secondary-container": "#b9f474",
+                        "on-primary-container": "#cbffc2",
+                        "on-surface-variant": "#40493d",
+                        "on-primary-fixed-variant": "#005312",
+                        "secondary-fixed-dim": "#9ed75b",
+                        "on-surface": "#141b2b",
+                        "inverse-surface": "#293040",
+                        "surface-tint": "#1b6d24",
+                        "outline": "#707a6c",
+                        "on-primary": "#ffffff",
+                        "surface-container-low": "#f1f3ff",
+                        "primary-fixed-dim": "#88d982",
+                        "on-error": "#ffffff",
+                        "background": "#f9f9ff",
+                        "tertiary-fixed": "#ffd9e2",
+                        "tertiary-container": "#b14b6f",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary-fixed": "#b9f474",
+                        "on-error-container": "#93000a",
+                        "secondary": "#3e6a00",
+                        "on-secondary-fixed": "#0f2000",
+                        "surface": "#f9f9ff",
+                        "surface-bright": "#f9f9ff",
+                        "on-primary-fixed": "#002204",
+                        "inverse-on-surface": "#edf0ff",
+                        "on-secondary-fixed-variant": "#2e4f00",
+                        "on-secondary-container": "#437000",
+                        "on-background": "#141b2b",
+                        "surface-container-highest": "#dce2f7",
+                        "primary": "#0d631b",
+                        "error": "#ba1a1a",
+                        "on-tertiary-container": "#ffedf0",
+                        "tertiary": "#923357",
+                        "outline-variant": "#bfcaba",
+                        "on-tertiary": "#ffffff",
+                        "inverse-primary": "#88d982",
+                        "primary-fixed": "#a3f69c",
+                        "tertiary-fixed-dim": "#ffb1c7",
+                        "on-tertiary-fixed-variant": "#7f2448",
+                        "on-secondary": "#ffffff",
+                        "surface-variant": "#dce2f7",
+                        "error-container": "#ffdad6"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "margin-desktop": "64px",
+                        "gutter": "24px",
+                        "max-width": "1440px",
+                        "margin-mobile": "16px",
+                        "unit": "4px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Hanken Grotesk"],
+                        "body-md": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "headline-lg": ["Hanken Grotesk"],
+                        "display": ["Hanken Grotesk"],
+                        "label-caps": ["JetBrains Mono"],
+                        "headline-lg-mobile": ["Hanken Grotesk"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["20px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                        "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                        "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                        "headline-lg": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                        "display": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                        "label-caps": ["12px", {"lineHeight": "1.0", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "headline-lg-mobile": ["24px", {"lineHeight": "1.2", "fontWeight": "700"}]
+                    }
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-surface text-on-surface font-body-md blueprint-bg min-h-screen">
+<!-- SideNavBar Anchor -->
+<aside class="h-screen w-64 fixed left-0 top-0 bg-surface dark:bg-surface-container-lowest border-r border-outline-variant dark:border-outline flex flex-col py-8 px-6 z-50 overflow-y-auto custom-scrollbar">
+<div class="mb-10">
+<h1 class="font-display text-headline-md text-primary dark:text-primary-fixed mb-1">Bekaa3D</h1>
+<p class="text-on-surface-variant text-xs font-label-caps uppercase tracking-widest">Engineering Precision</p>
+</div>
+<nav class="flex-1 space-y-2">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant dark:text-surface-variant hover:text-primary dark:hover:text-primary-fixed hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="account_circle">account_circle</span>
+<span class="font-body-md">Profile</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant dark:text-surface-variant hover:text-primary dark:hover:text-primary-fixed hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="shopping_bag">shopping_bag</span>
+<span class="font-body-md">Orders</span>
+</a>
+<!-- Active State: STL Downloads -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-primary dark:text-primary-fixed font-bold border-r-4 border-primary dark:border-primary-fixed bg-surface-container-low dark:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="deployed_code" style="font-variation-settings: 'FILL' 1;">deployed_code</span>
+<span class="font-body-md">STL Downloads</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant dark:text-surface-variant hover:text-primary dark:hover:text-primary-fixed hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="favorite">favorite</span>
+<span class="font-body-md">Wishlist</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant dark:text-surface-variant hover:text-primary dark:hover:text-primary-fixed hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="rate_review">rate_review</span>
+<span class="font-body-md">Reviews</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant dark:text-surface-variant hover:text-primary dark:hover:text-primary-fixed hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="local_offer">local_offer</span>
+<span class="font-body-md">Offers</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant dark:text-surface-variant hover:text-primary dark:hover:text-primary-fixed hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-body-md">Account Settings</span>
+</a>
+</nav>
+<div class="mt-auto pt-6 border-t border-outline-variant">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-error transition-colors duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+<span class="font-body-md">Logout</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="ml-64 min-h-screen relative pb-24">
+<!-- Top Sticky Header -->
+<header class="sticky top-0 w-full z-40 bg-white/80 dark:bg-surface/80 backdrop-blur-xl border-b border-outline-variant dark:border-outline flex justify-between items-center px-margin-desktop py-4">
+<div class="flex items-center gap-4">
+<h2 class="font-headline-md text-headline-md text-on-surface">Upload New Asset</h2>
+<span class="bg-secondary-container text-on-secondary-container px-3 py-1 rounded-full text-xs font-label-caps tracking-tighter">Draft Mode</span>
+</div>
+<div class="flex items-center gap-4">
+<button class="px-6 py-2 border border-primary text-primary font-label-caps rounded hover:bg-surface-container-low transition-all active:scale-[0.98]">
+                    SAVE DRAFT
+                </button>
+<button class="px-8 py-2 bg-primary-container text-on-primary-container font-label-caps rounded shadow-sm hover:brightness-110 transition-all active:scale-[0.98]">
+                    PUBLISH
+                </button>
+</div>
+</header>
+<div class="max-w-[1200px] mx-auto px-margin-desktop py-10 space-y-8">
+<!-- Section 1: General Information -->
+<section class="bg-white rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-outline-variant p-8 relative overflow-hidden">
+<div class="flex items-center gap-2 mb-8">
+<span class="material-symbols-outlined text-primary" data-icon="info">info</span>
+<h3 class="font-headline-md text-headline-md">General Information</h3>
+</div>
+<div class="grid grid-cols-12 gap-gutter">
+<div class="col-span-8 space-y-6">
+<div>
+<label class="block font-label-caps text-on-surface-variant mb-2">STL TITLE</label>
+<input class="w-full bg-surface border-outline-variant rounded-lg p-3 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all" placeholder="e.g. Industrial Turbine Blade v4" type="text"/>
+</div>
+<div>
+<label class="block font-label-caps text-on-surface-variant mb-2">DESCRIPTION</label>
+<div class="border border-outline-variant rounded-lg overflow-hidden">
+<div class="bg-surface-container-low p-2 border-b border-outline-variant flex gap-4">
+<button class="p-1 hover:bg-white rounded"><span class="material-symbols-outlined text-sm" data-icon="format_bold">format_bold</span></button>
+<button class="p-1 hover:bg-white rounded"><span class="material-symbols-outlined text-sm" data-icon="format_italic">format_italic</span></button>
+<button class="p-1 hover:bg-white rounded"><span class="material-symbols-outlined text-sm" data-icon="format_list_bulleted">format_list_bulleted</span></button>
+<button class="p-1 hover:bg-white rounded"><span class="material-symbols-outlined text-sm" data-icon="link">link</span></button>
+</div>
+<textarea class="w-full border-none focus:ring-0 p-4 resize-none" placeholder="Provide technical details, application notes, and recommended material..." rows="6"></textarea>
+</div>
+</div>
+</div>
+<div class="col-span-4 space-y-6">
+<div>
+<label class="block font-label-caps text-on-surface-variant mb-2">CATEGORY</label>
+<select class="w-full bg-surface border-outline-variant rounded-lg p-3 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none appearance-none">
+<option>Aerospace Components</option>
+<option>Architectural Models</option>
+<option>Mechanical Assemblies</option>
+<option>Artistic & Figurines</option>
+</select>
+</div>
+<div>
+<label class="block font-label-caps text-on-surface-variant mb-2">PRICE (USD)</label>
+<div class="relative">
+<span class="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant">$</span>
+<input class="w-full bg-surface border-outline-variant rounded-lg p-3 pl-8 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none" placeholder="0.00" type="number"/>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Section 2: Technical Specifications -->
+<section class="bg-white rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-outline-variant p-8">
+<div class="flex items-center gap-2 mb-8">
+<span class="material-symbols-outlined text-primary" data-icon="settings_suggest">settings_suggest</span>
+<h3 class="font-headline-md text-headline-md">Technical Specifications</h3>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+<div>
+<label class="block font-label-caps text-on-surface-variant mb-2">LICENSE TYPE</label>
+<div class="space-y-2">
+<label class="flex items-center gap-3 p-3 rounded-lg border border-outline-variant cursor-pointer hover:bg-surface-container-low transition-colors">
+<input class="text-primary focus:ring-primary" name="license" type="radio"/>
+<div>
+<p class="text-sm font-semibold">Personal</p>
+<p class="text-xs text-on-surface-variant">Non-commercial use only</p>
+</div>
+</label>
+<label class="flex items-center gap-3 p-3 rounded-lg border border-primary bg-primary/5 cursor-pointer">
+<input checked="" class="text-primary focus:ring-primary" name="license" type="radio"/>
+<div>
+<p class="text-sm font-semibold">Commercial</p>
+<p class="text-xs text-on-surface-variant">Re-sell printed products</p>
+</div>
+</label>
+<label class="flex items-center gap-3 p-3 rounded-lg border border-outline-variant cursor-pointer hover:bg-surface-container-low transition-colors">
+<input class="text-primary focus:ring-primary" name="license" type="radio"/>
+<div>
+<p class="text-sm font-semibold">Editorial</p>
+<p class="text-xs text-on-surface-variant">News/Media purpose only</p>
+</div>
+</label>
+</div>
+</div>
+<div class="space-y-6">
+<div>
+<label class="block font-label-caps text-on-surface-variant mb-2">LAYER HEIGHT (MM)</label>
+<input class="w-full bg-surface border-outline-variant rounded-lg p-3" placeholder="e.g. 0.1mm - 0.2mm" type="text"/>
+</div>
+<div>
+<label class="block font-label-caps text-on-surface-variant mb-2">EST. PRINT TIME</label>
+<div class="flex items-center gap-2">
+<input class="w-20 bg-surface border-outline-variant rounded-lg p-3 text-center" placeholder="HH" type="number"/>
+<span>:</span>
+<input class="w-20 bg-surface border-outline-variant rounded-lg p-3 text-center" placeholder="MM" type="number"/>
+</div>
+</div>
+</div>
+<div class="space-y-6">
+<div>
+<label class="block font-label-caps text-on-surface-variant mb-2">COMPATIBLE PRINTERS</label>
+<div class="border border-outline-variant rounded-lg p-3 bg-surface max-h-40 overflow-y-auto custom-scrollbar">
+<div class="space-y-2">
+<label class="flex items-center gap-2 text-sm"><input checked="" class="rounded text-primary focus:ring-primary" type="checkbox"/> Creality Ender Series</label>
+<label class="flex items-center gap-2 text-sm"><input checked="" class="rounded text-primary focus:ring-primary" type="checkbox"/> Prusa i3 MK3S+</label>
+<label class="flex items-center gap-2 text-sm"><input class="rounded text-primary focus:ring-primary" type="checkbox"/> Bambu Lab X1C</label>
+<label class="flex items-center gap-2 text-sm"><input class="rounded text-primary focus:ring-primary" type="checkbox"/> Elegoo Mars 3 (Resin)</label>
+<label class="flex items-center gap-2 text-sm"><input class="rounded text-primary focus:ring-primary" type="checkbox"/> Anycubic Kobra</label>
+</div>
+</div>
+</div>
+<div>
+<label class="block font-label-caps text-on-surface-variant mb-2">FILE SIZE</label>
+<p class="text-lg font-semibold text-primary">24.5 MB</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Section 3: File & Media Management -->
+<section class="grid grid-cols-12 gap-8">
+<!-- STL Upload -->
+<div class="col-span-12 lg:col-span-7 bg-white rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-outline-variant p-8">
+<div class="flex items-center gap-2 mb-6">
+<span class="material-symbols-outlined text-primary" data-icon="cloud_upload">cloud_upload</span>
+<h3 class="font-headline-md text-headline-md">Asset Upload</h3>
+</div>
+<div class="border-2 border-dashed border-outline-variant rounded-2xl p-10 flex flex-col items-center justify-center text-center bg-surface-container-low/50 hover:bg-primary/5 transition-colors group cursor-pointer">
+<div class="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-primary text-3xl" data-icon="upload_file">upload_file</span>
+</div>
+<h4 class="font-bold text-lg mb-1">Primary .STL File</h4>
+<p class="text-on-surface-variant text-sm mb-6">Drag and drop your asset here, or <span class="text-primary font-bold underline">browse files</span></p>
+<p class="text-xs font-label-caps text-on-surface-variant opacity-60">MAX FILE SIZE: 250MB</p>
+<div class="mt-6 w-full max-w-sm bg-white border border-outline-variant rounded-lg p-3 flex items-center gap-3">
+<span class="material-symbols-outlined text-primary" data-icon="description">description</span>
+<div class="flex-1 text-left">
+<p class="text-xs font-bold truncate">turbine_housing_v4_final.stl</p>
+<div class="w-full bg-surface-container-high h-1 rounded-full mt-1 overflow-hidden">
+<div class="bg-primary h-full w-[100%]"></div>
+</div>
+</div>
+<span class="material-symbols-outlined text-error cursor-pointer text-sm" data-icon="close">close</span>
+</div>
+</div>
+</div>
+<!-- Thumbnail -->
+<div class="col-span-12 lg:col-span-5 bg-white rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-outline-variant p-8 flex flex-col">
+<div class="flex items-center gap-2 mb-6">
+<span class="material-symbols-outlined text-primary" data-icon="image">image</span>
+<h3 class="font-headline-md text-headline-md">Thumbnail</h3>
+</div>
+<div class="flex-1 flex flex-col items-center justify-center">
+<div class="w-48 h-48 rounded-xl border border-outline-variant overflow-hidden bg-surface relative group">
+<img class="w-full h-full object-cover" data-alt="A professional, clean 3D render of a mechanical turbine blade with complex lattice structures. The object is silver metallic with high-specular reflections, set against a pristine white background with subtle ambient shadows. The style is modern industrial, high-precision engineering photography." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAS7T7kumq2Y4schDpEZFlbo9ypM2R3RJxQd_TUsGdOqRLWXubI9osj1zRoNvTjakFWMYEHaafEGkfuk-ATzUd6kT_r1jtr2HMpu2WvLe-WQhd-73TUDFlYAeHCZQssCXP2Eq7PTcyiomuc5RnxJHaZ59K2XeUgdpIUQExLQQo2VEqLIOVE3zdj-zeaCoVQeg9a2iZr9wzLyyClqx1CkuQ4fKQU9l1Boypw5IBJRftDDU1rPGaBToJGSQ"/>
+<div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity cursor-pointer">
+<span class="text-white font-label-caps">CHANGE PHOTO</span>
+</div>
+</div>
+<p class="mt-4 text-xs text-on-surface-variant text-center px-4">Marketplace listing image. Recommended 1000x1000px JPG/PNG.</p>
+</div>
+</div>
+<!-- Preview Gallery -->
+<div class="col-span-12 bg-white rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-outline-variant p-8">
+<div class="flex items-center gap-2 mb-6">
+<span class="material-symbols-outlined text-primary" data-icon="photo_library">photo_library</span>
+<h3 class="font-headline-md text-headline-md">Preview Gallery</h3>
+</div>
+<div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+<div class="aspect-square rounded-lg border border-outline-variant overflow-hidden bg-surface flex items-center justify-center hover:border-primary transition-colors cursor-pointer group">
+<span class="material-symbols-outlined text-outline group-hover:text-primary" data-icon="add_circle">add_circle</span>
+</div>
+<div class="aspect-square rounded-lg border border-outline-variant overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A detailed technical close-up shot of a 3D printed mechanical component showing fine layer lines and precise overhangs. The material is high-quality PLA in industrial grey. Soft, diffused professional studio lighting emphasizes the structural integrity and precision of the print." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDaFCnVQ5AIPcYtBkC96xEXjQBJzqRJhOQBxlxtdX3I6pdgUY1R9d9JqdK64DZo0odXvAatDauTRFGKXA3Mqz_LpmUBP48XiNlW5cUd6Mr1PGqCJEvSjY1-xByLiSHxRUU6HDOVKuV_al1jUs5k1ZzP-HSO1PWMTL6qz4ndxVE-fv-duU8e550CnGNsWwX3NIOL7JI5UEHGWaXXyUlkm8C57xsMGfX_zPb9ly_w60zV8aE69FCXqidEeA"/>
+</div>
+<div class="aspect-square rounded-lg border border-outline-variant overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A cross-section diagram render of a turbine blade, highlighting the internal cooling channels and structural supports in a blue-tinted wireframe view. The aesthetic is clean, technical, and digital, typical of high-end CAD software visualization." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAjx16Cd-puymyqZttb68KKXia8q_wyjvXzDLyB362oP5z26tLRhjRaib6DTEpS6lr9DIaq2hAOx4psEnZa096bEGkbA0ZsQGBcUpPXcHekMg3nvL61LI5uOqc8hjT9J7cyMaHxsAGo3VVFFvIyKU3OJINkDxe-BvJuK3EtD5vwDrCHLBiviKuVFqltVXomf_t2WV0w4IR_rXI6ImKwudAHhhihTNhxDAngaIuX18RGFYx4kBIr__6VWQ"/>
+</div>
+<div class="aspect-square rounded-lg border border-outline-variant overflow-hidden opacity-50 grayscale">
+<img class="w-full h-full object-cover" data-alt="Action shot of a high-end FDM 3D printer head depositing material onto a print bed, creating the base of a complex geometric part. Golden hour natural light streams through a modern workshop window, creating a warm, productive atmosphere." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC24NyhQwms4Fo-vlOplFE5_D7MFNeT05atiNEf-f4UMnj1Mt5qSm4YSKFMSrw6IyAdbu4Zz_WSzPe2-ZQy4BK5WyE4iJohHqGDKVqLDAEQDfTI4IAFs48NP4PJmqgFCoWw45SbA_ol0IlCcr1EX4THFxLjvqfuWWaL6QloGexkBufuAfsQPV3QMmj7rHPw5wPZbjIi7Mwjfe1odS2FHlgAgZ_MDIAABCtJ8Xl8tGDEhCAgqWCj1vkNjw"/>
+</div>
+</div>
+</div>
+</section>
+<!-- Section 4 & 5: Marketplace & SEO -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+<!-- Marketplace Settings -->
+<section class="bg-white rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-outline-variant p-8">
+<div class="flex items-center gap-2 mb-8">
+<span class="material-symbols-outlined text-primary" data-icon="storefront">storefront</span>
+<h3 class="font-headline-md text-headline-md">Marketplace Settings</h3>
+</div>
+<div class="space-y-6">
+<div class="flex items-center justify-between p-4 bg-surface rounded-lg">
+<div>
+<p class="font-bold">Enable 'Make an Offer'</p>
+<p class="text-xs text-on-surface-variant">Allow users to negotiate pricing</p>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input class="sr-only peer" type="checkbox" value=""/>
+<div class="w-11 h-6 bg-outline-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+<div class="flex items-center justify-between p-4 bg-surface rounded-lg">
+<div>
+<p class="font-bold">Featured Product</p>
+<p class="text-xs text-on-surface-variant">Prioritize in homepage carousels</p>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox" value=""/>
+<div class="w-11 h-6 bg-outline-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+</div>
+</section>
+<!-- SEO Configuration -->
+<section class="bg-white rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-outline-variant p-8">
+<div class="flex items-center gap-2 mb-8">
+<span class="material-symbols-outlined text-primary" data-icon="search_check">search_check</span>
+<h3 class="font-headline-md text-headline-md">SEO Configuration</h3>
+</div>
+<div class="space-y-4">
+<div>
+<label class="block font-label-caps text-on-surface-variant mb-1 text-[10px]">META TITLE</label>
+<input class="w-full bg-surface border-outline-variant rounded-lg p-2 text-sm" placeholder="Industrial Turbine Blade STL - High Performance Parts" type="text"/>
+</div>
+<div>
+<label class="block font-label-caps text-on-surface-variant mb-1 text-[10px]">META DESCRIPTION</label>
+<textarea class="w-full bg-surface border-outline-variant rounded-lg p-2 text-sm resize-none" placeholder="Download high-precision industrial turbine blade STL files for aerospace prototyping and mechanical testing..." rows="3"></textarea>
+</div>
+</div>
+</section>
+</div>
+</div>
+<!-- Floating Quick Status (Visual Flair) -->
+<div class="fixed bottom-8 right-8 flex flex-col gap-3 pointer-events-none">
+<div class="glass-panel border border-outline-variant px-4 py-2 rounded-full shadow-lg flex items-center gap-3 animate-bounce">
+<div class="w-2 h-2 rounded-full bg-primary-container animate-pulse"></div>
+<span class="text-xs font-label-caps text-primary">System Ready for Processing</span>
+</div>
+</div>
+</main>
+<script>
+        // Micro-interactions for the form fields
+        const inputs = document.querySelectorAll('input, select, textarea');
+        inputs.forEach(input => {
+            input.addEventListener('focus', () => {
+                input.parentElement.closest('div').classList.add('scale-[1.005]');
+            });
+            input.addEventListener('blur', () => {
+                input.parentElement.closest('div').classList.remove('scale-[1.005]');
+            });
+        });
+
+        // Simple drag & drop visual feedback
+        const dropzone = document.querySelector('.border-dashed');
+        if(dropzone) {
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropzone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    dropzone.classList.add('border-primary', 'bg-primary/5');
+                });
+            });
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropzone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    dropzone.classList.remove('border-primary', 'bg-primary/5');
+                });
+            });
+        }
+    </script>
+</body></html>

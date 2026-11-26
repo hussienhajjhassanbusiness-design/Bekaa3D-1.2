@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>User Profile | Bekaa3D Precision Engineering</title>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700;800&amp;family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@600&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-container-low": "#f1f3ff",
+                    "on-secondary": "#ffffff",
+                    "tertiary-fixed": "#ffd9e2",
+                    "surface-tint": "#1b6d24",
+                    "inverse-on-surface": "#edf0ff",
+                    "surface-container-high": "#e1e8fd",
+                    "on-surface-variant": "#40493d",
+                    "on-primary-fixed-variant": "#005312",
+                    "on-primary": "#ffffff",
+                    "inverse-surface": "#293040",
+                    "secondary-fixed": "#b9f474",
+                    "on-error-container": "#93000a",
+                    "error": "#ba1a1a",
+                    "primary-container": "#2e7d32",
+                    "surface-dim": "#d3daef",
+                    "surface-container-lowest": "#ffffff",
+                    "on-surface": "#141b2b",
+                    "on-primary-fixed": "#002204",
+                    "on-secondary-fixed": "#0f2000",
+                    "secondary": "#3e6a00",
+                    "error-container": "#ffdad6",
+                    "on-primary-container": "#cbffc2",
+                    "surface": "#f9f9ff",
+                    "secondary-fixed-dim": "#9ed75b",
+                    "primary": "#0d631b",
+                    "on-background": "#141b2b",
+                    "on-tertiary-container": "#ffedf0",
+                    "inverse-primary": "#88d982",
+                    "surface-container": "#e9edff",
+                    "on-secondary-container": "#437000",
+                    "on-error": "#ffffff",
+                    "on-tertiary-fixed-variant": "#7f2448",
+                    "on-tertiary": "#ffffff",
+                    "background": "#f9f9ff",
+                    "tertiary": "#923357",
+                    "surface-variant": "#dce2f7",
+                    "outline": "#707a6c",
+                    "primary-fixed-dim": "#88d982",
+                    "tertiary-fixed-dim": "#ffb1c7",
+                    "primary-fixed": "#a3f69c",
+                    "surface-bright": "#f9f9ff",
+                    "tertiary-container": "#b14b6f",
+                    "on-secondary-fixed-variant": "#2e4f00",
+                    "secondary-container": "#b9f474",
+                    "surface-container-highest": "#dce2f7",
+                    "outline-variant": "#bfcaba",
+                    "on-tertiary-fixed": "#3f001c"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "8px",
+                    "xl": "12px",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "unit": "4px",
+                    "max-width": "1440px",
+                    "margin-desktop": "64px",
+                    "gutter": "24px",
+                    "margin-mobile": "16px"
+            },
+            "fontFamily": {
+                    "body-md": ["Inter"],
+                    "label-caps": ["JetBrains Mono"],
+                    "headline-md": ["Hanken Grotesk"],
+                    "display": ["Hanken Grotesk"],
+                    "body-lg": ["Inter"],
+                    "headline-lg": ["Hanken Grotesk"]
+            },
+            "fontSize": {
+                    "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                    "label-caps": ["12px", {"lineHeight": "1.0", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                    "headline-md": ["20px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                    "display": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                    "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                    "headline-lg": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+      .glass-nav {
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+      }
+      .blueprint-bg {
+        background-color: #f9f9ff;
+        background-image: linear-gradient(rgba(13, 99, 27, 0.05) 1px, transparent 1px),
+                          linear-gradient(90deg, rgba(13, 99, 27, 0.05) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      .active-pill {
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      .input-field:focus {
+        box-shadow: 0 0 0 2px rgba(13, 99, 27, 0.1);
+      }
+    </style>
+</head>
+<body class="bg-background font-body-md text-on-surface blueprint-bg min-h-screen">
+<!-- SideNavBar (Desktop) -->
+<aside class="hidden md:flex flex-col h-full py-10 px-6 bg-surface border-r border-outline-variant fixed left-0 top-0 w-64 z-50">
+<div class="mb-10 px-4">
+<h1 class="font-display text-headline-md font-extrabold text-primary">Bekaa3D</h1>
+<p class="text-xs font-label-caps text-outline tracking-widest mt-1">ENGINEERING PRECISION</p>
+</div>
+<nav class="flex-1 space-y-1">
+<!-- Active Tab: Profile -->
+<a class="flex items-center gap-3 px-4 py-3 text-primary font-bold border-r-4 border-primary bg-surface-container-low transition-colors duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="account_circle">account_circle</span>
+<span class="font-headline-md text-body-md">Profile</span>
+</a>
+<!-- Inactive Tabs -->
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors duration-200 active:scale-[0.99]" href="#">
+<span class="material-symbols-outlined" data-icon="shopping_bag">shopping_bag</span>
+<span class="font-headline-md text-body-md">Orders</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors duration-200 active:scale-[0.99]" href="#">
+<span class="material-symbols-outlined" data-icon="deployed_code">deployed_code</span>
+<span class="font-headline-md text-body-md">STL Downloads</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors duration-200 active:scale-[0.99]" href="#">
+<span class="material-symbols-outlined" data-icon="favorite">favorite</span>
+<span class="font-headline-md text-body-md">Wishlist</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors duration-200 active:scale-[0.99]" href="#">
+<span class="material-symbols-outlined" data-icon="rate_review">rate_review</span>
+<span class="font-headline-md text-body-md">Reviews</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors duration-200 active:scale-[0.99]" href="#">
+<span class="material-symbols-outlined" data-icon="local_offer">local_offer</span>
+<span class="font-headline-md text-body-md">Offers</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors duration-200 active:scale-[0.99]" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-headline-md text-body-md">Account Settings</span>
+</a>
+</nav>
+<div class="mt-auto border-t border-outline-variant pt-4">
+<a class="flex items-center gap-3 px-4 py-3 text-error hover:bg-error-container/20 transition-colors duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+<span class="font-headline-md text-body-md">Logout</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Shell -->
+<div class="md:ml-64 flex flex-col min-h-screen">
+<!-- TopAppBar -->
+<header class="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-outline-variant flex justify-between items-center w-full px-8 py-4">
+<div class="flex items-center flex-1 max-w-xl">
+<div class="relative w-full group">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">search</span>
+<input class="w-full pl-10 pr-4 py-2 bg-surface-container rounded-full border-none focus:ring-2 focus:ring-primary/20 text-body-md placeholder:text-outline-variant transition-all" placeholder="Search orders, parts, or specifications..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-6 ml-8">
+<button class="relative text-on-surface-variant hover:text-primary transition-colors active:opacity-80">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="absolute top-0 right-0 w-2 h-2 bg-error rounded-full border-2 border-white"></span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors active:opacity-80">
+<span class="material-symbols-outlined" data-icon="help">help</span>
+</button>
+<div class="h-10 w-10 rounded-full border border-outline-variant overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A professional studio portrait of a male lead mechanical engineer in a clean, minimalist setting. He is wearing a dark navy polo shirt, looking confident with a slight smile. High-key lighting, neutral gray background, industrial aesthetic, sharp focus, 8k resolution." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCAfUDKhVI11Ave4AUKlFtdIlHFlFG54jsHS075lE69_3EhTs24QNfNPfYLAiUB-FoOq2wJRrptdw7DFMUWxuN0gW68gRbrX6jmNYbyi24c_aJ1WKKiakfYP596F9cVBAWMFML2yVgHVIaO2WIANxs9CrpaDhGTzGI72YYupJDpXgMHG6GnIFidS_7KevEFsns_Fm4jdp9Beg3Xabfj2tau6xyqldJNV6BIkJ07dG6jnWaerRn6b-t0-g"/>
+</div>
+</div>
+</header>
+<!-- Main Content Grid -->
+<main class="flex-1 p-8 max-w-[1440px] mx-auto w-full">
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+<!-- 1. Profile Header Card (Full Width) -->
+<section class="lg:col-span-12 bg-white rounded-lg shadow-sm border border-outline-variant p-8 flex flex-col md:flex-row items-center gap-8 relative overflow-hidden group">
+<div class="relative">
+<div class="w-32 h-32 rounded-full border-4 border-surface-container-high overflow-hidden shadow-inner">
+<img class="w-full h-full object-cover" data-alt="A detailed close-up of a premium user profile avatar. The subject is a professional engineer with a focus on high-fidelity manufacturing. Clean lighting, soft ambient shadows, and a neutral white-gray color palette reflecting the industrial luxury design system of Bekaa3D." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBnyWSah_4QvIf225_dn_pfIKEShR4PCHNvfwRHe8ODwhz1JKPkMjSUFbos10efNFgW-W2MgUA09LdCKIBQIx5rYWABxOL8v1UivsH9SDEkMJ6L7VXK2WvO4cbECTLULPItaeDs_DJY9B88Pdz25QvpqWrWTqruLqtTJaMIDEmrEn5FCNHim0m4A1ADgu6oswB059Kbf3VJcrAHll5m8gCXp3KgvbFKOrOVqIDpwg6Sb8Hz_WXhC-R_3w"/>
+</div>
+<button class="absolute bottom-0 right-0 p-2 bg-primary text-white rounded-full shadow-lg hover:bg-primary-container transition-transform hover:scale-110">
+<span class="material-symbols-outlined text-sm" data-icon="photo_camera">photo_camera</span>
+</button>
+</div>
+<div class="flex-1 text-center md:text-left">
+<div class="flex flex-col md:flex-row md:items-center gap-3 mb-2">
+<h2 class="font-display text-headline-lg text-on-surface">Alexander Wright</h2>
+<span class="inline-flex items-center px-3 py-1 bg-primary-fixed text-on-primary-fixed text-xs font-label-caps rounded-full w-fit mx-auto md:mx-0">
+<span class="material-symbols-outlined text-[14px] mr-1" data-icon="verified" style="font-variation-settings: 'FILL' 1;">verified</span>
+                                PRO MEMBER
+                            </span>
+</div>
+<p class="font-body-lg text-on-surface-variant mb-1">Lead Mechanical Engineer</p>
+<p class="text-xs font-label-caps text-outline uppercase tracking-tighter">Member since March 2023</p>
+</div>
+<div class="flex gap-3">
+<button class="px-6 py-2 bg-primary text-white rounded-lg font-label-caps text-[12px] hover:shadow-md hover:brightness-110 transition-all uppercase">
+                            Public Profile
+                        </button>
+<button class="px-6 py-2 border border-outline text-on-surface rounded-lg font-label-caps text-[12px] hover:bg-surface-container transition-all uppercase">
+                            Share
+                        </button>
+</div>
+<!-- Decorative Element -->
+<div class="absolute -right-10 -bottom-10 opacity-[0.03] pointer-events-none group-hover:opacity-10 transition-opacity">
+<span class="material-symbols-outlined text-[240px]" data-icon="precision_manufacturing">precision_manufacturing</span>
+</div>
+</section>
+<!-- 2. Personal Information Card -->
+<section class="lg:col-span-7 bg-white rounded-lg shadow-sm border border-outline-variant p-6">
+<div class="flex items-center justify-between mb-6">
+<h3 class="font-headline-md text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-primary" data-icon="person">person</span>
+                            Personal Information
+                        </h3>
+<button class="text-primary font-label-caps text-[12px] hover:underline flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]" data-icon="edit">edit</span>
+                            EDIT
+                        </button>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<div class="space-y-1">
+<label class="font-label-caps text-[11px] text-outline uppercase">Full Name</label>
+<p class="font-body-md text-on-surface border-b border-outline-variant pb-2">Alexander Wright</p>
+</div>
+<div class="space-y-1">
+<label class="font-label-caps text-[11px] text-outline uppercase">Email Address</label>
+<p class="font-body-md text-on-surface border-b border-outline-variant pb-2">a.wright@precision-mfg.com</p>
+</div>
+<div class="space-y-1">
+<label class="font-label-caps text-[11px] text-outline uppercase">Phone Number</label>
+<p class="font-body-md text-on-surface border-b border-outline-variant pb-2">+1 (555) 012-3456</p>
+</div>
+<div class="space-y-1">
+<label class="font-label-caps text-[11px] text-outline uppercase">Company Name</label>
+<p class="font-body-md text-on-surface border-b border-outline-variant pb-2">Precision Mechanical Group</p>
+</div>
+</div>
+</section>
+<!-- 3. Shipping Address Card -->
+<section class="lg:col-span-5 bg-white rounded-lg shadow-sm border border-outline-variant p-6">
+<div class="flex items-center justify-between mb-6">
+<h3 class="font-headline-md text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-primary" data-icon="location_on">location_on</span>
+                            Primary Address
+                        </h3>
+<button class="text-primary font-label-caps text-[12px] hover:underline uppercase">Change</button>
+</div>
+<div class="space-y-4">
+<div class="p-4 bg-surface-container rounded-lg border border-outline-variant">
+<div class="flex items-start justify-between">
+<div class="space-y-1">
+<p class="font-headline-md text-body-md text-on-surface">Home Office / Studio</p>
+<p class="font-body-md text-on-surface-variant">1284 Innovation Drive<br/>Silicon Hills, TX 78701<br/>United States</p>
+</div>
+<span class="bg-secondary-container text-on-secondary-container px-2 py-0.5 rounded text-[10px] font-label-caps">DEFAULT</span>
+</div>
+</div>
+<button class="w-full py-3 border-2 border-dashed border-outline-variant text-outline rounded-lg font-label-caps text-[12px] hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[18px]" data-icon="add_location">add_location</span>
+                            ADD NEW ADDRESS
+                        </button>
+</div>
+</section>
+<!-- 4. Security Card -->
+<section class="lg:col-span-6 bg-white rounded-lg shadow-sm border border-outline-variant p-6">
+<h3 class="font-headline-md text-on-surface flex items-center gap-2 mb-6">
+<span class="material-symbols-outlined text-primary" data-icon="security">security</span>
+                        Security &amp; Authentication
+                    </h3>
+<form class="space-y-4">
+<div class="space-y-1">
+<label class="font-label-caps text-[11px] text-outline uppercase">Current Password</label>
+<input class="w-full px-4 py-3 bg-white border border-outline-variant rounded-lg font-body-md input-field" type="password" value="••••••••••••"/>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div class="space-y-1">
+<label class="font-label-caps text-[11px] text-outline uppercase">New Password</label>
+<input class="w-full px-4 py-3 bg-white border border-outline-variant rounded-lg font-body-md input-field" placeholder="Min. 12 characters" type="password"/>
+</div>
+<div class="space-y-1">
+<label class="font-label-caps text-[11px] text-outline uppercase">Confirm New</label>
+<input class="w-full px-4 py-3 bg-white border border-outline-variant rounded-lg font-body-md input-field" placeholder="Confirm password" type="password"/>
+</div>
+</div>
+<button class="w-full mt-2 py-4 bg-primary text-white rounded-lg font-label-caps text-[14px] hover:shadow-lg transition-all active:scale-[0.98] uppercase" type="button">
+                            Update Password
+                        </button>
+</form>
+</section>
+<!-- 5. Account Preferences Card -->
+<section class="lg:col-span-6 bg-white rounded-lg shadow-sm border border-outline-variant p-6">
+<h3 class="font-headline-md text-on-surface flex items-center gap-2 mb-6">
+<span class="material-symbols-outlined text-primary" data-icon="tune">tune</span>
+                        Account Preferences
+                    </h3>
+<div class="space-y-4">
+<!-- Toggle Switch Component -->
+<div class="flex items-center justify-between py-2 border-b border-outline-variant">
+<div>
+<p class="font-headline-md text-body-md text-on-surface">Email Notifications</p>
+<p class="text-xs text-on-surface-variant">System and account activity alerts</p>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+<div class="flex items-center justify-between py-2 border-b border-outline-variant">
+<div>
+<p class="font-headline-md text-body-md text-on-surface">Order Updates</p>
+<p class="text-xs text-on-surface-variant">Print progress and delivery tracking</p>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+<div class="flex items-center justify-between py-2 border-b border-outline-variant">
+<div>
+<p class="font-headline-md text-body-md text-on-surface">Marketing News</p>
+<p class="text-xs text-on-surface-variant">New material drops and offers</p>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+<div class="flex items-center justify-between py-2">
+<div>
+<p class="font-headline-md text-body-md text-on-surface">Two-Factor Authentication</p>
+<p class="text-xs text-error font-medium">Highly recommended for security</p>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+</div>
+</section>
+</div>
+</main>
+<!-- Mobile Bottom Nav -->
+<nav class="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-outline-variant flex justify-around items-center py-3 px-2 z-50">
+<a class="flex flex-col items-center gap-1 text-primary" href="#">
+<span class="material-symbols-outlined" data-icon="account_circle" style="font-variation-settings: 'FILL' 1;">account_circle</span>
+<span class="text-[10px] font-label-caps uppercase">Profile</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-outline" href="#">
+<span class="material-symbols-outlined" data-icon="shopping_bag">shopping_bag</span>
+<span class="text-[10px] font-label-caps uppercase">Orders</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-outline" href="#">
+<span class="material-symbols-outlined" data-icon="deployed_code">deployed_code</span>
+<span class="text-[10px] font-label-caps uppercase">STL</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-outline" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="text-[10px] font-label-caps uppercase">Settings</span>
+</a>
+</nav>
+</div>
+<script>
+        // Micro-interactions
+        document.querySelectorAll('a, button').forEach(el => {
+            el.addEventListener('mousedown', () => {
+                el.classList.add('scale-[0.98]');
+            });
+            el.addEventListener('mouseup', () => {
+                el.classList.remove('scale-[0.98]');
+            });
+            el.addEventListener('mouseleave', () => {
+                el.classList.remove('scale-[0.98]');
+            });
+        });
+
+        // Search bar focus effect
+        const searchInput = document.querySelector('input[type="text"]');
+        searchInput.addEventListener('focus', () => {
+            searchInput.parentElement.classList.add('scale-[1.01]');
+        });
+        searchInput.addEventListener('blur', () => {
+            searchInput.parentElement.classList.remove('scale-[1.01]');
+        });
+    </script>
+</body></html>

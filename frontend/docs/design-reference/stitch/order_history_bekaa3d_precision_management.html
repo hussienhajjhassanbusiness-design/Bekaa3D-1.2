@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Order History | Bekaa3D</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700;800&family=Inter:wght@400;600&family=JetBrains+Mono:wght@600&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@100..900&family=Inter:wght@100..900&family=JetBrains+Mono:wght@100..900&display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-container-low": "#f1f3ff",
+                    "on-secondary": "#ffffff",
+                    "surface-container-high": "#e1e8fd",
+                    "on-surface-variant": "#40493d",
+                    "on-primary-fixed-variant": "#005312",
+                    "inverse-on-surface": "#edf0ff",
+                    "tertiary-fixed": "#ffd9e2",
+                    "surface-tint": "#1b6d24",
+                    "secondary-fixed": "#b9f474",
+                    "on-primary": "#ffffff",
+                    "inverse-surface": "#293040",
+                    "primary-container": "#2e7d32",
+                    "on-error-container": "#93000a",
+                    "error": "#ba1a1a",
+                    "on-surface": "#141b2b",
+                    "surface-container-lowest": "#ffffff",
+                    "surface-dim": "#d3daef",
+                    "on-secondary-fixed": "#0f2000",
+                    "on-primary-fixed": "#002204",
+                    "on-primary-container": "#cbffc2",
+                    "secondary": "#3e6a00",
+                    "error-container": "#ffdad6",
+                    "surface": "#f9f9ff",
+                    "secondary-fixed-dim": "#9ed75b",
+                    "on-tertiary-container": "#ffedf0",
+                    "primary": "#0d631b",
+                    "on-background": "#141b2b",
+                    "on-tertiary-fixed-variant": "#7f2448",
+                    "on-tertiary": "#ffffff",
+                    "background": "#f9f9ff",
+                    "surface-container": "#e9edff",
+                    "on-secondary-container": "#437000",
+                    "on-error": "#ffffff",
+                    "inverse-primary": "#88d982",
+                    "tertiary-fixed-dim": "#ffb1c7",
+                    "primary-fixed": "#a3f69c",
+                    "primary-fixed-dim": "#88d982",
+                    "surface-variant": "#dce2f7",
+                    "outline": "#707a6c",
+                    "tertiary": "#923357",
+                    "tertiary-container": "#b14b6f",
+                    "on-secondary-fixed-variant": "#2e4f00",
+                    "surface-bright": "#f9f9ff",
+                    "secondary-container": "#b9f474",
+                    "on-tertiary-fixed": "#3f001c",
+                    "outline-variant": "#bfcaba",
+                    "surface-container-highest": "#dce2f7"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "margin-mobile": "16px",
+                    "unit": "4px",
+                    "max-width": "1440px",
+                    "margin-desktop": "64px",
+                    "gutter": "24px"
+            },
+            "fontFamily": {
+                    "label-caps": ["JetBrains Mono"],
+                    "headline-md": ["Hanken Grotesk"],
+                    "headline-lg-mobile": ["Hanken Grotesk"],
+                    "body-md": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "headline-lg": ["Hanken Grotesk"],
+                    "display": ["Hanken Grotesk"]
+            },
+            "fontSize": {
+                    "label-caps": ["12px", {"lineHeight": "1.0", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                    "headline-md": ["20px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                    "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                    "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                    "headline-lg": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                    "display": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "800"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        .blueprint-bg {
+            background-image: 
+                linear-gradient(rgba(13, 99, 27, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(13, 99, 27, 0.03) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body-md overflow-x-hidden blueprint-bg">
+<!-- TopAppBar -->
+<header class="fixed top-0 left-0 w-full z-50 border-b border-outline-variant dark:border-outline bg-white/80 dark:bg-surface/80 backdrop-blur-xl flex justify-between items-center px-margin-desktop py-4">
+<div class="flex items-center gap-4">
+<span class="font-display text-headline-md font-extrabold text-primary dark:text-primary-fixed">Bekaa3D</span>
+</div>
+<div class="flex items-center gap-6">
+<div class="hidden md:flex relative">
+<input class="bg-surface-container-low border border-outline-variant rounded-full px-6 py-2 w-64 focus:outline-none focus:ring-2 focus:ring-primary text-body-md" placeholder="Search orders..." type="text"/>
+<span class="material-symbols-outlined absolute right-4 top-2 text-on-surface-variant">search</span>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 hover:text-primary transition-colors duration-200">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="p-2 hover:text-primary transition-colors duration-200">
+<span class="material-symbols-outlined" data-icon="help">help</span>
+</button>
+<div class="w-10 h-10 rounded-full overflow-hidden border border-outline-variant">
+<img class="w-full h-full object-cover" data-alt="A professional close-up studio portrait of a tech-savvy engineer in a clean, modern workspace. The lighting is crisp and cool-toned, reflecting a precision manufacturing environment. The person has a friendly, professional expression. High-fidelity photography style with a shallow depth of field background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDUIN7Hw_DKBqCXYFYtL9YK3eariev29u1Dc0eME4Z2q-z1PPn6sx08wd7hLAPcFe8y2XMPjjgXv0UPwkqkCmW0ToNoOUvEjPVID4kkY0NsNJ8rK_KzC_s-FUrDk8nqGJB-ZBkraW6rEaOYZFm7DAGMmcK9GdKD1DuCXZTax5mJJHwMpH5O3Q8KKsLhJkhJ2xokbmTQRI9RWaJh9d-tmAIQNz3zr8uIPf9wJIdHuL0v_OQ3bxPMoYEtTQ"/>
+</div>
+</div>
+</div>
+</header>
+<!-- SideNavBar -->
+<aside class="h-screen w-64 fixed left-0 top-0 border-r border-outline-variant dark:border-outline bg-surface dark:bg-surface-container-lowest flex flex-col py-24 px-unit-gutter z-40">
+<nav class="flex flex-col gap-2">
+<!-- Navigation Items -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">account_circle</span>
+<span class="font-body-md">Profile</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-primary font-bold border-r-4 border-primary bg-surface-container-low" href="#">
+<span class="material-symbols-outlined">shopping_bag</span>
+<span class="font-body-md">Orders</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">deployed_code</span>
+<span class="font-body-md">STL Downloads</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">favorite</span>
+<span class="font-body-md">Wishlist</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">rate_review</span>
+<span class="font-body-md">Reviews</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">local_offer</span>
+<span class="font-body-md">Offers</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-body-md">Account Settings</span>
+</a>
+<div class="mt-auto">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-error-container hover:text-error transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">logout</span>
+<span class="font-body-md">Logout</span>
+</a>
+</div>
+</nav>
+</aside>
+<!-- Main Content Canvas -->
+<main class="ml-64 pt-24 min-h-screen px-margin-desktop pb-12 relative">
+<!-- Dashboard Header -->
+<div class="max-w-max-width mx-auto">
+<header class="mb-8">
+<h1 class="font-headline-lg text-headline-lg text-on-surface mb-2">Order History</h1>
+<p class="text-on-surface-variant text-body-lg">Manage and track your precision-engineered parts and industrial 3D printing orders.</p>
+</header>
+<!-- Filters Section -->
+<div class="glass-panel p-6 rounded-xl border border-outline-variant mb-8 shadow-sm">
+<div class="flex flex-wrap items-end gap-6">
+<!-- Search -->
+<div class="flex-1 min-w-[280px]">
+<label class="block font-label-caps text-label-caps text-on-surface-variant mb-2">SEARCH SHIPMENTS</label>
+<div class="relative">
+<input class="w-full bg-white border border-outline-variant rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all" placeholder="Order ID or Product Name..." type="text"/>
+<span class="material-symbols-outlined absolute right-4 top-3 text-outline">search</span>
+</div>
+</div>
+<!-- Date Range -->
+<div class="w-full md:w-auto">
+<label class="block font-label-caps text-label-caps text-on-surface-variant mb-2">DATE RANGE</label>
+<div class="flex items-center gap-2">
+<input class="bg-white border border-outline-variant rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary outline-none text-body-md" type="date"/>
+<span class="text-outline">to</span>
+<input class="bg-white border border-outline-variant rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary outline-none text-body-md" type="date"/>
+</div>
+</div>
+<!-- Status Filter -->
+<div class="w-full md:w-auto">
+<label class="block font-label-caps text-label-caps text-on-surface-variant mb-2">ORDER STATUS</label>
+<select class="bg-white border border-outline-variant rounded-lg px-4 py-3 w-full md:w-48 focus:ring-2 focus:ring-primary outline-none text-body-md appearance-none">
+<option>All Statuses</option>
+<option>Pending</option>
+<option>Shipped</option>
+<option>Delivered</option>
+<option>Cancelled</option>
+</select>
+</div>
+<!-- Clear Filters -->
+<button class="px-6 py-3 text-primary font-label-caps text-label-caps hover:bg-surface-container-low rounded-lg transition-colors">
+                        RESET FILTERS
+                    </button>
+</div>
+</div>
+<!-- Modern Data Table -->
+<div class="bg-white rounded-xl border border-outline-variant overflow-hidden shadow-sm">
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low border-b border-outline-variant">
+<th class="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant">ORDER ID</th>
+<th class="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant">DATE</th>
+<th class="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant">STATUS</th>
+<th class="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant">TOTAL PRICE</th>
+<th class="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant">PAYMENT</th>
+<th class="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant text-right">ACTIONS</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-bright transition-colors group">
+<td class="px-6 py-5">
+<span class="font-label-caps text-primary font-bold">BK-72841</span>
+</td>
+<td class="px-6 py-5 text-on-surface-variant font-body-md">Oct 24, 2024</td>
+<td class="px-6 py-5">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-secondary-container text-on-secondary-container">
+                                        Delivered
+                                    </span>
+</td>
+<td class="px-6 py-5 font-label-caps font-bold">$1,240.00</td>
+<td class="px-6 py-5">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-primary"></span>
+<span class="text-body-md text-on-surface">Paid</span>
+</div>
+</td>
+<td class="px-6 py-5 text-right">
+<button class="bg-primary text-white font-label-caps text-label-caps px-4 py-2 rounded-lg hover:bg-primary-container transition-all active:scale-95">
+                                        VIEW DETAILS
+                                    </button>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-surface-bright transition-colors group">
+<td class="px-6 py-5">
+<span class="font-label-caps text-primary font-bold">BK-72902</span>
+</td>
+<td class="px-6 py-5 text-on-surface-variant font-body-md">Oct 26, 2024</td>
+<td class="px-6 py-5">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-surface-container-high text-on-primary-fixed-variant">
+                                        Shipped
+                                    </span>
+</td>
+<td class="px-6 py-5 font-label-caps font-bold">$450.50</td>
+<td class="px-6 py-5">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-primary"></span>
+<span class="text-body-md text-on-surface">Paid</span>
+</div>
+</td>
+<td class="px-6 py-5 text-right">
+<button class="bg-primary text-white font-label-caps text-label-caps px-4 py-2 rounded-lg hover:bg-primary-container transition-all active:scale-95">
+                                        VIEW DETAILS
+                                    </button>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-bright transition-colors group">
+<td class="px-6 py-5">
+<span class="font-label-caps text-primary font-bold">BK-73115</span>
+</td>
+<td class="px-6 py-5 text-on-surface-variant font-body-md">Oct 28, 2024</td>
+<td class="px-6 py-5">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-tertiary-fixed text-on-tertiary-fixed-variant">
+                                        Pending
+                                    </span>
+</td>
+<td class="px-6 py-5 font-label-caps font-bold">$2,890.00</td>
+<td class="px-6 py-5">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-amber-500"></span>
+<span class="text-body-md text-on-surface">Processing</span>
+</div>
+</td>
+<td class="px-6 py-5 text-right">
+<button class="bg-primary text-white font-label-caps text-label-caps px-4 py-2 rounded-lg hover:bg-primary-container transition-all active:scale-95">
+                                        VIEW DETAILS
+                                    </button>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="hover:bg-surface-bright transition-colors group">
+<td class="px-6 py-5">
+<span class="font-label-caps text-primary font-bold">BK-73450</span>
+</td>
+<td class="px-6 py-5 text-on-surface-variant font-body-md">Oct 30, 2024</td>
+<td class="px-6 py-5">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-error-container text-on-error-container">
+                                        Cancelled
+                                    </span>
+</td>
+<td class="px-6 py-5 font-label-caps font-bold">$85.00</td>
+<td class="px-6 py-5">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-outline"></span>
+<span class="text-body-md text-on-surface">Refunded</span>
+</div>
+</td>
+<td class="px-6 py-5 text-right">
+<button class="bg-primary text-white font-label-caps text-label-caps px-4 py-2 rounded-lg hover:bg-primary-container transition-all active:scale-95">
+                                        VIEW DETAILS
+                                    </button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pagination -->
+<div class="px-6 py-4 border-t border-outline-variant flex justify-between items-center bg-surface-bright">
+<p class="text-body-md text-on-surface-variant">Showing <span class="font-bold">1-4</span> of <span class="font-bold">24</span> results</p>
+<div class="flex items-center gap-2">
+<button class="p-2 border border-outline-variant rounded-lg hover:bg-surface-container-high disabled:opacity-50" disabled="">
+<span class="material-symbols-outlined">chevron_left</span>
+</button>
+<button class="w-10 h-10 bg-primary text-white rounded-lg font-label-caps text-label-caps">1</button>
+<button class="w-10 h-10 border border-outline-variant rounded-lg font-label-caps text-label-caps hover:bg-surface-container-high transition-colors">2</button>
+<button class="w-10 h-10 border border-outline-variant rounded-lg font-label-caps text-label-caps hover:bg-surface-container-high transition-colors">3</button>
+<button class="p-2 border border-outline-variant rounded-lg hover:bg-surface-container-high">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Featured Status Card (Asymmetric Layout Addition) -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-8 mt-12">
+<div class="md:col-span-1 glass-panel border border-primary p-6 rounded-xl flex flex-col justify-between">
+<div>
+<div class="w-12 h-12 bg-primary-fixed rounded-lg flex items-center justify-center mb-4">
+<span class="material-symbols-outlined text-primary text-3xl">precision_manufacturing</span>
+</div>
+<h3 class="font-headline-md text-headline-md mb-2">Live Factory Feed</h3>
+<p class="text-on-surface-variant text-body-md">Check the real-time status of our industrial printers working on your latest batch.</p>
+</div>
+<button class="mt-6 border-2 border-primary text-primary font-label-caps text-label-caps py-3 rounded-lg hover:bg-primary hover:text-white transition-all">
+                        ENTER CONTROL VIEW
+                    </button>
+</div>
+<div class="md:col-span-2 relative overflow-hidden rounded-xl border border-outline-variant h-64 group shadow-lg">
+<div class="absolute inset-0 z-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110" data-alt="A futuristic, high-tech industrial 3D printing facility with rows of sleek, modern printers. Glowing green status lights indicate active production. The environment is impeccably clean, with polished concrete floors and large glass partitions. Soft, cool atmospheric lighting creates a sense of cutting-edge engineering excellence and corporate luxury." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuByfSNjOm4C89NtqR-rYPgsyt6L4FXTiL9_0H3wdgHMfbdpY3OgN7WfKp4qc30l6vnwP-nGnXf6-e3JTCAWaElD0vHWUyrb6_R4db87kCIvsMUKf6m10UJOHa_j1p69BIvbn8-AY89DLlzC6lN1ju45apEFtajpn-yuLPwrP5l7WRuKOggf2-nmZc63H4mUF6vg-4laeFO_PXcbQwQSSIPo79Kjkbn1iEWUTUjXZXT2U0fld0FXuNZ86Q')">
+</div>
+<div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent z-10"></div>
+<div class="absolute bottom-6 left-6 right-6 z-20">
+<h4 class="text-white font-headline-md text-headline-md mb-1">Precision Guaranteed</h4>
+<p class="text-white/80 text-body-md max-w-md">Our ISO-certified manufacturing process ensures every order meets sub-micron tolerances.</p>
+</div>
+</div>
+</div>
+</div>
+</main>
+<script>
+        // Micro-interactions for table rows
+        document.querySelectorAll('tbody tr').forEach(row => {
+            row.addEventListener('mousedown', () => {
+                row.classList.add('scale-[0.995]', 'transition-transform');
+            });
+            row.addEventListener('mouseup', () => {
+                row.classList.remove('scale-[0.995]');
+            });
+        });
+
+        // Basic toggle for mobile responsive side nav (if needed)
+        // Note: For now, visibility is handled by desktop ml-64 classes
+    </script>
+</body></html>

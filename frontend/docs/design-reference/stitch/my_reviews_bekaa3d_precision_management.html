@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>My Reviews | Bekaa3D Precision Engineering</title>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700;800&amp;family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@600&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-primary-fixed": "#002204",
+                    "inverse-primary": "#88d982",
+                    "on-tertiary": "#ffffff",
+                    "surface-variant": "#dce2f7",
+                    "surface-container-high": "#e1e8fd",
+                    "secondary-fixed-dim": "#9ed75b",
+                    "error": "#ba1a1a",
+                    "tertiary-fixed": "#ffd9e2",
+                    "outline-variant": "#bfcaba",
+                    "tertiary-container": "#b14b6f",
+                    "surface-container": "#e9edff",
+                    "on-secondary-fixed-variant": "#2e4f00",
+                    "on-background": "#141b2b",
+                    "on-error-container": "#93000a",
+                    "on-tertiary-container": "#ffedf0",
+                    "surface-container-low": "#f1f3ff",
+                    "surface": "#f9f9ff",
+                    "on-error": "#ffffff",
+                    "on-surface-variant": "#40493d",
+                    "on-primary-fixed-variant": "#005312",
+                    "surface-container-lowest": "#ffffff",
+                    "outline": "#707a6c",
+                    "secondary-fixed": "#b9f474",
+                    "secondary": "#3e6a00",
+                    "primary-fixed-dim": "#88d982",
+                    "secondary-container": "#b9f474",
+                    "background": "#f9f9ff",
+                    "tertiary-fixed-dim": "#ffb1c7",
+                    "surface-container-highest": "#dce2f7",
+                    "tertiary": "#923357",
+                    "surface-bright": "#f9f9ff",
+                    "on-tertiary-fixed-variant": "#7f2448",
+                    "on-secondary-fixed": "#0f2000",
+                    "inverse-surface": "#293040",
+                    "inverse-on-surface": "#edf0ff",
+                    "surface-tint": "#1b6d24",
+                    "primary-fixed": "#a3f69c",
+                    "surface-dim": "#d3daef",
+                    "primary": "#0d631b",
+                    "on-secondary-container": "#437000",
+                    "error-container": "#ffdad6",
+                    "on-tertiary-fixed": "#3f001c",
+                    "on-surface": "#141b2b",
+                    "on-primary-container": "#cbffc2",
+                    "primary-container": "#2e7d32",
+                    "on-primary": "#ffffff",
+                    "on-secondary": "#ffffff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "gutter": "24px",
+                    "max-width": "1440px",
+                    "unit": "4px",
+                    "margin-mobile": "16px",
+                    "margin-desktop": "64px"
+            },
+            "fontFamily": {
+                    "label-caps": ["JetBrains Mono"],
+                    "headline-md": ["Hanken Grotesk"],
+                    "headline-lg-mobile": ["Hanken Grotesk"],
+                    "headline-lg": ["Hanken Grotesk"],
+                    "display": ["Hanken Grotesk"],
+                    "body-md": ["Inter"],
+                    "body-lg": ["Inter"]
+            },
+            "fontSize": {
+                    "label-caps": ["12px", {"lineHeight": "1.0", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                    "headline-md": ["20px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                    "headline-lg": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                    "display": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                    "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                    "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #f9f9ff;
+            background-image: 
+                linear-gradient(to right, rgba(203, 255, 194, 0.05) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(203, 255, 194, 0.05) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+    </style>
+</head>
+<body class="font-body-md text-on-surface">
+<!-- Sidebar Navigation -->
+<aside class="h-screen w-64 fixed left-0 top-0 bg-surface flex flex-col h-full py-8 px-6 border-r border-outline-variant z-50">
+<div class="mb-10 px-2">
+<h1 class="font-display text-headline-md text-primary font-extrabold tracking-tight">Bekaa3D</h1>
+<p class="text-on-surface-variant text-xs font-label-caps uppercase tracking-widest mt-1">Engineering Precision</p>
+</div>
+<nav class="flex-1 space-y-1">
+<!-- Nav Items generated from JSON -->
+<a class="flex items-center gap-3 p-3 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors duration-200 group" href="#">
+<span class="material-symbols-outlined" data-icon="account_circle">account_circle</span>
+<span class="font-body-md">Profile</span>
+</a>
+<a class="flex items-center gap-3 p-3 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="shopping_bag">shopping_bag</span>
+<span class="font-body-md">Orders</span>
+</a>
+<a class="flex items-center gap-3 p-3 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="deployed_code">deployed_code</span>
+<span class="font-body-md">STL Downloads</span>
+</a>
+<a class="flex items-center gap-3 p-3 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="favorite">favorite</span>
+<span class="font-body-md">Wishlist</span>
+</a>
+<!-- Active State: Reviews -->
+<a class="flex items-center gap-3 p-3 rounded-lg text-primary font-bold border-r-4 border-primary bg-surface-container-low" href="#">
+<span class="material-symbols-outlined" data-icon="rate_review" style="font-variation-settings: 'FILL' 1;">rate_review</span>
+<span class="font-body-md">Reviews</span>
+</a>
+<a class="flex items-center gap-3 p-3 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="local_offer">local_offer</span>
+<span class="font-body-md">Offers</span>
+</a>
+<div class="pt-4 mt-4 border-t border-outline-variant">
+<a class="flex items-center gap-3 p-3 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-body-md">Account Settings</span>
+</a>
+<a class="flex items-center gap-3 p-3 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+<span class="font-body-md">Logout</span>
+</a>
+</div>
+</nav>
+<div class="mt-auto pt-6 flex items-center gap-3 px-2 border-t border-outline-variant">
+<div class="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container font-bold overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A professional studio portrait of a high-end industrial designer, middle-aged with subtle glasses, wearing a dark grey polo shirt. The lighting is soft and professional, against a clean off-white background. The image has a sharp, high-fidelity corporate tech aesthetic, perfectly aligned with a precision manufacturing brand like Bekaa3D." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDQ7S7dXDXuMTwaXKn2RpL83h1WplK6ZKH3WmhIC8C2w2Dmq-29h7Mq7AG4FvITo2Qy5W7y1yfzwfXqkHGgV0KLO3z7ee5ORo2R6IQ8NyD3dwge6B_F3XSbig2RLD62gddIY-EufTehdWy4CES1o5zIwwd3dUXbmK9pbyRNFdA5hmAXPbDy8Hq8WBS4zAGJxncWEAUlf5cuJvbPY06MVz0-AXss1gUvzsrfiYH30aDSzYVjSyNcIZ-rJQ"/>
+</div>
+<div class="flex-1 overflow-hidden">
+<p class="text-sm font-bold truncate">Alex Chen</p>
+<p class="text-xs text-on-surface-variant truncate">Premium Account</p>
+</div>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="ml-64 min-h-screen">
+<!-- Top Navigation / Search Header -->
+<header class="sticky top-0 z-40 glass-panel border-b border-outline-variant px-margin-desktop py-6">
+<div class="max-w-max-width mx-auto flex flex-col md:flex-row md:items-center justify-between gap-6">
+<div>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">My Reviews</h2>
+<p class="text-on-surface-variant font-body-md">Manage your feedback on precision parts and hardware.</p>
+</div>
+<div class="flex items-center gap-4">
+<!-- Search Bar -->
+<div class="relative group">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-primary transition-colors">search</span>
+<input class="pl-10 pr-4 py-2 bg-surface-container border border-outline-variant rounded-lg focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-body-md w-64 md:w-80" placeholder="Search by product name..." type="text"/>
+</div>
+<!-- Sort Dropdown -->
+<div class="relative">
+<select class="appearance-none pl-4 pr-10 py-2 bg-surface-container border border-outline-variant rounded-lg focus:outline-none focus:border-primary font-body-md cursor-pointer">
+<option>Most Recent</option>
+<option>Highest Rating</option>
+<option>Lowest Rating</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant">expand_more</span>
+</div>
+</div>
+</div>
+</header>
+<section class="p-margin-desktop max-w-max-width mx-auto">
+<!-- Stats Row -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-gutter mb-12">
+<div class="bg-white p-6 rounded-xl border border-outline-variant shadow-sm flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-primary-container flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-3xl">reviews</span>
+</div>
+<div>
+<p class="text-label-caps text-on-surface-variant">Total Reviews</p>
+<p class="text-headline-md font-display">24</p>
+</div>
+</div>
+<div class="bg-white p-6 rounded-xl border border-outline-variant shadow-sm flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-secondary-container flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined text-3xl">star</span>
+</div>
+<div>
+<p class="text-label-caps text-on-surface-variant">Average Rating</p>
+<p class="text-headline-md font-display">4.8</p>
+</div>
+</div>
+<div class="bg-white p-6 rounded-xl border border-outline-variant shadow-sm flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-surface-container-high flex items-center justify-center text-on-surface-variant">
+<span class="material-symbols-outlined text-3xl">visibility</span>
+</div>
+<div>
+<p class="text-label-caps text-on-surface-variant">Helpful Votes</p>
+<p class="text-headline-md font-display">142</p>
+</div>
+</div>
+</div>
+<!-- Review Cards List -->
+<div class="space-y-6">
+<!-- Review Card 1 -->
+<article class="bg-white rounded-xl border border-outline-variant shadow-sm hover:shadow-md transition-shadow p-6 flex flex-col md:flex-row gap-6">
+<div class="w-full md:w-32 h-32 rounded-lg overflow-hidden flex-shrink-0 bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="A macro photograph of a high-precision aerospace grade titanium alloy bracket, 3D printed using DMLS technology. The part shows intricate latticing and a metallic sheen, set against a sterile, brightly lit laboratory background with professional white and soft green lighting. The style is clean, industrial, and high-performance, emphasizing engineering accuracy." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCRPVD7rF78_3dNN7IdAoHFBIN9Z70LHpretT_W5cD8hCWAYZTtbgMcPCXZ3KL-Yz_qN_eLjNRqVOZ9w0LMSPD71wLUXuqYccV7GD8HsoSUhk7B4V_fgF7QDVl4ouqUou8rKfKHeLqw1HaH-8552QOdet7iGxkP1naYKjBb5JK6vIcS7qqo91UlSImxCmsZAM-MKEuKQY0FljTF2CGQ8V5HAizZeJJAVvGkIbPOFrTitNlRYBaVu5Ll6g"/>
+</div>
+<div class="flex-1">
+<div class="flex flex-col md:flex-row md:items-start justify-between mb-4">
+<div>
+<h3 class="font-headline-md text-on-surface mb-1">Titanium X-11 Aerospace Bracket</h3>
+<div class="flex items-center gap-2 mb-2">
+<div class="flex text-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">star</span>
+</div>
+<span class="text-sm font-label-caps text-on-surface-variant">Oct 12, 2023</span>
+</div>
+</div>
+<div class="flex gap-2">
+<button class="flex items-center gap-2 px-4 py-2 rounded-lg border border-outline text-on-surface hover:bg-surface-container-low transition-colors font-body-md text-sm">
+<span class="material-symbols-outlined text-[18px]">edit</span> Edit
+                                </button>
+<button class="flex items-center gap-2 px-4 py-2 rounded-lg border border-error/20 text-error hover:bg-error-container transition-colors font-body-md text-sm">
+<span class="material-symbols-outlined text-[18px]">delete</span> Delete
+                                </button>
+</div>
+</div>
+<p class="text-body-md text-on-surface-variant leading-relaxed mb-4">
+                            The tolerances on this DMLS print were exceptional. We measured a variance of less than 0.05mm across the critical mounting points. The surface finish exceeded expectations for an as-printed part. Highly recommended for flight-ready prototypes.
+                        </p>
+<div class="flex items-center gap-4">
+<span class="flex items-center gap-1 text-xs font-label-caps text-primary bg-primary-container/20 px-3 py-1 rounded-full">
+<span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">verified</span> Verified Purchase
+                            </span>
+<button class="text-xs font-body-md text-on-surface-variant hover:text-primary flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">thumb_up</span> 12 Helpful
+                            </button>
+</div>
+</div>
+</article>
+<!-- Review Card 2 -->
+<article class="bg-white rounded-xl border border-outline-variant shadow-sm hover:shadow-md transition-shadow p-6 flex flex-col md:flex-row gap-6">
+<div class="w-full md:w-32 h-32 rounded-lg overflow-hidden flex-shrink-0 bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="A close-up shot of a Bekaa3D Pro-X industrial 3D printer nozzle assembly during a print process. Glowing filaments and high-tech cooling fans are visible in a sleek, minimalist carbon fiber and brushed aluminum housing. The lighting is cold blue and crisp white, reflecting a high-end corporate technology vibe. The mood is one of digital precision and cutting-edge manufacturing." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDQgPQD_dPe1P2OU90UssKPCEpcBV53XtijYMxhpJLMncFL0YMQTC3UqhOiEBwNXdh8zY5SVadEnQ3PrU5Jop2EgB4Ew1ObjjZGTbLwnA5uvyot3VCOy0VSzjYRUjGaUVLoKfdaf2OG9dEOeHpUbsUnAKSxDPnvICzWtKY7-TRC3F5BYD2YL6qV5mLhOw20dnAxG1hsSpgq_xGNCEPuucsKnFOoz2xDPWspK52FzTnkBC11sCQq8cliUg"/>
+</div>
+<div class="flex-1">
+<div class="flex flex-col md:flex-row md:items-start justify-between mb-4">
+<div>
+<h3 class="font-headline-md text-on-surface mb-1">Precision Nozzle Assembly - 0.4mm Ruby</h3>
+<div class="flex items-center gap-2 mb-2">
+<div class="flex text-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined">star</span>
+</div>
+<span class="text-sm font-label-caps text-on-surface-variant">Sept 28, 2023</span>
+</div>
+</div>
+<div class="flex gap-2">
+<button class="flex items-center gap-2 px-4 py-2 rounded-lg border border-outline text-on-surface hover:bg-surface-container-low transition-colors font-body-md text-sm">
+<span class="material-symbols-outlined text-[18px]">edit</span> Edit
+                                </button>
+<button class="flex items-center gap-2 px-4 py-2 rounded-lg border border-error/20 text-error hover:bg-error-container transition-colors font-body-md text-sm">
+<span class="material-symbols-outlined text-[18px]">delete</span> Delete
+                                </button>
+</div>
+</div>
+<p class="text-body-md text-on-surface-variant leading-relaxed mb-4">
+                            Substantial improvement in flow consistency over the standard brass nozzle. We've been running abrasive carbon fiber filaments for 200+ hours with zero signs of wear on the ruby tip. The thermal stability is impressive.
+                        </p>
+<div class="flex items-center gap-4">
+<span class="flex items-center gap-1 text-xs font-label-caps text-primary bg-primary-container/20 px-3 py-1 rounded-full">
+<span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">verified</span> Verified Purchase
+                            </span>
+<button class="text-xs font-body-md text-on-surface-variant hover:text-primary flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">thumb_up</span> 8 Helpful
+                            </button>
+</div>
+</div>
+</article>
+<!-- Review Card 3 -->
+<article class="bg-white rounded-xl border border-outline-variant shadow-sm hover:shadow-md transition-shadow p-6 flex flex-col md:flex-row gap-6">
+<div class="w-full md:w-32 h-32 rounded-lg overflow-hidden flex-shrink-0 bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="A high-density arrangement of custom-engineered nylon 12 gears and mechanical linkages, 3D printed with SLS technology. The parts are matte grey with a fine sandy texture, showcased on a clean glass tabletop. The composition is artistic yet technical, using soft directional light to emphasize depth and mechanical complexity. The color palette is strictly grey, white, and professional green." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCPZLsmJigVhZS6Xg2IuBKF4tbpdmOEZp7iDqDtEYOiDi7dD9m6qQtlmCHWA-CgJ3AQDm9dDd6nx2TCXrtRtB6bBf4GnTv4B_RvE6rUoLd5_gbsr4QHhpZOberZQD7XIW3o0H1H3PR2hqq-d5Ved5TGJO7HbvQgHLaYPkSnUsW2YX_0p3Ze5ygpsXhFK58kAbTO95SJoqRLM3jNxRHT4e1zUGNUwsd8ZWG06ETRFJYAL3fJokNCG37O-Q"/>
+</div>
+<div class="flex-1">
+<div class="flex flex-col md:flex-row md:items-start justify-between mb-4">
+<div>
+<h3 class="font-headline-md text-on-surface mb-1">Custom SLS Gear Set (Nylon 12)</h3>
+<div class="flex items-center gap-2 mb-2">
+<div class="flex text-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">star</span>
+</div>
+<span class="text-sm font-label-caps text-on-surface-variant">Aug 05, 2023</span>
+</div>
+</div>
+<div class="flex gap-2">
+<button class="flex items-center gap-2 px-4 py-2 rounded-lg border border-outline text-on-surface hover:bg-surface-container-low transition-colors font-body-md text-sm">
+<span class="material-symbols-outlined text-[18px]">edit</span> Edit
+                                </button>
+<button class="flex items-center gap-2 px-4 py-2 rounded-lg border border-error/20 text-error hover:bg-error-container transition-colors font-body-md text-sm">
+<span class="material-symbols-outlined text-[18px]">delete</span> Delete
+                                </button>
+</div>
+</div>
+<p class="text-body-md text-on-surface-variant leading-relaxed mb-4">
+                            Excellent strength-to-weight ratio. The SLS process really shines here for nested geometries that would be impossible with FDM. The turnaround time was faster than quoted, which helped us meet our client deadline.
+                        </p>
+<div class="flex items-center gap-4">
+<span class="flex items-center gap-1 text-xs font-label-caps text-primary bg-primary-container/20 px-3 py-1 rounded-full">
+<span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">verified</span> Verified Purchase
+                            </span>
+<button class="text-xs font-body-md text-on-surface-variant hover:text-primary flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">thumb_up</span> 24 Helpful
+                            </button>
+</div>
+</div>
+</article>
+</div>
+<!-- Pagination -->
+<footer class="mt-12 flex items-center justify-between border-t border-outline-variant pt-8">
+<p class="text-sm text-on-surface-variant font-body-md">Showing 3 of 24 reviews</p>
+<div class="flex items-center gap-2">
+<button class="w-10 h-10 flex items-center justify-center rounded-lg border border-outline-variant hover:bg-surface-container-low disabled:opacity-30 disabled:cursor-not-allowed" disabled="">
+<span class="material-symbols-outlined">chevron_left</span>
+</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-lg bg-primary text-on-primary font-bold">1</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-lg border border-outline-variant hover:bg-surface-container-low">2</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-lg border border-outline-variant hover:bg-surface-container-low">3</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-lg border border-outline-variant hover:bg-surface-container-low">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+</footer>
+</section>
+</main>
+<!-- Micro-interactions Script -->
+<script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const buttons = document.querySelectorAll('button');
+            buttons.forEach(btn => {
+                btn.addEventListener('mousedown', () => {
+                    btn.classList.add('scale-[0.98]');
+                });
+                btn.addEventListener('mouseup', () => {
+                    btn.classList.remove('scale-[0.98]');
+                });
+                btn.addEventListener('mouseleave', () => {
+                    btn.classList.remove('scale-[0.98]');
+                });
+            });
+
+            // Subtle parallax effect on cards
+            const cards = document.querySelectorAll('article');
+            window.addEventListener('mousemove', (e) => {
+                const { clientX, clientY } = e;
+                const centerX = window.innerWidth / 2;
+                const centerY = window.innerHeight / 2;
+                const deltaX = (clientX - centerX) / 100;
+                const deltaY = (clientY - centerY) / 100;
+
+                cards.forEach(card => {
+                    card.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+                });
+            });
+        });
+    </script>
+</body></html>

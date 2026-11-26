@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Bekaa3D Admin - Manage Price Offers</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Hanken+Grotesk:wght@600;700;800&amp;family=JetBrains+Mono:wght@600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "tertiary": "#923357",
+                    "outline-variant": "#bfcaba",
+                    "on-tertiary": "#ffffff",
+                    "inverse-primary": "#88d982",
+                    "tertiary-fixed-dim": "#ffb1c7",
+                    "on-tertiary-fixed-variant": "#7f2448",
+                    "primary-fixed": "#a3f69c",
+                    "surface-variant": "#dce2f7",
+                    "error-container": "#ffdad6",
+                    "on-secondary": "#ffffff",
+                    "surface-container-highest": "#dce2f7",
+                    "primary": "#0d631b",
+                    "error": "#ba1a1a",
+                    "on-tertiary-container": "#ffedf0",
+                    "on-primary-fixed": "#002204",
+                    "inverse-on-surface": "#edf0ff",
+                    "on-secondary-fixed-variant": "#2e4f00",
+                    "on-secondary-container": "#437000",
+                    "on-background": "#141b2b",
+                    "on-error-container": "#93000a",
+                    "surface": "#f9f9ff",
+                    "secondary": "#3e6a00",
+                    "on-secondary-fixed": "#0f2000",
+                    "surface-bright": "#f9f9ff",
+                    "background": "#f9f9ff",
+                    "secondary-fixed": "#b9f474",
+                    "tertiary-fixed": "#ffd9e2",
+                    "tertiary-container": "#b14b6f",
+                    "surface-container-lowest": "#ffffff",
+                    "surface-tint": "#1b6d24",
+                    "outline": "#707a6c",
+                    "on-primary": "#ffffff",
+                    "primary-fixed-dim": "#88d982",
+                    "on-error": "#ffffff",
+                    "surface-container-low": "#f1f3ff",
+                    "secondary-fixed-dim": "#9ed75b",
+                    "on-surface": "#141b2b",
+                    "inverse-surface": "#293040",
+                    "surface-container": "#e9edff",
+                    "on-tertiary-fixed": "#3f001c",
+                    "surface-dim": "#d3daef",
+                    "secondary-container": "#b9f474",
+                    "on-primary-container": "#cbffc2",
+                    "surface-container-high": "#e1e8fd",
+                    "primary-container": "#2e7d32",
+                    "on-primary-fixed-variant": "#005312",
+                    "on-surface-variant": "#40493d"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "margin-desktop": "64px",
+                    "gutter": "24px",
+                    "max-width": "1440px",
+                    "margin-mobile": "16px",
+                    "unit": "4px"
+            },
+            "fontFamily": {
+                    "body-lg": ["Inter"],
+                    "headline-md": ["Hanken Grotesk"],
+                    "body-md": ["Inter"],
+                    "label-caps": ["JetBrains Mono"],
+                    "headline-lg-mobile": ["Hanken Grotesk"],
+                    "display": ["Hanken Grotesk"],
+                    "headline-lg": ["Hanken Grotesk"]
+            },
+            "fontSize": {
+                    "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                    "headline-md": ["20px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                    "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                    "label-caps": ["12px", {"lineHeight": "1.0", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                    "display": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                    "headline-lg": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .blueprint-bg {
+            background-color: #f9f9ff;
+            background-image: 
+                linear-gradient(#e1e8fd 1px, transparent 1px),
+                linear-gradient(90deg, #e1e8fd 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .fill-icon {
+            font-variation-settings: 'FILL' 1;
+        }
+    </style>
+</head>
+<body class="blueprint-bg min-h-screen text-on-surface font-body-md">
+<!-- SideNavBar (Shared Component) -->
+<aside class="h-screen w-64 fixed left-0 top-0 bg-surface-container-lowest border-r border-outline-variant flex flex-col py-8 z-50">
+<div class="px-6 mb-10">
+<h1 class="font-headline-md text-headline-md font-bold text-primary">Bekaa3D</h1>
+<p class="font-label-caps text-label-caps text-on-surface-variant mt-1">Admin Console</p>
+</div>
+<nav class="flex-1 space-y-1">
+<!-- Dashboard -->
+<a class="flex items-center px-6 py-3 text-on-surface-variant font-medium hover:bg-surface-container-high transition-colors group" href="#">
+<span class="material-symbols-outlined mr-3">dashboard</span>
+<span class="font-body-md">Dashboard</span>
+</a>
+<!-- Physical Products -->
+<a class="flex items-center px-6 py-3 text-on-surface-variant font-medium hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined mr-3">inventory_2</span>
+<span class="font-body-md">Physical Products</span>
+</a>
+<!-- STL Files (Active State Logic) -->
+<a class="flex items-center px-6 py-3 text-primary font-bold border-r-4 border-primary bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined mr-3 fill-icon">deployed_code</span>
+<span class="font-body-md">STL Files</span>
+</a>
+<!-- Categories -->
+<a class="flex items-center px-6 py-3 text-on-surface-variant font-medium hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined mr-3">category</span>
+<span class="font-body-md">Categories</span>
+</a>
+<!-- Orders -->
+<a class="flex items-center px-6 py-3 text-on-surface-variant font-medium hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined mr-3">receipt_long</span>
+<span class="font-body-md">Orders</span>
+</a>
+</nav>
+<div class="px-4 mt-auto">
+<button class="w-full bg-primary-container text-on-primary-container font-label-caps text-label-caps py-3 rounded-xl uppercase tracking-wider hover:brightness-110 transition-all flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[18px]">add</span>
+                New Print Job
+            </button>
+<div class="mt-6 pt-6 border-t border-outline-variant">
+<a class="flex items-center px-2 py-3 text-on-surface-variant font-medium hover:bg-surface-container-high rounded-lg transition-colors" href="#">
+<span class="material-symbols-outlined mr-3">account_circle</span>
+<span class="font-body-md">Admin Profile</span>
+</a>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="pl-64 min-h-screen">
+<!-- TopAppBar (Shared Component) -->
+<header class="fixed top-0 right-0 left-64 h-16 glass-panel border-b border-outline-variant flex items-center justify-between px-8 z-40">
+<div class="flex items-center gap-6 flex-1">
+<h2 class="font-headline-md text-headline-md font-bold text-primary">Bekaa3D Admin</h2>
+<div class="relative w-full max-w-md">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
+<input class="w-full bg-surface-container border-none rounded-full py-2 pl-10 pr-4 focus:ring-2 focus:ring-primary/20 text-body-md placeholder:text-on-surface-variant/60" placeholder="Search customers, assets or offers..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 hover:bg-surface-variant/50 rounded-full transition-colors relative">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-error rounded-full border-2 border-surface"></span>
+</button>
+<button class="p-2 hover:bg-surface-variant/50 rounded-full transition-colors">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<button class="p-2 hover:bg-surface-variant/50 rounded-full transition-colors">
+<span class="material-symbols-outlined">help</span>
+</button>
+<div class="h-8 w-8 rounded-full overflow-hidden border border-outline-variant ml-2 cursor-pointer">
+<img class="w-full h-full object-cover" data-alt="A professional headshot of a female administrative user with sharp, high-key lighting. She is wearing a modern corporate suit in a bright, clean industrial office environment that features soft bokeh in the background. The aesthetic is professional, crisp, and high-fidelity, reflecting a premium engineering brand." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDkp7wdcNO9LmsQ5f8Mu7tMJlHR5N7eJSO20VbeQOQ7enK_GTI60s9ibsONY5b2kkDJ4zSaLxLKDYbdkuEbOgOKrz2RI7945Lnkcn4wDemjJj0Wpn9eH18P1f68SgHlDq0NAAnle6tH24vWksNmi-Fh02hsgYchw50rrsMIM6ej2Ei0-g8y8T7GNKnIG_psUrO4crCFAeM3KYX2WeXXOaFf57R2WrGubRLetMjgbYLggtIh3Piym3ttSg"/>
+</div>
+</div>
+</header>
+<!-- Content Canvas -->
+<div class="pt-24 pb-12 px-8 max-w-max-width mx-auto">
+<!-- Page Header & Stats -->
+<div class="mb-10">
+<div class="flex items-center justify-between mb-8">
+<div>
+<h3 class="font-headline-lg text-headline-lg text-on-surface mb-1">Manage Price Offers</h3>
+<p class="text-on-surface-variant font-body-md">Review and negotiate STL asset pricing with enterprise customers.</p>
+</div>
+<div class="flex gap-3">
+<button class="px-5 py-2.5 bg-surface-container-highest text-on-surface-variant font-label-caps text-label-caps rounded-xl border border-outline-variant flex items-center gap-2 hover:bg-surface-variant transition-colors">
+<span class="material-symbols-outlined text-[20px]">calendar_today</span>
+                            Last 30 Days
+                        </button>
+<button class="px-5 py-2.5 bg-primary text-on-primary font-label-caps text-label-caps rounded-xl flex items-center gap-2 hover:brightness-110 transition-all shadow-lg shadow-primary/20">
+<span class="material-symbols-outlined text-[20px]">file_download</span>
+                            Export Report
+                        </button>
+</div>
+</div>
+<!-- Operational Stats Bento Grid -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+<div class="bg-surface-container-lowest p-6 rounded-2xl border border-outline-variant shadow-sm hover:shadow-md transition-shadow">
+<div class="flex items-center justify-between mb-4">
+<div class="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
+<span class="material-symbols-outlined fill-icon">pending_actions</span>
+</div>
+<span class="text-primary font-label-caps text-label-caps bg-primary/10 px-2 py-1 rounded">+12% vs LW</span>
+</div>
+<p class="font-label-caps text-label-caps text-on-surface-variant mb-1">Total Pending Offers</p>
+<h4 class="font-headline-lg text-headline-lg text-on-surface">142</h4>
+</div>
+<div class="bg-surface-container-lowest p-6 rounded-2xl border border-outline-variant shadow-sm hover:shadow-md transition-shadow">
+<div class="flex items-center justify-between mb-4">
+<div class="w-12 h-12 bg-secondary/10 rounded-xl flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined fill-icon">payments</span>
+</div>
+<span class="text-secondary font-label-caps text-label-caps bg-secondary/10 px-2 py-1 rounded">Avg. Growth 4%</span>
+</div>
+<p class="font-label-caps text-label-caps text-on-surface-variant mb-1">Avg. Negotiation Value</p>
+<h4 class="font-headline-lg text-headline-lg text-on-surface">$1,482.00</h4>
+</div>
+<div class="bg-surface-container-lowest p-6 rounded-2xl border border-outline-variant shadow-sm hover:shadow-md transition-shadow">
+<div class="flex items-center justify-between mb-4">
+<div class="w-12 h-12 bg-tertiary/10 rounded-xl flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined fill-icon">insights</span>
+</div>
+<span class="text-tertiary font-label-caps text-label-caps bg-tertiary/10 px-2 py-1 rounded">Target: 80%</span>
+</div>
+<p class="font-label-caps text-label-caps text-on-surface-variant mb-1">Conversion Rate</p>
+<h4 class="font-headline-lg text-headline-lg text-on-surface">74.2%</h4>
+</div>
+</div>
+</div>
+<!-- Table Filters -->
+<div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+<div class="flex items-center gap-3">
+<div class="relative">
+<select class="appearance-none bg-surface-container-lowest border border-outline-variant rounded-xl px-4 py-2.5 pr-10 text-body-md text-on-surface focus:ring-2 focus:ring-primary/20 outline-none min-w-[160px]">
+<option>Status: All</option>
+<option>Pending</option>
+<option>Accepted</option>
+<option>Rejected</option>
+<option>Countered</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant">expand_more</span>
+</div>
+<div class="relative">
+<select class="appearance-none bg-surface-container-lowest border border-outline-variant rounded-xl px-4 py-2.5 pr-10 text-body-md text-on-surface focus:ring-2 focus:ring-primary/20 outline-none min-w-[200px]">
+<option>Asset Category: All</option>
+<option>Industrial Parts</option>
+<option>Medical Prototypes</option>
+<option>Architectural Models</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant">expand_more</span>
+</div>
+</div>
+<p class="font-label-caps text-label-caps text-on-surface-variant">Showing 42 active negotiations</p>
+</div>
+<!-- Professional Data Table -->
+<div class="bg-surface-container-lowest rounded-2xl border border-outline-variant overflow-hidden shadow-sm">
+<table class="w-full border-collapse">
+<thead>
+<tr class="bg-surface-container-low text-left border-b border-outline-variant">
+<th class="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant">Customer Info</th>
+<th class="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant">STL Asset</th>
+<th class="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant">Negotiation</th>
+<th class="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant">Status</th>
+<th class="px-6 py-4 font-label-caps text-label-caps text-on-surface-variant text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/30">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-container-low/30 transition-colors group">
+<td class="px-6 py-5">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full overflow-hidden bg-outline-variant">
+<img class="w-full h-full object-cover" data-alt="A macro portrait of an industrial designer in a high-tech studio. Soft cool-toned lighting, crisp focus on the face, background blurred with glowing blue and green hardware indicators. The overall look is professional, high-fidelity, and technologically advanced." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAL9boI4jFpfUsB9zCGV_EKIT0mxL2FVexbrO7viVdCZuQc_wGKkstM8-9ujTnqU971ji-qolSAYtP9zvlEyhd-tsh1vzLjfz3Y0kiMA9RDFDMAvsDRV2QplaJUUXv0n95XHUw08mFKXtJgKkuTBNEKCCQ60RwHQLUYuyx99otdcKiJj_0iszGLpECcaS9qCByG4WVtE-xTaA3DDbgHyKtXLMtsZTCGLAghnYH2_oEKbMiO2IhBzbs_VA"/>
+</div>
+<div>
+<p class="font-body-md font-bold text-on-surface">Alex Riverton</p>
+<p class="font-label-caps text-xs text-on-surface-variant">a.riverton@aerospace.co</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-5">
+<div class="flex items-center gap-3">
+<div class="w-12 h-12 rounded-lg bg-surface-container overflow-hidden border border-outline-variant">
+<img class="w-full h-full object-cover" data-alt="A clean, high-fidelity 3D rendering of a complex aerospace turbine component STL model on a neutral gray studio background. Professional studio lighting with sharp highlights and soft shadows to showcase the intricate geometry and precision of the engineering design. The color palette is composed of metallic silvers and whites." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD8-AT7LOcpbbS7rpzdUPO1_AErW1TbZACh359s5zG1npTN9uhR6Um_qLQrIUXKchU6S7UmFIg6kDhDEHOE0qEbsc5pZbtv3YnKux68WIRIQxLAa4nSL6rm1bLu6SJhGXkf2ZtDNTdc9tVWE9jmefv2EDba4h51QQGqnIoEcgzbvCYbqc7VFdmj7E9RZhpKhYSWw3Vuqd5JZj9IZQJCziQ85N7egTNlvdCjo8GtFsy3zmWYYjhuU8cRIQ"/>
+</div>
+<div>
+<p class="font-body-md font-bold text-on-surface">V8 Turbine Assembly</p>
+<p class="font-label-caps text-xs text-on-surface-variant">Orig: $450.00</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-5">
+<div class="flex flex-col gap-1">
+<div class="flex items-center gap-2">
+<span class="font-body-md font-bold text-primary">$380.00</span>
+<span class="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-label-caps">-15%</span>
+</div>
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-[16px]">history</span>
+<span class="text-xs font-label-caps underline cursor-pointer hover:text-primary transition-colors">2 Rounds</span>
+</div>
+</div>
+</td>
+<td class="px-6 py-5">
+<span class="px-3 py-1 rounded-full bg-amber-100 text-amber-800 font-label-caps text-[10px] flex items-center w-fit gap-1 border border-amber-200">
+<span class="w-1.5 h-1.5 rounded-full bg-amber-600 animate-pulse"></span>
+                                    PENDING
+                                </span>
+</td>
+<td class="px-6 py-5">
+<div class="flex items-center justify-end gap-2">
+<button class="p-2 hover:bg-primary/10 text-primary rounded-lg transition-colors group-hover:scale-105" title="Accept Offer">
+<span class="material-symbols-outlined fill-icon">check_circle</span>
+</button>
+<button class="p-2 hover:bg-error/10 text-error rounded-lg transition-colors group-hover:scale-105" title="Reject Offer">
+<span class="material-symbols-outlined">cancel</span>
+</button>
+<button class="px-3 py-1.5 border border-primary text-primary font-label-caps text-[11px] rounded-lg hover:bg-primary hover:text-on-primary transition-all">
+                                        COUNTER
+                                    </button>
+</div>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-surface-container-low/30 transition-colors group">
+<td class="px-6 py-5">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full overflow-hidden bg-outline-variant">
+<img class="w-full h-full object-cover" data-alt="A professional portrait of a senior mechanical engineer in a modern manufacturing lab setting. The lighting is bright and warm, emphasizing clarity and expertise. Background features blurred 3D printing equipment in clean white and signature green accents. A high-fidelity, high-end professional aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCGcBkqWjC4knfMkffZg0BwP4JcSX1GOgMcMTFLL1NB3LkBrJYQRZtHwESFhJoAwBayaq08eHFDEPfyrOZ7SjshsMOvicHzOmDGRY36AyiFY7JeM8-INtLAFJTXUcMuG-VzGHDNOqHvs2duMlffDXrqB4ESFvNHpbTtThHV_zeyqCiwx6Kgn2MvYx5fSwgKViF_zR1E5-BD6k_78fPF-0JmuDtkJPH88aLWcTdFEiKx4ySCwp1D2peZ6Q"/>
+</div>
+<div>
+<p class="font-body-md font-bold text-on-surface">Dr. Sarah Jenkins</p>
+<p class="font-label-caps text-xs text-on-surface-variant">jenkins.lab@medtech.io</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-5">
+<div class="flex items-center gap-3">
+<div class="w-12 h-12 rounded-lg bg-surface-container overflow-hidden border border-outline-variant">
+<img class="w-full h-full object-cover" data-alt="A 3D visualization of a high-precision medical orthopedic implant model for 3D printing. The model is rendered with a clean, medical-grade white material under professional studio lighting. The aesthetic is extremely detailed and clinical, set against a soft, bright-mode background that highlights the precision of the geometry." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCTaGyRzxMn9FzcmGLi-jibktAZX98m5BhGI82HWorzhgfy7M8bzM8c32wyt9hQrP3o8xXcPP7exrLUccXjaxfCKrNZQ1zXSJJKwo6yGAxg2gQPSqhgbUA6ns3Hq5GjxDh3CgJSARPRgTr3SFh_UHyARr0eKPaw7nb46Y3wfIIvSboOBvAwGrXT4fZ_ArKV-VTvaPl1kxTkUuECjc1eTd0wZaPTwBkeugjGlgFGbDaSeqhdUtAv0e-CIg"/>
+</div>
+<div>
+<p class="font-body-md font-bold text-on-surface">Orthopedic Joint v2</p>
+<p class="font-label-caps text-xs text-on-surface-variant">Orig: $1,200.00</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-5">
+<div class="flex flex-col gap-1">
+<div class="flex items-center gap-2">
+<span class="font-body-md font-bold text-primary">$1,050.00</span>
+<span class="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-label-caps">-12.5%</span>
+</div>
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-[16px]">history</span>
+<span class="text-xs font-label-caps underline cursor-pointer hover:text-primary transition-colors">1 Round</span>
+</div>
+</div>
+</td>
+<td class="px-6 py-5">
+<span class="px-3 py-1 rounded-full bg-blue-100 text-blue-800 font-label-caps text-[10px] flex items-center w-fit gap-1 border border-blue-200">
+<span class="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
+                                    COUNTERED
+                                </span>
+</td>
+<td class="px-6 py-5">
+<div class="flex items-center justify-end gap-2 opacity-50 cursor-not-allowed">
+<button class="p-2 text-on-surface-variant rounded-lg" disabled="">
+<span class="material-symbols-outlined">hourglass_empty</span>
+</button>
+<span class="text-[10px] font-label-caps text-on-surface-variant">WAITING ON CUST.</span>
+</div>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-container-low/30 transition-colors group">
+<td class="px-6 py-5">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full overflow-hidden bg-outline-variant">
+<img class="w-full h-full object-cover" data-alt="A portrait of a youthful creative director in a minimalist, sun-drenched architectural office. The lighting is soft and airy, with a clean white and wood aesthetic. High-fidelity photography that looks premium and sophisticated, aligning with the functional luxury brand voice. Neutral tones with subtle greenery in the background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBXbNUR_xx5THVSkz2NX3gdf86oiMALZ9oL8tHO8Ekkew_AhtRVKOBwSx86QH3ueTy29dHNttpHaGP11OtFxLaCMLwrEUFr7wxGwcvHdLHw_igs7dbrPakthYFSEq9IDSNlpZyrOa1yNfWYtKs4RSkjjMSHdtdv6r3UPuy7Mrh-BKHNDm1uubJr0GeRu-aDGlnWkZOxYQx2MVRe_869oClVd4MYP2oya0iTBB-g12j0RuSf_FvT8Tlh3Q"/>
+</div>
+<div>
+<p class="font-body-md font-bold text-on-surface">Markus Thon</p>
+<p class="font-label-caps text-xs text-on-surface-variant">m.thon@archistruct.eu</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-5">
+<div class="flex items-center gap-3">
+<div class="w-12 h-12 rounded-lg bg-surface-container overflow-hidden border border-outline-variant">
+<img class="w-full h-full object-cover" data-alt="A professional architectural 3D model of a modern skyscraper, rendered with fine lattice details and a high-fidelity matte finish. The model is presented in a clean digital viewport with subtle blueprint lines in the background. High-contrast lighting emphasizes the verticality and complexity of the STL file design." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD_r7n3BuKrLgKCHCa_-CZ_-IoRfJXHAEfrYWgMrJb8bPXfNIu-QHBgFIdkYdKq9keBs0-mcVP1tcmZUlsbtG1Q9JiZclUSDkCWPeagSuIwBoY4N-6DZfoZKK82X59zFa5vhbd7s2z7rEZsftiy6njgbsh1mD3Zmm9fH6sc4k88zAj8kWeeRIPVlicqAOzo0GhsVQlBwyytLUGrz7mcQi97Wj8dyfvSXfOXmNrsnQIvwBOZoCJIS2dYWA"/>
+</div>
+<div>
+<p class="font-body-md font-bold text-on-surface">Lattice Skyscraper</p>
+<p class="font-label-caps text-xs text-on-surface-variant">Orig: $220.00</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-5">
+<div class="flex flex-col gap-1">
+<div class="flex items-center gap-2">
+<span class="font-body-md font-bold text-on-surface-variant">$150.00</span>
+<span class="text-[10px] bg-error/10 text-error px-1.5 py-0.5 rounded font-label-caps">-32%</span>
+</div>
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-[16px]">history</span>
+<span class="text-xs font-label-caps underline cursor-pointer hover:text-primary transition-colors">0 Rounds</span>
+</div>
+</div>
+</td>
+<td class="px-6 py-5">
+<span class="px-3 py-1 rounded-full bg-amber-100 text-amber-800 font-label-caps text-[10px] flex items-center w-fit gap-1 border border-amber-200">
+<span class="w-1.5 h-1.5 rounded-full bg-amber-600"></span>
+                                    PENDING
+                                </span>
+</td>
+<td class="px-6 py-5">
+<div class="flex items-center justify-end gap-2">
+<button class="p-2 hover:bg-primary/10 text-primary rounded-lg transition-colors group-hover:scale-105" title="Accept Offer">
+<span class="material-symbols-outlined fill-icon">check_circle</span>
+</button>
+<button class="p-2 hover:bg-error/10 text-error rounded-lg transition-colors group-hover:scale-105" title="Reject Offer">
+<span class="material-symbols-outlined">cancel</span>
+</button>
+<button class="px-3 py-1.5 border border-primary text-primary font-label-caps text-[11px] rounded-lg hover:bg-primary hover:text-on-primary transition-all">
+                                        COUNTER
+                                    </button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+<!-- Pagination -->
+<div class="bg-surface-container-low/50 px-6 py-4 flex items-center justify-between border-t border-outline-variant">
+<p class="font-label-caps text-[10px] text-on-surface-variant">Page 1 of 5</p>
+<div class="flex gap-2">
+<button class="p-1.5 rounded-lg border border-outline-variant hover:bg-surface-container transition-colors disabled:opacity-30" disabled="">
+<span class="material-symbols-outlined">chevron_left</span>
+</button>
+<button class="p-1.5 rounded-lg border border-outline-variant hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Floating Action Button - Contextual for "Add New Offer/Job" only on main dashboard areas -->
+<div class="fixed bottom-8 right-8 z-50">
+<button class="h-14 w-14 rounded-full bg-primary text-on-primary shadow-xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all">
+<span class="material-symbols-outlined text-[28px]">add</span>
+</button>
+</div>
+<!-- Micro-interaction Scripts -->
+<script>
+        // Simple row hover effect enhancement
+        document.querySelectorAll('tbody tr').forEach(row => {
+            row.addEventListener('click', (e) => {
+                if(e.target.closest('button')) return; // Don't trigger if button clicked
+                console.log('Open offer details modal');
+            });
+        });
+
+        // Search bar focus effect
+        const searchInput = document.querySelector('input[type="text"]');
+        searchInput.addEventListener('focus', () => {
+            searchInput.parentElement.classList.add('ring-2', 'ring-primary/20');
+        });
+        searchInput.addEventListener('blur', () => {
+            searchInput.parentElement.classList.remove('ring-2', 'ring-primary/20');
+        });
+    </script>
+</body></html>

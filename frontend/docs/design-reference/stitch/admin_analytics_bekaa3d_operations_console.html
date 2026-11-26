@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Bekaa3D Admin Analytics</title>
+<!-- Fonts & Icons -->
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700;800&family=Inter:wght@400;500&family=JetBrains+Mono:wght@600&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@100..900&family=Inter:wght@100..900&family=JetBrains+Mono:wght@100..900&display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!-- Tailwind Theme Configuration -->
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                "surface-bright": "#f9f9ff",
+                "tertiary-container": "#b14b6f",
+                "on-secondary-fixed-variant": "#2e4f00",
+                "secondary-container": "#b9f474",
+                "surface-container-highest": "#dce2f7",
+                "outline-variant": "#bfcaba",
+                "on-tertiary-fixed": "#3f001c",
+                "primary": "#0d631b",
+                "on-background": "#141b2b",
+                "on-tertiary-container": "#ffedf0",
+                "inverse-primary": "#88d982",
+                "surface-container": "#e9edff",
+                "on-secondary-container": "#437000",
+                "on-error": "#ffffff",
+                "on-tertiary-fixed-variant": "#7f2448",
+                "on-tertiary": "#ffffff",
+                "background": "#f9f9ff",
+                "tertiary": "#923357",
+                "surface-variant": "#dce2f7",
+                "outline": "#707a6c",
+                "primary-fixed-dim": "#88d982",
+                "tertiary-fixed-dim": "#ffb1c7",
+                "primary-fixed": "#a3f69c",
+                "surface-dim": "#d3daef",
+                "surface-container-lowest": "#ffffff",
+                "on-surface": "#141b2b",
+                "on-primary-fixed": "#002204",
+                "on-secondary-fixed": "#0f2000",
+                "secondary": "#3e6a00",
+                "error-container": "#ffdad6",
+                "on-primary-container": "#cbffc2",
+                "surface": "#f9f9ff",
+                "secondary-fixed-dim": "#9ed75b",
+                "surface-container-low": "#f1f3ff",
+                "on-secondary": "#ffffff",
+                "tertiary-fixed": "#ffd9e2",
+                "surface-tint": "#1b6d24",
+                "inverse-on-surface": "#edf0ff",
+                "surface-container-high": "#e1e8fd",
+                "on-surface-variant": "#40493d",
+                "on-primary-fixed-variant": "#005312",
+                "on-primary": "#ffffff",
+                "inverse-surface": "#293040",
+                "secondary-fixed": "#b9f474",
+                "on-error-container": "#93000a",
+                "error": "#ba1a1a",
+                "primary-container": "#2e7d32"
+            },
+            "borderRadius": {
+                "DEFAULT": "0.25rem",
+                "lg": "0.5rem",
+                "xl": "0.75rem",
+                "full": "9999px"
+            },
+            "spacing": {
+                "unit": "4px",
+                "max-width": "1440px",
+                "margin-desktop": "64px",
+                "gutter": "24px",
+                "margin-mobile": "16px"
+            },
+            "fontFamily": {
+                "headline-lg": ["Hanken Grotesk"],
+                "body-lg": ["Inter"],
+                "display": ["Hanken Grotesk"],
+                "label-caps": ["JetBrains Mono"],
+                "headline-md": ["Hanken Grotesk"],
+                "body-md": ["Inter"]
+            },
+            "fontSize": {
+                "headline-lg": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                "display": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                "label-caps": ["12px", {"lineHeight": "1.0", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                "headline-md": ["20px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        .blueprint-grid {
+            background-image: linear-gradient(to right, #bfcaba22 1px, transparent 1px),
+                              linear-gradient(to bottom, #bfcaba22 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(20px);
+        }
+        .technical-border {
+            border: 1px solid #bfcaba;
+        }
+        .scroll-hide::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-body-md blueprint-grid min-h-screen">
+<!-- SideNavBar Anchor -->
+<aside class="flex flex-col h-screen fixed left-0 top-0 bg-surface-container-lowest border-r border-outline-variant w-64 z-[60]">
+<!-- Brand Header -->
+<div class="p-6">
+<h1 class="font-headline-md text-headline-md font-bold text-primary">Bekaa3D Admin</h1>
+<p class="text-on-surface-variant font-label-caps text-xs">Precision Control</p>
+</div>
+<!-- CTA -->
+<div class="px-4 mb-6">
+<button class="w-full bg-primary-container text-on-primary-container py-3 rounded-lg flex items-center justify-center gap-2 font-label-caps hover:brightness-110 transition-all">
+<span class="material-symbols-outlined text-sm">add</span>
+                New Print Job
+            </button>
+</div>
+<!-- Navigation Tabs -->
+<nav class="flex-1 px-2 space-y-1 overflow-y-auto scroll-hide">
+<!-- Dashboard Tab -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-variant transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-body-md">Dashboard</span>
+</a>
+<!-- Orders Tab -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-variant transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="package_2">package_2</span>
+<span class="font-body-md">Orders</span>
+</a>
+<!-- Inventory Tab -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-variant transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="precision_manufacturing">precision_manufacturing</span>
+<span class="font-body-md">Inventory</span>
+</a>
+<!-- Customers Tab -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-variant transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="font-body-md">Customers</span>
+</a>
+<!-- Analytics Tab (ACTIVE) -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-primary font-bold border-r-4 border-primary bg-surface-variant/30" href="#">
+<span class="material-symbols-outlined" data-icon="analytics" style="font-variation-settings: 'FILL' 1;">analytics</span>
+<span class="font-body-md">Analytics</span>
+</a>
+<!-- Settings Tab -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-variant transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-body-md">Settings</span>
+</a>
+</nav>
+<!-- Footer Tabs -->
+<div class="p-4 border-t border-outline-variant space-y-1">
+<a class="flex items-center gap-3 px-4 py-2 rounded-lg text-on-surface-variant hover:bg-surface-variant transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="help">help</span>
+<span class="font-body-md">Help Center</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2 rounded-lg text-error hover:bg-error-container/20 transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+<span class="font-body-md">Logout</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Wrapper -->
+<main class="ml-64 min-h-screen flex flex-col">
+<!-- TopNavBar Anchor -->
+<header class="flex justify-between items-center w-full px-8 h-16 sticky top-0 z-50 glass-panel border-b border-outline-variant">
+<div class="flex items-center gap-8 flex-1">
+<h2 class="font-headline-md text-headline-md font-bold text-primary whitespace-nowrap">Bekaa3D Manufacturing</h2>
+<!-- Search Bar -->
+<div class="relative w-full max-w-md">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">search</span>
+<input class="w-full bg-surface-container-low border border-outline-variant rounded-full py-2 pl-10 pr-4 focus:ring-2 focus:ring-primary focus:border-transparent outline-none text-body-md" placeholder="Search analytics, parts, or STL files..." type="text"/>
+</div>
+</div>
+<!-- Actions -->
+<div class="flex items-center gap-4 ml-8">
+<button class="p-2 text-on-surface-variant hover:text-primary transition-all active:scale-95">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:text-primary transition-all active:scale-95">
+<span class="material-symbols-outlined" data-icon="print">print</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:text-primary transition-all active:scale-95">
+<span class="material-symbols-outlined" data-icon="mail">mail</span>
+</button>
+<div class="h-8 w-px bg-outline-variant mx-2"></div>
+<div class="flex items-center gap-3">
+<div class="text-right hidden lg:block">
+<p class="text-sm font-bold text-on-surface">Alex Thompson</p>
+<p class="text-xs text-on-surface-variant font-label-caps">Sr. Operations Manager</p>
+</div>
+<img class="w-10 h-10 rounded-full border border-primary object-cover" data-alt="A professional high-resolution headshot of a senior operations manager in a tech office setting. The person is wearing a minimalist charcoal blazer, looking confident. The lighting is soft and natural, with a clean architectural background of a modern industrial manufacturing facility out of focus." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB1e0esL7oBrD0OnkAXjRxXF7xylB1P8Ri8hHVUAAWSJwsI2Bd_8YeDg1Se_RKftS2Zpbx-lLs3qi-GzoKuxqhGYj4RHXd0JlbgUqXm6zBfg_uiTkUBC1E7pG2d854Nueii9RX1nFsmJDyv-REJ8IR2Tazgwa5JkhMga0Bc60Yrfz1hej9YE9qQBB6AI3hmpHZQPrxda5S034b5aXjr6M97Q3fVG_7jPmcDj8sShJvJTqQUx8ZOXh1V7w"/>
+</div>
+</div>
+</header>
+<!-- Dashboard Content -->
+<div class="p-8 space-y-8 max-w-[1440px] mx-auto w-full">
+<!-- Page Title -->
+<div class="flex justify-between items-end">
+<div>
+<p class="font-label-caps text-primary mb-1 uppercase tracking-widest text-xs">Operational Intelligence</p>
+<h1 class="font-display text-headline-lg text-on-surface">Analytics Dashboard</h1>
+</div>
+<div class="flex gap-3">
+<button class="px-4 py-2 border border-outline-variant rounded-lg font-label-caps text-xs flex items-center gap-2 hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined text-sm">calendar_today</span>
+                        Last 30 Days
+                    </button>
+<button class="px-4 py-2 bg-primary text-white rounded-lg font-label-caps text-xs flex items-center gap-2 hover:brightness-110 shadow-lg shadow-primary/20">
+<span class="material-symbols-outlined text-sm">download</span>
+                        Export Report
+                    </button>
+</div>
+</div>
+<!-- KPI Cards Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+<!-- Total Revenue -->
+<div class="bg-surface-container-lowest p-6 border border-outline-variant rounded-none shadow-sm flex flex-col justify-between group hover:border-primary transition-colors">
+<div class="flex justify-between items-start">
+<div class="p-2 bg-primary-container/10 text-primary rounded">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">payments</span>
+</div>
+<span class="text-primary font-label-caps text-xs flex items-center bg-primary/10 px-2 py-1 rounded">+12.4%</span>
+</div>
+<div class="mt-4">
+<p class="text-on-surface-variant text-sm font-label-caps">Total Revenue</p>
+<h3 class="font-headline-lg text-on-surface">$248,392.00</h3>
+</div>
+</div>
+<!-- Conversion Rate -->
+<div class="bg-surface-container-lowest p-6 border border-outline-variant rounded-none shadow-sm flex flex-col justify-between group hover:border-primary transition-colors">
+<div class="flex justify-between items-start">
+<div class="p-2 bg-secondary-container/20 text-secondary rounded">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">ads_click</span>
+</div>
+<span class="text-secondary font-label-caps text-xs flex items-center bg-secondary/10 px-2 py-1 rounded">+3.2%</span>
+</div>
+<div class="mt-4">
+<p class="text-on-surface-variant text-sm font-label-caps">Conversion Rate</p>
+<h3 class="font-headline-lg text-on-surface">4.82%</h3>
+</div>
+</div>
+<!-- Customer Growth -->
+<div class="bg-surface-container-lowest p-6 border border-outline-variant rounded-none shadow-sm flex flex-col justify-between group hover:border-primary transition-colors">
+<div class="flex justify-between items-start">
+<div class="p-2 bg-tertiary-container/10 text-tertiary rounded">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">person_add</span>
+</div>
+<span class="text-tertiary font-label-caps text-xs flex items-center bg-tertiary/10 px-2 py-1 rounded">+1,240</span>
+</div>
+<div class="mt-4">
+<p class="text-on-surface-variant text-sm font-label-caps">Active Customers</p>
+<h3 class="font-headline-lg text-on-surface">18,521</h3>
+</div>
+</div>
+<!-- Total Downloads -->
+<div class="bg-surface-container-lowest p-6 border border-outline-variant rounded-none shadow-sm flex flex-col justify-between group hover:border-primary transition-colors">
+<div class="flex justify-between items-start">
+<div class="p-2 bg-primary/5 text-primary rounded">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">cloud_download</span>
+</div>
+<span class="text-on-surface-variant font-label-caps text-xs flex items-center bg-surface-container px-2 py-1 rounded">Stable</span>
+</div>
+<div class="mt-4">
+<p class="text-on-surface-variant text-sm font-label-caps">STL Downloads</p>
+<h3 class="font-headline-lg text-on-surface">142,890</h3>
+</div>
+</div>
+</div>
+<!-- Charts Section -->
+<div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+<!-- Large Revenue Area Chart -->
+<div class="xl:col-span-2 bg-surface-container-lowest p-6 border border-outline-variant rounded-none">
+<div class="flex justify-between items-center mb-8">
+<div>
+<h4 class="font-headline-md text-on-surface">Revenue Performance</h4>
+<p class="text-sm text-on-surface-variant">Monthly fiscal performance vs projection</p>
+</div>
+<div class="flex gap-2">
+<div class="flex items-center gap-2 text-xs font-label-caps">
+<span class="w-3 h-3 rounded-full bg-primary"></span> Revenue
+                            </div>
+<div class="flex items-center gap-2 text-xs font-label-caps ml-4">
+<span class="w-3 h-3 rounded-full bg-primary/30"></span> Projected
+                            </div>
+</div>
+</div>
+<div class="h-80 w-full">
+<canvas id="revenueChart"></canvas>
+</div>
+</div>
+<!-- Sales by Category Donut -->
+<div class="bg-surface-container-lowest p-6 border border-outline-variant rounded-none">
+<div class="mb-8">
+<h4 class="font-headline-md text-on-surface">Sales by Category</h4>
+<p class="text-sm text-on-surface-variant">Distribution across business units</p>
+</div>
+<div class="h-64 flex items-center justify-center">
+<canvas id="categoryChart"></canvas>
+</div>
+<div class="mt-8 space-y-3">
+<div class="flex justify-between items-center">
+<div class="flex items-center gap-2 text-sm">
+<span class="w-3 h-3 bg-primary rounded-sm"></span> Physical Products
+                            </div>
+<span class="font-bold">45%</span>
+</div>
+<div class="flex justify-between items-center">
+<div class="flex items-center gap-2 text-sm">
+<span class="w-3 h-3 bg-secondary rounded-sm"></span> STL Digital Files
+                            </div>
+<span class="font-bold">35%</span>
+</div>
+<div class="flex justify-between items-center">
+<div class="flex items-center gap-2 text-sm">
+<span class="w-3 h-3 bg-tertiary rounded-sm"></span> Custom Services
+                            </div>
+<span class="font-bold">20%</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Detailed Tables Section -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+<!-- Most Sold Physical Products -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-none overflow-hidden">
+<div class="p-6 border-b border-outline-variant flex justify-between items-center">
+<h4 class="font-headline-md text-on-surface">Most Sold Physical Products</h4>
+<button class="text-primary font-label-caps text-xs hover:underline">View All</button>
+</div>
+<table class="w-full text-left">
+<thead class="bg-surface-container-low text-on-surface-variant font-label-caps text-xs uppercase">
+<tr>
+<th class="px-6 py-4">Product</th>
+<th class="px-6 py-4">Units Sold</th>
+<th class="px-6 py-4">Revenue</th>
+<th class="px-6 py-4">Trend</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant">
+<tr class="hover:bg-surface-container/50 transition-colors">
+<td class="px-6 py-4 flex items-center gap-3">
+<div class="w-10 h-10 bg-surface-container rounded border border-outline-variant overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A high-precision 3D printed mechanical assembly with visible layer lines and intricate gear geometry. The material is a semi-transparent emerald green resin, illuminated with professional studio lighting on a clean white laboratory surface. Macro photography style emphasizing detail and engineering precision." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBL81xxA4G9og9Oco6OAOnrm9r9YsHx2L75m9tdRiwaihV2aLIlo1OSPwc_zyQ-7mEbViPC66T0w5rjyYTHIgIF5ho7Vq5q6z46nEt_JwXI6qLS5Zy0nxCC2B-rwOZ6A7BGsZ4JcXBK7LzTarl_77nWPoPrPcfAFHUR9jhfFYMCwU9iLQBdFfGypf5xHGcwNrW0ypljAVnnUoXdtKSPjLIGmp-kglpwsF0LrXX93jNRtA3oPmoC-M-SNw"/>
+</div>
+<div>
+<p class="font-bold text-sm">Titanium Core 2.0</p>
+<p class="text-xs text-on-surface-variant">MK-Series Parts</p>
+</div>
+</td>
+<td class="px-6 py-4 text-sm font-label-caps">1,240</td>
+<td class="px-6 py-4 text-sm font-bold">$42,800</td>
+<td class="px-6 py-4 text-primary"><span class="material-symbols-outlined text-sm">trending_up</span></td>
+</tr>
+<tr class="hover:bg-surface-container/50 transition-colors">
+<td class="px-6 py-4 flex items-center gap-3">
+<div class="w-10 h-10 bg-surface-container rounded border border-outline-variant overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A detailed 3D printed industrial cooling fan housing, printed in a carbon-fiber reinforced matte black filament. The object features aerodynamic fins and complex internal latticing. Shot in an industrial workshop environment with subtle depth of field and professional high-key lighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDEMFk0vbgNPNTuIxx2HdfXqnMSZ4cW2DKArHAh0V4446OPbVmoF12zBde62Bw5-Zj_2PubO-Idj5MDMo-FKGHjDFh-b2STo0n4L5hZCOl4E4y-tCdPPJfgMWRB1anPdtD1WDwR_cWX32RhNgD-LQyCqVssHQ3pj8NdabUAhtBUVApAEYBEuOuHOjb7FOq8AR7NjPg8jR8puqNO8CJ12XhQn5cX74YbHDKG7n5SNEI76NP3RYROTSdjvQ"/>
+</div>
+<div>
+<p class="font-bold text-sm">Aero-Fan Housing</p>
+<p class="text-xs text-on-surface-variant">Cooling Solutions</p>
+</div>
+</td>
+<td class="px-6 py-4 text-sm font-label-caps">892</td>
+<td class="px-6 py-4 text-sm font-bold">$18,450</td>
+<td class="px-6 py-4 text-primary"><span class="material-symbols-outlined text-sm">trending_up</span></td>
+</tr>
+<tr class="hover:bg-surface-container/50 transition-colors">
+<td class="px-6 py-4 flex items-center gap-3">
+<div class="w-10 h-10 bg-surface-container rounded border border-outline-variant overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A series of precision-calibrated 3D printer nozzles made of hardened steel and ruby. The components are arranged neatly on a technical blueprint with glowing green circuit line accents. The aesthetic is extremely high-tech, focusing on material science and micro-manufacturing." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC_VNhS55rNNTuwhjid8yTJsi4PHpCIF3zNYBV-0lk6o3x8bUlxQq4nvgcludL6AFDk_Ekw09hoMy4W3ioisNBFnEFhahvMjhJlPnuxGug3pG7y2pwsnhXD0nf8uvgIJgeChKMmwno3BLbYq9q3d1MvMZt6kZPNNBcALFuX9SZKxoI-U0hzstmMzv9lT2PcwbM1tDr1brLRNp6QehHvojSDEg0iXDp2vrPY8rXALRwDRJ7P7__eBDcmvQ"/>
+</div>
+<div>
+<p class="font-bold text-sm">Precision Nozzle Kit</p>
+<p class="text-xs text-on-surface-variant">Maintenance</p>
+</div>
+</td>
+<td class="px-6 py-4 text-sm font-label-caps">654</td>
+<td class="px-6 py-4 text-sm font-bold">$12,100</td>
+<td class="px-6 py-4 text-on-surface-variant"><span class="material-symbols-outlined text-sm">horizontal_rule</span></td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Top Downloaded STL Files -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-none overflow-hidden">
+<div class="p-6 border-b border-outline-variant flex justify-between items-center">
+<h4 class="font-headline-md text-on-surface">Top STL Downloads</h4>
+<button class="text-primary font-label-caps text-xs hover:underline">Full Library</button>
+</div>
+<table class="w-full text-left">
+<thead class="bg-surface-container-low text-on-surface-variant font-label-caps text-xs uppercase">
+<tr>
+<th class="px-6 py-4">File Name</th>
+<th class="px-6 py-4">Downloads</th>
+<th class="px-6 py-4">Rating</th>
+<th class="px-6 py-4">Action</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant">
+<tr class="hover:bg-surface-container/50 transition-colors">
+<td class="px-6 py-4">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-xl">description</span>
+<p class="font-bold text-sm">v3_planetary_gear.stl</p>
+</div>
+</td>
+<td class="px-6 py-4 text-sm font-label-caps">12,402</td>
+<td class="px-6 py-4 text-sm">
+<div class="flex text-amber-500">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-sm">star</span>
+</div>
+</td>
+<td class="px-6 py-4">
+<button class="p-2 hover:bg-surface-container rounded-full text-on-surface-variant">
+<span class="material-symbols-outlined text-sm">more_vert</span>
+</button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container/50 transition-colors">
+<td class="px-6 py-4">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-xl">description</span>
+<p class="font-bold text-sm">articulated_dragon_v2.stl</p>
+</div>
+</td>
+<td class="px-6 py-4 text-sm font-label-caps">9,812</td>
+<td class="px-6 py-4 text-sm">
+<div class="flex text-amber-500">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+</div>
+</td>
+<td class="px-6 py-4">
+<button class="p-2 hover:bg-surface-container rounded-full text-on-surface-variant">
+<span class="material-symbols-outlined text-sm">more_vert</span>
+</button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container/50 transition-colors">
+<td class="px-6 py-4">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-xl">description</span>
+<p class="font-bold text-sm">industrial_vise_clamp.stl</p>
+</div>
+</td>
+<td class="px-6 py-4 text-sm font-label-caps">7,420</td>
+<td class="px-6 py-4 text-sm">
+<div class="flex text-amber-500">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">star_half</span>
+<span class="material-symbols-outlined text-sm">star</span>
+</div>
+</td>
+<td class="px-6 py-4">
+<button class="p-2 hover:bg-surface-container rounded-full text-on-surface-variant">
+<span class="material-symbols-outlined text-sm">more_vert</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Bottom Layout: Distribution & Trend -->
+<div class="grid grid-cols-1 lg:grid-cols-4 gap-6 pb-12">
+<div class="lg:col-span-3 bg-surface-container-lowest p-6 border border-outline-variant rounded-none">
+<div class="flex justify-between items-center mb-6">
+<h4 class="font-headline-md text-on-surface">Sales Trends</h4>
+<select class="bg-transparent border-none text-xs font-label-caps focus:ring-0 cursor-pointer">
+<option>Daily</option>
+<option selected="">Weekly</option>
+<option>Monthly</option>
+</select>
+</div>
+<div class="h-48 w-full">
+<canvas id="salesTrendChart"></canvas>
+</div>
+</div>
+<div class="bg-primary p-8 rounded-none flex flex-col justify-between text-white relative overflow-hidden group">
+<div class="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-110 transition-transform duration-700">
+<span class="material-symbols-outlined text-[120px]">precision_manufacturing</span>
+</div>
+<div class="z-10">
+<h4 class="font-headline-md mb-2">Print Capacity</h4>
+<p class="text-sm opacity-80 mb-6 font-body-md">Currently utilizing 84% of fleet across 2 facilities.</p>
+<div class="w-full bg-white/20 h-2 rounded-full overflow-hidden">
+<div class="bg-secondary-fixed w-[84%] h-full"></div>
+</div>
+</div>
+<button class="mt-8 py-3 bg-white text-primary font-label-caps text-xs rounded-lg hover:bg-surface-bright transition-colors z-10">
+                        Optimize Workflow
+                    </button>
+</div>
+</div>
+</div>
+</main>
+<!-- Chart.js Scripts -->
+<script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Main Revenue Area Chart
+            const ctxRev = document.getElementById('revenueChart').getContext('2d');
+            new Chart(ctxRev, {
+                type: 'line',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+                    datasets: [{
+                        label: 'Revenue',
+                        data: [65000, 59000, 80000, 81000, 56000, 55000, 40000, 75000, 82000, 95000, 110000, 125000],
+                        borderColor: '#0d631b',
+                        backgroundColor: 'rgba(13, 99, 27, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        borderWidth: 3,
+                        pointRadius: 0
+                    }, {
+                        label: 'Projected',
+                        data: [60000, 62000, 65000, 68000, 70000, 75000, 78000, 82000, 85000, 90000, 95000, 100000],
+                        borderColor: 'rgba(13, 99, 27, 0.2)',
+                        borderDash: [5, 5],
+                        fill: false,
+                        tension: 0.4,
+                        borderWidth: 2,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { display: false },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+
+            // Category Donut Chart
+            const ctxCat = document.getElementById('categoryChart').getContext('2d');
+            new Chart(ctxCat, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Physical', 'STL', 'Service'],
+                    datasets: [{
+                        data: [45, 35, 20],
+                        backgroundColor: ['#0d631b', '#3e6a00', '#923357'],
+                        borderWidth: 0,
+                        hoverOffset: 10
+                    }]
+                },
+                options: {
+                    cutout: '75%',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } }
+                }
+            });
+
+            // Sales Trend Mini Chart
+            const ctxSales = document.getElementById('salesTrendChart').getContext('2d');
+            new Chart(ctxSales, {
+                type: 'bar',
+                data: {
+                    labels: ['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8', 'W9', 'W10', 'W11', 'W12'],
+                    datasets: [{
+                        data: [45, 52, 38, 65, 48, 56, 67, 89, 76, 85, 92, 98],
+                        backgroundColor: '#0d631b',
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { display: false },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+        });
+
+        // Search Interactivity
+        const searchInput = document.querySelector('input[type="text"]');
+        searchInput.addEventListener('focus', () => {
+            searchInput.parentElement.classList.add('scale-105');
+        });
+        searchInput.addEventListener('blur', () => {
+            searchInput.parentElement.classList.remove('scale-105');
+        });
+    </script>
+</body></html>

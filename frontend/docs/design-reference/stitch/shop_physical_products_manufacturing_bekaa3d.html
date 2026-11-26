@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Bekaa3D | Premium Manufacturing & 3D Store</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@600&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@100..900&family=Inter:wght@100..900&family=JetBrains+Mono:wght@100..900&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary-fixed": "#a3f69c",
+                        "error-container": "#ffdad6",
+                        "on-surface-variant": "#40493d",
+                        "surface-container": "#e9edff",
+                        "background": "#f9f9ff",
+                        "surface": "#f9f9ff",
+                        "on-error-container": "#93000a",
+                        "on-error": "#ffffff",
+                        "on-tertiary-fixed": "#3f001c",
+                        "on-secondary": "#ffffff",
+                        "inverse-surface": "#293040",
+                        "on-primary-fixed": "#002204",
+                        "error": "#ba1a1a",
+                        "surface-container-lowest": "#ffffff",
+                        "primary-fixed-dim": "#88d982",
+                        "primary-container": "#2e7d32",
+                        "surface-container-high": "#e1e8fd",
+                        "on-tertiary": "#ffffff",
+                        "on-secondary-fixed": "#0f2000",
+                        "on-primary": "#ffffff",
+                        "surface-variant": "#dce2f7",
+                        "surface-dim": "#d3daef",
+                        "inverse-primary": "#88d982",
+                        "secondary-container": "#b9f474",
+                        "on-background": "#141b2b",
+                        "tertiary-fixed-dim": "#ffb1c7",
+                        "on-secondary-container": "#437000",
+                        "tertiary": "#923357",
+                        "surface-tint": "#1b6d24",
+                        "on-tertiary-fixed-variant": "#7f2448",
+                        "inverse-on-surface": "#edf0ff",
+                        "secondary-fixed": "#b9f474",
+                        "on-surface": "#141b2b",
+                        "on-primary-container": "#cbffc2",
+                        "surface-container-highest": "#dce2f7",
+                        "on-primary-fixed-variant": "#005312",
+                        "tertiary-fixed": "#ffd9e2",
+                        "primary": "#0d631b",
+                        "surface-bright": "#f9f9ff",
+                        "tertiary-container": "#b14b6f",
+                        "on-secondary-fixed-variant": "#2e4f00",
+                        "outline": "#707a6c",
+                        "secondary": "#3e6a00",
+                        "outline-variant": "#bfcaba",
+                        "on-tertiary-container": "#ffedf0",
+                        "surface-container-low": "#f1f3ff",
+                        "secondary-fixed-dim": "#9ed75b"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "max-width": "1440px",
+                        "margin-mobile": "16px",
+                        "unit": "4px",
+                        "margin-desktop": "64px",
+                        "gutter": "24px"
+                    },
+                    "fontFamily": {
+                        "label-caps": ["JetBrains Mono"],
+                        "headline-md": ["Hanken Grotesk"],
+                        "body-lg": ["Inter"],
+                        "headline-lg-mobile": ["Hanken Grotesk"],
+                        "headline-lg": ["Hanken Grotesk"],
+                        "display": ["Hanken Grotesk"],
+                        "body-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "label-caps": ["12px", {"lineHeight": "1.0", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "headline-md": ["20px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                        "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                        "headline-lg-mobile": ["24px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                        "headline-lg": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                        "display": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                        "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .glass-panel {
+            backdrop-filter: blur(20px);
+            background: rgba(255, 255, 255, 0.8);
+        }
+        .primary-gradient {
+            background: linear-gradient(135deg, #0d631b 0%, #1b6d24 100%);
+        }
+        .product-card-hover:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #0d631b;
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md selection:bg-primary-fixed selection:text-on-primary-fixed">
+<!-- TopNavBar -->
+<header class="fixed top-0 w-full z-50 bg-surface/80 dark:bg-inverse-surface/80 backdrop-blur-xl border-b border-outline-variant/30 shadow-sm">
+<div class="flex justify-between items-center px-margin-desktop py-4 max-w-max-width mx-auto">
+<a class="font-display text-headline-md font-bold text-primary dark:text-primary-fixed-dim" href="#">Bekaa3D</a>
+<nav class="hidden md:flex items-center gap-8">
+<a class="font-body-md text-body-md text-on-surface-variant dark:text-surface-variant hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200" href="#">Home</a>
+<a class="font-body-md text-body-md text-primary dark:text-primary-fixed-dim font-bold border-b-2 border-primary dark:border-primary-fixed-dim pb-1" href="#">Shop</a>
+<a class="font-body-md text-body-md text-on-surface-variant dark:text-surface-variant hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200" href="#">STL Store</a>
+<a class="font-body-md text-body-md text-on-surface-variant dark:text-surface-variant hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200" href="#">About</a>
+</nav>
+<div class="flex items-center gap-6">
+<div class="hidden lg:flex items-center bg-surface-container rounded-full px-4 py-2 border border-outline-variant/20 focus-within:border-primary transition-all">
+<span class="material-symbols-outlined text-on-surface-variant mr-2">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-body-md w-48" placeholder="Search parts..." type="text"/>
+</div>
+<div class="flex items-center gap-4">
+<button class="relative text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">shopping_cart</span>
+<span class="absolute -top-2 -right-2 bg-primary text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">2</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">person</span>
+</button>
+</div>
+</div>
+</div>
+</header>
+<main class="pt-24 pb-16 max-w-max-width mx-auto px-margin-desktop">
+<!-- Hero / Search Section -->
+<section class="mb-12">
+<div class="relative rounded-xl overflow-hidden h-[300px] flex flex-col items-center justify-center text-center px-6">
+<div class="absolute inset-0 z-0">
+<div class="w-full h-full bg-cover bg-center brightness-50" data-alt="Close-up macro shot of a high-tech 3D printer nozzle extruding vibrant green carbon fiber filament. The background is a clean, minimalist laboratory setting with soft focus on industrial machinery. The lighting is crisp and cool, emphasizing precision and modern manufacturing excellence." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuA-cZaOJLk8UwQOPrMQnLJXNe4QzKlTMFqOB5geYnCtjUGoxqW_cWt5mSPtqXtlaP7SW801Abvj01-g3zVx1SJwl9T6wmzRNO5eyXwRUgJdggrH8HESoHNPqdhelQfSTpDP5tvKGtF-azik66UJ7vJ4IgupL27A2Avhird6Y2n_n03L3HmUwm5BU_sb5cnV6EYsRwPhwCtOuXDUVIudKvEL_MSpQ_dJkOo9FcNibJdf_ITjAQ33ir7kSg')"></div>
+</div>
+<div class="relative z-10 w-full max-w-2xl">
+<h1 class="font-display text-display text-white mb-6">Find Your Precision Part</h1>
+<div class="glass-panel rounded-full p-2 flex shadow-2xl">
+<input class="flex-grow bg-transparent border-none focus:ring-0 px-6 py-4 text-body-lg text-on-surface" placeholder="Search by application, material or part name..." type="text"/>
+<button class="primary-gradient text-white px-8 rounded-full font-label-caps uppercase flex items-center gap-2 hover:opacity-90 transition-opacity">
+<span class="material-symbols-outlined">search</span>
+                            Search
+                        </button>
+</div>
+</div>
+</div>
+</section>
+<div class="flex flex-col md:flex-row gap-gutter">
+<!-- Sidebar Filters -->
+<aside class="w-full md:w-64 flex-shrink-0 space-y-8">
+<div>
+<h3 class="font-headline-md text-headline-md mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined">filter_list</span>
+                        Filters
+                    </h3>
+<!-- Categories -->
+<div class="mb-8">
+<span class="font-label-caps text-label-caps text-outline uppercase block mb-4">Categories</span>
+<div class="space-y-3">
+<label class="flex items-center gap-3 cursor-pointer group">
+<input class="w-5 h-5 rounded border-outline-variant text-primary focus:ring-primary" type="checkbox"/>
+<span class="text-body-md text-on-surface-variant group-hover:text-on-surface">Engineering Parts</span>
+</label>
+<label class="flex items-center gap-3 cursor-pointer group">
+<input class="w-5 h-5 rounded border-outline-variant text-primary focus:ring-primary" type="checkbox"/>
+<span class="text-body-md text-on-surface-variant group-hover:text-on-surface">Home Decor</span>
+</label>
+<label class="flex items-center gap-3 cursor-pointer group">
+<input class="w-5 h-5 rounded border-outline-variant text-primary focus:ring-primary" type="checkbox"/>
+<span class="text-body-md text-on-surface-variant group-hover:text-on-surface">Automotive</span>
+</label>
+<label class="flex items-center gap-3 cursor-pointer group">
+<input class="w-5 h-5 rounded border-outline-variant text-primary focus:ring-primary" type="checkbox"/>
+<span class="text-body-md text-on-surface-variant group-hover:text-on-surface">Robotics</span>
+</label>
+</div>
+</div>
+<!-- Material -->
+<div class="mb-8">
+<span class="font-label-caps text-label-caps text-outline uppercase block mb-4">Material</span>
+<div class="space-y-3">
+<label class="flex items-center gap-3 cursor-pointer group">
+<input class="w-5 h-5 border-outline-variant text-primary focus:ring-primary" name="material" type="radio"/>
+<span class="text-body-md text-on-surface-variant group-hover:text-on-surface">Carbon Fiber Nylon</span>
+</label>
+<label class="flex items-center gap-3 cursor-pointer group">
+<input class="w-5 h-5 border-outline-variant text-primary focus:ring-primary" name="material" type="radio"/>
+<span class="text-body-md text-on-surface-variant group-hover:text-on-surface">SLA Resin</span>
+</label>
+<label class="flex items-center gap-3 cursor-pointer group">
+<input class="w-5 h-5 border-outline-variant text-primary focus:ring-primary" name="material" type="radio"/>
+<span class="text-body-md text-on-surface-variant group-hover:text-on-surface">Stainless Steel</span>
+</label>
+</div>
+</div>
+<!-- Price Range -->
+<div class="mb-8">
+<span class="font-label-caps text-label-caps text-outline uppercase block mb-4">Price Range</span>
+<input class="w-full h-2 bg-surface-container-highest rounded-lg appearance-none cursor-pointer accent-primary" max="1000" min="0" type="range"/>
+<div class="flex justify-between mt-2 font-label-caps text-label-caps text-on-surface-variant">
+<span>$0</span>
+<span>$1000</span>
+</div>
+</div>
+<!-- Custom Quote Banner -->
+<div class="p-6 rounded-xl bg-primary-container/10 border border-primary-container/20">
+<span class="material-symbols-outlined text-primary mb-2">precision_manufacturing</span>
+<h4 class="font-headline-md text-headline-md text-primary mb-2">Custom Quote</h4>
+<p class="text-body-md text-on-surface-variant mb-4">Need a specialized manufacturing slot? Request a custom quote.</p>
+<button class="w-full py-3 border-2 border-primary text-primary font-label-caps uppercase rounded-lg hover:bg-primary hover:text-white transition-all">Request Slot</button>
+</div>
+</div>
+</aside>
+<!-- Product Grid Area -->
+<div class="flex-grow">
+<!-- Toolbar -->
+<div class="flex flex-col sm:flex-row justify-between items-center bg-white p-4 rounded-xl shadow-sm mb-8 gap-4 border border-outline-variant/30">
+<div class="flex items-center gap-6">
+<span class="text-body-md text-on-surface-variant"><strong class="text-on-surface">48</strong> results found</span>
+<div class="h-6 w-px bg-outline-variant/50 hidden sm:block"></div>
+<div class="flex gap-1">
+<button class="p-2 bg-primary-container text-white rounded"><span class="material-symbols-outlined">grid_view</span></button>
+<button class="p-2 hover:bg-surface-container rounded transition-colors"><span class="material-symbols-outlined">list</span></button>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<label class="text-label-caps font-label-caps text-outline uppercase">Sort By:</label>
+<select class="bg-surface-container border-none rounded-lg font-body-md px-4 py-2 focus:ring-primary cursor-pointer">
+<option>Newest Arrivals</option>
+<option>Price: High to Low</option>
+<option>Price: Low to High</option>
+<option>Highest Rated</option>
+</select>
+</div>
+</div>
+<!-- Grid -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+<!-- Product Card 1 -->
+<div class="bg-white rounded-xl overflow-hidden border border-outline-variant/20 product-card-hover transition-all duration-300 group">
+<div class="relative aspect-square overflow-hidden bg-surface-container-low">
+<img class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" data-alt="High-detail 3D printed mechanical planetary gear system made from translucent green SLA resin. The part is displayed on a clean white surface with sharp geometric shadows. Studio lighting highlights the intricate inner workings and smooth surface finish of the precision component." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDl07_73uf8uRCjxAlNFmAZrHImpUfrPQpM45HwVr6CpGJXyWG3l_QmJ1mQlWOmvXHnzSVIamLEvJ074RcBRje7oqgsl6dYGiDxPOBakQvCYwAnNwxIfAASA6Oe1Nay-1TkUTFjx93l_-jIV1yg9Z4AurE3niZRGRkmKjTI4Nxh88-Za3_ET25DbwUwwKsakhTVgsb5imvn4Ll9JIdqHjWjLIrphhoV-_MSLEJITL60kollWdFNzFgv_Q"/>
+<span class="absolute top-4 left-4 bg-primary text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest">Engineering</span>
+<div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+<button class="bg-white text-on-surface p-3 rounded-full hover:bg-primary hover:text-white transition-colors shadow-lg">
+<span class="material-symbols-outlined">visibility</span>
+</button>
+<button class="bg-white text-on-surface p-3 rounded-full hover:bg-primary hover:text-white transition-colors shadow-lg">
+<span class="material-symbols-outlined">favorite</span>
+</button>
+</div>
+</div>
+<div class="p-6">
+<div class="flex items-center gap-1 mb-2">
+<span class="material-symbols-outlined text-sm text-secondary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-sm text-secondary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-sm text-secondary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-sm text-secondary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-sm text-outline-variant">star</span>
+<span class="text-label-caps text-outline-variant ml-1">(42)</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-surface mb-1 truncate">Precision Planetary Gear Set</h3>
+<p class="text-body-md text-on-surface-variant font-bold text-lg mb-4">$129.00</p>
+<button class="w-full py-3 primary-gradient text-white rounded-lg font-label-caps uppercase flex items-center justify-center gap-2 hover:brightness-110 transition-all">
+<span class="material-symbols-outlined">shopping_cart</span>
+                                Add to Cart
+                            </button>
+</div>
+</div>
+<!-- Product Card 2 -->
+<div class="bg-white rounded-xl overflow-hidden border border-outline-variant/20 product-card-hover transition-all duration-300 group">
+<div class="relative aspect-square overflow-hidden bg-surface-container-low">
+<img class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" data-alt="A minimalist architectural home decor piece, a 3D printed geometric vase with a complex Voronoi pattern, printed in matte white ceramic-style PLA. The vase sits on a modern wooden desk in a bright, sunlit office. The overall vibe is high-end industrial design meets organic luxury." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCtz10LtjL_6GYiBGkECvo3Ze0PTgmZwkq0trYCvwMmyhzWGgiJS5Z4Wgx5ZkQEeHmHsbDGtJ9b9GpzetZhFVZVi2FVSkwbOxNUN5NRIKb35vOdiWeFeDID9Rt8hcWS5qGGgfPYRIOGNbgzIM1FTl8eY4CMBRXpSqK2l5JobLBWdZZJkRTZR7hy8xaBwt-qURXqNq-ysFj5cnfO9VUippPtgzImT2azpKnGEPy9rEsM6jZJ6IR5KT8KDg"/>
+<span class="absolute top-4 left-4 bg-secondary text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest">Home Decor</span>
+<div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+<button class="bg-white text-on-surface p-3 rounded-full hover:bg-primary hover:text-white transition-colors shadow-lg">
+<span class="material-symbols-outlined">visibility</span>
+</button>
+<button class="bg-white text-on-surface p-3 rounded-full hover:bg-primary hover:text-white transition-colors shadow-lg">
+<span class="material-symbols-outlined">favorite</span>
+</button>
+</div>
+</div>
+<div class="p-6">
+<div class="flex items-center gap-1 mb-2">
+<span class="material-symbols-outlined text-sm text-secondary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-sm text-secondary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-sm text-secondary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-sm text-secondary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-sm text-secondary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="text-label-caps text-outline-variant ml-1">(128)</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-surface mb-1 truncate">Voronoi Lattice Vase</h3>
+<p class="text-body-md text-on-surface-variant font-bold text-lg mb-4">$85.00</p>
+<button class="w-full py-3 primary-gradient text-white rounded-lg font-label-caps uppercase flex items-center justify-center gap-2 hover:brightness-110 transition-all">
+<span class="material-symbols-outlined">shopping_cart</span>
+                                Add to Cart
+                            </button>
+</div>
+</div>
+<!-- Product Card 3 -->
+<div class="bg-white rounded-xl overflow-hidden border border-outline-variant/20 product-card-hover transition-all duration-300 group">
+<div class="relative aspect-square overflow-hidden bg-surface-container-low">
+<img class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" data-alt="An automotive component, a custom air intake manifold 3D printed in high-temperature carbon fiber nylon. The part has a rugged, professional black finish with visible layer precision. It is staged in an automotive garage setting with warm ambient light catching the textured surface." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAKHHE6LJqdS-DuF8Y0B7K5CkkPU0L_X2nvnZnlGdaeJhygEbBdEGqM7LEc-SeeqwGpeANgyyOTwDNcS0ZiAecZ1UjNaSALv7bsV46RD7ix9-HN7dobW3uK10JdtM12VXpEher52DNK57P8mg2M-gtWUpr_hn8kHv2ipuOxkeEoLAhaQOu11v-fApAuPK0KndGOx5dN5QOGi4v-rF03c95iwZHdefIr7clpncTdKWQQ04ypDnpwAqhKMA"/>
+<span class="absolute top-4 left-4 bg-tertiary text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest">Automotive</span>
+<div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+<button class="bg-white text-on-surface p-3 rounded-full hover:bg-primary hover:text-white transition-colors shadow-lg">
+<span class="material-symbols-outlined">visibility</span>
+</button>
+<button class="bg-white text-on-surface p-3 rounded-full hover:bg-primary hover:text-white transition-colors shadow-lg">
+<span class="material-symbols-outlined">favorite</span>
+</button>
+</div>
+</div>
+<div class="p-6">
+<div class="flex items-center gap-1 mb-2">
+<span class="material-symbols-outlined text-sm text-secondary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-sm text-secondary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-sm text-secondary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-sm text-secondary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-sm text-outline-variant">star_half</span>
+<span class="text-label-caps text-outline-variant ml-1">(15)</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-surface mb-1 truncate">CF-Nylon Air Intake</h3>
+<p class="text-body-md text-on-surface-variant font-bold text-lg mb-4">$340.00</p>
+<button class="w-full py-3 primary-gradient text-white rounded-lg font-label-caps uppercase flex items-center justify-center gap-2 hover:brightness-110 transition-all">
+<span class="material-symbols-outlined">shopping_cart</span>
+                                Add to Cart
+                            </button>
+</div>
+</div>
+<!-- Row 2 -->
+<!-- Product Card 4 -->
+<div class="bg-white rounded-xl overflow-hidden border border-outline-variant/20 product-card-hover transition-all duration-300 group">
+<div class="relative aspect-square overflow-hidden bg-surface-container-low">
+<img class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" data-alt="A macro shot of a complex 3D printed robotic gripper hand, assembled with stainless steel 3D printed joints and carbon fiber linkages. The background is a blurred high-tech lab workspace. The lighting is focused, casting highlights on the metallic surfaces and matte carbon finishes." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAqsw2y6OFvn9WB3Nix9TQkA-58FZGUzrWajzpFhJoOaMPxP25Nc06bED5xPLA7g1bTuhWFAoD0Di6jqWxjVdCdPb_H3Rlc2ECONilU671igRKAKufwhdH6NB1V2x-PbrryIf8jEfaOFD8ATf_cNGVag86KwbCOalVnTNZr6g6qwQr71u0ZkcKJCSkb2O-s6HLKul-j8pfgh6JH6ehHuFHRlKDvZdPYMv8-WUoqncoEOVgJL--jwIONyA"/>
+<span class="absolute top-4 left-4 bg-primary text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest">Robotics</span>
+</div>
+<div class="p-6">
+<div class="flex items-center gap-1 mb-2">
+<span class="material-symbols-outlined text-sm text-secondary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-sm text-secondary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-sm text-secondary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-sm text-secondary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-sm text-secondary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="text-label-caps text-outline-variant ml-1">(56)</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-surface mb-1 truncate">V3 Robotic Gripper Assembly</h3>
+<p class="text-body-md text-on-surface-variant font-bold text-lg mb-4">$590.00</p>
+<button class="w-full py-3 primary-gradient text-white rounded-lg font-label-caps uppercase flex items-center justify-center gap-2 hover:brightness-110 transition-all">
+<span class="material-symbols-outlined">shopping_cart</span>
+                                Add to Cart
+                            </button>
+</div>
+</div>
+<!-- Product Card 5 -->
+<div class="bg-white rounded-xl overflow-hidden border border-outline-variant/20 product-card-hover transition-all duration-300 group">
+<div class="relative aspect-square overflow-hidden bg-surface-container-low">
+<img class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" data-alt="A pair of custom 3D printed eyewear frames with an intricate topological optimization design, printed in lightweight black SLA resin. The frames are resting on a piece of white marble, styled with a high-end fashion magazine look. Soft, elegant lighting emphasizes the curves and holes of the generative design." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCEGRbxSHpUDvIWF0DTSLWrfcekY_mcCthQPb6fwDfbbPmwYpzArQAiNOuaFhyNDWCMWWeKdiStRo4XOBt67a11oHLKuiOWQ_E4QzooDmrQ0_xpmM983GquDy5ISGChPtekdTTIwb5WeBPMrhSe5fIhmVA_HV1RMHlJ36pvlMU-LG_hB1jsux5Qi9tZ1IA077QNbxO79SkBO-OjTzNxGEIDF3rpEYB9A1qGABauetMxo2pwtQ18KHEWSw"/>
+<span class="absolute top-4 left-4 bg-secondary text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest">Accessories</span>
+</div>
+<div class="p-6">
+<div class="flex items-center gap-1 mb-2">
+<span class="material-symbols-outlined text-sm text-secondary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-sm text-secondary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-sm text-secondary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-sm text-secondary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-sm text-outline-variant">star</span>
+<span class="text-label-caps text-outline-variant ml-1">(22)</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-surface mb-1 truncate">Topologically Optimized Frames</h3>
+<p class="text-body-md text-on-surface-variant font-bold text-lg mb-4">$155.00</p>
+<button class="w-full py-3 primary-gradient text-white rounded-lg font-label-caps uppercase flex items-center justify-center gap-2 hover:brightness-110 transition-all">
+<span class="material-symbols-outlined">shopping_cart</span>
+                                Add to Cart
+                            </button>
+</div>
+</div>
+<!-- Product Card 6 -->
+<div class="bg-white rounded-xl overflow-hidden border border-outline-variant/20 product-card-hover transition-all duration-300 group">
+<div class="relative aspect-square overflow-hidden bg-surface-container-low">
+<img class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" data-alt="A large-scale industrial 3D printed structural bracket made of 316L Stainless Steel. The part shows a high-quality metallic finish and extreme structural detail. It is presented on a blueprint background with technical markings, highlighting its application in civil or mechanical engineering." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAN_SZXhrIa7quWy8fvlykkBvci277w87fJkMsiY5hXQ7z2tY05dsXdoJvOiowKqbah7DJy8BnzE3sWZIKNLFZ265rcUmoF1IjDbpv7t0KNTi0e8vyw3lHt4B-5CxGkhPs47KK2rO_RynYx5fMC4jf5F2e3HIw0hKU45K2pEo3S2tyTVpSg93Ce-LGQk6n2EJnOW4f5MaRHa3VEleEuuq9dgqomq2BYfxUmHz18LCYppT7VXhQp4JbQWQ"/>
+<span class="absolute top-4 left-4 bg-primary text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest">Industrial</span>
+</div>
+<div class="p-6">
+<div class="flex items-center gap-1 mb-2">
+<span class="material-symbols-outlined text-sm text-secondary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-sm text-secondary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-sm text-secondary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-sm text-secondary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-sm text-secondary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="text-label-caps text-outline-variant ml-1">(31)</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-surface mb-1 truncate">SS316L Heavy Duty Bracket</h3>
+<p class="text-body-md text-on-surface-variant font-bold text-lg mb-4">$875.00</p>
+<button class="w-full py-3 primary-gradient text-white rounded-lg font-label-caps uppercase flex items-center justify-center gap-2 hover:brightness-110 transition-all">
+<span class="material-symbols-outlined">shopping_cart</span>
+                                Add to Cart
+                            </button>
+</div>
+</div>
+</div>
+<!-- Pagination -->
+<div class="mt-16 flex justify-center items-center gap-2">
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined">chevron_left</span>
+</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-full bg-primary text-white font-bold">1</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container transition-colors">2</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container transition-colors">3</button>
+<span class="px-2">...</span>
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container transition-colors">12</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</main>
+<!-- Footer -->
+<footer class="bg-surface-container-lowest dark:bg-surface-dim border-t border-outline-variant">
+<div class="grid grid-cols-1 md:grid-cols-4 gap-gutter px-margin-desktop py-16 max-w-max-width mx-auto">
+<div class="space-y-6">
+<a class="font-display text-headline-md font-bold text-on-surface dark:text-surface-bright" href="#">Bekaa3D</a>
+<p class="text-body-md text-on-surface-variant">Leading the future of digital manufacturing with precision engineering and advanced materials.</p>
+<div class="flex gap-4">
+<a class="w-10 h-10 rounded-full border border-outline-variant flex items-center justify-center hover:text-primary transition-colors" href="#"><span class="material-symbols-outlined">share</span></a>
+<a class="w-10 h-10 rounded-full border border-outline-variant flex items-center justify-center hover:text-primary transition-colors" href="#"><span class="material-symbols-outlined">mail</span></a>
+<a class="w-10 h-10 rounded-full border border-outline-variant flex items-center justify-center hover:text-primary transition-colors" href="#"><span class="material-symbols-outlined">map</span></a>
+</div>
+</div>
+<div>
+<h4 class="font-label-caps text-label-caps text-on-surface uppercase mb-6">Products</h4>
+<ul class="space-y-4">
+<li><a class="text-body-md text-on-surface-variant hover:text-secondary dark:hover:text-secondary-fixed transition-colors" href="#">Printers</a></li>
+<li><a class="text-body-md text-on-surface-variant hover:text-secondary dark:hover:text-secondary-fixed transition-colors" href="#">Materials</a></li>
+<li><a class="text-body-md text-on-surface-variant hover:text-secondary dark:hover:text-secondary-fixed transition-colors" href="#">Case Studies</a></li>
+</ul>
+</div>
+<div>
+<h4 class="font-label-caps text-label-caps text-on-surface uppercase mb-6">Support</h4>
+<ul class="space-y-4">
+<li><a class="text-body-md text-on-surface-variant hover:text-secondary dark:hover:text-secondary-fixed transition-colors" href="#">Documentation</a></li>
+<li><a class="text-body-md text-on-surface-variant hover:text-secondary dark:hover:text-secondary-fixed transition-colors" href="#">Support</a></li>
+<li><a class="text-body-md text-on-surface-variant hover:text-secondary dark:hover:text-secondary-fixed transition-colors" href="#">Privacy Policy</a></li>
+<li><a class="text-body-md text-on-surface-variant hover:text-secondary dark:hover:text-secondary-fixed transition-colors" href="#">Terms of Service</a></li>
+</ul>
+</div>
+<div>
+<h4 class="font-label-caps text-label-caps text-on-surface uppercase mb-6">Newsletter</h4>
+<p class="text-body-md text-on-surface-variant mb-4">Stay updated with our latest materials and manufacturing slots.</p>
+<div class="flex gap-2">
+<input class="bg-surface-container border-none rounded-lg px-4 py-2 w-full" placeholder="Email address" type="email"/>
+<button class="bg-primary text-white p-2 rounded-lg hover:brightness-110 transition-all"><span class="material-symbols-outlined">send</span></button>
+</div>
+</div>
+</div>
+<div class="border-t border-outline-variant/30 py-8 px-margin-desktop text-center">
+<p class="text-body-md text-on-surface-variant">© 2024 Bekaa3D Manufacturing. All rights reserved.</p>
+</div>
+</footer>
+<!-- WhatsApp Floating Button -->
+<a class="fixed bottom-8 right-8 z-[60] bg-[#25D366] text-white p-4 rounded-full shadow-2xl hover:scale-110 active:scale-95 transition-all duration-200 flex items-center justify-center" href="https://wa.me/yourphonenumber" target="_blank">
+<svg fill="currentColor" height="32" viewbox="0 0 24 24" width="32" xmlns="http://www.w3.org/2000/svg">
+<path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.319 1.592 5.448 0 9.886-4.438 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.815-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"></path>
+</svg>
+</a>
+<script>
+        // Micro-interactions and floating effects
+        document.querySelectorAll('input[type="range"]').forEach(slider => {
+            slider.addEventListener('input', (e) => {
+                const val = e.target.value;
+                // Interaction logic could go here for live filtering
+            });
+        });
+
+        // Simple grid/list toggle visual state
+        const toggleButtons = document.querySelectorAll('.flex.gap-1 button');
+        toggleButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                toggleButtons.forEach(b => b.classList.remove('bg-primary-container', 'text-white'));
+                btn.classList.add('bg-primary-container', 'text-white');
+            });
+        });
+    </script>
+</body></html>

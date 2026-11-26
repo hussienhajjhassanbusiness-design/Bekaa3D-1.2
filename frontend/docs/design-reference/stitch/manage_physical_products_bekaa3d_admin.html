@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Bekaa3D Admin | Physical Products Management</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700;800&amp;family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "inverse-on-surface": "#edf0ff",
+                    "tertiary-fixed-dim": "#ffb1c7",
+                    "primary": "#0d631b",
+                    "on-tertiary-fixed": "#3f001c",
+                    "surface-tint": "#1b6d24",
+                    "secondary-container": "#b9f474",
+                    "on-tertiary-container": "#ffedf0",
+                    "surface-container-high": "#e1e8fd",
+                    "on-secondary": "#ffffff",
+                    "surface-variant": "#dce2f7",
+                    "on-tertiary-fixed-variant": "#7f2448",
+                    "on-secondary-fixed": "#0f2000",
+                    "surface-container-lowest": "#ffffff",
+                    "on-primary-fixed-variant": "#005312",
+                    "tertiary-container": "#b14b6f",
+                    "secondary-fixed-dim": "#9ed75b",
+                    "inverse-primary": "#88d982",
+                    "on-background": "#141b2b",
+                    "inverse-surface": "#293040",
+                    "on-tertiary": "#ffffff",
+                    "on-secondary-container": "#437000",
+                    "outline": "#707a6c",
+                    "surface-container": "#e9edff",
+                    "primary-fixed-dim": "#88d982",
+                    "surface-dim": "#d3daef",
+                    "surface-container-low": "#f1f3ff",
+                    "on-error": "#ffffff",
+                    "surface-bright": "#f9f9ff",
+                    "on-surface": "#141b2b",
+                    "primary-container": "#2e7d32",
+                    "outline-variant": "#bfcaba",
+                    "on-secondary-fixed-variant": "#2e4f00",
+                    "tertiary": "#923357",
+                    "on-primary": "#ffffff",
+                    "surface": "#f9f9ff",
+                    "on-primary-container": "#cbffc2",
+                    "on-error-container": "#93000a",
+                    "secondary": "#3e6a00",
+                    "on-surface-variant": "#40493d",
+                    "surface-container-highest": "#dce2f7",
+                    "secondary-fixed": "#b9f474",
+                    "on-primary-fixed": "#002204",
+                    "background": "#f9f9ff",
+                    "tertiary-fixed": "#ffd9e2",
+                    "primary-fixed": "#a3f69c",
+                    "error": "#ba1a1a",
+                    "error-container": "#ffdad6"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "max-width": "1440px",
+                    "margin-desktop": "64px",
+                    "gutter": "24px",
+                    "margin-mobile": "16px",
+                    "unit": "4px"
+            },
+            "fontFamily": {
+                    "label-caps": ["JetBrains Mono"],
+                    "body-md": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "headline-lg-mobile": ["Hanken Grotesk"],
+                    "display": ["Hanken Grotesk"],
+                    "headline-md": ["Hanken Grotesk"],
+                    "headline-lg": ["Hanken Grotesk"]
+            },
+            "fontSize": {
+                    "label-caps": ["12px", {"lineHeight": "1.0", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                    "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                    "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                    "display": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                    "headline-md": ["20px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                    "headline-lg": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #f9f9ff;
+            background-image: 
+                linear-gradient(to right, rgba(13, 99, 27, 0.05) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(13, 99, 27, 0.05) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #bfcaba;
+            border-radius: 10px;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(191, 202, 186, 0.3);
+        }
+    </style>
+</head>
+<body class="font-body-md text-on-surface antialiased">
+<!-- Sidebar (Shared Component Blueprint) -->
+<aside class="h-screen w-64 fixed left-0 top-0 flex flex-col py-8 px-6 bg-surface border-r border-outline-variant z-40">
+<div class="mb-10 flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-3xl" style="font-variation-settings: 'FILL' 1;">deployed_code</span>
+<div class="flex flex-col">
+<span class="font-display text-headline-md text-primary font-extrabold leading-none">Bekaa3D</span>
+<span class="text-xs font-label-caps text-outline tracking-widest uppercase mt-1">Engineering Precision</span>
+</div>
+</div>
+<nav class="flex-1 space-y-1 custom-scrollbar overflow-y-auto">
+<!-- Navigation items from JSON logic -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-medium">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-primary font-bold border-r-4 border-primary bg-surface-container-low" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">shopping_bag</span>
+<span class="font-medium">Orders</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">deployed_code</span>
+<span class="font-medium">STL Downloads</span>
+</a>
+<!-- Active State: Physical Products (Implicitly mapping based on user request) -->
+<div class="pt-4 pb-2 px-4">
+<span class="text-[10px] font-bold text-outline uppercase tracking-[0.2em]">Management</span>
+</div>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-primary font-bold border-r-4 border-primary bg-surface-container-low" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">inventory_2</span>
+<span class="font-medium">Physical Products</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">favorite</span>
+<span class="font-medium">Wishlist</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">rate_review</span>
+<span class="font-medium">Reviews</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">local_offer</span>
+<span class="font-medium">Offers</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-medium">Account Settings</span>
+</a>
+</nav>
+<div class="mt-auto pt-6 border-t border-outline-variant">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-error hover:bg-error-container/20 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">logout</span>
+<span class="font-medium">Logout</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="ml-64 min-h-screen">
+<!-- Top Bar (Shared Component Blueprint) -->
+<header class="flex justify-between items-center w-full px-margin-desktop py-4 bg-white/80 backdrop-blur-xl sticky top-0 z-30 border-b border-outline-variant">
+<h1 class="font-display text-headline-md font-extrabold text-primary">Physical Products</h1>
+<div class="flex items-center gap-6">
+<div class="relative hidden lg:block w-72">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">search</span>
+<input class="w-full pl-10 pr-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-all text-sm outline-none" placeholder="Search catalog..." type="text"/>
+</div>
+<div class="flex items-center gap-4">
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-all">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-all">
+<span class="material-symbols-outlined">help</span>
+</button>
+<div class="h-10 w-[1px] bg-outline-variant"></div>
+<div class="flex items-center gap-3 cursor-pointer group">
+<div class="text-right">
+<p class="text-xs font-bold text-on-surface">Alex Engineer</p>
+<p class="text-[10px] text-outline uppercase font-label-caps">Super Admin</p>
+</div>
+<img class="w-10 h-10 rounded-full object-cover ring-2 ring-primary/20 group-hover:ring-primary transition-all" data-alt="A professional studio portrait of a male engineer in his 40s with a focused and friendly expression. He is wearing a clean charcoal grey polo shirt. The background is a blurred high-tech manufacturing facility with soft industrial lighting, predominantly in whites and greens, matching a premium corporate tech aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCZPgaj6uSZmKRHvKsqMq69H-TBKS3VwkaSESi-MKiO81z_hwABOTity15_9nxLjXezmzVJFzKbCW-lj-llAOC0UVfHbK9oA9JvS_XnnDwJt3k5SzhEGbr-_H9mMx0dmL6qTmlUbobWeR75unDBs2D1kHkx2XW4LpYdBbmTEPG5l4KvFD90iUsISD0V-FS3BlTdX85rlJJCA7vD9KWzmS8pRDgdttzkHOG-l_Cc9Tt0J0YtLzWr13zmcQ"/>
+</div>
+</div>
+</div>
+</header>
+<div class="p-8 max-w-max-width mx-auto">
+<!-- Utility Actions Bar -->
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+<div class="flex flex-wrap items-center gap-3">
+<div class="relative">
+<select class="appearance-none bg-white border border-outline-variant rounded-lg px-4 py-2.5 pr-10 text-sm font-medium focus:ring-primary focus:border-primary cursor-pointer hover:border-primary transition-all">
+<option>All Categories</option>
+<option>Mechanical Kits</option>
+<option>Filaments</option>
+<option>Spare Parts</option>
+<option>Upgrades</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-outline text-lg">expand_more</span>
+</div>
+<div class="relative">
+<select class="appearance-none bg-white border border-outline-variant rounded-lg px-4 py-2.5 pr-10 text-sm font-medium focus:ring-primary focus:border-primary cursor-pointer hover:border-primary transition-all">
+<option>All Statuses</option>
+<option>In Stock</option>
+<option>Low Stock</option>
+<option>Out of Stock</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-outline text-lg">expand_more</span>
+</div>
+<button class="flex items-center gap-2 px-4 py-2.5 bg-white border border-outline-variant rounded-lg text-sm font-medium hover:bg-surface-container-low transition-all">
+<span class="material-symbols-outlined text-lg">tune</span>
+                        Advanced Filters
+                    </button>
+</div>
+<button class="flex items-center justify-center gap-2 px-6 py-3 bg-primary text-white rounded-lg font-bold shadow-lg shadow-primary/20 hover:bg-primary-container active:scale-[0.98] transition-all uppercase text-sm tracking-wider">
+<span class="material-symbols-outlined">add</span>
+                    Add Product
+                </button>
+</div>
+<!-- Main Data Table Panel -->
+<div class="glass-panel rounded-xl overflow-hidden shadow-sm border border-outline-variant">
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low border-b border-outline-variant">
+<th class="px-6 py-4 text-xs font-label-caps text-outline uppercase tracking-widest">
+<input class="rounded text-primary focus:ring-primary border-outline-variant" type="checkbox"/>
+</th>
+<th class="px-6 py-4 text-xs font-label-caps text-outline uppercase tracking-widest">Product</th>
+<th class="px-6 py-4 text-xs font-label-caps text-outline uppercase tracking-widest">Category</th>
+<th class="px-6 py-4 text-xs font-label-caps text-outline uppercase tracking-widest">Price</th>
+<th class="px-6 py-4 text-xs font-label-caps text-outline uppercase tracking-widest">Discount</th>
+<th class="px-6 py-4 text-xs font-label-caps text-outline uppercase tracking-widest">Status</th>
+<th class="px-6 py-4 text-xs font-label-caps text-outline uppercase tracking-widest">Featured</th>
+<th class="px-6 py-4 text-xs font-label-caps text-outline uppercase tracking-widest text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant">
+<!-- Row 1 -->
+<tr class="hover:bg-primary/5 transition-colors group">
+<td class="px-6 py-4">
+<input class="rounded text-primary focus:ring-primary border-outline-variant" type="checkbox"/>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-surface-container overflow-hidden flex-shrink-0 border border-outline-variant">
+<img class="w-full h-full object-cover" data-alt="A high-resolution product macro shot of a precision-engineered 3D printer extruder assembly. The components are sleek silver metal and black high-grade plastic, set against a clean white background with soft shadows. The lighting is bright and industrial, highlighting the intricate mechanical details and engineering precision of the device." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCyJf-vH7JtrwAQLoIdB36Tzonbih715pjU2eR2PHT9M98_ClNCf06-JQ_2czZrRq-BSauQ3c_zpocE7DG5q4lHA2_OifGjQR_ic6OlwxyIMjuZPd6eMFDP2lDhG7F_BBNn5djY9BNTJD1qkLPKIIBL7kNSD44fPbEw4NAq5riGkIYRI0MOe_bnNgGES0jGO9IRNQewRBb9PgSwUr62AumD-rvLhbri-K-OBb37HmG4SocjIKCUDg7jlQ"/>
+</div>
+<div>
+<p class="font-bold text-on-surface leading-tight">Viper-X Extruder Kit</p>
+<p class="text-[10px] font-label-caps text-outline mt-0.5">SKU: BK-EX-001</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="text-sm font-medium text-on-surface-variant">Mechanical Kits</span>
+</td>
+<td class="px-6 py-4">
+<span class="text-sm font-bold text-on-surface">$189.00</span>
+</td>
+<td class="px-6 py-4">
+<span class="text-xs font-bold text-primary px-2 py-1 bg-primary/10 rounded-full">-15%</span>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-1.5 px-3 py-1 bg-secondary-container/30 text-secondary text-[11px] font-bold rounded-full w-fit">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+                                        In Stock
+                                    </div>
+</td>
+<td class="px-6 py-4">
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-10 h-5 bg-outline-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</td>
+<td class="px-6 py-4 text-right">
+<div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="p-1.5 text-on-surface-variant hover:text-primary transition-all" title="View"><span class="material-symbols-outlined text-xl">visibility</span></button>
+<button class="p-1.5 text-on-surface-variant hover:text-primary transition-all" title="Edit"><span class="material-symbols-outlined text-xl">edit</span></button>
+<button class="p-1.5 text-on-surface-variant hover:text-primary transition-all" title="Duplicate"><span class="material-symbols-outlined text-xl">content_copy</span></button>
+<button class="p-1.5 text-on-surface-variant hover:text-error transition-all" title="Delete"><span class="material-symbols-outlined text-xl">delete</span></button>
+</div>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-primary/5 transition-colors group">
+<td class="px-6 py-4">
+<input class="rounded text-primary focus:ring-primary border-outline-variant" type="checkbox"/>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-surface-container overflow-hidden flex-shrink-0 border border-outline-variant">
+<img class="w-full h-full object-cover" data-alt="A clean product shot of a spool of emerald green 3D printing filament. The filament is neatly wound on a transparent plastic reel. The green is vibrant and semi-translucent, suggesting high quality. The background is a minimalist studio setting with crisp lighting and a professional manufacturing feel." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDZyN4l-n0zXumSYbii2NYJrN8zyqvLIjyMobfck_GSQ9U5OWworWwYHukJMq9xnF5adZ6GNmd20kpk3n9ofPOBb3SWa1rgLeim7KJQZpRR6uYPax5ZFDRoddIGQ0oSBLL_wOkD8CdBzW0jZuoCqXsY736ZwSIqk804cVx-9eloqan_bN8W8KD_RZavpp0MMyi0mnah1hRfPszZGHTQHoqKAU2CjZXMnMl_UVJJ-Qe7deXguaA6f2w6vw"/>
+</div>
+<div>
+<p class="font-bold text-on-surface leading-tight">PLA Pro - Emerald Green</p>
+<p class="text-[10px] font-label-caps text-outline mt-0.5">SKU: BK-FL-402</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="text-sm font-medium text-on-surface-variant">Filaments</span>
+</td>
+<td class="px-6 py-4">
+<span class="text-sm font-bold text-on-surface">$24.50</span>
+</td>
+<td class="px-6 py-4">
+<span class="text-xs font-bold text-outline px-2 py-1 bg-surface-container-high rounded-full">None</span>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-1.5 px-3 py-1 bg-tertiary-fixed/30 text-tertiary text-[11px] font-bold rounded-full w-fit">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>
+                                        Low Stock
+                                    </div>
+</td>
+<td class="px-6 py-4">
+<label class="relative inline-flex items-center cursor-pointer">
+<input class="sr-only peer" type="checkbox"/>
+<div class="w-10 h-5 bg-outline-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</td>
+<td class="px-6 py-4 text-right">
+<div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="p-1.5 text-on-surface-variant hover:text-primary transition-all" title="View"><span class="material-symbols-outlined text-xl">visibility</span></button>
+<button class="p-1.5 text-on-surface-variant hover:text-primary transition-all" title="Edit"><span class="material-symbols-outlined text-xl">edit</span></button>
+<button class="p-1.5 text-on-surface-variant hover:text-primary transition-all" title="Duplicate"><span class="material-symbols-outlined text-xl">content_copy</span></button>
+<button class="p-1.5 text-on-surface-variant hover:text-error transition-all" title="Delete"><span class="material-symbols-outlined text-xl">delete</span></button>
+</div>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-primary/5 transition-colors group">
+<td class="px-6 py-4">
+<input class="rounded text-primary focus:ring-primary border-outline-variant" type="checkbox"/>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-surface-container overflow-hidden flex-shrink-0 border border-outline-variant">
+<img class="w-full h-full object-cover" data-alt="A macro photograph of three different brass 3D printer nozzles of varying diameters (0.2mm, 0.4mm, 0.6mm). They are arranged artistically on a technical blueprint paper background. The brass is polished and reflects soft overhead studio lighting. The image captures the extreme precision and industrial quality of these spare parts." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCXUNkoM5evDj0xDXwJ1q3WEktQUJsT7Y-HJPVbUo1tJ_ynZynwSFL3fDsK_yTBjoIkv415Fh-m-ymQNwb4qNsdZfSsJmIWT6ata_cA4jv2Ycu5M0DzeyiZ5umRFCtxsAFtrBGScEczjlY9ptxiLWlu2wyeK-QxJ2DAH6XW3objfbBJ7VAJMPe7ZGbNhatZpCft1Dj2sYNCxSy5ONPpHE32JaNqrSBNfzWsvHw6gKHjpsc4fwW3Ot1ZmA"/>
+</div>
+<div>
+<p class="font-bold text-on-surface leading-tight">Brass Nozzle Pack (3pc)</p>
+<p class="text-[10px] font-label-caps text-outline mt-0.5">SKU: BK-SP-882</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="text-sm font-medium text-on-surface-variant">Spare Parts</span>
+</td>
+<td class="px-6 py-4">
+<span class="text-sm font-bold text-on-surface">$12.00</span>
+</td>
+<td class="px-6 py-4">
+<span class="text-xs font-bold text-outline px-2 py-1 bg-surface-container-high rounded-full">None</span>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-1.5 px-3 py-1 bg-error-container/30 text-error text-[11px] font-bold rounded-full w-fit">
+<span class="w-1.5 h-1.5 rounded-full bg-error"></span>
+                                        Out of Stock
+                                    </div>
+</td>
+<td class="px-6 py-4">
+<label class="relative inline-flex items-center cursor-pointer">
+<input class="sr-only peer" type="checkbox"/>
+<div class="w-10 h-5 bg-outline-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</td>
+<td class="px-6 py-4 text-right">
+<div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="p-1.5 text-on-surface-variant hover:text-primary transition-all" title="View"><span class="material-symbols-outlined text-xl">visibility</span></button>
+<button class="p-1.5 text-on-surface-variant hover:text-primary transition-all" title="Edit"><span class="material-symbols-outlined text-xl">edit</span></button>
+<button class="p-1.5 text-on-surface-variant hover:text-primary transition-all" title="Duplicate"><span class="material-symbols-outlined text-xl">content_copy</span></button>
+<button class="p-1.5 text-on-surface-variant hover:text-error transition-all" title="Delete"><span class="material-symbols-outlined text-xl">delete</span></button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Footer Pagination & Actions -->
+<div class="px-6 py-4 bg-surface-container-lowest flex flex-col md:flex-row items-center justify-between gap-4">
+<div class="flex items-center gap-3">
+<button class="flex items-center gap-2 px-4 py-2 border border-outline-variant text-error rounded-lg text-sm font-medium hover:bg-error-container/10 transition-all">
+<span class="material-symbols-outlined text-lg">delete_sweep</span>
+                            Bulk Delete
+                        </button>
+<button class="flex items-center gap-2 px-4 py-2 border border-outline-variant text-on-surface-variant rounded-lg text-sm font-medium hover:bg-surface-container-low transition-all">
+<span class="material-symbols-outlined text-lg">file_download</span>
+                            Export CSV
+                        </button>
+</div>
+<div class="flex items-center gap-6">
+<span class="text-sm text-outline font-medium">Showing <span class="text-on-surface">1-10</span> of <span class="text-on-surface">42</span></span>
+<div class="flex items-center gap-1">
+<button class="w-8 h-8 flex items-center justify-center rounded border border-outline-variant text-outline hover:bg-surface-container-high disabled:opacity-50" disabled="">
+<span class="material-symbols-outlined">chevron_left</span>
+</button>
+<button class="w-8 h-8 flex items-center justify-center rounded bg-primary text-white font-bold text-sm">1</button>
+<button class="w-8 h-8 flex items-center justify-center rounded border border-outline-variant text-on-surface hover:bg-surface-container-high text-sm">2</button>
+<button class="w-8 h-8 flex items-center justify-center rounded border border-outline-variant text-on-surface hover:bg-surface-container-high text-sm">3</button>
+<span class="px-1 text-outline">...</span>
+<button class="w-8 h-8 flex items-center justify-center rounded border border-outline-variant text-on-surface hover:bg-surface-container-high text-sm">5</button>
+<button class="w-8 h-8 flex items-center justify-center rounded border border-outline-variant text-on-surface hover:bg-surface-container-high">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Stats Overview Cards (Bento Style) -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mt-8">
+<div class="bg-white p-6 rounded-xl border border-outline-variant shadow-sm flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">inventory</span>
+</div>
+<div>
+<p class="text-xs font-label-caps text-outline uppercase tracking-wider">Total SKUs</p>
+<p class="text-2xl font-display font-bold text-on-surface">42</p>
+</div>
+</div>
+<div class="bg-white p-6 rounded-xl border border-outline-variant shadow-sm flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-secondary-container/20 flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+<div>
+<p class="text-xs font-label-caps text-outline uppercase tracking-wider">In Stock</p>
+<p class="text-2xl font-display font-bold text-on-surface">36</p>
+</div>
+</div>
+<div class="bg-white p-6 rounded-xl border border-outline-variant shadow-sm flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-tertiary-fixed/20 flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">warning</span>
+</div>
+<div>
+<p class="text-xs font-label-caps text-outline uppercase tracking-wider">Low Stock</p>
+<p class="text-2xl font-display font-bold text-on-surface">4</p>
+</div>
+</div>
+<div class="bg-white p-6 rounded-xl border border-outline-variant shadow-sm flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-error-container/20 flex items-center justify-center text-error">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">error</span>
+</div>
+<div>
+<p class="text-xs font-label-caps text-outline uppercase tracking-wider">Out of Stock</p>
+<p class="text-2xl font-display font-bold text-on-surface">2</p>
+</div>
+</div>
+</div>
+</div>
+</main>
+<script>
+        // Micro-interactions for table rows
+        document.querySelectorAll('tbody tr').forEach(row => {
+            row.addEventListener('mouseenter', () => {
+                row.classList.add('shadow-md');
+            });
+            row.addEventListener('mouseleave', () => {
+                row.classList.remove('shadow-md');
+            });
+        });
+
+        // Simple checkbox toggle logic for "Select All"
+        const selectAllCheckbox = document.querySelector('thead input[type="checkbox"]');
+        const rowCheckboxes = document.querySelectorAll('tbody input[type="checkbox"]');
+
+        selectAllCheckbox.addEventListener('change', (e) => {
+            rowCheckboxes.forEach(checkbox => {
+                checkbox.checked = e.target.checked;
+                if(e.target.checked) {
+                    checkbox.closest('tr').classList.add('bg-primary/5');
+                } else {
+                    checkbox.closest('tr').classList.remove('bg-primary/5');
+                }
+            });
+        });
+
+        rowCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', () => {
+                if(checkbox.checked) {
+                    checkbox.closest('tr').classList.add('bg-primary/5');
+                } else {
+                    checkbox.closest('tr').classList.remove('bg-primary/5');
+                }
+            });
+        });
+    </script>
+</body></html>
