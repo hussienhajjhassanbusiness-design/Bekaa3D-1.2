@@ -110,8 +110,11 @@ services:
     healthcheck:
       # arq's own check: reads the heartbeat the worker writes to Redis each
       # poll and fails if it has gone stale, so a stalled-but-running worker
-      # shows as unhealthy instead of looking fine.
-      test: ["CMD", "arq", "app.worker.WorkerSettings", "--check"]
+      # shows as unhealthy instead of looking fine. Run through
+      # app.worker_health rather than `arq app.worker.WorkerSettings --check`:
+      # that imports the whole app, which over the ./src bind mount on a
+      # Windows host takes longer than the timeout, so the probe always failed.
+      test: ["CMD", "python", "-m", "app.worker_health"]
       interval: 30s
       timeout: 10s
       retries: 3
